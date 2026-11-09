@@ -316,7 +316,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       editedAt: e.editedAt,
       // Reply tag: named stance and reason, or objection, supplied by the author.
       stanceTag: e.stanceTag,
-      canEdit: !!user && e.authorId === user.id,
+      canEdit: !!user && e.authorId === user.id && (e.id !== topic.id || !topic.stanceLocked),
       own: !!user && e.authorId === user.id,
       posted: !!user && e.authorId === user.id && readPostedId(url) === e.id,
       hidden: e.visibility === "hidden",
