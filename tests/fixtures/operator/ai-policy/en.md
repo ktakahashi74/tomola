@@ -1,0 +1,1 @@
+Automated retrieval may be exercised only with fictional test content. This fixture grants no permission to reuse content from any deployed site. Indexing, training and redistribution are not authorized.

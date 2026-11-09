@@ -1,0 +1,3 @@
+ALTER TABLE "drafts" ADD COLUMN "village_id" text;--> statement-breakpoint
+ALTER TABLE "drafts" ADD CONSTRAINT "drafts_village_id_villages_id_fk" FOREIGN KEY ("village_id") REFERENCES "public"."villages"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "drafts" ADD CONSTRAINT "drafts_village_topic_check" CHECK ("drafts"."kind" = 'topic' OR "drafts"."village_id" IS NULL);

@@ -1,0 +1,1 @@
+export const PASSKEY_PROMPT_MAX_AGE = 30 * 86400;

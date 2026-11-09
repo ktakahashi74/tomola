@@ -1,0 +1,5 @@
+ALTER TABLE "entries" ADD COLUMN "card_html" text;--> statement-breakpoint
+ALTER TABLE "translations" ADD COLUMN "card_html" text;--> statement-breakpoint
+CREATE INDEX "entries_topic_created_idx" ON "entries" USING btree ("created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST) WHERE "entries"."kind" = 'topic' and "entries"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "entries_question_created_idx" ON "entries" USING btree ("created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST) WHERE "entries"."kind" = 'topic' and "entries"."deleted_at" is null and "entries"."asks_stance";--> statement-breakpoint
+CREATE INDEX "entries_titled_created_idx" ON "entries" USING btree ("created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST) WHERE "entries"."kind" = 'topic' and "entries"."deleted_at" is null and "entries"."title" is not null;

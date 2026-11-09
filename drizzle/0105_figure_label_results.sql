@@ -1,0 +1,4 @@
+ALTER TABLE "figure_translations" DROP CONSTRAINT "figure_translations_content_check";--> statement-breakpoint
+ALTER TABLE "figure_translations" ADD COLUMN "label_results" jsonb;--> statement-breakpoint
+ALTER TABLE "figure_translations" ADD CONSTRAINT "figure_translations_results_check" CHECK ("figure_translations"."label_results" is null or jsonb_typeof("figure_translations"."label_results") = 'array');--> statement-breakpoint
+ALTER TABLE "figure_translations" ADD CONSTRAINT "figure_translations_content_check" CHECK (("figure_translations"."state" = 'ready' and "figure_translations"."bytes" is not null and octet_length("figure_translations"."bytes") between 1 and 2097152 and "figure_translations"."labels" is not null) or ("figure_translations"."state" = 'skipped' and "figure_translations"."bytes" is null));

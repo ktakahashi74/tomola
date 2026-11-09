@@ -1,0 +1,99 @@
+# Example production setup: PostgreSQL with pgvector, the app (migrations followed by startup with a worker), and Caddy (automatic TLS and reverse proxy).
+# Complete public DNS, certificate, SMTP and browser acceptance checks in docs/deploy.md for each deployment.
+# Usage: create .env (see .env.example and the environment variable list in docs/deploy.md), then run docker compose up -d --build.
+# Required in .env (read by this docker-compose.yml): POSTGRES_PASSWORD, SITE_ADDRESS (the public hostname, e.g. forum.example.org),
+# BETTER_AUTH_URL (https://<SITE_ADDRESS>), BETTER_AUTH_SECRET, SMTP_URL, MAIL_FROM, GEMINI_API_KEY, OPERATOR_EMAILS, etc.
+
+services:
+  db:
+    image: pgvector/pgvector:pg18@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+    security_opt: ["no-new-privileges:true"]
+    logging: { driver: local, options: { max-size: "10m", max-file: "5" } }
+    restart: unless-stopped
+    # Shared memory size (/dev/shm). Docker defaults to 64 MB; PostgreSQL parallel queries (embedding scans for search and aggregates) can
+    # fail with "could not resize shared memory segment".
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: tomola
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: tomola
+    volumes:
+      # The PostgreSQL 18 image stores data in /var/lib/postgresql/18/docker (PGDATA). Mount its parent /var/lib/postgresql as the volume.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tomola -d tomola"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Do not publish a port: communicate with the app only within the Docker network.
+
+  app:
+    image: tomola-app:${TOMOLA_REVISION:-local}
+    build:
+      context: .
+      args:
+        REVISION: ${TOMOLA_REVISION:-unknown}
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    mem_limit: 2g
+    pids_limit: 512
+    # PostgreSQL owns persistent data; sharp buffers, tsx IPC/cache and other
+    # temporary files use /tmp. Corepack/pnpm are warmed into /opt/corepack at build time.
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,size=512m,mode=1777"]
+    logging: { driver: local, options: { max-size: "10m", max-file: "5" } }
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - type: bind
+        source: ${TOMOLA_OPERATOR_DIR:?set TOMOLA_OPERATOR_DIR to the host operator settings directory}
+        target: /operator
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      TOMOLA_OPERATOR_DIR: /operator
+      # POSTGRES_USER is a superuser, allowing CREATE EXTENSION vector in migrations. For a managed database, see pgvector in docs/deploy.md.
+      DATABASE_URL: postgres://tomola:${POSTGRES_PASSWORD}@db:5432/tomola
+      # Site languages: use ENABLED_LANGS from .env, or ja,en if absent. Production requires an explicit setting; unchecked UI translations prevent startup (docs/deploy.md section 13).
+      ENABLED_LANGS: ${ENABLED_LANGS:-ja,en}
+      # Run the worker (translation, embedding, notification email and other jobs) inside the app process.
+      WORKER_ENABLED: "true"
+      # One Caddy proxy precedes the app: the rightmost X-Forwarded-For address is the client. See "3. Proxies and TRUSTED_PROXY_HOPS" in docs/deploy.md.
+      TRUSTED_PROXY_HOPS: "1"
+      PORT: "3000"
+    # docker stop grace period: make it longer than both HTTP shutdown (HTTP_SHUTDOWN_TIMEOUT_MS, default 10 seconds) and worker shutdown (WORKER_SHUTDOWN_TIMEOUT_MS, default 8 seconds).
+    stop_grace_period: 30s
+    # Do not publish a port: Caddy forwards to app:3000 within the Docker network. Never expose the app port externally when TRUSTED_PROXY_HOPS is at least 1:
+    # clients could forge X-Forwarded-For and bypass per-IP rate limits with fake addresses (docs/deploy.md, "3. Proxies and TRUSTED_PROXY_HOPS").
+    # For a direct local test, uncomment the next line (bind only to local 127.0.0.1 and test with TRUSTED_PROXY_HOPS=0).
+    # ports: ["127.0.0.1:3000:3000"]
+
+  caddy:
+    image: caddy:2@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    logging: { driver: local, options: { max-size: "10m", max-file: "5" } }
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env (the public host name, for example forum.example.org)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account. Deleting these forces certificate reissuance; mind issuance rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

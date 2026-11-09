@@ -1,0 +1,2 @@
+ALTER TABLE "llm_usage" ADD COLUMN "reserved" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "llm_usage_reserved_idx" ON "llm_usage" USING btree ("created_at") WHERE "llm_usage"."reserved" = true;

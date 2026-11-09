@@ -1,0 +1,3 @@
+CREATE INDEX "moderation_actions_avatar_media_idx" ON "moderation_actions" USING btree ("avatar_media_id_before") WHERE "moderation_actions"."avatar_media_id_before" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "profiles_avatar_media_idx" ON "profiles" USING btree ("avatar_media_id") WHERE "profiles"."avatar_media_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "reports_avatar_media_idx" ON "reports" USING btree ("avatar_media_id") WHERE "reports"."avatar_media_id" IS NOT NULL;

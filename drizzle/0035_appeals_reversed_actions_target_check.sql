@@ -1,0 +1,2 @@
+ALTER TABLE "appeals" ADD COLUMN "reversed" boolean;--> statement-breakpoint
+ALTER TABLE "moderation_actions" ADD CONSTRAINT "moderation_actions_target_check" CHECK (("moderation_actions"."action" in ('hide', 'unhide', 'delete', 'restore', 'dismiss_report') and "moderation_actions"."target_entry_id" is not null) or ("moderation_actions"."action" in ('suspend', 'unsuspend') and "moderation_actions"."target_user_id" is not null));

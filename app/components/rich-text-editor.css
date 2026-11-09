@@ -1,0 +1,40 @@
+.rich-text-editor .ProseMirror {
+  min-height: 12rem;
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.rich-text-editor .ProseMirror > :first-child { margin-top: 0; }
+.rich-text-editor .ProseMirror > :last-child { margin-bottom: 0; }
+.rich-text-editor .tableWrapper { max-width: 100%; overflow-x: auto; }
+.rich-text-editor table { display: table; width: 100%; table-layout: fixed; }
+.rich-text-editor td, .rich-text-editor th { overflow-wrap: anywhere; }
+.rich-text-editor .ProseMirror-selectednode { outline: 2px solid currentColor; }
+
+.rich-text-editor .ProseMirror img { max-width: 100%; height: auto; margin-block: 0; }
+
+/* A tall field for long-form writing: half the screen at least, so that it reads as a place to write. */
+.rich-text-tall .ProseMirror { min-height: 40vh; }
+
+/* The text of an empty editor (the decoration is added by the editor while the document is one empty paragraph). */
+.rich-text-editor .ProseMirror p.is-editor-empty::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+/* While the on-screen keyboard is up, the toolbar sits just above it (the inset is set from the visual viewport). */
+.rich-text-editor[data-keyboard] .editor-toolbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--keyboard-inset, 0);
+  top: auto;
+  z-index: 40;
+  padding-inline: 0.5rem;
+  border-top: 1px solid var(--border);
+  max-height: 40vh;
+  overflow-y: auto;
+}

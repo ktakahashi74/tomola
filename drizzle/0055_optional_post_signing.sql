@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "sign_posts" boolean DEFAULT false NOT NULL;

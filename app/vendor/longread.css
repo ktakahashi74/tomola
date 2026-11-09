@@ -1,0 +1,392 @@
+/*! longread.css v0.1.2 | MIT License | https://github.com/ktakahashi74/longread.css
+ *
+ * Reading CSS for essays, papers and long posts on screen, in many
+ * languages and scripts.
+ *
+ * Contract: put class="longread" on the element that contains the prose,
+ * give it (and any nested passage in another language) a correct lang
+ * attribute, and add dir where the direction is not left to right.
+ * Ordinary prose needs no other classes. Footnotes may come from pandoc
+ * (role="doc-noteref" etc.) or from GFM (data-footnote-ref etc.).
+ *
+ * The file has no colour palette: decorative rules, borders and
+ * backgrounds are derived from the text colour. It is unlayered, and every
+ * rule has the specificity of one class (.longread :where(…) or
+ * .longread:where(…)), apart from the two ::marker rules, which add a
+ * pseudo-element. Element-level resets therefore lose to it, and a later
+ * rule with a class in the same layer wins over it. To place it in a
+ * cascade layer, import it with @import url("longread.css") layer(longread);
+ *
+ * Order: 1 defaults, 2 element styles, 3 typesetting by language,
+ * 4 exceptions that must win over 3, 5 spacing at the edges.
+ */
+
+/* 1. Defaults on the container ------------------------------------- */
+
+.longread {
+  --_lr-size: 1.1875rem;
+  --_lr-leading: 1.6;
+  --_lr-measure: 34em;
+  --_lr-gap: 1.15em;
+  --_lr-heading-weight: 600;
+  --_lr-size-narrow: 1.0625rem;
+  --_lr-leading-narrow: 1.55;
+  --_lr-face: var(--longread-font, "Source Serif 4 Variable", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  font-family: var(--_lr-face);
+  font-size: var(--longread-size, var(--_lr-size));
+  line-height: var(--longread-leading, var(--_lr-leading));
+  max-inline-size: var(--longread-measure, var(--_lr-measure));
+  overflow-wrap: break-word;
+  line-break: auto;
+  word-break: normal;
+  hyphens: manual;
+  text-autospace: normal;
+  text-spacing-trim: normal;
+}
+
+/* 2. Element styles. Written for plain HTML and for resets such as   */
+/*    Tailwind Preflight, which remove list markers and heading sizes. */
+/*    Spacing and table rules follow Tailwind Typography's defaults    */
+/*    where they suit multilingual prose.                              */
+
+.longread :where(p) {
+  margin-block: 0 var(--longread-gap, var(--_lr-gap));
+}
+
+.longread :where(h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--_lr-heading-weight);
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.longread :where(h1) { font-size: 1.75em; margin-block: 0 0.8em; }
+.longread :where(h2) { font-size: 1.5em; margin-block: 2em 0.8em; }
+.longread :where(h3) { font-size: 1.25em; margin-block: 1.6em 0.6em; line-height: 1.45; }
+.longread :where(h4, h5, h6) { font-size: 1em; margin-block: 1.5em 0.5em; line-height: 1.5; }
+.longread :where([id]) {
+  scroll-margin-block-start: var(--longread-scroll-margin, 2rem);
+}
+
+.longread :where(strong, b) { font-weight: 600; }
+.longread :where(h1, h2, h3, h4, h5, h6) :where(strong, b) { font-weight: bolder; }
+.longread :where(sup, sub) { line-height: 0; }
+
+.longread :where(a) {
+  text-decoration-line: underline;
+  text-underline-offset: 0.15em;
+  overflow-wrap: anywhere;
+}
+
+.longread :where(ul, ol) {
+  margin-block: 0 var(--longread-gap, var(--_lr-gap));
+  padding-inline-start: 1.625em;
+}
+.longread :where(ul) { list-style-type: disc; }
+.longread :where(ul ul) { list-style-type: circle; }
+.longread :where(ul ul ul) { list-style-type: square; }
+/* Lists with a type attribute keep the browser's own numbering, which
+   tells type="A" from type="a"; a CSS selector cannot do so everywhere. */
+.longread :where(ol:not([type])) { list-style-type: decimal; }
+.longread :where(li) { margin-block: 0.4em; }
+.longread :where(ul > li, ol > li) { padding-inline-start: 0.375em; }
+.longread :where(ul > li)::marker { color: color-mix(in srgb, currentColor 55%, transparent); }
+.longread :where(ol > li)::marker { font-weight: 400; }
+.longread :where(li > p, li > ul, li > ol) { margin-block: 0.4em; }
+/* GFM task lists, with or without a paragraph around the checkbox. */
+.longread :where(li:has(> input[type="checkbox"]:first-child, > p:first-child > input[type="checkbox"]:first-child)) {
+  list-style-type: none;
+}
+.longread :where(li > input[type="checkbox"]:first-child, li > p:first-child > input[type="checkbox"]:first-child) {
+  margin-inline: -1.4em 0.4em;
+}
+
+.longread :where(dl) { margin-block: 0 var(--longread-gap, var(--_lr-gap)); }
+.longread :where(dt) { font-weight: var(--_lr-heading-weight); margin-block-start: 1em; }
+.longread :where(dl > dt:first-child) { margin-block-start: 0; }
+.longread :where(dd) { margin-block-start: 0.3em; margin-inline-start: 0; padding-inline-start: 1.625em; }
+
+.longread :where(blockquote) {
+  margin-block: 1.6em;
+  margin-inline: 0;
+  padding-inline-start: 1em;
+  border-inline-start: 0.25em solid currentColor;
+  border-inline-start: 0.25em solid color-mix(in srgb, currentColor 30%, transparent);
+}
+.longread :where(blockquote > :first-child) { margin-block-start: 0; }
+.longread :where(blockquote > :last-child) { margin-block-end: 0; }
+
+.longread :where(hr) {
+  border: 0;
+  border-block-start: 1px solid currentColor;
+  border-block-start: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  margin-block: 2.5em;
+}
+
+.longread :where(code, samp, pre) {
+  font-family: var(--longread-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+/* kbd keeps the surrounding typeface and is drawn as a key. */
+.longread :where(code, samp, kbd) { font-size: 0.875em; }
+.longread :where(:not(pre) > code) {
+  padding: 0.1em 0.3em;
+  border-radius: 0.25em;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.longread :where(kbd) {
+  padding: 0.1em 0.375em;
+  border-radius: 0.3em;
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent), 0 2px 0 color-mix(in srgb, currentColor 25%, transparent);
+}
+.longread :where(pre) {
+  margin-block: 0 var(--longread-gap, var(--_lr-gap));
+  padding: 0.85em 1.15em;
+  border-radius: 0.375em;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font-size: 0.875em;
+  line-height: 1.7;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  text-align: start;
+}
+.longread :where(pre code) {
+  font-size: 1em;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* Tables scroll sideways instead of widening the column. */
+.longread :where(table) {
+  display: block;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  margin-block: 0 var(--longread-gap, var(--_lr-gap));
+  border-collapse: collapse;
+  font-size: 0.875em;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.longread :where(thead) { border-block-end: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
+.longread :where(tbody tr) { border-block-end: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+.longread :where(tbody tr:last-child) { border-block-end: 0; }
+.longread :where(tfoot) { border-block-start: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
+.longread :where(th, td) { padding: 0.55em 0.6em; }
+.longread :where(th, td):where(:first-child) { padding-inline-start: 0; }
+.longread :where(th, td):where(:last-child) { padding-inline-end: 0; }
+.longread :where(thead th) { font-weight: var(--_lr-heading-weight); vertical-align: bottom; }
+.longread :where(tbody td, tbody th) { vertical-align: baseline; }
+.longread :where(tfoot td) { vertical-align: top; }
+/* Respect alignment from GFM (align attribute); pandoc uses inline styles. */
+.longread :where(th, td):where(:not([align])) { text-align: start; }
+.longread :where(th[align="left"], td[align="left"]) { text-align: left; }
+.longread :where(th[align="center"], td[align="center"]) { text-align: center; }
+.longread :where(th[align="right"], td[align="right"]) { text-align: right; }
+.longread :where(caption) { margin-block-end: 0.5em; text-align: start; }
+
+.longread :where(img, video, svg) {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+.longread :where(picture) { display: block; }
+.longread :where(figure) { margin-block: 1.6em; margin-inline: 0; }
+.longread :where(figure > :first-child) { margin-block-start: 0; }
+.longread :where(figure > :last-child) { margin-block-end: 0; }
+.longread :where(figure > :is(img, svg, video, picture)) { display: block; }
+.longread :where(figure > figcaption) {
+  margin-block-start: 0.6em;
+  font-size: 0.875em;
+  line-height: 1.45;
+}
+.longread :where(figure > figcaption:first-child) { margin-block: 0 0.6em; }
+
+/* Footnotes: pandoc and GFM markup. */
+.longread :where(a[role="doc-noteref"], a[data-footnote-ref]) {
+  text-decoration-line: none;
+}
+.longread :where(section[role="doc-endnotes"], section[data-footnotes]) {
+  --longread-align: start;
+  margin-block-start: 3em;
+  font-size: 0.875em;
+  line-height: calc(var(--longread-leading, var(--_lr-leading)) - 0.2);
+}
+.longread :where(section[role="doc-endnotes"] li, section[data-footnotes] li) {
+  margin-block: 0.5em;
+}
+/* pandoc starts the notes with a rule; GFM with a heading (#footnote-label)
+   that is meant for screen readers but stays visible where a sanitiser
+   removes its class. Keep both modest; hide the heading in your own CSS if
+   you prefer. */
+.longread :where(section[role="doc-endnotes"] > hr:first-child) { margin-block: 0 1.25em; }
+.longread :where(section[data-footnotes] > h2:first-child) {
+  font-size: 1em;
+  margin-block: 0 0.5em;
+}
+.longread :where(a[role="doc-backlink"], a[data-footnote-backref]) {
+  text-decoration-line: none;
+  margin-inline-start: 0.25em;
+}
+.longread :where(li:target, a:target:not(:focus-visible), sup:target) {
+  outline: 2px solid currentColor;
+  outline: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.2em;
+}
+
+/* KaTeX output keeps its own fonts and spacing, and math stays left to
+   right inside right-to-left text. */
+.longread :where(.katex) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+/* Room above and below, so that tall superscripts are not clipped and a
+   scrollbar, including one drawn over the content, does not cover deep
+   subscripts. */
+.longread :where(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.15em 0.6em;
+  scrollbar-width: thin;
+}
+
+/* 3. Typesetting by language ---------------------------------------- */
+/* Metrics follow the container's language. Typefaces switch at block- */
+/* level elements that carry their own lang. Script rules switch at    */
+/* every element that carries lang, and reset what a parent in another */
+/* script would pass down.                                             */
+
+.longread:where(:lang(ja)) {
+  --_lr-size: 1.125rem;
+  --_lr-leading: 1.9;
+  --_lr-leading-narrow: 1.8;
+  --_lr-measure: 36em;
+  --_lr-gap: 1.4em;
+  --_lr-heading-weight: 700;
+}
+.longread:where(:lang(zh), :lang(ko)) {
+  --_lr-size: 1.125rem;
+  --_lr-leading: 1.85;
+  --_lr-leading-narrow: 1.75;
+  --_lr-measure: 36em;
+  --_lr-gap: 1.4em;
+  --_lr-heading-weight: 700;
+}
+/* Scripts with tall marks or stacked letters: Thai, Lao, Khmer, Burmese,
+   the Arabic script, and the scripts of South Asia. */
+.longread:where(:lang(th), :lang(lo), :lang(km), :lang(my),
+                :lang(ar), :lang(fa), :lang(ur), :lang(ps), :lang(sd), :lang(ug), :lang(ckb),
+                :lang(hi), :lang(mr), :lang(ne), :lang(bn), :lang(as), :lang(pa), :lang(gu), :lang(or),
+                :lang(ta), :lang(te), :lang(kn), :lang(ml), :lang(si)) {
+  --_lr-size: 1.25rem;
+  --_lr-leading: 1.9;
+  --_lr-size-narrow: 1.25rem;
+  --_lr-leading-narrow: 1.9;
+}
+
+.longread :where(:is(p, li, dt, dd, blockquote, figure, figcaption, caption, th, td, h1, h2, h3, h4, h5, h6,
+                     ul, ol, dl, table, section, article, aside, header, footer, main, nav, details, summary, address, div)[lang]) {
+  --_lr-face: var(--longread-font, "Source Serif 4 Variable", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  font-family: var(--_lr-face);
+}
+.longread:where(:lang(ja)),
+.longread :where([lang]:lang(ja)) {
+  --_lr-face: var(--longread-font-ja, "Hiragino Mincho ProN", "BIZ UDPMincho", "BIZ UDPMincho Medium", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", serif);
+}
+.longread:where(:lang(zh)),
+.longread :where([lang]:lang(zh)) {
+  --_lr-face: var(--longread-font-zh-hans, "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "Source Han Serif CN", "Microsoft YaHei", serif);
+}
+.longread:where(:lang(zh-Hant), :lang(zh-TW), :lang(zh-HK), :lang(zh-MO)),
+.longread :where([lang]:is(:lang(zh-Hant), :lang(zh-TW), :lang(zh-HK), :lang(zh-MO))) {
+  --_lr-face: var(--longread-font-zh-hant, "Songti TC", "Noto Serif CJK TC", "Source Han Serif TC", "Source Han Serif TW", "Microsoft JhengHei", serif);
+}
+.longread:where(:lang(ko)),
+.longread :where([lang]:lang(ko)) {
+  --_lr-face: var(--longread-font-ko, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", sans-serif);
+}
+.longread:where(:lang(th), :lang(lo), :lang(km), :lang(my),
+                :lang(ar), :lang(fa), :lang(ur), :lang(ps), :lang(sd), :lang(ug), :lang(ckb),
+                :lang(hi), :lang(mr), :lang(ne), :lang(bn), :lang(as), :lang(pa), :lang(gu), :lang(or),
+                :lang(ta), :lang(te), :lang(kn), :lang(ml), :lang(si)),
+.longread :where([lang]:is(:lang(th), :lang(lo), :lang(km), :lang(my),
+                           :lang(ar), :lang(fa), :lang(ur), :lang(ps), :lang(sd), :lang(ug), :lang(ckb),
+                           :lang(hi), :lang(mr), :lang(ne), :lang(bn), :lang(as), :lang(pa), :lang(gu), :lang(or),
+                           :lang(ta), :lang(te), :lang(kn), :lang(ml), :lang(si))) {
+  --_lr-face: var(--longread-font-ui, system-ui, sans-serif);
+}
+
+.longread :where([lang]) {
+  line-break: auto;
+  word-break: normal;
+  hyphens: manual;
+  text-autospace: normal;
+  text-spacing-trim: normal;
+}
+.longread:where(:lang(ja), :lang(zh)),
+.longread :where([lang]:is(:lang(ja), :lang(zh))) {
+  text-autospace: normal;
+  text-spacing-trim: trim-start;
+}
+.longread:where(:lang(ja)),
+.longread :where([lang]:lang(ja)) {
+  line-break: strict;
+}
+.longread:where(:lang(ko)),
+.longread :where([lang]:lang(ko)) {
+  word-break: keep-all;
+}
+.longread:where(:lang(en), :lang(fr), :lang(de), :lang(es), :lang(pt), :lang(it), :lang(nl), :lang(id), :lang(vi), :lang(ru)),
+.longread :where([lang]:is(:lang(en), :lang(fr), :lang(de), :lang(es), :lang(pt), :lang(it), :lang(nl), :lang(id), :lang(vi), :lang(ru))) {
+  hyphens: auto;
+  hyphenate-limit-chars: 8 4 3;
+  -webkit-hyphenate-limit-before: 4;
+  -webkit-hyphenate-limit-after: 3;
+}
+
+/* Paragraph shape. Alignment stays at the start unless the host opts in,
+   for example: .longread:lang(ja) { --longread-align: justify; } */
+.longread :where(p, li, blockquote) { text-wrap: pretty; }
+.longread :where(p, li) { text-align: var(--longread-align, start); }
+/* Paragraphs in table cells follow the cell's alignment. */
+.longread :where(th, td) :where(p, li) { text-align: inherit; }
+
+/* Narrow screens: slightly smaller running text keeps lines long enough
+   to read, about 40 Latin or 20 CJK characters at 390px. It is set on the
+   text blocks, not the container, so measures in em do not move when a
+   phone turns. Scripts with tall marks, footnotes and table cells keep
+   their size. */
+@media (max-width: 40rem) {
+  .longread :where(p, li, blockquote, dt, dd) {
+    font-size: min(var(--longread-size, var(--_lr-size)), var(--_lr-size-narrow));
+    line-height: var(--longread-leading, var(--_lr-leading-narrow));
+  }
+  .longread :where(section[role="doc-endnotes"], section[data-footnotes], th, td) :where(p, li, blockquote, dt, dd) {
+    font-size: inherit;
+    line-height: inherit;
+  }
+}
+
+/* 4. Exceptions that must win over the language rules --------------- */
+
+/* Code and math keep their own spacing, including any lang inside them. */
+.longread :where(code, samp, kbd, pre, .katex, :is(code, samp, kbd, pre, .katex) [lang]) {
+  hyphens: manual;
+  line-break: auto;
+  word-break: normal;
+  text-autospace: no-autospace;
+  text-spacing-trim: space-all;
+}
+/* Headings and links are not hyphenated. */
+.longread :where(h1, h2, h3, h4, h5, h6, a, :is(h1, h2, h3, h4, h5, h6, a) [lang]) {
+  hyphens: manual;
+}
+/* Japanese headings break between phrases where supported. */
+.longread :where(:is(h1, h2, h3, h4, h5, h6):lang(ja)) {
+  word-break: auto-phrase;
+}
+
+/* 5. Spacing at the edges ------------------------------------------- */
+
+.longread :where(h1, h2, h3, h4, h5, h6, hr) + * { margin-block-start: 0; }
+.longread > :where(:first-child) { margin-block-start: 0; }
+.longread > :where(:last-child) { margin-block-end: 0; }
+.longread :where(th, td) > :where(:last-child) { margin-block-end: 0; }

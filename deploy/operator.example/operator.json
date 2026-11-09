@@ -1,0 +1,62 @@
+{
+  "status": "example",
+  "name": {
+    "en": "Example Operator",
+    "ja": "Example Operator"
+  },
+  "contactEmail": "contact@example.org",
+  "privacyEmail": "privacy@example.org",
+  "participation": {
+    "minimumAge": 18,
+    "excludedResidenceCountries": [],
+    "requireTrialConsent": true,
+    "trialConsentVersion": 1,
+    "stanceConsentVersion": 1,
+    "copy": {
+      "en": {
+        "countryExcluded": "REPLACE_ME: Write the residence restriction and its explanation here.",
+        "invitationRestriction": "REPLACE_ME: Write the participation conditions shown before joining here.",
+        "eligibilitySummary": "REPLACE_ME: Write a short summary consistent with the configured participation conditions."
+      },
+      "ja": {
+        "countryExcluded": "REPLACE_ME: 居住地の制限と理由をここに記載してください。",
+        "invitationRestriction": "REPLACE_ME: 参加前に示す条件をここに記載してください。",
+        "eligibilitySummary": "REPLACE_ME: 設定した参加条件と一致する短い要約をここに記載してください。"
+      }
+    }
+  },
+  "copy": {
+    "en": {
+      "aiRecipient": "REPLACE_ME: Write the site policy or wording here.",
+      "stanceDisclosure": "REPLACE_ME: Write the site policy or wording here.",
+      "stanceConsent": "REPLACE_ME: Write the site policy or wording here.",
+      "trainingPolicy": "REPLACE_ME: Write the site policy or wording here.",
+      "chatProvider": "REPLACE_ME: Write the site policy or wording here. {privacy}",
+      "chatProviderChange": "REPLACE_ME: Write the site policy or wording here.",
+      "termsLabel": "REPLACE_ME: Write the site policy or wording here.",
+      "countryHelp": "REPLACE_ME: Write the site policy or wording here.",
+      "adultError": "REPLACE_ME: Write the site policy or wording here. {age}",
+      "agreementLabel": "REPLACE_ME: Write the site policy or wording here.",
+      "agreementError": "REPLACE_ME: Write the site policy or wording here.",
+      "reviewTitle": "REPLACE_ME: Write the site policy or wording here.",
+      "reviewHelp": "REPLACE_ME: Write the site policy or wording here.",
+      "testSiteNotice": "REPLACE_ME: Write the site policy or wording here."
+    },
+    "ja": {
+      "aiRecipient": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "stanceDisclosure": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "stanceConsent": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "trainingPolicy": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "chatProvider": "REPLACE_ME: サイトの方針や案内をここに記載してください。 {privacy}",
+      "chatProviderChange": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "termsLabel": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "countryHelp": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "adultError": "REPLACE_ME: サイトの方針や案内をここに記載してください。 {age}",
+      "agreementLabel": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "agreementError": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "reviewTitle": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "reviewHelp": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
+      "testSiteNotice": "REPLACE_ME: サイトの方針や案内をここに記載してください。"
+    }
+  }
+}

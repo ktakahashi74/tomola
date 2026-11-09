@@ -1,0 +1,4 @@
+ALTER TABLE "entries" ADD COLUMN "last_activity_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "entries" ADD COLUMN "reply_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE INDEX "entries_topic_activity_idx" ON "entries" USING btree ("last_activity_at" DESC NULLS FIRST,"id" DESC NULLS FIRST) WHERE "entries"."kind" = 'topic' and "entries"."deleted_at" is null;--> statement-breakpoint
+CREATE INDEX "entries_topic_lang_activity_idx" ON "entries" USING btree ("lang","last_activity_at" DESC NULLS FIRST,"id" DESC NULLS FIRST) WHERE "entries"."kind" = 'topic' and "entries"."deleted_at" is null;

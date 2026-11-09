@@ -1,0 +1,3 @@
+ALTER TABLE "entries" ADD CONSTRAINT "entries_title_not_blank_check" CHECK ("entries"."title" is null or btrim("entries"."title") <> '');--> statement-breakpoint
+ALTER TABLE "entries" ADD CONSTRAINT "entries_question_title_check" CHECK (not "entries"."asks_stance" or "entries"."title" is not null);--> statement-breakpoint
+ALTER TABLE "entries" ADD CONSTRAINT "entries_reply_title_check" CHECK ("entries"."kind" = 'topic' or "entries"."title" is null);

@@ -1,0 +1,1 @@
+- **運営者。** Example Operator。

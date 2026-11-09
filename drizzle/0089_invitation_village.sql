@@ -1,0 +1,2 @@
+ALTER TABLE "invitations" ADD COLUMN "village_id" text;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_village_id_villages_id_fk" FOREIGN KEY ("village_id") REFERENCES "public"."villages"("id") ON DELETE set null ON UPDATE no action;

@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD CONSTRAINT "profiles_handle_check" CHECK ("profiles"."handle" ~ '^[a-z0-9][a-z0-9_-]{1,29}$');

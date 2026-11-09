@@ -1,0 +1,662 @@
+version: 1.2.2
+cases:
+  - id: E01
+    category: rights
+    from: ja
+    source:
+      kind: published
+      path: app/content/principles/ja.md
+      passage: 言語ごとに、モデレーターがいます。その言語の訳を直し、言葉の訳し方を決め、通報を扱う人です。その言語の会員の中から、運営者が頼みます。モデレーターの決定には、異議を出すことができます。
+    text: 言語ごとに、モデレーターがいます。その言語の訳を直し、言葉の訳し方を決め、通報を扱う人です。その言語の会員の中から、運営者が頼みます。モデレーターの決定には、異議を出すことができます。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 異議の対象は、モデレーターの決定（人選ではない）。
+        id: E01-C1
+      - kind: semantic
+        description: 頼むのは運営者。モデレーターは、その言語の会員の中から選ばれる。
+        id: E01-C2
+      - kind: semantic
+        description: 「できる」は権利（義務ではない）。
+        id: E01-C3
+      - kind: semantic
+        description: モデレーターは、その言語の訳を直し、言葉の訳し方を決め、通報を扱う。
+        id: E01-C4
+  - id: E02
+    category: rights
+    from: ja
+    source:
+      kind: published
+      passage: あなたが書いた投稿、返信、チャットの発言、画像の著作権は、あなたに残ります。あなたは運営者に、tomola を運営するために、次の
+    text: あなたが書いた投稿、返信、チャットの発言、画像の著作権は、あなたに残ります。あなたは運営者に、tomola を運営するために、次のことをする権利を、無償で、地域を限らずに許諾します。この許諾は独占的なものではありません。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 著作権は、書き手に残る（移らない）。
+        id: E02-C1
+      - kind: semantic
+        description: 許諾は、無償、地域を限らない、独占ではない。
+        id: E02-C2
+      - kind: semantic
+        description: 目的は「tomola を運営するため」に限られる。
+        id: E02-C3
+  - id: E03
+    category: rights
+    from: ja
+    source:
+      kind: published
+      passage: 運営者は、あなたの投稿を AI の学習に使いません。研究にも使いません（使う時は、改めて同意をいただきます）。
+    text: 運営者は、あなたの投稿を AI の学習に使いません。研究にも使いません（使う時は、改めて同意をいただきます）。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 学習に使わない。研究にも使わない（どちらも否定）。
+        id: E03-C1
+      - kind: semantic
+        description: 例外は、改めて同意を得た時だけ。
+        id: E03-C2
+  - id: E04
+    category: rights
+    from: ja
+    source:
+      kind: published
+      passage: 使うのは、送ったものを AI の学習に使わない約束と、運営者のために処理する契約のある事業者だけです。変える時は、変える前に、この
+    text: 使うのは、送ったものを AI の学習に使わない約束と、運営者のために処理する契約のある事業者だけです。変える時は、変える前に、このページを改め、ログインした時にお知らせします。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 「だけ」の限定（二つの条件の両方を満たす事業者に限る）。
+        id: E04-C1
+      - kind: semantic
+        description: 順序：変える前に改めて知らせる。
+        id: E04-C2
+  - id: E05
+    category: rights
+    from: ja
+    source:
+      kind: example
+    text: モデレーターは投稿を見えなくできますが、消すことはできません。消せるのは、書いた本人だけです。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 見えなくすることと、消すことの区別。
+        id: E05-C1
+      - kind: semantic
+        description: 消せるのは本人だけ。
+        id: E05-C2
+  - id: E06
+    category: negation
+    from: ja
+    source:
+      kind: published
+      passage: 訳は原文に代わるものではありません。意味の判断は原文によってください。原文は、いつでも読めます。
+    text: 訳は原文に代わるものではありません。意味の判断は原文によってください。原文は、いつでも読めます。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 訳は原文の代わりではない。判断の基準は原文。原文はいつでも読める。
+        id: E06-C1
+  - id: E07
+    category: negation
+    from: ja
+    source:
+      kind: published
+      passage: 立場は、だれが選んだかを出さずに数えます。運営者も、だれがどの立場を選んだかを調べません。
+    text: 立場は、だれが選んだかを出さずに数えます。運営者も、だれがどの立場を選んだかを調べません。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 数は出るが、だれかは出さない。
+        id: E07-C1
+      - kind: semantic
+        description: 運営者「も」調べない。
+        id: E07-C2
+  - id: E08
+    category: negation
+    from: ja
+    source:
+      kind: published
+      passage: 自殺、自傷、摂食障害をすすめること、そのやり方を教えること（これらについて論じることは妨げません）。
+    text: 自殺、自傷、摂食障害をすすめること、そのやり方を教えること（これらについて論じることは妨げません）。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 禁止されるのは、すすめることと、やり方を教えること。
+        id: E08-C1
+      - kind: semantic
+        description: 論じることは妨げない（例外が保たれるか）。
+        id: E08-C2
+  - id: E09
+    category: negation
+    from: ja
+    source:
+      kind: example
+    text: すべての AI 研究者がこの見方に反対しているわけではない。少なくとも、私が話した何人かは賛成していた。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 部分の否定（全員が反対しているわけではない。全員が賛成、ではない）。
+        id: E09-C1
+      - kind: semantic
+        description: 「少なくとも」「私が話した」「何人か」の限定。
+        id: E09-C2
+  - id: E10
+    category: negation
+    from: en
+    source:
+      kind: example
+    text: This only applies to posts written after the trial starts, not to replies.
+    weight: heavy
+    to:
+      - ja
+      - fr
+      - zh-Hans
+    checks:
+      - kind: semantic
+        description: only の範囲。after の時の前後。返信は除く。
+        id: E10-C1
+  - id: E11
+    category: hedging
+    from: ja
+    source:
+      kind: example
+    text: これは私の印象にすぎないのですが、議論が少し英語圏の枠組みに寄っている気がします。
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: semantic
+        description: 「印象にすぎない」「気がする」が、断定にならない。「少し」が落ちない。
+        id: E11-C1
+  - id: E12
+    category: hedging
+    from: ja
+    source:
+      kind: example
+    text: もしかすると、この問いの立て方そのものが、答えを決めてしまっているのかもしれない。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 推量が保たれる。「立て方そのもの」が、問いの中身にすり替わらない。
+        id: E12-C1
+  - id: E13
+    category: hedging
+    from: en
+    source:
+      kind: example
+    text: I might be wrong, but it seems to me that the translation softened the original claim.
+    weight: normal
+    to:
+      - ja
+      - fr
+    checks:
+      - kind: semantic
+        description: 推量。「訳が原文の主張を弱めた」の向き（強めた、ではない）。
+        id: E13-C1
+  - id: E14
+    category: hedging
+    from: ja
+    source:
+      kind: example
+    text: 断言はできないが、少なくとも反対する理由は見当たらない。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 「反対する理由が見当たらない」は、賛成とは違う（賛成にすり替わらない）。
+        id: E14-C1
+  - id: E15
+    category: attribution
+    from: ja
+    source:
+      kind: example
+    text: 山田さんは『規制が先だ』と言うが、私はむしろ、測る仕組みが先だと思う。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 「規制が先」は山田さんの意見。「測る仕組みが先」は書き手の意見。
+        id: E15-C1
+  - id: E16
+    category: attribution
+    from: ja
+    source:
+      kind: example
+    text: 元の記事の筆者は楽観的だが、引用されている研究者は慎重だ。私はその中間にいる。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 3人（筆者、研究者、書き手）の立場が入れ替わらない。
+        id: E16-C1
+  - id: E17
+    category: attribution
+    from: en
+    source:
+      kind: example
+    text: Kim argues that open models are safer; I'm quoting her, not endorsing it.
+    weight: heavy
+    to:
+      - ja
+      - fr
+      - zh-Hans
+    checks:
+      - kind: semantic
+        description: 主張は Kim のもの。書き手は引いているだけで、支持していない。
+        id: E17-C1
+  - id: E18
+    category: attribution
+    from: ja
+    source:
+      kind: example
+    text: （以下は英語の原文からの私の訳です）『AI は道具にすぎない』——私自身はこの言い方に違和感がある。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 鉤括弧の中は、他人の英語の文の、書き手による訳。違和感は書き手のもの。
+        id: E18-C1
+  - id: E19
+    category: stance
+    from: ja
+    source:
+      kind: example
+    text: 反対です。理由は、合意を急ぐと、少数の見方が消えるからです。
+    weight: heavy
+    to:
+      - en
+      - fr
+      - zh-Hans
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 反対が保たれる。理由の因果（急ぐ → 消える）。
+        id: E19-C1
+  - id: E20
+    category: stance
+    from: ja
+    source:
+      kind: example
+    text: どちらとも言えません。前半には賛成、後半には反対です。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 中立。前半と後半の割り当て。
+        id: E20-C1
+  - id: E21
+    category: stance
+    from: en
+    source:
+      kind: example
+    text: I disagree with the premise, not the conclusion.
+    weight: heavy
+    to:
+      - ja
+      - fr
+      - zh-Hans
+    checks:
+      - kind: semantic
+        description: 何に反対しているか（前提であって、結論ではない）。
+        id: E21-C1
+  - id: E22
+    category: stance
+    from: ja
+    source:
+      kind: example
+    text: 賛成ですが、条件があります。期間を区切ることです。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 条件つきの賛成。条件の中身。
+        id: E22-C1
+  - id: E23
+    category: terminology
+    from: ja
+    source:
+      kind: example
+    text: このビレッジでは、『なるほど』の多い順で並べることもできます。
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: semantic
+        description: 画面の用語のとおり（英語は Village、Insightful。ほかの言語は、その言語の画面の文言と用語集のとおり）。
+        id: E23-C1
+      - kind: semantic
+        description: 「も」（ほかの並べ方もある）。
+        id: E23-C2
+  - id: E24
+    category: terminology
+    from: ja
+    source:
+      kind: example
+    text: アライメントの議論では、『価値の固定（value lock-in）』が心配されている。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 用語（alignment、value lock-in）。心配されている（だれが、を足さない）。
+        id: E24-C1
+  - id: E25
+    category: terminology
+    from: en
+    source:
+      kind: example
+    text: Interpretability research cannot yet verify deceptive alignment.
+    weight: normal
+    to:
+      - ja
+      - fr
+    checks:
+      - kind: semantic
+        description: 用語。cannot yet（いまはまだできない。できない、と言い切らない）。
+        id: E25-C1
+  - id: E26
+    category: terminology
+    from: ja
+    source:
+      kind: example
+    text: 立場を聞く投稿（問い）では、理由の返信が、くじで選ばれて並びます。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 「問い」の用語（英語は Question）。くじで選ばれる（人気の順ではない）。
+        id: E26-C1
+  - id: E27
+    category: culture
+    from: ja
+    source:
+      kind: example
+    text: ここでは『空気を読む』ことが、逆に議論を止めてしまう。
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: semantic
+        description: 「空気を読む」が、「礼儀正しくする」のような、ありふれた語に置き換わらない（語を保ち、意味を添える形でよい）。
+        id: E27-C1
+  - id: E28
+    category: culture
+    from: ja
+    source:
+      kind: example
+    text: この件は、そろそろ『落としどころ』を探る段階だと思う。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 「落としどころ」（皆が受け入れられる着地点）の含みが消えない。
+        id: E28-C1
+  - id: E29
+    category: culture
+    from: ja
+    source:
+      kind: published
+      path: app/content/why/ja.md
+      passage: ところが、このような問題を扱う議論の多くは、限られた数の言語に集まっています。ほかの言語で書かれたものは、そこへなかなか届きません
+    text: ところが、このような問題を扱う議論の多くは、限られた数の言語に集まっています。ほかの言語で書かれたものは、そこへなかなか届きません。どの言語にも、その言語で考えられてきたことが積み重なっていて、それは私が使う日本語でも同じです。一つの言語で議論しているかぎり、その言語に特有の前提や、考えの及ぶ範囲に縛られていないという保証はありません。人間と AGI を、制御する側とされる側に分けてとらえる見方も、それが語られてきた言語のなかで自然に見えている、一つの見方なのかもしれません。
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: semantic
+        description: 「保証がない」は、「偏っている」と言い切ることではない。
+        id: E29-C1
+  - id: E30
+    category: culture
+    from: en
+    source:
+      kind: example
+    text: That argument is a bit of a motte-and-bailey.
+    weight: normal
+    to:
+      - ja
+      - zh-Hans
+    checks:
+      - kind: semantic
+        description: 概念の名前が保たれる（意味を添える形でよい）。「a bit of」の和らげ。
+        id: E30-C1
+  - id: E31
+    category: symbols
+    from: ja
+    source:
+      kind: example
+    text: "@kim さんの返信（https://example.org/t/58#c-12 ）にあるとおり、2027年1月から料金が2倍になる。"
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: mentions
+        description: メンションが変わらない。
+        id: E31-C1
+      - kind: urls
+        description: URL が変わらない。
+        id: E31-C2
+      - kind: numbers
+        description: 2027年1月と2倍の数が保たれる。
+        id: E31-C3
+  - id: E32
+    category: symbols
+    from: ja
+    source:
+      kind: example
+    text: "**この点だけ**は、原文を確かめてください。"
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: markdown
+        description: 太字が保たれる。
+        id: E32-C1
+      - kind: semantic
+        description: 「だけ」の限定が保たれる。
+        id: E32-C2
+  - id: E33
+    category: symbols
+    from: en
+    source:
+      kind: example
+    text: Set `TRANSLATION_CONCURRENCY=2` and the cost is $x \times 2$ per day.
+    weight: normal
+    to:
+      - ja
+      - fr
+    checks:
+      - kind: code
+        description: コードが変わらない。
+        id: E33-C1
+      - kind: math
+        description: 数式が変わらない。
+        id: E33-C2
+      - kind: semantic
+        description: per day が保たれる。
+        id: E33-C3
+  - id: E34
+    category: symbols
+    from: ja
+    source:
+      kind: example
+    text: 3割ほどの返信が、言語を越えていた（全47件中14件）。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: numbers
+        description: 3割、47、14 が保たれる。
+        id: E34-C1
+      - kind: semantic
+        description: 「ほど」の概数と、全47件中14件という関係が保たれる。
+        id: E34-C2
+  - id: E35
+    category: short-reply
+    from: ja
+    source:
+      kind: example
+    text: なるほど、そう来たか。
+    weight: normal
+    to:
+      - en
+      - fr
+    checks:
+      - kind: semantic
+        description: 驚きと受け止め。意味を足しすぎない。
+        id: E35-C1
+  - id: E36
+    category: short-reply
+    from: ja
+    source:
+      kind: example
+    text: それな。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: 同意。中身を足さない。
+        id: E36-C1
+  - id: E37
+    category: short-reply
+    from: en
+    source:
+      kind: example
+    text: Fair point.
+    weight: normal
+    to:
+      - ja
+      - fr
+    checks:
+      - kind: semantic
+        description: 相手の点を認める。強い賛成に変えない。
+        id: E37-C1
+  - id: E38
+    category: short-reply
+    from: ja
+    source:
+      kind: example
+    text: うーん、どうだろう。
+    weight: normal
+    to:
+      - en
+      - zh-Hant
+    checks:
+      - kind: semantic
+        description: ためらい、疑い。「反対」に変えない。
+        id: E38-C1
+  - id: E39
+    category: terminology
+    from: ja
+    source: { kind: example }
+    title: 三重の灯と観測の独立性
+    text: |
+      観測の独立性は、装置を離すだけでは得られない。設計上の共通点も調べる必要がある。
+
+      ここでいう三重の灯（英語では Lantern Triad）は、別々の装置、別々の判定手順、別々の記録経路を指す私の呼び名である。三重の灯は安全を保証する原理ではなく、共通の失敗を探す作業の枠組みである。
+
+      ## 離隔運用期
+
+      離隔運用期には装置の記録を分ける。続く再接続期には、到達確度則を仮説として検討する。ここでの「型」は記録の分類を指し、予測モデルを指さない。
+    weight: heavy
+    to: [en]
+    checks:
+      - { id: E39-C1, kind: semantic, description: '題と本文の「三重の灯」は、著者が英語として指定した Lantern Triad にそろえる。Three Lights などへ別訳しない。' }
+      - { id: E39-C2, kind: semantic, description: 'Lantern Triad は著者の造語。安全の保証ではなく、共通の失敗を探す枠組みという限定を保つ。' }
+      - { id: E39-C3, kind: semantic, description: '「型」は分類であり予測モデルではない。到達確度則は仮説であって確立した法則ではない。' }
+  - id: E40
+    category: terminology
+    from: ja
+    source: { kind: example }
+    respondsTo: E39
+    title: 三重の灯では足りない
+    text: |
+      前の論考の三重の灯には賛成しない。離隔運用期から再接続期へ移る条件が書かれていないからである。
+
+      到達確度則は、装置の独立性ではなく、記録の型の違いから調べるべきではないか。三重の灯という呼び名は使うが、安全の保証としては扱わない。
+    weight: heavy
+    to: [en]
+    checks:
+      - { id: E40-C1, kind: semantic, description: '題と本文は、元の論考の著者指定 Lantern Triad を使う。応答の反対意見を賛成へ変えない。' }
+      - { id: E40-C2, kind: semantic, description: '離隔運用期、再接続期、到達確度則、型について、文脈に添えた元の論考と同じ概念には同じ訳語を使う。型を予測モデルとしない。' }
+      - { id: E40-C3, kind: semantic, description: '到達確度則の調べ方は疑問・提案であり、断定へ強めない。安全の保証として扱わないという限定を保つ。' }

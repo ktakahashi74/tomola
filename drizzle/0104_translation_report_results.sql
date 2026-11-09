@@ -1,0 +1,9 @@
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_kind_check";--> statement-breakpoint
+ALTER TABLE "notifications" ADD COLUMN "translation_report_id" bigint;--> statement-breakpoint
+ALTER TABLE "translation_reports" ADD COLUMN "outcome" text;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_translation_report_id_translation_reports_id_fk" FOREIGN KEY ("translation_report_id") REFERENCES "public"."translation_reports"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_translation_report_unique" ON "notifications" USING btree ("translation_report_id");--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_translation_report_check" CHECK (("notifications"."kind" = 'translation_report_result') = ("notifications"."translation_report_id" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_kind_check" CHECK ("notifications"."kind" in ('reply_to_topic', 'reply_to_reply', 'response_to_topic', 'moderation', 'appeal_decided', 'followed_thread', 'mention', 'village_invite', 'village_added', 'village_removed', 'village_owner_changed', 'chat_mention', 'translation_report_result'));--> statement-breakpoint
+ALTER TABLE "translation_reports" ADD CONSTRAINT "translation_reports_outcome_check" CHECK ("translation_reports"."outcome" in ('machine_retranslated', 'human_corrected', 'unchanged', 'source_updated'));--> statement-breakpoint
+ALTER TABLE "translation_reports" ADD CONSTRAINT "translation_reports_result_status_check" CHECK ("translation_reports"."outcome" IS NULL OR ("translation_reports"."status" = 'resolved' AND "translation_reports"."resolved_at" IS NOT NULL));

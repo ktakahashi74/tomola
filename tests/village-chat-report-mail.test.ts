@@ -1,0 +1,72 @@
+import { consentChatMembers } from "./helpers/chat-consent";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
+import { addMember, createTestDb } from "./helpers/db";
+import { selectedTables } from "./helpers/query-tables";
+import { chatMessages, profiles, villageMembers, villages } from "~/lib/db/schema";
+import { createChatReport, moderateChatReport } from "~/lib/village-chat-reports.server";
+import { mutateChat } from "~/lib/village-chat.server";
+import { createNotificationHandlers, ensureDigestScheduled } from "~/lib/jobs/notification-jobs.server";
+import { runDueJobs } from "~/lib/jobs/queue.server";
+import { createMailer } from "~/lib/mail/mail.server";
+import { createMemoryMailbox } from "~/lib/mail/transports.server";
+import { chatMailVillageName } from "~/lib/village-chat-villages.server";
+import { notificationMail } from "~/lib/mail/notification.server";
+import { setTestMessages } from "./stubs/paraglide-messages";
+import { jsonMessages } from "./helpers/messages-json";
+
+beforeEach(() => setTestMessages(jsonMessages()));
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); setTestMessages(); });
+it.each(["immediate", "auto", "daily"])("delivers chat moderation with no body, author or explanation and retains it after closing (%s)", async emailPref => {
+  vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
+  const db = await createTestDb();
+  for (const id of ["cmail_writer", "cmail_reporter", "cmail_mod"]) await addMember(db, id, id);
+  await db.update(profiles).set({ emailPref, uiLocale: "en" }).where(eq(profiles.userId, "cmail_writer"));
+  const [village] = await db.insert(villages).values({ slug: "chat-moderation-mail", name: "Public mail village", kind: "open" }).returning();
+  await db.insert(villageMembers).values(["cmail_writer", "cmail_reporter"].map(userId => ({ villageId: village.id, userId })));
+  await consentChatMembers(db);
+  const sent = await mutateChat(db, "cmail_writer", village.slug!, "send", { body: "DO_NOT_MAIL_PRIVATE_CHAT_BODY" });
+  await db.update(chatMessages).set({ lang: "en" }).where(eq(chatMessages.id, sent.id));
+  const report = await createChatReport(db, "cmail_reporter", { slug: village.slug!, messageId: sent.id, reason: "harassment" });
+  const hidden = await moderateChatReport(db, { id: "cmail_mod", scope: { operator: false, langs: ["en"] } }, { reportId: report.id, intent: "hide", reason: "harassment", note: "DO_NOT_MAIL_PRIVATE_CHAT_BODY" });
+  vi.stubEnv("VILLAGES", ""); vi.stubEnv("VILLAGE_CHAT", "");
+  const box = createMemoryMailbox(), mailer = createMailer(box.transport, "tomola <no-reply@example.org>");
+  const handlers = createNotificationHandlers({ mailer: () => mailer });
+  const now = new Date(Date.now() + (emailPref !== "immediate" ? 2 * 86400000 : 6 * 60000));
+  if (emailPref !== "immediate") await ensureDigestScheduled(db, new Date());
+  const seen = selectedTables(db);
+  await runDueJobs(db, handlers, { now, logger: { error() {}, warn() {} }, limit: 100 }); seen.restore();
+  expect(box.sent).toHaveLength(1);
+  const content = JSON.stringify(box.sent.map(mail => ({ subject: mail.subject, text: mail.text, html: mail.html })));
+  expect(content).not.toContain("DO_NOT_MAIL_PRIVATE_CHAT_BODY"); expect(content).not.toContain("cmail_writer");
+  expect(content).toContain(village.name); expect(content).toContain(`/appeal/${hidden.actionId}`);
+  expect(seen.tables.has("chat_report_snapshots")).toBe(false);
+  expect(seen.queries.filter(query => query.sql.includes('from "chat_messages"')).every(query => !query.sql.includes('"body"'))).toBe(true);
+});
+
+it("never includes the name of a private village in a chat moderation email", () => {
+  const text = notificationMail({ to: "member@example.org", locale: "en", settingsUrl: "https://example.org/settings", item: { kind: "moderation", action: "hide_chat", reason: "other", url: "https://example.org/appeal/42", villageName: chatMailVillageName({ kind: "invite_private", name: "PRIVATE_VILLAGE_NAME", language: null }, "en") } });
+  expect(JSON.stringify(text)).not.toContain("PRIVATE_VILLAGE_NAME");
+});
+
+it.each([["immediate", "en", "English village"], ["immediate", "ja", "英語のビレッジ"], ["daily", "ja", "英語のビレッジ"]] as const)("names a language village in the recipient's %s/%s moderation mail", async (emailPref, locale, expected) => {
+  setTestMessages(jsonMessages());
+  vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
+  const db = await createTestDb();
+  for (const id of ["lmail_writer", "lmail_reporter", "lmail_mod"]) await addMember(db, id, id);
+  await db.update(profiles).set({ emailPref, uiLocale: locale }).where(eq(profiles.userId, "lmail_writer"));
+  const [village] = await db.insert(villages).values({ slug: "en", language: "en", system: true, kind: "open" }).returning();
+  await db.insert(villageMembers).values(["lmail_writer", "lmail_reporter"].map(userId => ({ villageId: village.id, userId })));
+  await consentChatMembers(db);
+  const sent = await mutateChat(db, "lmail_writer", "en", "send", { body: "DO_NOT_MAIL_LANGUAGE_CHAT_BODY" });
+  await db.update(chatMessages).set({ lang: "en" }).where(eq(chatMessages.id, sent.id));
+  const report = await createChatReport(db, "lmail_reporter", { slug: "en", messageId: sent.id, reason: "spam" });
+  await moderateChatReport(db, { id: "lmail_mod", scope: { operator: false, langs: ["en"] } }, { reportId: report.id, intent: "hide", reason: "spam", note: "Private explanation" });
+  const box = createMemoryMailbox(), mailer = createMailer(box.transport, "tomola <no-reply@example.org>");
+  if (emailPref === "daily") await ensureDigestScheduled(db, new Date());
+  await runDueJobs(db, createNotificationHandlers({ mailer: () => mailer }), { now: new Date(Date.now() + (emailPref === "daily" ? 2 * 86400000 : 6 * 60000)), logger: { error() {}, warn() {} }, limit: 100 });
+  expect(box.sent).toHaveLength(1);
+  expect(box.sent[0].text).toContain(expected);
+  if (locale === "ja") expect(box.sent[0].text).not.toContain("English village");
+  expect(box.sent[0].text).not.toContain("DO_NOT_MAIL_LANGUAGE_CHAT_BODY");
+});

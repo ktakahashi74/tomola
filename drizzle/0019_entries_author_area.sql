@@ -1,0 +1,2 @@
+ALTER TABLE "entries" ADD COLUMN "author_area" text;--> statement-breakpoint
+ALTER TABLE "entries" ADD CONSTRAINT "entries_author_area_check" CHECK ("entries"."author_area" in ('ja', 'en', 'fr', 'de', 'zh-Hant', 'zh-Hans', 'ko', 'th', 'vi', 'other'));

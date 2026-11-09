@@ -1,0 +1,1 @@
+CREATE INDEX "entries_author_idx" ON "entries" USING btree ("author_id","created_at");

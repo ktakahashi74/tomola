@@ -1,0 +1,375 @@
+# Optional glossary sample matching docs/drafts/glossary-initial.md. Preserve the
+# multilingual candidates and notes; the Markdown file is the human-readable reference.
+# Import: pnpm glossary:import docs/drafts/glossary-initial.yaml
+# Creates every direction between the five languages, idempotently. Format and
+# export round-trip rules: app/lib/glossary-io.server.ts.
+# terms: candidate forms by language; source punctuation and parentheses are retained.
+# note: contextual guidance. keep_original: languages that may retain the source form.
+# needs_review: target languages whose candidates still need review. Operators should
+# review all language choices with their members, including those not listed here.
+format: tomola-glossary
+version: 1
+entries:
+
+  # AI alignment
+  - terms:
+      en: ["AI alignment"]
+      ja: ["AIアライメント", "AIアラインメント"]
+      fr: ["alignement de l'IA"]
+      zh-Hans: ["AI对齐", "人工智能对齐"]
+      zh-Hant: ["AI對齊", "人工智慧對齊"]
+    note: "「整列」「配置」とは訳さない。日本語の表記は「アライメント」と「アラインメント」が併存する。場では「アライメント」を先に挙げる。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # AI safety
+  - terms:
+      en: ["AI safety"]
+      ja: ["AI安全性", "AIの安全性"]
+      fr: ["sûreté de l'IA"]
+      zh-Hans: ["AI安全", "人工智能安全"]
+      zh-Hant: ["AI安全", "人工智慧安全"]
+    note: "safety（事故や意図しない害を防ぐこと）と security（攻撃から守ること）を区別する。仏語は sûreté（safety）と sécurité（security）で分ける。中国語はどちらも「安全」になりやすいので、区別が要る文脈では注記を足す。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # AI security
+  - terms:
+      en: ["AI security"]
+      ja: ["AIセキュリティ"]
+      fr: ["sécurité de l'IA"]
+      zh-Hans: ["AI安全防护", "人工智能安全防护"]
+      zh-Hant: ["AI資安", "人工智慧資訊安全"]
+    note: "AI safety（事故や意図しない害を防ぐこと）と取り違えない。こちらは、攻撃から守ることを指す。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # interpretability
+  - terms:
+      en: ["interpretability"]
+      ja: ["解釈可能性"]
+      fr: ["interprétabilité"]
+      zh-Hans: ["可解释性"]
+      zh-Hant: ["可解釋性"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # mechanistic interpretability
+  - terms:
+      en: ["mechanistic interpretability"]
+      ja: ["メカニスティック解釈可能性", "機械論的解釈可能性"]
+      fr: ["interprétabilité mécaniste"]
+      zh-Hans: ["机制可解释性"]
+      zh-Hant: ["機制可解釋性"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # reward hacking
+  - terms:
+      en: ["reward hacking"]
+      ja: ["報酬ハッキング"]
+      fr: ["piratage de la récompense（英語のまま使われることも多い）"]
+      zh-Hans: ["奖励黑客", "奖励投机"]
+      zh-Hant: ["獎勵駭客", "獎勵投機"]
+    note: "原語のまま可。"
+    keep_original: [en]
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # specification gaming
+  - terms:
+      en: ["specification gaming"]
+      ja: ["仕様ゲーミング"]
+      fr: ["contournement de la spécification（英語のまま使われることも多い）"]
+      zh-Hans: ["规范博弈", "规格投机"]
+      zh-Hant: ["規範博弈", "規格投機"]
+    note: "原語のまま可。"
+    keep_original: [en]
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # corrigibility
+  - terms:
+      en: ["corrigibility"]
+      ja: ["修正可能性", "コリジビリティ"]
+      fr: ["corrigibilité"]
+      zh-Hans: ["可纠正性", "可修正性"]
+      zh-Hant: ["可修正性", "可矯正性"]
+    note: "人による修正や停止を受け入れる性質。「訂正しやすさ」の一般の意味ではない。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # deceptive alignment
+  - terms:
+      en: ["deceptive alignment"]
+      ja: ["欺瞞的アライメント"]
+      fr: ["alignement trompeur"]
+      zh-Hans: ["欺骗性对齐"]
+      zh-Hant: ["欺騙性對齊"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # inner alignment
+  - terms:
+      en: ["inner alignment"]
+      ja: ["内部アライメント"]
+      fr: ["alignement interne"]
+      zh-Hans: ["内部对齐"]
+      zh-Hant: ["內部對齊"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # outer alignment
+  - terms:
+      en: ["outer alignment"]
+      ja: ["外部アライメント"]
+      fr: ["alignement externe"]
+      zh-Hans: ["外部对齐"]
+      zh-Hant: ["外部對齊"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # mesa-optimizer
+  - terms:
+      en: ["mesa-optimizer"]
+      ja: ["メサ最適化器"]
+      fr: ["mesa-optimiseur"]
+      zh-Hans: ["内层优化器", "mesa 优化器"]
+      zh-Hant: ["內層最佳化器", "mesa 最佳化器"]
+    note: "原語のまま可。"
+    keep_original: [en]
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # red teaming
+  - terms:
+      en: ["red teaming"]
+      ja: ["レッドチーミング"]
+      fr: ["red teaming", "tests d'équipe rouge"]
+      zh-Hans: ["红队测试"]
+      zh-Hant: ["紅隊演練", "紅隊測試"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # existential risk (x-risk)
+  - terms:
+      en: ["existential risk (x-risk)"]
+      ja: ["存亡リスク", "実存的リスク"]
+      fr: ["risque existentiel"]
+      zh-Hans: ["生存风险", "存在性风险"]
+      zh-Hant: ["生存風險", "存在性風險"]
+    note: "人類の存続や将来の可能性を損なう規模のリスク。哲学の「実存」の意味ではない。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # catastrophic risk
+  - terms:
+      en: ["catastrophic risk"]
+      ja: ["破局的リスク", "壊滅的リスク"]
+      fr: ["risque catastrophique"]
+      zh-Hans: ["灾难性风险"]
+      zh-Hant: ["災難性風險"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # frontier AI
+  - terms:
+      en: ["frontier AI"]
+      ja: ["フロンティアAI"]
+      fr: ["IA de pointe"]
+      zh-Hans: ["前沿人工智能"]
+      zh-Hant: ["前沿人工智慧"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # frontier model
+  - terms:
+      en: ["frontier model"]
+      ja: ["フロンティアモデル"]
+      fr: ["modèle de pointe", "modèle de frontière"]
+      zh-Hans: ["前沿模型"]
+      zh-Hant: ["前沿模型"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # AGI (artificial general intelligence)
+  - terms:
+      en: ["AGI (artificial general intelligence)"]
+      ja: ["汎用人工知能（AGI）"]
+      fr: ["intelligence artificielle générale（IAG、AGI）"]
+      zh-Hans: ["通用人工智能（AGI）"]
+      zh-Hant: ["通用人工智慧（AGI）"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # superintelligence
+  - terms:
+      en: ["superintelligence"]
+      ja: ["超知能"]
+      fr: ["superintelligence"]
+      zh-Hans: ["超级智能"]
+      zh-Hant: ["超級智慧"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # scalable oversight
+  - terms:
+      en: ["scalable oversight"]
+      ja: ["スケーラブルな監督"]
+      fr: ["supervision évolutive"]
+      zh-Hans: ["可扩展监督"]
+      zh-Hant: ["可擴展監督"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # evals（dangerous capability evaluations）
+  - terms:
+      en: ["evals（dangerous capability evaluations）"]
+      ja: ["評価（危険な能力の評価）"]
+      fr: ["évaluations（des capacités dangereuses）"]
+      zh-Hans: ["评测（危险能力评测）"]
+      zh-Hant: ["評測（危險能力評測）"]
+    note: "モデルの能力や危険性を測る試験の意味。一般の「評価」と区別が要る文脈では補う。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # jailbreak
+  - terms:
+      en: ["jailbreak"]
+      ja: ["ジェイルブレイク", "脱獄"]
+      fr: ["jailbreak", "contournement"]
+      zh-Hans: ["越狱"]
+      zh-Hant: ["越獄"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # prompt injection
+  - terms:
+      en: ["prompt injection"]
+      ja: ["プロンプトインジェクション"]
+      fr: ["injection de prompt", "injection d'instructions"]
+      zh-Hans: ["提示注入", "提示词注入"]
+      zh-Hant: ["提示詞注入"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # model weights
+  - terms:
+      en: ["model weights"]
+      ja: ["モデルの重み"]
+      fr: ["poids du modèle"]
+      zh-Hans: ["模型权重"]
+      zh-Hant: ["模型權重"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # open-weight model
+  - terms:
+      en: ["open-weight model"]
+      ja: ["オープンウェイトモデル", "重み公開モデル"]
+      fr: ["modèle à poids ouverts"]
+      zh-Hans: ["开放权重模型"]
+      zh-Hant: ["開放權重模型"]
+    note: "「オープンソース」とは区別する（重みだけが公開されていることが多い）。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # compute（名詞）
+  - terms:
+      en: ["compute"]
+      ja: ["計算資源"]
+      fr: ["puissance de calcul", "ressources de calcul"]
+      zh-Hans: ["算力", "计算资源"]
+      zh-Hant: ["算力", "運算資源"]
+    note: "動詞の「計算する」ではない。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # AI governance
+  - terms:
+      en: ["AI governance"]
+      ja: ["AIガバナンス"]
+      fr: ["gouvernance de l'IA"]
+      zh-Hans: ["人工智能治理"]
+      zh-Hant: ["人工智慧治理"]
+    note: ""
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 共生
+  - terms:
+      en: ["coexistence", "symbiosis"]
+      ja: ["共生"]
+      fr: ["coexistence", "symbiose"]
+      zh-Hans: ["共生", "共存"]
+      zh-Hant: ["共生", "共存"]
+    note: "人と AI の関係を言うときは、多くは「共に存在し、影響し合う」の意味（coexistence）。生物の共生の比喩であることが明らかなときだけ symbiosis にする。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 制御
+  - terms:
+      en: ["control"]
+      ja: ["制御"]
+      fr: ["contrôle"]
+      zh-Hans: ["控制"]
+      zh-Hant: ["控制"]
+    note: "AI 安全性の文脈では、「AI control」（不整合でありうる AI を安全に使うための研究の分野）を指すことがある。一般の制御と区別が要る文脈では補う。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 価値観
+  - terms:
+      en: ["values"]
+      ja: ["価値観"]
+      fr: ["valeurs"]
+      zh-Hans: ["价值观"]
+      zh-Hant: ["價值觀"]
+    note: "「人間の価値観に沿わせる」のように、人や社会が大切にするものを指す。英語では複数形の values。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 価値
+  - terms:
+      en: ["value"]
+      ja: ["価値"]
+      fr: ["valeur"]
+      zh-Hans: ["价值"]
+      zh-Hant: ["價值"]
+    note: "文脈で意味が分かれる。大切にするもの（value、values）か、経済的な値打ち（worth、value）かを、文脈で判断する。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 安全性
+  - terms:
+      en: ["safety"]
+      ja: ["安全性"]
+      fr: ["sûreté"]
+      zh-Hans: ["安全性"]
+      zh-Hant: ["安全性"]
+    note: "security（セキュリティ。攻撃から守ること）と区別する。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]
+
+  # 熟議
+  - terms:
+      en: ["deliberation"]
+      ja: ["熟議"]
+      fr: ["délibération"]
+      zh-Hans: ["审议"]
+      zh-Hant: ["審議"]
+    note: "「議論」（discussion、debate）と区別する。台湾では deliberative democracy を「審議民主」と訳すのが通例。中国大陸の「协商」は「协商民主」として政治の制度の含意を持つので、候補にしない（参加者に確かめる）。"
+    keep_original: []
+    needs_review: [fr, zh-Hans, zh-Hant]

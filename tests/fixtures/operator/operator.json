@@ -1,0 +1,65 @@
+{
+  "status": "configured",
+  "name": {
+    "en": "Test Community",
+    "ja": "テストの運営者"
+  },
+  "contactEmail": "support@example.net",
+  "privacyEmail": "data@example.net",
+  "participation": {
+    "minimumAge": 18,
+    "excludedResidenceCountries": [
+      "CN",
+      "DE"
+    ],
+    "requireTrialConsent": true,
+    "trialConsentVersion": 3,
+    "stanceConsentVersion": 1,
+    "copy": {
+      "en": {
+        "countryExcluded": "This test community does not accept registration or posts from residents of China or Germany. Choose again if you selected the wrong country.",
+        "invitationRestriction": "Invited people aged 18 or older outside China and Germany can join this test community.",
+        "eligibilitySummary": "You need an invitation, confirmation that you are 18 or older, and an eligible country of residence."
+      },
+      "ja": {
+        "countryExcluded": "このテスト用コミュニティでは、中国とドイツの居住者は登録・投稿できません。国の選択を間違えた場合は選び直してください。",
+        "invitationRestriction": "招待を受けた18歳以上で、中国・ドイツ以外に住む人が参加できます。",
+        "eligibilitySummary": "招待、18歳以上であることの確認、対象の国での居住が参加条件です。"
+      }
+    }
+  },
+  "copy": {
+    "en": {
+      "aiRecipient": "an external service provider",
+      "stanceDisclosure": "The privacy notice describes this test community's policy on operator access to stance records.",
+      "stanceConsent": "The privacy notice describes this test community's policy on operator access to stance records.",
+      "trainingPolicy": ". This test community's participation agreement describes the conditions for using what you write.",
+      "chatProvider": "See the {privacy} for this test community's providers, processing locations, contracts and change-notification policy.",
+      "chatProviderChange": "The privacy notice describes this test community's current providers and change-notification policy.",
+      "termsLabel": null,
+      "countryHelp": null,
+      "adultError": null,
+      "agreementLabel": null,
+      "agreementError": null,
+      "reviewTitle": null,
+      "reviewHelp": null,
+      "testSiteNotice": null
+    },
+    "ja": {
+      "aiRecipient": "外部の事業者",
+      "stanceDisclosure": "このテスト用コミュニティで、運営者が立場の記録を閲覧する方針は、プライバシーの説明に書いてあります。",
+      "stanceConsent": "このテスト用コミュニティで、運営者が立場の記録を閲覧する方針は、プライバシーの説明に書いてあります。",
+      "trainingPolicy": "このテスト用コミュニティで、書いたものを利用する条件は、参加の約束に書いてあります。",
+      "chatProvider": "このテスト用コミュニティの事業者、処理する場所、契約、変更を知らせる方針は、{privacy}に書いてあります。",
+      "chatProviderChange": "このテスト用コミュニティの、いまの事業者と変更を知らせる方針は、プライバシーの説明に書いてあります。",
+      "termsLabel": null,
+      "countryHelp": null,
+      "adultError": null,
+      "agreementLabel": null,
+      "agreementError": null,
+      "reviewTitle": null,
+      "reviewHelp": null,
+      "testSiteNotice": null
+    }
+  }
+}

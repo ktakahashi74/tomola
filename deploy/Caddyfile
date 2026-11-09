@@ -1,0 +1,63 @@
+# Example Caddy configuration for automatic TLS and reverse proxying to the app. docker-compose.yml loads this file. Set SITE_ADDRESS to the public hostname.
+# If the hostname's DNS points to this server and ports 80 and 443 are open, Caddy automatically obtains a Let's Encrypt certificate.
+# Without Docker, run `SITE_ADDRESS=forum.example.org caddy run --config deploy/Caddyfile` and change the app upstream from app:3000 to 127.0.0.1:3000.
+#
+# X-Forwarded-For and TRUSTED_PROXY_HOPS:
+#   Caddy does not trust client-supplied X-Forwarded-For unless the sender is listed in trusted_proxies; it replaces it with the connecting peer's address before forwarding to the app.
+#   Thus, the rightmost X-Forwarded-For address seen by the app is the real client. This is what the app's `TRUSTED_PROXY_HOPS=1` means: one proxy hop.
+#   With another proxy or CDN before Caddy, list its egress addresses in `trusted_proxies` below and increase the hop count accordingly: CDN plus Caddy means two hops.
+#   An incorrect hop count either groups everyone under one proxy IP, applying the per-IP rate limit to all users together, or causes forged addresses to be trusted.
+#
+# Preserve Host when forwarding to the app, Caddy's default. React Router checks form origins by comparing Origin and Host, so do not change it.
+
+{$SITE_ADDRESS} {
+	# The app handles compression in server.ts, so do not add encode in Caddy.
+	reverse_proxy app:3000 {
+		# Check liveness through the app's /healthz, which does not access the database.
+		health_uri /healthz
+		health_interval 10s
+		health_timeout 3s
+	}
+
+	# Request-body limit, matching the app's MAX_REQUEST_BODY_BYTES default of 2 MiB. Caddy rejects oversized bodies with 413 before forwarding them to the app.
+	# Image actions allow 10 MiB of image data plus 64 KiB of multipart overhead.
+	# Include React Router fetcher paths; path matching excludes the query string.
+	@imageUpload {
+		method POST
+		path_regexp ^/(media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+	}
+	request_body @imageUpload {
+		max_size 10551296
+	}
+	@ordinaryBody {
+		not {
+			method POST
+			path_regexp ^/(media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+		}
+	}
+	request_body @ordinaryBody {
+		max_size 2MiB
+	}
+
+	header {
+		-Server
+	}
+
+	# Access logging is disabled by default. If enabled, URLs containing tokens (?k=, ?q=, /auth/confirm?token=, /invite/<token>) would be retained verbatim, so redact the entire query string
+	# rather than maintaining a list of secret parameter names, which changes as features are added. Also remove Referer, since other pages' URLs can contain ?k= and similar parameters.
+	# Caddy redacts credentials such as Cookie and Authorization by default; the global log_credentials option is disabled by default.
+	# Invitation-path redaction is approximate: the regex cannot cover alternative spellings such as /./invite/… or /%69nvite/…. For reliable protection, omit the URI with `request>uri delete`
+	# and use the app's access log in server.ts, which resolves these spellings before redacting. The example below follows Caddy's log format filter syntax, with fields and filters inside fields,
+	# but has not been verified by running it:
+	# log {
+	# 	output stdout
+	# 	format filter {
+	# 		wrap json
+	# 		fields {
+	# 			request>uri regexp \?.* ?[redacted]
+	# 			request>uri regexp (?i)/invite/[^/?]+ /invite/[redacted]
+	# 			request>headers>Referer delete
+	# 		}
+	# 	}
+	# }
+}

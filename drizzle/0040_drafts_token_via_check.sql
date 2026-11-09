@@ -1,0 +1,1 @@
+ALTER TABLE "drafts" ADD CONSTRAINT "drafts_token_via_check" CHECK ("drafts"."via" = 'api' or "drafts"."token_id" is null);

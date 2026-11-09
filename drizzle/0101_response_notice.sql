@@ -1,0 +1,5 @@
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_kind_check";--> statement-breakpoint
+ALTER TABLE "drafts" ADD COLUMN "response_to" bigint;--> statement-breakpoint
+ALTER TABLE "drafts" ADD CONSTRAINT "drafts_response_to_entries_id_fk" FOREIGN KEY ("response_to") REFERENCES "public"."entries"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "drafts" ADD CONSTRAINT "drafts_response_to_check" CHECK ("drafts"."response_to" IS NULL OR ("drafts"."kind" = 'topic' AND "drafts"."via" = 'web'));--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_kind_check" CHECK ("notifications"."kind" in ('reply_to_topic', 'reply_to_reply', 'response_to_topic', 'moderation', 'appeal_decided', 'followed_thread', 'mention', 'village_invite', 'village_added', 'village_removed', 'village_owner_changed', 'chat_mention'));

@@ -1,0 +1,11 @@
+allowBuilds:
+  esbuild: true
+  # Explicitly forbid these packages' lifecycle scripts: they are unnecessary (@google/genai prepare calls a nonexistent file; protobufjs postinstall only emits a warning).
+  "@google/genai": false
+  protobufjs: false
+
+# rehype-katex still declares katex ^0.16. One KaTeX version must both render the markup and ship the stylesheet.
+overrides:
+  katex: ^0.19.1
+  # The retired Drizzle loader pins esbuild before the development-server security fix.
+  "@esbuild-kit/core-utils>esbuild": ^0.25.12

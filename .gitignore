@@ -1,0 +1,62 @@
+# Credentials, local settings, and editor backups
+.DS_Store
+.env
+.env.*
+!.env.example
+*~
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+
+# Dependencies, build output, and generated translations
+/node_modules/
+/.react-router/
+/build/
+/app/paraglide/
+/app/lib/i18n/review-counts.generated.json
+/app/lib/cn-tables.generated.mjs
+
+# Local data and operational exports
+/.data/
+/compare-out/
+/out/
+/key/
+/backups/
+/exports/
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.jsonl
+invitations.private.json
+mails.jsonl
+
+# Private work context and agent logs
+/.claude/
+/.codex/
+/.agent-shell/
+/.superpowers/
+CLAUDE-SECURITY-*
+/tomola-private/
+/materials/
+/notes/
+/history/
+/audit/
+/publication/
+
+# Internal originals and home testing; publish separate reviewed documents.
+# Adding these patterns does not remove files already tracked by Git.
+/docs/design.md
+/docs/plans/
+/docs/reports/
+/deploy/home-trial*
+
+# Test output
+/.vitest/
+/test-results/
+/test-results-public/
+/playwright-report/

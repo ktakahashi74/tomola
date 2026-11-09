@@ -1,0 +1,131 @@
+{
+  "app/components/ai-choice-form.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "app/components/ai-write.tsx": {
+    "react-hooks/exhaustive-deps": 2,
+    "react-hooks/refs": 6
+  },
+  "app/components/body-translation-wait.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/chat-message.tsx": {
+    "jsx-a11y/click-events-have-key-events": 1,
+    "jsx-a11y/no-noninteractive-element-interactions": 1,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/digest-time.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/draft-autosave-content.tsx": {
+    "react-hooks/refs": 4,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/draft-keeper-content.tsx": {
+    "react-hooks/refs": 2
+  },
+  "app/components/entry-language.tsx": {
+    "react-hooks/exhaustive-deps": 1,
+    "react-hooks/immutability": 1
+  },
+  "app/components/entry-preview.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/login-code-form.tsx": {
+    "jsx-a11y/no-autofocus": 1
+  },
+  "app/components/long-form-body.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "app/components/media-upload-client.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "app/components/open-in-ai.tsx": {
+    "react-hooks/purity": 1
+  },
+  "app/components/reactions.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/rich-text-editor.client.tsx": {
+    "jsx-a11y/no-autofocus": 1,
+    "react-hooks/exhaustive-deps": 1,
+    "react-hooks/refs": 2
+  },
+  "app/components/route-error.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/signed-form.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/topic-fields.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "app/components/topic-list.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/topic-share.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/translation-watch.tsx": {
+    "react-hooks/refs": 1
+  },
+  "app/components/ui/label.tsx": {
+    "jsx-a11y/label-has-associated-control": 1
+  },
+  "app/components/unsaved-form-guard.tsx": {
+    "react-hooks/exhaustive-deps": 1,
+    "react-hooks/immutability": 6,
+    "react-hooks/preserve-manual-memoization": 4,
+    "react-hooks/refs": 1
+  },
+  "app/components/use-ai-open-return.ts": {
+    "react-hooks/exhaustive-deps": 1,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/components/village-target.tsx": {
+    "react-hooks/immutability": 2,
+    "react-hooks/set-state-in-effect": 2
+  },
+  "app/lib/use-chat-position.ts": {
+    "react-hooks/exhaustive-deps": 1,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/lib/use-village-chat.ts": {
+    "react-hooks/exhaustive-deps": 7,
+    "react-hooks/purity": 1
+  },
+  "app/root.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/draft.tsx": {
+    "react-hooks/refs": 21,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/invites-new.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/login.tsx": {
+    "react-hooks/refs": 33
+  },
+  "app/routes/mod-chat.tsx": {
+    "react-hooks/set-state-in-effect": 2
+  },
+  "app/routes/onboarding.tsx": {
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/topic-new.tsx": {
+    "react-hooks/refs": 5,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/topic.tsx": {
+    "react-hooks/exhaustive-deps": 2,
+    "react-hooks/set-state-in-effect": 1
+  },
+  "app/routes/village-chat.tsx": {
+    "jsx-a11y/no-noninteractive-element-interactions": 1,
+    "react-hooks/exhaustive-deps": 2,
+    "react-hooks/immutability": 1,
+    "react-hooks/refs": 4,
+    "react-hooks/set-state-in-effect": 2
+  }
+}
