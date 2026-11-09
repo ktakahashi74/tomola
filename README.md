@@ -6,7 +6,7 @@ The software is under development. Before inviting members, complete the operati
 
 ## Features
 
-- Invitation-based accounts, email sign-in by a six-digit code or confirmation link, and passkeys. Codes and links work only in the requesting browser, expire after 15 minutes, and share a single use. Members can enable passkey signatures for their posts; signing is disabled by default.
+- Email sign-in by a six-digit code or confirmation link, and passkeys. Codes and links work only in the requesting browser, expire after 15 minutes, and share a single use. Members can enable passkey signatures for their posts; signing is disabled by default.
 - Original posts and replies, uploaded images, side-by-side translations, a shared glossary, and translation reports. Optional figure translation reads and translates image labels while keeping the original image available.
 - Optional villages (`VILLAGES=1`): personal, shared and language villages, with opt-in village chat (`VILLAGE_CHAT=1`), translated messages, reporting and moderation.
 - Optional public reading of posts and lists. Readers can switch reading languages independently of the interface language.
