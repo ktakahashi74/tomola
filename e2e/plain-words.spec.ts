@@ -101,7 +101,9 @@ test("post controls, metadata and empty states work at desktop and phone widths,
       await expect(form.getByText(en.writing_math_help, { exact: true })).toBeHidden();
       await openReplyMore(page);
       await expect(form.getByText(en.writing_math_help, { exact: true })).toBeVisible();
-      await expect(form.getByText(en.writing_ai_guide_link, { exact: true })).toBeVisible();
+      const connect = form.getByRole("link", { name: en.footer_connect, exact: true });
+      await expect(connect).toHaveAttribute("href", "/connect");
+      await expect(connect).toHaveAttribute("target", "_blank");
       await page.locator("[data-reply-more] > summary").click();
       await expect(topic.locator("[data-reading-language]")).toContainText(formatMessage(en.label_from_lang_machine_engine, { lang: en.language_name_ja, engine: en.engine_fake }));
       const actions = await readingActions(page);

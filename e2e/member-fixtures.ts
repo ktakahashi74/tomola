@@ -121,7 +121,7 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["tidy_writer", "tidy_reader", "tidy_target"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["deleted", "published"].map(name => ({ email: `draft_recovery_${name}@example.com`, handle: `draft_recovery_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
   ...VILLAGE_MEMBER_FIXTURES,
-  ...["lists", "actions", "author", "panels"].flatMap(scenario => ["writer", "reader", "voter"].map(role => ({ email: `reading_controls_${scenario}_${role}@example.com`, handle: `rc_${scenario}_${role}`, homeArea: role === "reader" ? "en" as const : "ja" as const, uiLocale: "en" as const }))),
+  ...["lists", "actions", "author", "panels", "ownership"].flatMap(scenario => ["writer", "reader", "voter"].map(role => ({ email: `reading_controls_${scenario}_${role}@example.com`, handle: `rc_${scenario}_${role}`, homeArea: role === "reader" ? "en" as const : "ja" as const, uiLocale: "en" as const }))),
   ...["early_rich", "early_markdown", "settings", "documents", "quote", "village"].map(name => ({ email: `ui_controls_${name}@example.com`, handle: `ui_controls_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
   { email: "login_help_member@example.com", handle: "login_help_member", homeArea: "ja", uiLocale: "ja" },
   ...["login_flow_ja", "login_flow_other", "login_polish_unfinished"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),

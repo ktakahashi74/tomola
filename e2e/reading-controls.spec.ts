@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { enMessages as en, formatMessage, messagePattern, useMember, state, waitForClientRoute } from "./helpers";
+import { enMessages as en, formatMessage, messagePattern, useMember, state, waitForClientRoute, captureScreenshot } from "./helpers";
 
 type Fixture = { topicId: number; ownReplyId: number; otherReplyId: number; englishId: number };
 const fixture = (name: string): Fixture => JSON.parse(fs.readFileSync(path.join(state().dir, "reading-controls.json"), "utf8"))[name];
@@ -81,19 +81,60 @@ test("author actions and the follow toggle remain available at the end of the ar
   await expect(following).toBeVisible();
   await expect(page.locator('#reply [data-reply-heading]')).toContainText(en.reply_write_title);
   await expect(page.locator('#p-' + f.topicId + ' [data-reading-language]')).toContainText(en.show_original);
-  await expect(byline.locator("summary").filter({ hasText: "…" })).toHaveAccessibleName(en.entry_actions);
-  await byline.getByText("…", { exact: true }).click();
+  await expect(byline.getByRole("link", { name: en.edit, exact: true })).toBeVisible();
+  await expect(byline.locator("summary").filter({ hasText: en.delete_summary })).toBeVisible();
   await byline.getByRole("button", { name: en.intro_set, exact: true }).click();
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 }, storageState: await page.context().storageState() });
   try {
     const native = await context.newPage();
     await native.goto(`/t/${f.topicId}?lang=en`);
     const meta = native.locator("[data-article-details]");
-    await meta.getByText("…", { exact: true }).click();
     await expect(meta.getByRole("button", { name: en.intro_unset, exact: true })).toBeVisible();
     await meta.locator("summary").filter({ hasText: en.delete_summary }).click();
     await expect(meta.getByRole("button", { name: en.delete_confirm, exact: true })).toBeVisible();
   } finally { await context.close(); }
+});
+
+test("owned topics expose edit and confirmed deletion at both ends, while other readers see neither", async ({ page }) => {
+  const f = fixture("ownership");
+  await useMember(page, "reading_controls_ownership_reader@example.com", `/t/${f.topicId}?lang=en`);
+  const head = page.locator("[data-reading-byline]");
+  const end = page.locator("[data-article-details]");
+  for (const row of [head, end]) {
+    await expect(row.getByRole("link", { name: en.edit, exact: true })).toHaveCount(0);
+    await expect(row.locator('details:has(input[name="intent"][value="delete"])')).toHaveCount(0);
+  }
+  await useMember(page, "reading_controls_ownership_writer@example.com", `/t/${f.topicId}?lang=en`);
+  await waitForClientRoute(page);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [position, row] of [["head", head], ["end", end]] as const) {
+      await expect(row.getByRole("link", { name: en.edit, exact: true })).toHaveAttribute("href", `/t/${f.topicId}/edit`);
+      const remove = row.locator('details:has(input[name="intent"][value="delete"])');
+      const summary = remove.locator(":scope > summary");
+      await expect(summary).toBeVisible();
+      await expect(summary).toHaveAccessibleName(en.delete_summary);
+      await row.scrollIntoViewIfNeeded();
+      await captureScreenshot(page, { path: `topic-${position}-${width}.png` }, "topic");
+      const confirm = remove.getByRole("button", { name: en.delete_confirm, exact: true });
+      await expect(confirm).toBeHidden();
+      await summary.click();
+      await expect(confirm).toBeVisible();
+      const bounds = await row.boundingBox();
+      const panel = await remove.locator(":scope > div").boundingBox();
+      expect(Math.abs(panel!.width - bounds!.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(panel!.x - bounds!.x)).toBeLessThanOrEqual(1);
+      const otherRow = position === "head" ? end : head;
+      await expect(otherRow.getByRole("button", { name: en.delete_confirm, exact: true })).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await summary.click();
+    }
+  }
+  await head.locator("summary").filter({ hasText: en.delete_summary }).click();
+  await head.getByRole("button", { name: en.delete_confirm, exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect((await page.goto(`/t/${f.topicId}?lang=en`))!.status()).toBe(404);
+  await expect(page.locator('[data-reading-byline], [data-article-details]')).toHaveCount(0);
 });
 
 test("opened reply panels use the action row's full width below their entrance", async ({ page, browser }) => {

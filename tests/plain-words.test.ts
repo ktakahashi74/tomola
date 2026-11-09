@@ -25,7 +25,8 @@ it("keeps all writing help in one closed disclosure, outside the body label", as
   const html = await render(createElement(EntryFields, { defaultLang: "en", pasteFrontmatter: "reply" }));
   const details = html.match(/<details\b[^>]*>[\s\S]*?<\/details>/g)!.find(part => part.includes(m.writing_tips()))!;
   expect(details).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
-  const positions = [m.writing_math_help(), m.related_link_help(), m.writing_ai_guide_link()].map(messageMarkup).map(text => details.indexOf(text));
+  const positions = [m.writing_math_help(), m.related_link_help(), m.footer_connect()].map(messageMarkup).map(text => details.indexOf(text));
+  expect(details).toContain('href="/connect" target="_blank"');
   // Nothing in the writing help is about frontmatter: that belongs to the guide for AI clients.
   expect(details).not.toContain("frontmatter");
   expect(positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1]))).toBe(true);

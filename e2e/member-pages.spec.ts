@@ -72,7 +72,6 @@ test("the introduction default and question choice are mutually exclusive, and p
   await expect(mention).toHaveText(`@${MEMBER}`);
   mentionHref = (await mention.getAttribute("href"))!;
   expect(mentionHref).toMatch(/^\/u\/id\/[a-z0-9]{12}$/);
-  if (!await owner.getByRole("button", { name: en.intro_unset, exact: true }).isVisible()) await owner.getByLabel(en.entry_actions, { exact: true }).click();
   await expect(owner.getByRole("button", { name: en.intro_unset, exact: true })).toBeVisible();
 });
 
@@ -84,7 +83,6 @@ test("the own page shows the introduction; unset and set preserve its post and o
   await expectMemberPageOnly(owner);
   await owner.getByRole("link", { name: en.card_open, exact: true }).click();
   await expect(owner).toHaveURL(new RegExp(`${topicPath}(?:\\?sl=[\\w-]+)?$`));
-  await owner.getByLabel(en.entry_actions, { exact: true }).click();
   await owner.getByRole("button", { name: en.intro_unset, exact: true }).click();
   await expect(owner.getByRole("button", { name: en.intro_set, exact: true })).toBeVisible();
   await ownPage();
@@ -92,7 +90,6 @@ test("the own page shows the introduction; unset and set preserve its post and o
   await expect(owner.getByRole("link", { name: en.member_page_write_intro, exact: true })).toBeVisible();
   await owner.locator("#posts").getByRole("link", { name: TITLE, exact: true }).click();
   await expect(owner.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
-  await owner.getByLabel(en.entry_actions, { exact: true }).click();
   await owner.getByRole("button", { name: en.intro_set, exact: true }).click();
   await expect(owner.getByRole("button", { name: en.intro_unset, exact: true })).toBeVisible();
   await ownPage();

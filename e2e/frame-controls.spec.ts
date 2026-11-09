@@ -16,9 +16,11 @@ test("new-post tools keep undo, redo and an accessible image picker, with frontm
   await chooseEditorMode(page, m.editor_mode_markdown);
   await expect(page.getByRole("textbox", { name: m.field_body, exact: true })).toHaveValue("Native source kept through the compact toolbar.\n");
   await page.locator("[data-writing-tips] > summary").click();
-  // The writing help is short and technical details are not in it: Markdown and math, and a link to how to write with an AI.
+  // Writing help covers Markdown and math, and links to the connection page.
   await expect(page.locator("[data-writing-tips]").getByText(m.writing_math_help, { exact: true })).toBeVisible();
-  await expect(page.locator("[data-writing-tips]").getByRole("link", { name: m.writing_ai_guide_link, exact: true })).toBeVisible();
+  const connect = page.locator("[data-writing-tips]").getByRole("link", { name: m.footer_connect, exact: true });
+  await expect(connect).toHaveAttribute("href", "/connect");
+  await expect(connect).toHaveAttribute("target", "_blank");
   await openPostSettings(page);
   await expect(page.getByText(m.village_public_reach, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`^${m.field_village}\\b`) })).toHaveAccessibleDescription(m.village_public_reach);

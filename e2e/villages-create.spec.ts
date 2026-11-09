@@ -12,6 +12,7 @@ async function screenshots(page: Page, label: string) {
 async function create(page: Page, slug: string, name: string, invited: boolean) {
   await page.goto("/villages"); await waitForClientRoute(page);
   await page.getByRole("link", { name: m.village_create, exact: true }).click();
+  await expect(page.getByText(m.village_slug_help, { exact: true })).toBeVisible();
   await page.getByLabel(invited ? m.village_kind_invite_option : m.village_kind_open_option, { exact: true }).check();
   await page.getByLabel(m.village_name_field, { exact: true }).fill(name);
   await page.getByLabel(m.village_slug_field, { exact: true }).fill(slug);

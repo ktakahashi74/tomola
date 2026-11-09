@@ -167,6 +167,11 @@ test("the author of a question can no longer edit it once another member has cho
   await expect(titleField(saki)).toHaveCount(0);
   await saki.goto(questionPath);
   await expect(saki.getByText(enMessages.edit_locked_notice)).toBeVisible();
+  for (const selector of ["[data-reading-byline]", "[data-article-details]"]) {
+    const row = saki.locator(selector);
+    await expect(row.getByRole("link", { name: enMessages.edit, exact: true })).toHaveCount(0);
+    await expect(row.locator("summary").filter({ hasText: enMessages.delete_summary })).toBeVisible();
+  }
   // Only the author sees the locked state; tom does not.
   await tom.goto(questionPath);
   await expect(tom.getByText(enMessages.edit_locked_notice)).toHaveCount(0);

@@ -159,6 +159,11 @@ test("the question cannot be edited into an ordinary topic, and its author still
   await titleField(quinn).fill(`${QUESTION}（改）`);
   await quinn.getByRole("button", { name: enMessages.save_changes }).click();
   await expect(quinn.getByRole("heading", { level: 1, name: `${QUESTION}（改）` })).toBeVisible();
+  for (const selector of ["[data-reading-byline]", "[data-article-details]"]) {
+    const row = quinn.locator(selector);
+    await expect(row.getByRole("link", { name: enMessages.edit, exact: true })).toHaveAttribute("href", `${questionPath}/edit`);
+    await expect(row.locator("summary").filter({ hasText: enMessages.delete_summary })).toBeVisible();
+  }
   // Editing has no "立場を聞く" toggle; it cannot be added or removed later.
   await quinn.goto(`${questionPath}/edit`);
   await expect(quinn.getByRole("checkbox", { name: enMessages.asks_stance_checkbox, exact: true })).toHaveCount(0);
@@ -187,9 +192,9 @@ test("a draft of another way of asking whose original question was deleted says 
   await expect(ravi.getByText(messagePattern(enMessages.alt_of_label, { title: /.+/ }))).toBeVisible();
   await expect(remove).toHaveCount(0);
   // The author deletes the question.
-  await quinn.getByLabel(enMessages.entry_actions, { exact: true }).click();
-  await quinn.getByText(enMessages.delete_summary).click();
-  await quinn.getByRole("button", { name: enMessages.delete_confirm }).click();
+  const topicEnd = quinn.locator("[data-article-details]");
+  await topicEnd.locator("summary").filter({ hasText: enMessages.delete_summary }).click();
+  await topicEnd.getByRole("button", { name: enMessages.delete_confirm }).click();
   // Deleting a topic redirects to the home page; wait before ravi reads it.
   await expect(quinn).toHaveURL(/\/$/);
   // The draft screen explains why publication is blocked and offers unlinking. Publication is rejected.

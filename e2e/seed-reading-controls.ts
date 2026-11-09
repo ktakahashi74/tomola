@@ -10,7 +10,7 @@ import { setFollow } from "../app/lib/follows.server";
 export async function seedReadingControls(db: Db, dir: string) {
   const fixtures: Record<string, { topicId: number; ownReplyId: number; otherReplyId: number; englishId: number }> = {};
   const at = new Date("2025-12-01T12:00:00Z");
-  for (const scenario of ["lists", "actions", "author", "panels"]) {
+  for (const scenario of ["lists", "actions", "author", "panels", "ownership"]) {
     const ids: Record<string, string> = {};
     for (const role of ["writer", "reader", "voter"]) {
       const [member] = await db.select({ id: user.id }).from(user).where(eq(user.email, `reading_controls_${scenario}_${role}@example.com`));

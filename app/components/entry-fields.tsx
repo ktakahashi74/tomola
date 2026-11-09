@@ -106,7 +106,7 @@ export function EntryFields({
         <FieldDescription>{m.writing_math_help()}</FieldDescription>
         <FieldDescription>{m.related_link_help()}</FieldDescription>
         {writingHelp}
-        <FieldDescription><a href="/help/ai.md" target="_blank" rel="noreferrer" className="underline">{m.writing_ai_guide_link()}</a></FieldDescription>
+        <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
       </details>
       <div hidden={richActive}><EntryPreview kind={previewKind} fixedLang={fixedLang} pasteFrontmatter={pasteFrontmatter} invalidateOnEdit={invalidatePreviewOnEdit} selectedLang={previewLanguage ?? previewLang} /></div>
       {showLanguage && !fixedLang && <EntryLanguage error={error} errorId={errorId} defaultLang={defaultLang} selectedLang={selectedLang} disabledClosed={disabledClosed} pasteFrontmatter={Boolean(pasteFrontmatter)} onChange={invalidatePreviewOnEdit ? setPreviewLang : undefined} />}

@@ -34,12 +34,9 @@ async function myPage() {
   await expect(page.getByRole("heading", { level: 1, name: `@${HANDLE}`, exact: true })).toBeVisible();
 }
 
-// The introduction controls live in the author's small actions menu beside "Edit".
+// The introduction controls are visible beside the author's edit and delete actions.
 async function introButton(name: string) {
-  const summary = page.locator(`summary[aria-label="${enMessages.entry_actions}"]`);
-  await summary.waitFor();
-  if (await summary.locator("xpath=..").getAttribute("open") === null) await summary.click();
-  return page.getByRole("button", { name, exact: true });
+  return page.locator("[data-article-details]").getByRole("button", { name, exact: true });
 }
 
 test("a member publishes an introduction, reads it on their page, and removes and restores its designation under CSP", async () => {

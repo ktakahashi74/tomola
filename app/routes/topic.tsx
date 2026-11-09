@@ -730,19 +730,16 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
       <div data-article-details="" className="relative flex flex-wrap items-center gap-x-4 gap-y-2 ui-meta text-muted-foreground">
         {full.editedAt && <Link to={`/t/${full.id}/history`} className="link-ui underline">{m.history_updated()} <LocalTime iso={full.editedAt.toISOString()} style="stamp" /></Link>}
         {full.canEdit && <Link to={`/t/${full.id}/edit`} className="link-ui underline">{m.edit()}</Link>}
+        {full.own && <>
+          <DeleteEntryForm inline entryId={full.id} kind="topic" />
+          {!full.hidden && !question.asksStance && <Form method="post">
+            <Button variant="link" type="submit" name="intent" value={loaderData.introSelected ? "intro-unset" : "intro-set"} className="h-auto px-0 ui-meta">
+              {loaderData.introSelected ? m.intro_unset() : m.intro_set()}
+            </Button>
+          </Form>}
+        </>}
         {loaderData.village && loaderData.village.kind !== "personal" && !loaderData.village.language && <Link to={`/v/${loaderData.village.slug}`} title={villageNameTitle(loaderData.village)} className="ui-meta underline">{villageName(loaderData.village)}</Link>}
         {follow && <FollowButton variant="compact" threadId={full.id} state={follow.state} returnTo={`${returnTo}#p-${full.id}`} />}
-        {full.own && <details className="inline-block ui-meta">
-          <summary aria-label={m.entry_actions()} className={cn(buttonVariants({ variant: "link" }), "h-auto cursor-pointer list-none px-0 py-0 ui-meta")}>…</summary>
-          <div className="absolute start-0 top-full z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] space-y-3 rounded-lg border bg-popover p-3 shadow-md">
-            <DeleteEntryForm entryId={full.id} kind="topic" />
-            {!full.hidden && !question.asksStance && <Form method="post">
-              <Button variant="link" type="submit" name="intent" value={loaderData.introSelected ? "intro-unset" : "intro-set"} className="h-auto px-0 ui-meta">
-                {loaderData.introSelected ? m.intro_unset() : m.intro_set()}
-              </Button>
-            </Form>}
-          </div>
-        </details>}
       </div>
       {loaderData.saved != null && <noscript className="reading-mobile-fallback">
         <SaveButton topicId={full.id} saved={loaderData.saved} returnTo={`${returnTo}#p-${full.id}`} />
@@ -819,6 +816,10 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                     <LocalTime iso={topic.createdAt.toISOString()} style="date" />
                     {info && info.minutes >= 3 && <span data-reading-time="">{m.reading_minutes({ minutes: info.minutes })}</span>}
                     {languageMenu}
+                    {topic.own && <>
+                      {topic.canEdit && <Link to={`/t/${topic.id}/edit`} className="link-ui underline">{m.edit()}</Link>}
+                      <DeleteEntryForm inline entryId={topic.id} kind="topic" />
+                    </>}
                     <noscript className="reading-mobile-fallback"><a href={aiOpen.mdPath} className="link-ui underline">{m.open_in_ai_noscript()}</a></noscript>
                   </div>
                   {controls && <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 ui-meta text-muted-foreground" data-reading-language="">

@@ -26,7 +26,7 @@ export default function ReplyExtrasContent({ error, errorId, defaultLang, select
         <EntryPreview kind="reply" pasteFrontmatter={autoLang ? "reply" : undefined} invalidateOnEdit={invalidatePreviewOnEdit} selectedLang={lang} />
         <div className="space-y-2 ui-help text-muted-foreground">
           <FieldDescription>{m.writing_math_help()}</FieldDescription>
-          <FieldDescription><a href="/help/ai.md" target="_blank" rel="noreferrer" className="underline">{m.writing_ai_guide_link()}</a></FieldDescription>
+          <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
         </div>
         {aiTools && <AiEditorTools {...aiTools} />}
       </div>
