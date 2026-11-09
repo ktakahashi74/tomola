@@ -791,7 +791,6 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                       <span className="text-muted-foreground">{m.alt_of_origin_unreadable()}</span>
                     ))}
                   {/* Lock from a received stance: show only to the author and permitted typo correctors. Omit the timestamp. */}
-                  {/* The byline already links to the edit page: the notice does not repeat it. */}
                   {question.locked && <span role="note" className="text-muted-foreground">{m.edit_locked_notice()}</span>}
                   {question.canFix && (
                     <span role="note" className="text-muted-foreground">
