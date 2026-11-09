@@ -22,6 +22,15 @@ it("rejects a misspelled site stage before startup and accepts test or unset", (
   expect(() => assertStartupConfig({ TOMOLA_OPERATOR_DIR: process.env.TOMOLA_OPERATOR_DIR, NODE_ENV: "development", TOMOLA_SITE_STAGE: "tset" })).toThrow("TOMOLA_SITE_STAGE");
 });
 
+it("accepts operator-only invitations when enabled or empty and rejects other values at startup", () => {
+  for (const OPERATOR_ONLY_INVITATIONS of [undefined, "", " ", "1", " 1 "]) {
+    expect(() => assertStartupConfig({ NODE_ENV: "development", OPERATOR_ONLY_INVITATIONS })).not.toThrow();
+  }
+  for (const OPERATOR_ONLY_INVITATIONS of ["0", "true", "false", "yes", "2"]) {
+    expect(() => assertStartupConfig({ NODE_ENV: "development", OPERATOR_ONLY_INVITATIONS })).toThrow("OPERATOR_ONLY_INVITATIONS");
+  }
+});
+
 it("checks configuration without importing a database client or initializing workers", async () => {
   vi.resetModules();
   vi.doMock("~/lib/db/client.server", () => { throw new Error("database client imported before the startup gate"); });

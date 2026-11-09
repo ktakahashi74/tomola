@@ -85,7 +85,7 @@ export function MemberHeader({ data, sideNavigation = false, whyLink = false }: 
           <DropdownMenuItem render={<Link to={`/u/${data.handle}`} />}>{labels.nav_my_page}</DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings/stances" />}>{labels.nav_stances}</DropdownMenuItem>
           <DropdownMenuItem render={<Link to={withSettingsReturn("/settings", location.pathname === "/settings" ? new URLSearchParams(location.search).get("returnTo") : `${location.pathname}${location.search}${location.hash}`)} />}>{labels.nav_settings}</DropdownMenuItem>
-          <DropdownMenuItem render={<Link to="/invites/new" />}>{labels.nav_invite}</DropdownMenuItem>
+          {data.canInvite && <DropdownMenuItem render={<Link to="/invites/new" />}>{labels.nav_invite}</DropdownMenuItem>}
           <LocaleMenu />
           <Form method="post" action="/logout"><DropdownMenuItem nativeButton render={<button type="submit" />}>{labels.nav_logout}</DropdownMenuItem></Form>
           {data.isModerator && <DropdownMenuGroup className="sm:hidden" data-mobile-admin>

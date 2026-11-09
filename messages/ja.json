@@ -1511,7 +1511,7 @@
   "settings_share_show": "文字列を見る",
   "principles_langs_more": "ほかの言語で読む（{count}）",
   "public_document_read_posts": "tomola の投稿を読む →",
-  "public_document_invitation": "アカウントは、会員からの招待で作ります。",
+  "public_document_invitation": "アカウントは招待で作ります。",
   "welcome_close": "閉じる",
   "reauth_cancel": "やめて戻る",
   "home_intro_guest": "tomola は、言語をまたいで論考を読み、考えを交わす場です。どの投稿も、あなたの言語で読めます。",

@@ -11,6 +11,7 @@ import { assertEnabledLangsConfigured, assertEnabledLangsReviewed, type ReviewCo
 import { isDevOrTest } from "~/lib/env.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { publicReading } from "~/lib/public-reading.server";
+import { operatorOnlyInvitations } from "~/lib/invitation-permissions.server";
 import { trustedProxyHops } from "~/lib/http/client-ip.server";
 import { divergenceDetectionEnabled, judgeThinking, primaryModelOf, resolveEmbeddingEngine, resolveEngines, retryModelOf, translationThinking } from "~/lib/llm/config.server";
 import { divergenceSampleRate } from "~/lib/llm/divergence-sample.server";
@@ -133,6 +134,7 @@ export function assertStartupConfig(
   // ENABLED_LANGS: a malformed value stops startup everywhere; production must set it explicitly (app/lib/enabled-langs.server.ts).
   assertEnabledLangsConfigured(env);
   publicReading(env);
+  operatorOnlyInvitations(env);
   villagesEnabled(env);
   assertVillageChatConfig(env);
   for (const name of ["MODERATION_SPAM_ENABLED", "MODERATION_AI_SPAM_ENABLED", "MODERATION_AI_TRIAGE_ENABLED"]) {

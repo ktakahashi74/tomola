@@ -30,6 +30,7 @@ import { TooltipProvider } from "~/components/ui/tooltip";
 import { negotiateUiLocale } from "~/lib/http/locale.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
+import { canCreateInvitations } from "~/lib/invitation-permissions.server";
 import { villageReaderFor } from "~/lib/display-lang.server";
 import { m } from "~/paraglide/messages.js";
 
@@ -63,6 +64,7 @@ export async function loader({ request }: { request: Request }) {
     credentialFresh: await getCredentialSessionFresh(request),
     handle: profile.handle,
     isOperator: scope.operator,
+    canInvite: canCreateInvitations(scope.operator),
     isModerator: isModerator(scope),
     apiDrafts,
     unreadNotifications: notificationState[0],

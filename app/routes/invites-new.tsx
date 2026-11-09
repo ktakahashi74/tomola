@@ -17,9 +17,12 @@ import { useEffect, useState } from "react";
 import { createSignupInvitation, signupVillageChoices } from "~/lib/signup-village.server";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { invitationNoteText, INVITATION_NOTE_MAX } from "~/lib/invitation-note";
+import { canCreateInvitations } from "~/lib/invitation-permissions.server";
+import { isOperatorEmail } from "~/lib/operators.server";
 
 async function loaderImplementation({ request }: Route.LoaderArgs) {
   const { db, user } = await requireMember(request);
+  if (!canCreateInvitations(isOperatorEmail(user.email))) throw data("Not found", { status: 404 });
   const rows = await listInvitations(db, { createdBy: user.id });
   // Account identities linked to recipient addresses are operator-only data.
   return { villages: await signupVillageChoices(db, user.id), ttlDays: INVITATION_TTL_DAYS, invitations: rows.map(({ id, email, status, createdAt, expiresAt }) => ({ id, email, status, createdAt: createdAt.toISOString(), expiresAt: expiresAt.toISOString() })) };
@@ -28,6 +31,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   assertSameOrigin(request);
   const { user, db } = await requireMember(request);
+  if (!canCreateInvitations(isOperatorEmail(user.email))) throw data("Not found", { status: 404 });
   const form = await request.formData();
   if (form.get("intent") === "revoke") {
     if (!await revokeInvitation(db, user.id, String(form.get("id") ?? ""))) throw data("Not found", { status: 404 });
