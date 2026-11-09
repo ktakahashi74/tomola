@@ -2210,6 +2210,7 @@
   "settings_share_show": "문구 보기",
   "principles_langs_more": "다른 언어로 읽기({count})",
   "public_document_read_posts": "tomola에서 게시물 읽기 →",
+  "public_document_invitation": "계정은 초대를 통해 생성됩니다.",
   "welcome_close": "닫기",
   "reauth_cancel": "취소하고 돌아가기",
   "home_intro_guest": "tomola는 언어를 뛰어넘어 에세이를 읽고 토론하는 공간입니다. 모든 게시물은 여러분의 언어로 읽을 수 있습니다.",
