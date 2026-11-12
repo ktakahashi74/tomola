@@ -16,7 +16,6 @@ import {
   divergenceDedupeKey,
   TRANSLATE_JOB,
   TITLE_TRANSLATE_JOB,
-  RETRANSLATE_REPORT_JOB,
   TRANSLATE_MAX_ATTEMPTS,
   translateDedupeKey,
   type TranslateJobPayload,
@@ -40,7 +39,7 @@ export type RequeueResult = {
   divergence: number;
   // Why requested divergence jobs were skipped: missing secondary or judge engine, or degraded budget.
   divergenceSkipped: string | null;
-  // Only with dryRun: the number of (post x language) pairs that would be queued and the total number of characters of their originals (title and body), for the cost estimate
+  // Only with dryRun: the number of (post x language) pairs that would be queued and their source character count (title and body, or title alone for title-only recovery), for the cost estimate
   // (pnpm langs:open --dry-run). A job that is already queued and waiting counts as a target too.
   dryRun?: { targets: number; chars: number };
 };
@@ -84,10 +83,10 @@ export async function requeueTranslations(
   const rows = await db.select(columns).from(translations).where(eq(translations.kind, "primary"));
   const secondary = opts.divergence ? await db.select(columns).from(translations).where(and(eq(translations.kind, "secondary"), eq(translations.field, "body"))) : [];
   // Match payload identifiers as text so malformed historical jobs cannot cause a cast error.
-  const failed = allMissing ? [] : await db.select({ entryId: entries.id, lang: sql<string>`${jobs.payload}->>'lang'` }).from(jobs)
+  const failed = allMissing ? [] : await db.select({ kind: jobs.kind, entryId: entries.id, lang: sql<string>`${jobs.payload}->>'lang'` }).from(jobs)
     .innerJoin(entries, and(sql`${jobs.payload}->>'entryId' = ${entries.id}::text`, sql`${jobs.payload}->>'sourceHash' = ${entries.sourceHash}`))
-    .where(and(eq(jobs.status, "failed"), inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, RETRANSLATE_REPORT_JOB])));
-  const failedPairs = new Set(failed.map(row => `${row.entryId}:${row.lang}`));
+    .where(and(eq(jobs.status, "failed"), inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB])));
+  const failedPairs = new Set(failed.map(row => `${row.kind}:${row.entryId}:${row.lang}`));
   const byKey = new Map<string, typeof rows[number]>();
   for (const r of rows) byKey.set(`${r.entryId}:${r.field}:${r.lang}`, r);
   const secondaryByKey = new Map<string, typeof rows[number]>();
@@ -117,19 +116,21 @@ export async function requeueTranslations(
         return !(opts.includeFlagged && row.flags.some((flag) => NEAR_COPY_FLAGS.includes(flag)));
       });
       if (!done) {
-        const recovery = failedPairs.has(`${entry.id}:${lang}`) || fields.some(field => {
+        const recovery = failedPairs.has(`${TRANSLATE_JOB}:${entry.id}:${lang}`) || fields.some(field => {
           const row = byKey.get(`${entry.id}:${field}:${lang}`);
           return row?.sourceHash === entry.sourceHash && (!isUsablePrimary(row, entry.sourceHash) ||
             (opts.includeFlagged && row.flags.some(flag => NEAR_COPY_FLAGS.includes(flag))));
         });
-        if (!allMissing && !recovery) continue;
+        const title = byKey.get(`${entry.id}:title:${lang}`);
+        const titleOnly = !allMissing && !recovery && fields.some(field => field === "title") && title?.sourceHash !== entry.sourceHash && failedPairs.has(`${TITLE_TRANSLATE_JOB}:${entry.id}:${lang}`);
+        if (!allMissing && !recovery && !titleOnly) continue;
         if (result.dryRun) {
           result.dryRun.targets++;
-          result.dryRun.chars += Number(entry.chars);
+          result.dryRun.chars += titleOnly ? [...entry.title!].length : Number(entry.chars);
           continue;
         }
-        const title = byKey.get(`${entry.id}:title:${lang}`);
         if (entry.kind === "topic" && entry.title?.trim() && title?.sourceHash !== entry.sourceHash) await enqueueTitleTranslation(db, payload, entry.lang, { priority: 5 });
+        if (titleOnly) continue;
         const res = await enqueue(db, TRANSLATE_JOB, payload, { dedupeKey: translateDedupeKey(payload, entry.lang), maxAttempts: TRANSLATE_MAX_ATTEMPTS, priority: 5 });
         if (res.created) result.translate++;
         continue;

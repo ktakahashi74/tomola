@@ -45,7 +45,9 @@ describe("requeueTranslations", () => {
     const [reply] = await db.select().from(entries).where(eq(entries.id, replyId));
     await db.insert(jobs).values([
       { kind: "translate_entry", status: "failed", payload: { entryId: topicId, lang: "fr", sourceHash: entry.sourceHash } },
+      { kind: "translate_title", status: "failed", payload: { entryId: topicId, lang: "fr", sourceHash: entry.sourceHash } },
       { kind: "translate_title", status: "failed", payload: { entryId: topicId, lang: "de", sourceHash: entry.sourceHash } },
+      { kind: "translate_title", status: "failed", payload: { entryId: topicId, lang: "ko", sourceHash: entry.sourceHash } },
       { kind: "translate_entry", status: "failed", payload: { entryId: topicId, lang: "vi", sourceHash: "old" } },
       { kind: "translate_entry", status: "done", payload: { entryId: topicId, lang: "zh-Hans", sourceHash: entry.sourceHash } },
       { kind: "translate_entry", status: "queued", dedupeKey: `translate:${replyId}:ja:vi:${reply.sourceHash}`, payload: { entryId: replyId, lang: "vi", sourceHash: reply.sourceHash } },
@@ -61,13 +63,36 @@ describe("requeueTranslations", () => {
     const env = { TRANSLATION_EAGER_SCOPE: "readers" };
     const before = await db.select().from(jobs);
     const dry = await requeueTranslations(db, { env, dryRun: true });
-    expect(dry).toMatchObject({ translate: 0, dryRun: { targets: 3, chars: 3 * ([...entry.body].length + [...entry.title!].length) } });
+    expect(dry).toMatchObject({ translate: 0, dryRun: { targets: 3, chars: 2 * ([...entry.body].length + [...entry.title!].length) + [...entry.title!].length } });
     expect(await db.select().from(jobs)).toEqual(before);
-    expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 3 });
+    expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 2 });
     expect((await queued(db, "translate_entry")).filter(job => (job.payload as { entryId: number }).entryId === topicId)
-      .map(job => (job.payload as { lang: string }).lang).sort()).toEqual(["de", "fr", "ko"]);
+      .map(job => (job.payload as { lang: string }).lang).sort()).toEqual(["fr", "ko"]);
+    expect((await queued(db, "translate_title")).map(job => (job.payload as { lang: string }).lang).sort()).toEqual(["de", "fr", "ko"]);
     expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 0 });
-    expect(await requeueTranslations(db, { env, allMissing: true })).toMatchObject({ translate: 12 });
+    expect(await requeueTranslations(db, { env, allMissing: true })).toMatchObject({ translate: 13 });
+  });
+
+  it("recovers a failed title without requesting or translating its missing body", async () => {
+    const { db, topicId } = await setup();
+    await db.delete(jobs);
+    const [entry] = await db.select().from(entries).where(eq(entries.id, topicId));
+    await db.insert(jobs).values({ kind: "translate_title", status: "failed", payload: { entryId: topicId, lang: "de", sourceHash: entry.sourceHash } });
+    const env = { TRANSLATION_EAGER_SCOPE: "readers" };
+    expect(await requeueTranslations(db, { env, dryRun: true })).toMatchObject({ dryRun: { targets: 1, chars: [...entry.title!].length } });
+    expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 0 });
+    expect(await queued(db, "translate_title")).toHaveLength(1);
+    expect(await queued(db, "translate_entry")).toHaveLength(0);
+    const requests: string[] = [];
+    const base = createFakeEngine();
+    const primary = { ...base, async translate(req: Parameters<typeof base.translate>[0]) {
+      requests.push(`${req.to}:${req.field}:${req.text}`);
+      return base.translate(req);
+    } };
+    expect(await runAll(db, { primary, secondary: null, judge: null })).toMatchObject({ done: 1, failed: 0 });
+    expect(requests).toEqual(["de:title:題"]);
+    expect(await db.select().from(translations)).toMatchObject([{ entryId: topicId, lang: "de", field: "title", flags: ["provisional_title"] }]);
+    expect(await requeueTranslations(db, { env, dryRun: true })).toMatchObject({ dryRun: { targets: 0, chars: 0 } });
   });
 
   it("defaults to recovery when the eager scope is unset and allows an explicit all-missing dry run", async () => {

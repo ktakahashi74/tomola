@@ -1,5 +1,5 @@
 import { safeErrorText } from "../app/lib/error-text.server.ts";
-// Requeue translations: recover failed current-version jobs and suppressed primary translations.
+// Requeue translations: recover failed current-version jobs and suppressed primary translations. Title-only failures requeue only the title.
 //   pnpm translations:requeue               With TRANSLATION_EAGER_SCOPE=readers (default), recover failures only; all also queues every missing pair.
 //   pnpm translations:requeue --all-missing Queue every entry/language pair missing usable current primary title/body translations, including never-requested pairs.
 //   pnpm translations:requeue --lang fr     Restrict targets to an enabled language (repeat --lang to select more).
