@@ -81,6 +81,7 @@
   "invites_invalid_email": "请输入有效的电子邮箱地址。",
   "error_unexpected": "发生意外错误。",
   "nav_language": "语言",
+  "language_select": "显示语言",
   "home_empty": "暂无帖子。",
   "home_replies": [
     {
@@ -176,6 +177,7 @@
   "usage_purpose_retry": "收到报告后的重新翻译",
   "usage_purpose_judge": "分歧判定",
   "usage_purpose_embed": "嵌入",
+  "display_lang_label": "翻译语言",
   "label_machine": "机器翻译 ({engine})",
   "label_human": "人工编辑",
   "label_original": "原文",
@@ -322,6 +324,7 @@
   "page_current": "第 {page} 页",
   "settings_title": "设置",
   "settings_langs_heading": "语言",
+  "settings_display_auto": "与显示语言相同（默认）",
   "settings_saved": "已保存。",
   "settings_area_confirm": "我确认更改主要语言。更改后，{days}天后才能再次更改。",
   "settings_area_confirm_required": "要更改主要语言，请勾选下方的确认项。更改后，{days}天后才能再次更改。",
@@ -1104,6 +1107,7 @@
   "signing_accept_publish": "使用通行密钥确认并公开",
   "signing_accept_save": "使用通行密钥确认并保存修改",
   "signing_accept_remove": "使用通行密钥确认并删除",
+  "settings_ui_lang_help": "菜单、按钮和翻译所用的语言。",
   "nav_menu": "菜单",
   "nav_admin": "管理",
   "filter_prefix": "筛选：",
@@ -1275,6 +1279,7 @@
   "onboarding_language_help": "请选择你平时读写的语言。这种语言的帖子将以原文显示。",
   "onboarding_language_details": "此选择的用途",
   "settings_advanced_heading": "高级设置",
+  "settings_area_short_help": "你发帖的默认语言。也用于按语言统计和版面管理。",
   "settings_links_sessions_help": "退出其他设备并不会移除 API 令牌或已连接的 AI。请在各自的界面中将其移除。",
   "open_in_ai_provider_login": "使用您自己的 {name} 账户",
   "open_in_ai_not_read": "您的 AI 尚未读取此页面。如果此前显示错误，请使用您自己的账户打开该 AI，然后再次点击此按钮。您也可以通过 ▾ 下的“{copy}”复制正文并粘贴。",
@@ -1702,6 +1707,7 @@
   "settings_account_heading": "账号",
   "settings_records_heading": "你的记录",
   "settings_records_page": "你的主页与个人介绍",
+  "settings_email_intro": "回复、提及和其他提醒始终会出现在通知页面中。请选择是否也通过电子邮件接收它们。电子邮件将使用你保存的显示语言。",
   "settings_email_digest_at": "摘要邮件会在每天 {time} 左右发送。",
   "settings_display_effect": "用其他语言写的帖子，会翻译成{lang}显示。",
   "settings_share_copy": "复制书签文本",
@@ -2153,5 +2159,6 @@
         "n=other": "此村庄中有 {count} 人可以阅读此聊天。"
       }
     }
-  ]
+  ],
+  "settings_language_advanced": "更多语言设置"
 }

@@ -81,6 +81,7 @@
   "invites_invalid_email": "Veuillez saisir une adresse e-mail valide.",
   "error_unexpected": "Une erreur inattendue est survenue.",
   "nav_language": "Langue",
+  "language_select": "Langue d’affichage",
   "home_empty": "Aucune publication pour le moment.",
   "home_replies": [
     {
@@ -193,6 +194,7 @@
   "usage_purpose_retry": "Nouvelle traduction après un signalement",
   "usage_purpose_judge": "Juge de divergence",
   "usage_purpose_embed": "Plongement",
+  "display_lang_label": "Langue de traduction",
   "label_machine": "Traduction automatique ({engine})",
   "label_human": "Modifié par un humain",
   "label_original": "Original",
@@ -494,6 +496,7 @@
   "page_current": "Page {page}",
   "settings_title": "Paramètres",
   "settings_langs_heading": "Langues",
+  "settings_display_auto": "Identique à la langue d’affichage (par défaut)",
   "settings_saved": "Enregistré.",
   "settings_area_confirm": [
     {
@@ -1553,6 +1556,7 @@
   "signing_accept_publish": "Confirmer avec la clé d'accès et publier",
   "signing_accept_save": "Confirmer avec la clé d'accès et enregistrer les modifications",
   "signing_accept_remove": "Confirmer avec la clé d'accès et supprimer",
+  "settings_ui_lang_help": "La langue des menus, des boutons et des traductions.",
   "nav_menu": "Menu",
   "nav_admin": "Admin",
   "filter_prefix": "Filtre :",
@@ -1772,6 +1776,7 @@
   "onboarding_language_help": "Choisissez la langue dans laquelle vous lisez et écrivez habituellement. Les publications dans cette langue s’affichent dans l’original.",
   "onboarding_language_details": "Comment ce choix est utilisé",
   "settings_advanced_heading": "Paramètres avancés",
+  "settings_area_short_help": "La langue par défaut de vos publications. Elle est également utilisée pour les décomptes par langue et la modération.",
   "settings_links_sessions_help": "Déconnecter d’autres appareils ne retire ni les jetons d’API ni les IA connectées. Retirez-les depuis leurs écrans respectifs.",
   "open_in_ai_provider_login": "Utiliser votre propre compte {name}",
   "open_in_ai_not_read": "Votre IA n’a pas encore lu cette page. Si elle s’est interrompue sur une erreur, ouvrez cette IA avec votre propre compte et appuyez de nouveau sur ce bouton. Vous pouvez également copier le texte avec « {copy} » sous ▾ et le coller.",
@@ -2323,6 +2328,7 @@
   "settings_account_heading": "Compte",
   "settings_records_heading": "Vos données",
   "settings_records_page": "Votre page et présentation",
+  "settings_email_intro": "Les réponses, mentions et autres notifications apparaissent toujours sur l’écran des notifications. Choisissez si vous souhaitez également les recevoir par e-mail. Les e-mails utilisent la langue d’affichage que vous avez enregistrée.",
   "settings_email_digest_at": "Le récapitulatif est envoyé chaque jour vers {time}.",
   "settings_display_effect": "Les publications écrites dans d’autres langues s’affichent traduites en {lang}.",
   "settings_share_copy": "Copier le texte du favori",
@@ -2778,5 +2784,6 @@
         "n=other": "{count} personnes dans ce village peuvent lire ce chat."
       }
     }
-  ]
+  ],
+  "settings_language_advanced": "Paramètres de langue avancés"
 }
