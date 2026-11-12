@@ -4577,7 +4577,7 @@
       "checkConstraints": {
         "list_seen_scope_check": {
           "name": "list_seen_scope_check",
-          "value": "length(\"list_seen\".\"scope\") <= 67 and \"list_seen\".\"scope\" ~ '^(/|/a/(ja|en|fr|de|zh-Hant|zh-Hans|ko|th|vi)/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$'"
+          "value": "length(\"list_seen\".\"scope\") <= 67 and \"list_seen\".\"scope\" ~ '^(/|/a/[A-Za-z]{2,3}(-[A-Za-z]+)?/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$'"
         }
       },
       "isRLSEnabled": false

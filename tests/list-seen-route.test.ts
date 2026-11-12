@@ -34,9 +34,17 @@ it("writes only the session member's row, ignoring submitted account identifiers
   expect(rows.find(row => row.userId === h.ids.watermark_other)?.seenAt.toISOString()).toBe(first);
 });
 
-it("rejects future or invalid times and paths outside bounded list scopes without changing records", async () => {
+it("clamps future times to the server's current time", async () => {
+  const sent = Date.now();
+  expect((await send("/a/de", new Date(sent + 86_400_000).toISOString())).status).toBe(200);
+  const [row] = await h.db.select().from(listSeen).where(eq(listSeen.scope, "/a/de"));
+  expect(row.seenAt.getTime()).toBeLessThanOrEqual(Date.now());
+  expect(row.seenAt.getTime()).toBeGreaterThanOrEqual(sent);
+});
+
+it("rejects invalid times and paths outside bounded list scopes without changing records", async () => {
   const before = await h.db.select().from(listSeen);
-  for (const seenAt of ["invalid", "", new Date(Date.now() + 60_000).toISOString()]) {
+  for (const seenAt of ["invalid", ""]) {
     expect(await h.outcome(() => send("/a/ja", seenAt))).toMatchObject({ status: 400 });
   }
   for (const scope of ["", "/t/1", "/latest.md", "/a/no", "/v/../secret", "/v/a?x=1", "/v/a#x", "https://example.com/", `/v/${"a".repeat(68)}`, "/v/a\n"]) {

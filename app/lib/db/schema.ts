@@ -1490,6 +1490,7 @@ export const notifications = pgTable(
 );
 
 // A private watermark per list, without recording which individual topics were opened.
+// The check bounds the shape only; the route decides which languages are enabled, so adding a language needs no migration.
 export const listSeen = pgTable("list_seen", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   scope: text("scope").notNull(),
@@ -1498,7 +1499,7 @@ export const listSeen = pgTable("list_seen", {
 }, t => [
   primaryKey({ columns: [t.userId, t.scope] }),
   index("list_seen_member_order_idx").on(t.userId, t.updatedAt.desc(), t.scope),
-  check("list_seen_scope_check", sql`length(${t.scope}) <= 67 and ${t.scope} ~ '^(/|/a/(ja|en|fr|de|zh-Hant|zh-Hans|ko|th|vi)/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$'`),
+  check("list_seen_scope_check", sql`length(${t.scope}) <= 67 and ${t.scope} ~ '^(/|/a/[A-Za-z]{2,3}(-[A-Za-z]+)?/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$'`),
 ]);
 
 // Private reading list; no copy of a post and no public activity signal.

@@ -18,9 +18,10 @@ export async function action({ request }: Route.ActionArgs) {
   const scope = form.get("scope");
   const rawTime = form.get("seenAt");
   const seenAt = typeof rawTime === "string" && rawTime.length <= 30 ? new Date(rawTime) : new Date(NaN);
-  if (!validListScope(scope) || !Number.isFinite(seenAt.getTime()) || seenAt.getTime() > Date.now()) {
+  if (!validListScope(scope) || !Number.isFinite(seenAt.getTime())) {
     throw data("Bad request", { status: 400, headers: HEADERS });
   }
-  const previous = await exchangeListSeen(db, user.id, scope, seenAt);
+  // Post times come from the database clock; clamp instead of rejecting so a small clock difference does not drop the visit.
+  const previous = await exchangeListSeen(db, user.id, scope, new Date(Math.min(seenAt.getTime(), Date.now())));
   return Response.json({ previous }, { headers: HEADERS });
 }

@@ -13,7 +13,7 @@ export function validListScope(scope: unknown): scope is string {
 // the per-member cap across devices and across different list scopes.
 export async function exchangeListSeen(db: Db, userId: string, scope: string, seenAt: Date) {
   return db.transaction(async tx => {
-    await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
+    await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("no key update");
     const ownScope = and(eq(listSeen.userId, userId), eq(listSeen.scope, scope));
     const [previous] = await tx.select({ seenAt: listSeen.seenAt }).from(listSeen).where(ownScope);
     if (!previous || seenAt > previous.seenAt) {
