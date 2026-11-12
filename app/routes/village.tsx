@@ -3,6 +3,7 @@ import { AuthorLink } from "~/components/author-link";
 import { villageIconUrl } from "~/lib/village-icon.server";
 import { AvatarSettings } from "~/components/avatar-settings";
 import { VillageHeader } from "~/components/village-header";
+import { useDismissibleDetails } from "~/components/use-dismissible-details";
 import { Check } from "lucide-react";
 import { parseIdOrNull } from "~/lib/params.server";
 import { VillageReportForm } from "~/components/village-moderation";
@@ -184,6 +185,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function Village({ loaderData, actionData }: Route.ComponentProps) {
   const { village, source, membership, following, topics, order, page, hasNext, langParam, stanceMessage, ended, operator, management, incoming, confirmingEnd } = loaderData;
   const location = useLocation();
+  const membershipControl = useDismissibleDetails();
   const owner = membership?.owner ?? false;
   const search = new URLSearchParams(location.search);
   const managementOpen = search.get("manage") === "1" || confirmingEnd || "resolveReportId" in loaderData || search.has("invitesPage") || location.hash === "#village-invites";
@@ -192,12 +194,12 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
   const noticeKey = search.get("notice") ?? "";
   const notice = canManage && Object.hasOwn(notices, noticeKey) ? notices[noticeKey]() : undefined;
   const leaveForm = <Form method="post"><Button type="submit" variant="outline" name="intent" value="leave" disabled={!ended && management.lastOwner}>{m.village_leave()}</Button></Form>;
-  const membershipAction = membership?.joined ? <details data-village-membership>
+  const membershipAction = membership?.joined ? <details ref={membershipControl} key={location.key} data-village-membership>
     <summary data-pressed="" className={buttonVariants({ variant: "outline", className: "cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
       <Check aria-hidden="true" data-icon="inline-start" />{m.village_joined()}<span aria-hidden="true">▾</span>
     </summary>
     <div className="absolute end-0 z-40 mt-2 w-80 max-w-full space-y-3 rounded-lg border bg-background p-3 shadow-md ui-help">
-      {village.kind === "invite_public" && !ended && <><p className="font-semibold">{m.village_leave_confirm()}</p><p>{m.village_leave_invite_help()}</p></>}
+      {village.kind === "invite_public" && !ended && !management.lastOwner && <><p className="font-semibold">{m.village_leave_confirm()}</p><p>{m.village_leave_invite_help()}</p></>}
       {!ended && management.lastOwner && <p>{m.village_error_last_owner()}</p>}
       {leaveForm}
     </div>
@@ -208,12 +210,12 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
   const mainAction = ended || !membership ? undefined : membership.joined
     ? <Link to={`/t/new?village=${village.slug}`} className={buttonVariants()}>{m.village_post_here()}</Link>
     : village.kind === "open" ? <Form method="post"><Button type="submit" name="intent" value="join">{m.village_join()}</Button></Form> : undefined;
-  // Following is reading only. Joined villages already appear on the home filter and in navigation, so only nonjoining members need this control. An ended village cannot be newly followed.
+  // Following is reading only. Joined villages already appear on the home filter and in navigation, so only members who have not joined need this control. An ended village cannot be newly followed.
   const followForm = !loaderData.reader && !membership?.joined && (following || !ended) ? <Form method="post">
     <Button type="submit" variant="outline" pressed={following} name="intent" value={following ? "unfollow" : "follow"}>{following ? m.village_following() : m.village_follow()}<span className="sr-only"> {villageName(village)}</span></Button>
   </Form> : undefined;
   const participationHelp = !loaderData.reader && !membership?.joined && !following && (mainAction || followForm)
-    ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat() : m.village_join_follow_help() : m.village_follow_members_help()
+    ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat({ filter: m.home_filter_following() }) : m.village_join_follow_help({ filter: m.home_filter_following() }) : m.village_follow_members_help({ filter: m.home_filter_following() })
     : undefined;
   return <main className="space-y-3 [overflow-wrap:anywhere]">
     <VillageHeader village={village} current="posts" chat={"chat" in loaderData ? { ...loaderData.chat!, member: !loaderData.reader } : undefined} actions={mainAction || membershipAction || followForm ? <>{mainAction}{membershipAction}{followForm}</> : undefined} purpose={<>

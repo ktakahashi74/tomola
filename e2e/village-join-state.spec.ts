@@ -43,7 +43,23 @@ test("joined state replaces follow controls and leaving preserves an existing fo
   await joined(page).focus();
   await page.keyboard.press("Enter");
   await expect(joined(page).locator("..")).toHaveAttribute("open", "");
-  await expect(header(page).getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+  const leave = header(page).getByRole("button", { name: m.village_leave, exact: true });
+  await expect(leave).toBeVisible();
+  await leave.focus();
+  await page.keyboard.press("Escape");
+  await expect(joined(page).locator("..")).not.toHaveAttribute("open", "");
+  await expect(joined(page)).toBeFocused();
+  await joined(page).click();
+  await header(page).getByRole("heading", { level: 1 }).click();
+  await expect(joined(page).locator("..")).not.toHaveAttribute("open", "");
+  await joined(page).click();
+  await joined(page).press("ArrowDown");
+  await expect(joined(page).locator("..")).toHaveAttribute("open", "");
+  // Keyboard navigation has no outside pointer press to dismiss the details.
+  await page.getByRole("link", { name: m.home_order_activity, exact: true }).press("Enter");
+  await expect(page).toHaveURL(/\?order=activity$/);
+  await expect(joined(page).locator("..")).not.toHaveAttribute("open", "");
+  await joined(page).click();
   await header(page).getByRole("button", { name: m.village_leave, exact: true }).click();
   await expect(joined(page)).toHaveCount(0);
   await expect(follow(page)).toHaveAttribute("aria-pressed", "true");
@@ -85,6 +101,8 @@ test("invited members confirm departure and the last owner can leave only after 
   const owner = await openVillageMembership(page);
   await expect(owner.getByRole("button", { name: m.village_leave, exact: true })).toBeDisabled();
   await expect(owner.getByText(m.village_error_last_owner, { exact: true })).toBeVisible();
+  await expect(owner.getByText(m.village_leave_confirm, { exact: true })).toHaveCount(0);
+  await expect(owner.getByText(m.village_leave_invite_help, { exact: true })).toHaveCount(0);
   await screenshots(page, "last-owner");
 
   await useMember(page, "zjoin_ended@example.com", "/v/join-state-ended");

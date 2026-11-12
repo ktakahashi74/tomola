@@ -26,7 +26,7 @@ beforeAll(async () => {
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
 const load = (as?: string, slug = "join-open") => loader(h.args(h.request(`/v/${slug}`, { as }), { slug }));
 const post = (as: string, intent: string, slug = "join-open") => h.outcome(() => action(h.args(h.request(`/v/${slug}`, { as, form: { intent } }), { slug })));
-const html = async (page: Awaited<ReturnType<typeof load>>) => (await renderInRouter(() => createElement(Village, { loaderData: page } as never), `/v/${page.village.slug}`)).replaceAll("&#x27;", "'");
+const html = async (page: Awaited<ReturnType<typeof load>>) => (await renderInRouter(() => createElement(Village, { loaderData: page } as never), `/v/${page.village.slug}`)).replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
 const head = (rendered: string) => rendered.split("</header>")[0];
 
 it("puts joined state and departure in the header, hides follows, and retains an existing follow after departure", async () => {
@@ -49,16 +49,16 @@ it("puts joined state and departure in the header, hides follows, and retains an
 
 it("shows participation guidance before the description only for members who neither joined nor followed", async () => {
   const open = await html(await load("zjoin_guidance"));
-  expect(open).toContain(m.village_join_follow_help_chat());
+  expect(open).toContain(m.village_join_follow_help_chat({ filter: m.home_filter_following() }));
   expect(open.indexOf("data-village-participation-help")).toBeLessThan(open.indexOf("Description sentinel"));
   vi.stubEnv("VILLAGE_CHAT", "");
   try {
     const withoutChat = await html(await load("zjoin_guidance"));
-    expect(withoutChat).toContain(m.village_join_follow_help());
-    expect(withoutChat).not.toContain(m.village_join_follow_help_chat());
+    expect(withoutChat).toContain(m.village_join_follow_help({ filter: m.home_filter_following() }));
+    expect(withoutChat).not.toContain(m.village_join_follow_help_chat({ filter: m.home_filter_following() }));
   } finally { vi.stubEnv("VILLAGE_CHAT", "1"); }
   const invite = await html(await load("zjoin_guidance", "join-invite"));
-  expect(invite).toContain(m.village_follow_members_help());
+  expect(invite).toContain(m.village_follow_members_help({ filter: m.home_filter_following() }));
   expect(invite).not.toContain('value="join"');
   await post("zjoin_guidance", "follow", "join-invite");
   expect(await html(await load("zjoin_guidance", "join-invite"))).not.toContain("data-village-participation-help");
@@ -71,6 +71,8 @@ it("retains invitation-only departure confirmation and explains the last owner's
   const owner = head(await html(await load("zjoin_owner", "join-invite")));
   expect(owner).toMatch(/<button[^>]*disabled=""[^>]*value="leave"|<button[^>]*value="leave"[^>]*disabled=""/);
   expect(owner).toContain(m.village_error_last_owner());
+  expect(owner).not.toContain(m.village_leave_confirm());
+  expect(owner).not.toContain(m.village_leave_invite_help());
   expect(await post("zjoin_owner", "leave", "join-invite")).toMatchObject({ status: 400, value: { data: { error: "last_owner" } } });
 });
 

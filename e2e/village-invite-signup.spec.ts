@@ -29,7 +29,7 @@ test("an invitation from a suspended owner omits village enrollment on both sign
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/v/signup-stopped");
   await expect(page.getByRole("button", { name: enMessages.village_accept, exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: enMessages.village_leave, exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-village-header] summary").filter({ hasText: enMessages.village_joined })).toHaveCount(0);
   await expect(page.getByRole("link", { name: enMessages.village_post_here, exact: true })).toHaveCount(0);
 });
 
@@ -72,7 +72,7 @@ test("an invitation from a village carries the opened destination through signup
     await openVillageMembership(guest);
     await expect(guest.getByRole("button", { name: enMessages.village_leave, exact: true })).toBeVisible();
     await guest.goto("/v/signup-entry-b");
-    await expect(guest.getByRole("button", { name: enMessages.village_leave, exact: true })).toHaveCount(0);
+    await expect(guest.locator("[data-village-header] summary").filter({ hasText: enMessages.village_joined })).toHaveCount(0);
     await guest.goto("/notifications");
     await expect(guest.getByText(enMessages.notification_village_added.replace("{name}", "Signup entry A").replace("{actor}", "@signup_entry_a"), { exact: true })).toBeVisible();
     await guest.goto(urls[1]);
