@@ -38,7 +38,7 @@ export async function createInvitation(
   const note = invitationNoteText(input.note ?? "");
   if (note === null) throw new Error("Invalid invitation note");
   const [author] = note && input.createdBy ? await db.select().from(profiles).where(eq(profiles.userId, input.createdBy)) : [];
-  const noteLang = note ? detectLang(note) ?? (isLang(author?.homeArea) ? author.homeArea : memberVillageLang(author ?? { homeArea: "other", uiLocale: null, displayLang: null, readLangs: [] })) : null;
+  const noteLang = note ? detectLang(note, author?.homeArea) ?? (isLang(author?.homeArea) ? author.homeArea : memberVillageLang(author ?? { homeArea: "other", uiLocale: null, displayLang: null, readLangs: [] })) : null;
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + (input.ttlDays ?? INVITATION_TTL_DAYS) * DAY_MS);
   await db.insert(invitations).values({

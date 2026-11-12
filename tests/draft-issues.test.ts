@@ -27,6 +27,10 @@ beforeAll(async () => {
 });
 
 describe("draft diagnostics from publishing rules", () => {
+  it("uses the intended draft language for ambiguous Han diagnostics", async () => {
+    expect((await inspect("確認", null, "ja")).issues).toEqual([]);
+    expect((await inspect("学会", null, "ja")).issues).toEqual([]);
+  });
   it("reports unresolved mentions at their body line, respecting prefixes, quotes and Markdown exclusions", async () => {
     const result = await inspect("@reader0-san @writer\n\n@missing\n\n> @quoted\n\n`@code` [@link](https://example.org) \\@escaped &#64;entity");
     expect(result.issues).toMatchObject([{ kind: "unknown_mention", location: { field: "body", line: 3 }, excerpt: "@missing" }]);

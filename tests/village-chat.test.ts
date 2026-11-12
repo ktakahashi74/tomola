@@ -63,6 +63,14 @@ it("allocates committed village sequences, detects language, and erases deleted 
   for (const body of ["", "   ", "x".repeat(2001)]) await expect(mutateChat(db, "author", slug, "send", { body })).rejects.toMatchObject({ code: "invalid" });
 });
 
+it("uses the author's main language for short Han messages on send and edit", async () => {
+  const { db, slug } = await world();
+  const sent = await mutateChat(db, "reader", slug, "send", { body: "確認" });
+  expect((await db.select().from(chatMessages).where(eq(chatMessages.id, sent.id)))[0].lang).toBe("ja");
+  await mutateChat(db, "reader", slug, "edit", { id: sent.id, body: "時間変更" });
+  expect((await db.select().from(chatMessages).where(eq(chatMessages.id, sent.id)))[0].lang).toBe("ja");
+});
+
 it("normalizes browser newlines before applying the length limit and preserves balanced URL parentheses", async () => {
   const { db, slug } = await world();
   const text = "a\n".repeat(999) + "xy";

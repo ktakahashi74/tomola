@@ -15,7 +15,7 @@ const words = {
 export type LanguageDecision = { source: "explicit" | "detected" | "default"; detected: Lang | null };
 
 // Pure, conservative evidence from prose alone; never guesses from names or identifiers.
-export function detectLang(body: string): Lang | null {
+export function detectLang(body: string, hint?: string | null): Lang | null {
   const prose = proseOf(body, true);
   const mentions = mentionCandidates(prose).map(c => `@${c.token}`);
   const text = withoutResolvedMentions(prose, mentions).normalize("NFC").toLowerCase().replace(/’/g, "'");
@@ -25,9 +25,18 @@ export function detectLang(body: string): Lang | null {
   if (kana >= 2 && kana + count(/\p{Script=Han}/u) > letters.length / 2) return "ja";
   if (count(/\p{Script=Hangul}/u) > letters.length / 2) return "ko";
   if (count(/\p{Script=Thai}/u) > letters.length / 2) return "th";
-  if (kana === 0 && count(/\p{Script=Han}/u) > letters.length / 2) {
+  const han = count(/\p{Script=Han}/u);
+  if (kana === 0 && han > letters.length / 2) {
     const a = letters.filter(ch => simplified.has(ch)).length;
     const b = letters.filter(ch => traditional.has(ch)).length;
+    if (han === letters.length && (hint === "ja" || hint === "zh-Hans" || hint === "zh-Hant")) {
+      // Japanese shinjitai overlap both scripts. Short text and repeated markers
+      // need author context; longer text can override it with varied evidence.
+      const markers = a > b ? simplified : traditional;
+      const strong = han >= 12 && Math.abs(a - b) >= Math.max(4, Math.ceil(han / 4))
+        && new Set(letters.filter(ch => markers.has(ch))).size >= 4;
+      if (!strong) return hint;
+    }
     return a === b ? null : a > b ? "zh-Hans" : "zh-Hant";
   }
   const latin = count(/\p{Script=Latin}/u);

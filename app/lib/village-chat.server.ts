@@ -100,7 +100,7 @@ export async function mutateChat(db: Db, userId: string, slug: string, intent: "
     }
     const text = body?.success ? body.data : "";
     if (!writer.ok) throw new ChatError("forbidden");
-    const detected = detectLang(text);
+    const detected = detectLang(text, writer.profile.homeArea);
     const lang = isEnabledLang(detected) ? detected : isEnabledLang(writer.profile.homeArea) ? writer.profile.homeArea : defaultUiLocale();
     const id = message?.id ?? randomBytes(16).toString("hex");
     const now = new Date();

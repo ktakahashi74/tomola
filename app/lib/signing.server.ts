@@ -249,7 +249,7 @@ async function loadIntent(tx: Db, userId: string, pathname: string, form: FormDa
     const bodyError = await checkBodyBudget(content.body, userId);
     if (bodyError) throw new SigningError(bodyError, 400);
   }
-  if ((operation === "publish-draft" || operation === "edit-topic" || operation === "edit-reply") && content.lang) language = { source: "explicit", detected: (await detectLang(content.body)) };
+  if ((operation === "publish-draft" || operation === "edit-topic" || operation === "edit-reply") && content.lang) language = { source: "explicit", detected: (await detectLang(content.body, content.lang)) };
   const destinationId = target.threadId ?? target.altOf;
   const targetIds = [destinationId, target.parentId].filter((id): id is number => id !== null);
   const targetViews = await getEntryViews(tx, targetIds);

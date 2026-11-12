@@ -9,6 +9,7 @@ import * as structure from "~/lib/llm/structure.core.server";
 import * as copy from "~/lib/llm/copy-detection.core.server";
 import * as frontmatter from "~/lib/entry-frontmatter.core.server";
 import * as evaluation from "~/lib/eval/checks.core.server";
+import * as language from "~/lib/lang-detect.core.server";
 
 it("keeps body interpretation out of the caller's module instances", async () => {
   const spies = [
@@ -16,6 +17,7 @@ it("keeps body interpretation out of the caller's module instances", async () =>
     vi.spyOn(references, "parseEntryReferences"), vi.spyOn(plain, "markdownToPlainText"),
     vi.spyOn(structure, "checkStructure"), vi.spyOn(copy, "detectCopy"), vi.spyOn(frontmatter, "parseMapping"),
     vi.spyOn(evaluation, "deterministicCheck"),
+    vi.spyOn(language, "detectLang"),
   ];
   try {
     const source = "# A post\n\n**Evidence** and @hana [topic](/t/1), with $x^2$.\n";
@@ -27,6 +29,7 @@ it("keeps body interpretation out of the caller's module instances", async () =>
     await (await import("~/lib/llm/copy-detection.server")).detectCopy(source, source, "en", "ja");
     await (await import("~/lib/entry-frontmatter.server")).parseMapping("type: topic\ntitle: Test");
     await (await import("~/lib/eval/checks.server")).deterministicCheck({ id: "C1", kind: "markdown", description: "Preserve markup" }, source, source, false);
+    expect(await (await import("~/lib/lang-detect")).detectLang("確認", "ja")).toBe("ja");
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   } finally { for (const spy of spies) spy.mockRestore(); }
 });

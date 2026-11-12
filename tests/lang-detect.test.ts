@@ -16,6 +16,27 @@ const sentences = {
 } as const;
 
 describe("prose language detection", () => {
+  const hintedCases: (readonly [text: string, hint: string, lang: string | null])[] = [
+    ...["確認", "時間変更", "開始", "学会", "国会", "会議延期", "了解", "確認確認確認確認確認確認"].map(text => [text, "ja", "ja"] as const),
+    ...["确认", "会议延期", "谢谢"].map(text => [text, "zh-Hans", "zh-Hans"] as const),
+    ...["確認", "謝謝"].map(text => [text, "zh-Hant", "zh-Hant"] as const),
+    [sentences["zh-Hans"], "ja", "zh-Hans"],
+    [sentences["zh-Hant"], "ja", "zh-Hant"],
+    [sentences["zh-Hans"], "zh-Hant", "zh-Hans"],
+    ["確認", "en", "zh-Hant"],
+    ["学会", "en", "zh-Hans"],
+    ["会議延期", "en", null],
+    ["こんにちは", "zh-Hans", "ja"],
+  ];
+  it.each(hintedCases)("uses hint %s / %s only for ambiguous Han prose", (text, hint, lang) => {
+    expect(detectLang(text, hint)).toBe(lang);
+  });
+  it("preserves unhinted and non-CJK-hinted detection", () => {
+    for (const text of [...Object.values(sentences), "確認", "学会", "山川水土木日月", "確認 API"]) {
+      expect(detectLang(text, "en")).toBe(detectLang(text));
+    }
+    expect(detectLang("確認 API", "ja")).toBe(detectLang("確認 API"));
+  });
   it.each([
     ["Il faut être prudent : même si les idées sont différentes, nous pouvons parler avec les autres.", "fr"],
     ["We discuss the idea of もったいない and how it can change the way we use our resources.", "en"],
@@ -45,6 +66,11 @@ describe("prose language detection", () => {
 
 describe("entry language resolution", () => {
   const raw = (body: string, lang = "") => ({ title: "", body, lang, asksStance: false, altOf: null, stanceTag: null });
+  it("passes the member default through the worker for short Han posts", async () => {
+    for (const body of ["確認", "時間変更", "開始", "学会", "国会"]) {
+      expect(await applyPastedFrontmatter(raw(body), "topic", { defaultLang: "ja" })).toMatchObject({ ok: true, input: { lang: "ja" }, language: { detected: "ja" } });
+    }
+  });
   it("detects enabled prose for topics and replies instead of the member default", async () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     for (const kind of ["topic", "reply"] as const) expect((await applyPastedFrontmatter(raw(sentences.en), kind, { defaultLang: "ja" }))).toMatchObject({ ok: true, input: { lang: "en" }, language: { source: "detected", detected: "en" } });

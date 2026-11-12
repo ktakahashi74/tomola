@@ -38,6 +38,7 @@ it("creates an optional note through the member action and detects its language"
   const [row] = await h.db.select().from(invitations).where(eq(invitations.email, "note_action@example.com"));
   expect(row).toMatchObject({ note, noteLang: "ja" });
   expect((await make("🙂")).invitation.noteLang).toBe("ja");
+  for (const text of ["確認", "学会", "時間変更"]) expect((await make(text)).invitation.noteLang).toBe("ja");
   expect((await make("")).invitation).toMatchObject({ note: null, noteLang: null });
   expect((await make("Please share your perspective on this essay.")).invitation.noteLang).toBe("en");
   await h.db.update(profiles).set({ homeArea: "ko" }).where(eq(profiles.userId, h.ids.invite_note_sender));

@@ -162,8 +162,8 @@ export function memberVillageLang(profile: MemberLangs, env?: Record<string, str
 }
 
 // For a village with no author to ask (a language village an operator described): what the text itself is in, if it can be told; otherwise the site's default.
-export function detectedVillageLang(text: string, env?: Record<string, string | undefined>): Lang {
-  const lang = detectLang(text);
+export function detectedVillageLang(text: string, env?: Record<string, string | undefined>, hint?: string): Lang {
+  const lang = detectLang(text, hint);
   return lang && isEnabledLang(lang, env) ? lang : defaultLangOf(enabledLangs(env));
 }
 
@@ -173,7 +173,7 @@ export type DecidedVillageLang = { lang: Lang; by: "author" | "text" | "default"
 export function decideVillageLang(parts: { name: string | null; description: string | null }, author: MemberLangs | null | undefined, env?: Record<string, string | undefined>): DecidedVillageLang {
   const own = author ? ownLang(author, env) : null;
   if (own) return { lang: own, by: "author" };
-  const detected = detectLang(`${parts.name ?? ""}\n${parts.description ?? ""}`);
+  const detected = detectLang(`${parts.name ?? ""}\n${parts.description ?? ""}`, author?.homeArea);
   if (detected && isEnabledLang(detected, env)) return { lang: detected, by: "text" };
   return { lang: defaultLangOf(enabledLangs(env)), by: "default" };
 }

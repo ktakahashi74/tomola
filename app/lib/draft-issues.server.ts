@@ -50,7 +50,7 @@ function collectDraftIssues(db: Db, draft: DraftIssuesInput) {
     if (draft.kind === "topic" && draft.title) review(draft.title, { field: "title" });
     const lines = draft.body.split(/\r?\n/);
     for (let i = 0; i < lines.length && issues.length <= MAX_DRAFT_ISSUES; i++) review(lines[i], { field: "body", line: i + 1 });
-    const detected = await detectLang(draft.body);
+    const detected = await detectLang(draft.body, draft.lang);
     if (detected && detected !== draft.lang) add({ kind: "lang_mismatch", location: { field: "body", line: 1 }, excerpt: draftExcerpt(draft.body),
       message: `The body appears to be ${detected}, but lang is ${draft.lang}. Check the intended language with your member.` });
     return { issues: issues.slice(0, MAX_DRAFT_ISSUES), issuesTruncated: issues.length > MAX_DRAFT_ISSUES, ...(issues.length ? { issuesNotice: DRAFT_ISSUES_NOTICE } : {}) };

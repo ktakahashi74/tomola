@@ -10,7 +10,7 @@ export async function detectLang(...args: Parameters<typeof core.detectLang>): P
 
 // Browser forms and AI drafts use identical detection and enabled-language fallback rules.
 export async function resolvePostLanguage(body: string, explicit: string | undefined, defaultLang: string) {
-  const detected = await detectLang(body);
+  const detected = await detectLang(body, defaultLang);
   const source = explicit ? "explicit" : detected && isEnabledLang(detected) ? "detected" : "default";
   return { lang: explicit || (source === "detected" ? detected! : defaultLang), language: { source, detected } as core.LanguageDecision };
 }

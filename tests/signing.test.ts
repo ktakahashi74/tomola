@@ -19,6 +19,13 @@ function signed(form: FormData, options: Awaited<ReturnType<typeof issue>>, key 
 const run = (form: FormData, path = "/t/new") => withSignedWrite(h.db, h.ids.hana, h.request(path, { as: "hana" }), form, tx => createTopic(tx, h.ids.hana, { body: String(form.get("body")), lang: "ja" }));
 
 describe("signed acceptance", () => {
+  it("uses the draft language as a hint when previewing ambiguous Han text", async () => {
+    const created = await createDraft(h.db, h.ids.hana, { kind: "topic", body: "確認", lang: "ja" });
+    if (!created.ok) throw new Error(created.error);
+    const form = formFor("確認"); form.set("intent", "publish");
+    const preview = await previewSignedWrite(h.db, h.ids.hana, `/drafts/${created.id}`, form);
+    expect(preview.language).toEqual({ source: "explicit", detected: "ja" });
+  });
   it("requires UV and binds all input into the challenge, then records independently verifiable evidence", async () => {
     const form = formFor(); const options = await issue(form);
     expect(options.options.userVerification).toBe("required");

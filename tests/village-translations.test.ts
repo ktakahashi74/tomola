@@ -15,7 +15,7 @@ import type { TranslationEngine, TranslationRequest } from "~/lib/llm/types";
 import { createVillage, editVillage, inviteToVillage } from "~/lib/village-management.server";
 import { joinedVillageNavigation } from "~/lib/village-navigation.server";
 import { listNotifications } from "~/lib/notifications.server";
-import { applyVillageTexts, decideVillageLangOf, SAME_AS_SOURCE, localizeVillage, localizeVillages, planVillageTexts, requestVillageTranslations, villageReaderOfMember, villageSourceHash } from "~/lib/village-translations.server";
+import { applyVillageTexts, decideVillageLang, decideVillageLangOf, detectedVillageLang, SAME_AS_SOURCE, localizeVillage, localizeVillages, planVillageTexts, requestVillageTranslations, villageReaderOfMember, villageSourceHash } from "~/lib/village-translations.server";
 import { prepareVillages, runPrepareVillages } from "~/lib/villages-prepare.server";
 import { hitMemberLimit } from "~/lib/rate-limit.server";
 import { villageNameLang } from "~/lib/village-translation-view";
@@ -23,6 +23,14 @@ import { changeVillageMembership, ensureLanguageVillages, listJoinedVillages, li
 import { buildListMarkdown } from "~/lib/md/lists.server";
 import { translatedVillageDescription, translatedVillageName } from "~/lib/villages";
 import { loader as villageLoader } from "~/routes/village";
+
+it("keeps ambiguous Han village text in the author's main language", () => {
+  const env = { ENABLED_LANGS: "ja,en,zh-Hans,zh-Hant" };
+  const author = { homeArea: "ja", uiLocale: null, displayLang: null, readLangs: ["ja"] };
+  expect(decideVillageLang({ name: "学会", description: "時間変更" }, author, env)).toEqual({ lang: "ja", by: "author" });
+  expect(detectedVillageLang("確認", env, author.homeArea)).toBe("ja");
+  expect(detectedVillageLang("確認", env)).toBe("zh-Hant");
+});
 import { loader as villagesLoader } from "~/routes/villages";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
