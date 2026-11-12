@@ -1,4 +1,5 @@
 export const WRITER_EXCEPTIONS = {
+  "list-seen.ts": "private list watermarks only: requireMember permits suspended members to update their own viewing state; no publishing or signature",
   "save.ts": "private reading only: requireMember allows suspended members to save readable topics and remove their own saved rows; no publishing or signature",
   "entry-history.tsx": "deletes only the authenticated author's previous revisions after confirmation; suspended members retain their right to delete, and moderation evidence is protected",
   "topic-translations.ts": "same-origin browser reading: getReader enforces public/private access; rate-limited translation work and first display timestamps, never member-authored content",

@@ -2,6 +2,7 @@
 // Media delivery and deleted-parent visibility exercise both authority modes.
 export const publicOnly = [
   ["village-roster", ".*"],
+  ["list-seen-sync", "signed-out boundaries"],
   ["meta-separators", ".*"],
   ["read-later", "anonymous readers"],
   ["village-icons", ".*"],
@@ -50,6 +51,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["list-seen-sync", "account list boundaries|failed account exchange"],
   ["logout-drafts", ".*"],
   ["web-push", ".*"],
   ["install-guide", ".*"],

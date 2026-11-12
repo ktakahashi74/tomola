@@ -70,6 +70,7 @@ export const MEMBER_RATE_LIMITS = {
   "chat-edit": { limit: 60, windowSeconds: 60 },
   "chat-delete": { limit: 60, windowSeconds: 60 },
   "chat-read": { limit: 120, windowSeconds: 60 },
+  "list-seen": { limit: 120, windowSeconds: 60 },
   "chat-changes": { limit: 120, windowSeconds: 60 },
   "chat-events": { limit: 120, windowSeconds: 3600 },
   preview: { limit: 300, windowSeconds: 3600 },

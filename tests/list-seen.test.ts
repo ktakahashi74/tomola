@@ -1,5 +1,5 @@
-import { expect, it } from "vitest";
-import { rememberViewingPosts, SEEN_POSTS_KEY, type PostsView } from "~/lib/list-seen";
+import { afterEach, expect, it, vi } from "vitest";
+import { rememberMemberViewingPosts, rememberViewingPosts, SEEN_POSTS_KEY, type PostsView } from "~/lib/list-seen";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 
 const storage = () => {
@@ -7,6 +7,41 @@ const storage = () => {
   return { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
 };
 const post = (id: number, day: number) => ({ id, createdAt: `2026-10-${String(day).padStart(2, "0")}T00:00:00.000Z` });
+afterEach(() => vi.unstubAllGlobals());
+
+it("uses one account exchange per viewing, including overlapping revalidation", async () => {
+  let resolve!: (response: Response) => void;
+  const request = vi.fn(() => new Promise<Response>(done => { resolve = done; }));
+  vi.stubGlobal("fetch", request);
+  const view: PostsView = {};
+  const a = rememberMemberViewingPosts("/", [post(3, 13), post(1, 11)], view);
+  const b = rememberMemberViewingPosts("/", [post(3, 13), post(2, 12), post(1, 11)], view);
+  resolve(Response.json({ previous: post(1, 11).createdAt }));
+  expect(await a).toEqual({ newIds: [3], boundaryAfter: 3 });
+  expect(await b).toEqual({ newIds: [3, 2], boundaryAfter: 2 });
+  expect(await rememberMemberViewingPosts("/", [post(3, 13), post(1, 11)], view)).toEqual(await a);
+  expect(request).toHaveBeenCalledTimes(1);
+  const [url, options] = request.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe("/list-seen");
+  expect(options.method).toBe("POST");
+  expect(Object.fromEntries(options.body as URLSearchParams)).toEqual({ scope: "/", seenAt: post(3, 13).createdAt });
+});
+
+it("marks no first account visit, empty list, or failed synchronization and never retries within the visit", async () => {
+  const request = vi.fn();
+  vi.stubGlobal("fetch", request);
+  expect(await rememberMemberViewingPosts("/", [], {})).toEqual({ newIds: [], boundaryAfter: null });
+  expect(request).not.toHaveBeenCalled();
+  for (const response of [Response.json({ previous: null }), Response.json({ previous: "invalid" }), Response.json({ previous: 1 }), new Response("Unavailable", { status: 503 })]) {
+    request.mockResolvedValue(response);
+    const view: PostsView = {};
+    expect(await rememberMemberViewingPosts("/", [post(2, 12)], view)).toEqual({ newIds: [], boundaryAfter: null });
+    expect(await rememberMemberViewingPosts("/", [post(3, 13)], view)).toEqual({ newIds: [], boundaryAfter: null });
+  }
+  request.mockRejectedValue(new Error("Offline"));
+  expect(await rememberMemberViewingPosts("/", [post(2, 12)], {})).toEqual({ newIds: [], boundaryAfter: null });
+  expect(request).toHaveBeenCalledTimes(5);
+});
 
 it("marks nothing on a first visit, then the posts created after the newest one that was seen", () => {
   const store = storage();

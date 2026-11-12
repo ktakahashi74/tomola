@@ -750,6 +750,13 @@
       "when": 1794136483441,
       "tag": "0106_web_push",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794473020590,
+      "tag": "0107_list_seen",
+      "breakpoints": true
     }
   ]
 }

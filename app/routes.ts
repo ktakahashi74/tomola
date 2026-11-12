@@ -47,6 +47,7 @@ export default [
   // Follow or unfollow a topic (POST only), and the Markdown twin of the follow list (authenticated).
   route("follow", "routes/follow.ts"),
   route("save", "routes/save.ts"),
+  route("list-seen", "routes/list-seen.ts"),
   route("following.md", "routes/following-md.ts", { id: "following-md" }),
   route("following.txt", "routes/following-md.ts", { id: "following-txt" }),
   // Markdown versions (.md and .txt). Middleware on t/:id and a/:lang handles /t/:id.md and /a/:lang.md (app/lib/md/twin.server.ts).

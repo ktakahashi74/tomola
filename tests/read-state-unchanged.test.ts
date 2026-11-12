@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chatReads, notifications } from "~/lib/db/schema";
+import { chatReads, listSeen, notifications } from "~/lib/db/schema";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { clearMemoryReadLimitsForTests } from "~/lib/rate-limit.server";
 import { createApiToken } from "~/lib/tokens.server";
@@ -28,6 +28,7 @@ describe("read routes with a member's credentials", () => {
     const stored = async () => ({
       notifications: await h.db.select().from(notifications).where(eq(notifications.userId, h.ids.hana)).orderBy(notifications.id),
       chatReads: await h.db.select().from(chatReads).where(eq(chatReads.userId, h.ids.hana)),
+      listSeen: await h.db.select().from(listSeen).where(eq(listSeen.userId, h.ids.hana)),
     });
     const before = await stored();
     expect(before.notifications.some((row) => row.readAt === null)).toBe(true);

@@ -96,6 +96,7 @@ describe("every write path goes through the writer gate", () => {
       // Private reading uses requireMember: suspension limits publishing, not
       // saving readable posts or erasing one's own private saved records.
       ["private saved reading", () => import("~/routes/save") as never, "/save", {}, { topicId: id, saved: "1" }],
+      ["private list watermark", () => import("~/routes/list-seen") as never, "/list-seen", {}, { scope: "/", seenAt: "2026-01-01T00:00:00.000Z" }],
       ["topic-new (post, draft)", () => import("~/routes/topic-new") as never, "/t/new", {}, { title: "x", body: "y" }],
       ["draft autosave", () => import("~/routes/draft-autosave") as never, "/drafts/autosave", {}, { body: "y" }],
       ["topic (reply, draft, translation report)", () => import("~/routes/topic") as never, `/t/${id}`, { id }, { body: "y" }],

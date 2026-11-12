@@ -1,7 +1,7 @@
 import { Badge } from "~/components/ui/badge";
 import { PendingText } from "~/components/pending-text";
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useRouteLoaderData } from "react-router";
 import { CountWithLanguages } from "~/components/count-with-languages";
 import { StancePanel } from "~/components/stance-panel";
 import { TranslationLabel } from "~/components/translation-label";
@@ -24,8 +24,8 @@ import { m } from "~/paraglide/messages.js";
 // Each question retains one compact stance panel. Reply links use the latest visible reply's position.
 // stanceMessage: the previous submission result without JavaScript (?stance_msg=), shown only on that question's panel.
 // A post without a title (a remark) is drawn in the interface's voice (not the reading face of a title), plain and cut at two lines, so that a long remark does not take the place of an essay's title.
-// trackNew (the first page of a list in the newest-first order with no filter, which is the only list where "newer than the newest one seen" means new; the path of the list names it): the browser alone remembers the newest post it showed (lib/list-seen.ts) and marks the rows that came after it with a dot, and
-// draws a line before the first row it has seen. Nothing about this is sent; it is added after the page is live, so the page the server sends is the same for everyone.
+// trackNew (the first page in newest-first order without filters): remember the newest post shown, in the account for members or in the browser for guests (lib/list-seen.ts).
+// After initial activation, mark newer rows with a dot and draw a line before previously seen rows.
 export function TopicList({
   topics,
   langParam,
@@ -106,28 +106,35 @@ export function TopicList({
   );
 }
 
-// The rows that are new since the reader last saw this list (browser only; see lib/list-seen.ts). Null until the page is live, and for a list that is not tracked.
+// The rows that are new since the reader last saw this list (see lib/list-seen.ts). Null until the page is live, and for a list that is not tracked.
 // What counts as new is fixed for one visit (one navigation to the list), so that a reload of the data does not move the line; the next navigation starts again from what was seen.
 function useNewPostMarks(scope: string | undefined, topics: readonly TopicItem[], navigationKey: string) {
+  const member = useRouteLoaderData<typeof import("~/routes/member-layout").loader>("routes/member-layout");
+  const memberId = member && "userId" in member ? member.userId : null;
   const [marks, setMarks] = useState<{ ids: Set<number>; boundaryAfter: number | null } | null>(null);
   const view = useRef<{ key: string; value: PostsView }>({ key: "", value: {} });
   const posts = useMemo(() => topics.map(t => ({ id: t.id, createdAt: t.createdAt })), [topics]);
   useEffect(() => {
     if (scope === undefined) { setMarks(null); return; }
-    const key = `${scope}|${navigationKey}`;
-    if (view.current.key !== key) view.current = { key, value: {} };
+    const key = `${scope}|${navigationKey}|${memberId ?? ""}`;
+    if (view.current.key !== key) {
+      view.current = { key, value: {} };
+      setMarks(null);
+    }
+    const viewing = view.current.value;
     let cancelled = false;
     let cancel = () => {};
-    void import("~/lib/list-seen").then(({ rememberViewingPosts }) => {
+    void import("~/lib/list-seen").then(({ rememberViewingPosts, rememberMemberViewingPosts }) => {
       if (cancelled) return;
-      cancel = afterInitialActivation(() => {
+      cancel = afterInitialActivation(() => { void (async () => {
         if (cancelled) return;
         let found: ReturnType<typeof rememberViewingPosts>;
-        try { found = rememberViewingPosts(window.localStorage, scope, posts, view.current.value); } catch { return; }
+        try { found = memberId ? await rememberMemberViewingPosts(scope, posts, viewing) : rememberViewingPosts(window.localStorage, scope, posts, viewing); } catch { return; }
+        if (cancelled) return;
         setMarks(found.newIds.length ? { ids: new Set(found.newIds), boundaryAfter: found.boundaryAfter } : null);
-      });
+      })(); });
     });
     return () => { cancelled = true; cancel(); };
-  }, [scope, navigationKey, posts]);
+  }, [scope, navigationKey, posts, memberId]);
   return marks;
 }
