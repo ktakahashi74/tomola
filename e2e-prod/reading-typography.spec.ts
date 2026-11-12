@@ -41,6 +41,8 @@ test("reading fonts load locally under CSP, while Japanese articles use device f
     for (const lang of ["ja", "en"]) {
       // New contexts isolate font requests from cache and earlier English pages.
       const context = await browser.newContext({ baseURL, storageState });
+      // A member keeps the saved display language over ?lang=; read each article as a reader of its language would.
+      await context.addCookies([{ name: "PARAGLIDE_LOCALE", value: lang, url: baseURL }]);
       const article = await context.newPage();
       const watch = await watchCsp(article);
       const fonts: Promise<{ file: string; bytes: number }>[] = [];
