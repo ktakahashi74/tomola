@@ -40,9 +40,11 @@ function decodeURIComponentSafe(value: string): string {
   }
 }
 
-// Whether this path requires redaction: currently invitation tokens only (/invite/<token>).
+// Redact credentials and article identifiers on counted reading paths. Logs
+// must not become a separate per-article record of reading notifications.
 function secretPathPrefix(pathname: string): string | null {
   const path = decodedPath(pathname);
+  if (/^\/t\/[1-9]\d*(?:\.(?:md|txt|data))?(?:\/translations)?\/?$/.test(path)) return "/t/";
   if (path === "/media" || path.startsWith("/media/")) return "/media/";
   if (path === "/invite" || path.startsWith("/invite/")) return "/invite/";
   return null;

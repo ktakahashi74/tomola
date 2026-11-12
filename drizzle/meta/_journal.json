@@ -757,6 +757,13 @@
       "when": 1794473020590,
       "tag": "0107_list_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1794485137821,
+      "tag": "0108_reading_counts",
+      "breakpoints": true
     }
   ]
 }

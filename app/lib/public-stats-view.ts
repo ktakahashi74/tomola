@@ -1,3 +1,4 @@
+import { readingStatsSection } from "./reading-stats-view";
 import type { PublicStats } from "~/lib/public-stats.server";
 import { m } from "~/paraglide/messages.js";
 
@@ -38,6 +39,7 @@ export function publicStatsSections(stats: PublicStats): StatsSection[] {
   const retention = rateTable(m.stats_retention(), stats.retention, true);
   retention.rows = retention.rows.map((row, index) => stats.retention[index].observed ? row : [row[0], ...Array<string>(4).fill(m.stats_unmeasured())]);
   return [
+    readingStatsSection(stats.reading, stats.currentWeek),
     { id: "system", title: m.stats_system(), notes: [], tables: [] },
     { id: "evaluation", title: m.stats_evaluation(), notes: [m.stats_eval_help(), ...(evaluation ? [
       evaluation.finishedAt ? { iso: evaluation.finishedAt, label: (at: string) => evalConfig(evaluation, at) } : evalConfig(evaluation, "—"),

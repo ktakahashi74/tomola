@@ -1,3 +1,4 @@
+import "~/lib/reading-document";
 import { webPushEnabled } from "~/lib/push/config.server";
 import { THEME_COLORS } from "~/lib/theme-colors";
 import { useOperatorSettings } from "~/lib/operator-context";

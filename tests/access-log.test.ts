@@ -4,17 +4,17 @@ import { formatAccessLog, redactUrl, REDACTED } from "../server/access-log.ts";
 // Production server.ts access logs omit URL parts that may contain secrets (server/access-log.ts).
 describe("redactUrl", () => {
   it("hides every query string, including the signed-link, search and login-token parameters", () => {
-    expect(redactUrl("/t/12.md?k=tml_signed_abcdef")).toBe(`/t/12.md?${REDACTED}`);
+    expect(redactUrl("/t/12.md?k=tml_signed_abcdef")).toBe(`/t/${REDACTED}?${REDACTED}`);
     expect(redactUrl("/search?q=my%20private%20question&lang=ja")).toBe(`/search?${REDACTED}`);
     expect(redactUrl("/search.md?q=x&k=secret")).toBe(`/search.md?${REDACTED}`);
     expect(redactUrl("/auth/confirm?token=abcDEF123")).toBe(`/auth/confirm?${REDACTED}`);
     expect(redactUrl("/changes.md?cursor=1790812800000_5&k=tok")).toBe(`/changes.md?${REDACTED}`);
-    expect(redactUrl("/t/1?")).toBe(`/t/1?${REDACTED}`);
+    expect(redactUrl("/t/1?")).toBe(`/t/${REDACTED}?${REDACTED}`);
   });
 
-  it("keeps paths without a query as they are", () => {
+  it("keeps ordinary paths without a query as they are", () => {
     expect(redactUrl("/")).toBe("/");
-    expect(redactUrl("/t/12")).toBe("/t/12");
+    expect(redactUrl("/stats")).toBe("/stats");
     expect(redactUrl("/assets/entry.client-abc.js")).toBe("/assets/entry.client-abc.js");
   });
 
@@ -55,7 +55,7 @@ describe("redactUrl", () => {
     // Only redirects the route elsewhere; not an invitation.
     expect(redactUrl("/invite/../latest")).toBe("/invite/../latest");
     expect(redactUrl("/x/../latest")).toBe("/x/../latest");
-    expect(redactUrl("/%2e/t/1")).toBe("/%2e/t/1");
+    expect(redactUrl("/%2e/t/1")).toBe(`/t/${REDACTED}`);
   });
 
   it("does not hide other paths that only look similar", () => {
@@ -94,4 +94,11 @@ it("redacts media IDs and dimension-bearing resource paths", () => {
   for (const url of ["/media/" + "a".repeat(64) + "-100x80.webp", "/MEDIA/secret", "/%6dedia/secret", "/x/../media/secret"]) {
     expect(redactUrl(url)).toBe(`/media/${REDACTED}`);
   }
+});
+
+it("redacts article identifiers on HTML, data, Markdown and browser-notification paths", () => {
+  for (const url of ["/t/982", "/t/982.md", "/t/982.txt", "/t/982.data", "/t/982/translations", "/T/%39%38%32/translations", "/t//982/translations", "/x/../t/982"]) {
+    expect(redactUrl(url)).toBe(`/t/${REDACTED}`);
+  }
+  expect(formatAccessLog({ method: "POST", url: "/t/982/translations?sl=en", status: 200, bytes: 11, ms: 1 })).not.toContain("982");
 });

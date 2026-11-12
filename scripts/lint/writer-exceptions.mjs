@@ -2,7 +2,7 @@ export const WRITER_EXCEPTIONS = {
   "list-seen.ts": "private list watermarks only: requireMember permits suspended members to update their own viewing state; no publishing or signature",
   "save.ts": "private reading only: requireMember allows suspended members to save readable topics and remove their own saved rows; no publishing or signature",
   "entry-history.tsx": "deletes only the authenticated author's previous revisions after confirmation; suspended members retain their right to delete, and moderation evidence is protected",
-  "topic-translations.ts": "same-origin browser reading: getReader enforces public/private access; rate-limited translation work and first display timestamps, never member-authored content",
+  "topic-translations.ts": "same-origin browser reading: getReader enforces public/private access; rate-limited translation work, first display timestamps and anonymous reading buckets, never member-authored content",
   "villages-md.ts": "re-exports the catch-all action, which rejects every write with 404",
       "appeal.tsx": "appeals a moderation decision against the member (requireMember): a suspended member may still appeal; own decisions only",
       "api.auth.ts": "the Better Auth handler: only explicit passkey/OAuth endpoints pass; each authenticates its own credential",

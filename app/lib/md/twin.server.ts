@@ -64,7 +64,7 @@ async function threadMd(request: Request, stem: string): Promise<Response> {
   const query = parseQuery(request, true, true);
   if (query instanceof Response) return query;
   const lang = resolveDisplayLang({ query: query.lang, profile: auth.profile ?? { displayLang: null, readLangs: [] }, uiLocale: auth.profile?.uiLocale, enabled: enabledLangs() });
-  const markdown = await buildThreadMarkdown(auth.db, id, { ...query, lang: query.allTranslations ? "all" : lang, displayLang: lang, k: auth.carryK, readLangs: auth.profile?.readLangs ?? [], readerId: auth.profile?.userId });
+  const markdown = await buildThreadMarkdown(auth.db, id, { ...query, readingMethod: request.method === "GET" ? "via" in auth && auth.via === "read-token" ? "api" : "markdown" : undefined, lang: query.allTranslations ? "all" : lang, displayLang: lang, k: auth.carryK, readLangs: auth.profile?.readLangs ?? [], readerId: auth.profile?.userId });
   return markdown === null ? notFound(request, "text") : memberResponse(request, markdown, { rate: auth.rate });
 }
 

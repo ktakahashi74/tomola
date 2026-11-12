@@ -34,6 +34,9 @@ import { TranslationReportForm } from "~/components/translation-report-form";
 import { getReader, getRequestViewer, getSessionUser, requireMember, requireWriter } from "~/lib/auth/session.server";
 import { getWriter } from "~/lib/members.server";
 import { distributionViewerFor, readDistributions } from "~/lib/distribution.server";
+import { countReading } from "~/lib/reading-counts.server";
+import { isAiCrawler } from "~/lib/reading-sources.server";
+import { browserReadingLanguage } from "~/lib/reading-language.server";
 import { displayLangFor, langCarry, readingLanguageChoice, screenReadLangsFor } from "~/lib/display-lang.server";
 import { defaultPostLang } from "~/lib/profiles.server";
 import { parseIdSet } from "~/lib/display";
@@ -340,6 +343,11 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   // Only public readers fetch preview data; member pages do not need its cost.
   const share = !user && publicReading() && topic.visibility === "visible" ? await topicShare(db, topic, url.search) : null;
   const alternateLang = url.searchParams.get("lang");
+  if (request.method === "GET" && url.pathname === `/t/${topic.id}` && thread.page === 1 && topic.visibility === "visible" &&
+      !/prefetch/i.test(`${request.headers.get("purpose")} ${request.headers.get("sec-purpose")}`) &&
+      isAiCrawler(request.headers.get("user-agent") ?? "")) {
+    await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: await browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
+  }
   return {
     reader: !user,
     canReply: !!user && topic.visibility === "visible",
@@ -555,6 +563,20 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const { topic, replies, defaultLang, page, hasNextPage, aiOpen, operator, question, stanceTag, writeTag, langParam, loadedAt, follow, canReply } = loaderData;
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search}`;
+  const reportsRead = page === 1 && topic.placeholder === null && !topic.hidden;
+  // Hash links and loader revalidation keep the same displayed article.
+  const readingDisplay = useRef<{ page: string; sent?: boolean }>({ page: returnTo });
+  useEffect(() => {
+    if (!reportsRead) { readingDisplay.current = { page: returnTo }; return; }
+    let active = true, stop: (() => void) | undefined;
+    void import("~/lib/translation-seen").then(module => {
+      if (active) {
+        readingDisplay.current = module.readingDisplayFor(readingDisplay.current, returnTo);
+        stop = module.markTopicRead(readingDisplay.current);
+      }
+    }).catch(() => {});
+    return () => { active = false; stop?.(); };
+  }, [returnTo, reportsRead]);
   const [replyTarget, setReplyTarget] = useState(loaderData.replyTarget);
   // The author's language menu: languages whose translation has arrived since the page was read (TranslationWatch) are no longer muted.
   const [settled, setSettled] = useState<{ id: number; langs: Lang[] }>({ id: topic.placeholder === null ? topic.id : 0, langs: [] });

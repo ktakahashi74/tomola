@@ -1,3 +1,4 @@
+import { weeklyReadings } from "./reading-counts.server";
 import type { Db } from "~/lib/db/client.server";
 import { evaluationHistory } from "~/lib/eval/metrics.server";
 import { translationInventory, translationQualitySignals } from "~/lib/eval/signals.server";
@@ -21,7 +22,7 @@ export function publicRate(numerator: number, denominator: number, people?: numb
 
 export async function collectPublicStats(db: Db, now: Date) {
   const starts = observationWeeks(now);
-  const [history, inventory, replies, insightful, active, retention, reports] = await Promise.all([
+  const [history, inventory, replies, insightful, active, retention, reports, reading] = await Promise.all([
     evaluationHistory(db, { publicOnly: true }), translationInventory(db, now),
     crossAreaReplyRate(db, now), crossAreaInsightfulRate(db, now), weeklyActiveMembers(db, now), fourWeekRetention(db, now),
     Promise.all(starts.map(async from => {
@@ -33,11 +34,13 @@ export async function collectPublicStats(db: Db, now: Date) {
         eligible: signals.translations.reduce((n, row) => n + row.reports, 0),
         corrected: signals.translations.reduce((n, row) => n + row.corrected, 0), since: signals.since };
     })),
+    weeklyReadings(db, now),
   ]);
-  return selectPublicStats({ now, history, inventory, replies, insightful, active, retention, reports });
+  return selectPublicStats({ now, history, inventory, replies, insightful, active, retention, reports, reading });
 }
 
 type Collected = {
+  reading: Awaited<ReturnType<typeof weeklyReadings>>;
   now: Date;
   history: Awaited<ReturnType<typeof evaluationHistory>>;
   inventory: Awaited<ReturnType<typeof translationInventory>>;
@@ -55,6 +58,11 @@ export function selectPublicStats(source: Collected) {
     label: row.label, preserved: row.preserved, total: row.total, severe: row.severe, rate: row.rate,
   }));
   return {
+    reading: { since: source.reading.since, weeks: source.reading.weeks.map(row => ({
+      week: row.week, observed: row.observed, count: publicCount(row.total), translated: publicRate(row.translated, row.total),
+      sources: row.sources.map(item => ({ source: item.source, ...publicRate(item.count, row.total) })),
+      methods: row.methods.map(item => ({ method: item.method, count: publicCount(item.count) })),
+    })) },
     generatedAt: source.now.toISOString(),
     currentWeek: day(observationWeeks(source.now, 1)[0]),
     evaluation: run ? {

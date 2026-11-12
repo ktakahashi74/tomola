@@ -1,5 +1,7 @@
 // Every file here has passed individually with database creation disabled.
 export const FAST_TEST_FILES = [
+  "tests/reading-notice.test.ts",
+  "tests/reading-sources.test.ts",
   "tests/web-push-transport.test.ts",
   "tests/operator-config.test.ts",
   "tests/paid-translation.test.ts",

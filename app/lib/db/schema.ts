@@ -5,6 +5,7 @@ import {
   boolean,
   check,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -21,7 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { AI_ASSISTANCE } from "../ai-assistance";
 import { GLOSSARY_VIAS, type GlossaryContent } from "../glossary";
-import { AREAS, LANGS } from "../languages";
+import { AREAS, LANGS, type Lang } from "../languages";
 import { APPEAL_STATUSES, CHAT_ACTIONS, ENTRY_ACTIONS, MEMBER_ACTIONS, MODERATION_ACTIONS, REPORT_REASONS, REPORT_STATUSES, VILLAGE_ACTIONS } from "../moderation";
 import { FOLLOW_STATES } from "../follows";
 import { DEFAULT_EMAIL_PREF, EMAIL_PREFS, NOTIFICATION_KINDS } from "../notifications";
@@ -29,6 +30,8 @@ import { POSITIONS, STANCE_TAGS } from "../stances";
 import type { ReasonPick } from "../reasons";
 import { user } from "./auth-schema";
 import { VILLAGE_INVITE_KINDS, VILLAGE_INVITE_STATES } from "../villages";
+
+import { READING_METHODS, READING_SOURCES } from "../reading-sources.server";
 
 export * from "./auth-schema";
 export * from "./oauth-schema";
@@ -1681,3 +1684,22 @@ export const pushDeliveries = pgTable("push_deliveries", {
 }, t => [uniqueIndex("push_deliveries_notice_registration_unique").on(t.notificationId, t.subscriptionId, t.generation),
   index("push_deliveries_user_idx").on(t.userId), index("push_deliveries_subscription_idx").on(t.subscriptionId),
   index("push_deliveries_pending_idx").on(t.subscriptionId, t.generation, t.createdAt).where(sql`${t.completedAt} is null`)]);
+
+// Daily anonymous buckets only: never store an article, person, device, IP,
+// raw referrer or user agent. There are no per-read records or identity joins.
+export const readingCounts = pgTable("reading_counts", {
+  day: date("day").notNull(),
+  method: text("method").notNull().$type<typeof READING_METHODS[number]>(),
+  sourceLang: text("source_lang").notNull().$type<Lang>(),
+  readLang: text("read_lang").notNull().$type<Lang>(),
+  source: text("source").notNull().$type<typeof READING_SOURCES[number]>(),
+  count: bigint("count", { mode: "number" }).notNull().default(0),
+}, t => [
+  primaryKey({ columns: [t.day, t.method, t.sourceLang, t.readLang, t.source] }),
+  check("reading_counts_method_check", oneOf(t.method, READING_METHODS)),
+  check("reading_counts_source_check", oneOf(t.source, READING_SOURCES)),
+  check("reading_counts_source_lang_check", oneOf(t.sourceLang, LANGS)),
+  check("reading_counts_read_lang_check", oneOf(t.readLang, LANGS)),
+  check("reading_counts_count_check", sql`${t.count} >= 0`),
+  check("reading_counts_machine_source_check", sql`${t.method} = 'browser' or ${t.source} = 'none'`),
+]);

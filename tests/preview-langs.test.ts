@@ -46,6 +46,7 @@ describe("preview configuration and release gate", () => {
 it("the operator-only set matches actual screen uses and excludes shared or moderator messages", () => {
   const routes = new Set(["usage", "metrics", "observation", "invitations", "roles"].map(name => `app/routes/admin-${name}.tsx`));
   routes.add("app/components/quality-metrics.tsx");
+  routes.add("app/components/reading-metrics.tsx");
   const links = new Set(["nav_usage", "nav_metrics", "nav_observation", "nav_invitations", "nav_roles"]);
   const admin = new Set<string>(); const other = new Set<string>();
   for (const file of fs.readdirSync("app", { recursive: true }).map(String).filter(file => /\.tsx?$/.test(file) && !file.startsWith("paraglide/"))) {

@@ -2731,5 +2731,26 @@
       }
     }
   ],
-  "settings_language_advanced": "More language settings"
+  "settings_language_advanced": "More language settings",
+  "stats_reading_title": "Reading",
+  "stats_reading_help": "Weekly browser reads of public articles: visits, not people. A visible page sends one notice; prefetches and most robots are not counted. Authenticated authors and members excluded from observation are omitted.",
+  "stats_reading_since": "Measurement began on {since} (UTC). Earlier weeks are unmeasured; the first week can be partial.",
+  "stats_reading_translated": "Read in translation",
+  "stats_reading_translation_help": "Translation share: browser reads in a language different from the original, divided by all counted browser reads that week.",
+  "stats_reading_sources": "How reading reached the site",
+  "stats_reading_source_help": "Each source share uses all counted browser reads that week as its denominator. Only the first page opened from outside receives an external source or share-link category; later navigation is internal. Domains and search terms are not retained.",
+  "stats_reading_tools": "Tools and AI crawlers",
+  "stats_reading_tools_help": "Weekly successful article reads, counted separately for Markdown, read-token API, MCP and self-declared AI crawlers. Reply pagination and HEAD requests are excluded. These are request counts, not people or verified AI identities; a request for all languages counts once in its resolved display language.",
+  "stats_reading_share": "Shared language link",
+  "stats_reading_search": "Search",
+  "stats_reading_social": "Social networks",
+  "stats_reading_ai": "AI tools",
+  "stats_reading_other": "Other sites",
+  "stats_reading_none": "No referrer",
+  "stats_reading_internal": "Within this site",
+  "stats_reading_markdown": "Markdown",
+  "stats_reading_crawler": "AI crawlers",
+  "metrics_reading_help": "Weekly original-language × reading-language counts across all reading methods. These are reads, not unique people. Counts contain no article or reader identifiers.",
+  "metrics_reading_source_lang": "Original language",
+  "metrics_reading_read_lang": "Reading language"
 }

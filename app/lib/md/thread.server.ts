@@ -1,3 +1,5 @@
+import { countReading } from "~/lib/reading-counts.server";
+import type { ReadingMethod } from "~/lib/reading-sources.server";
 import { historyPath, revisionCounts } from "../entry-history.server";
 import { loadDisplayNames, displayNameFields } from "../display-names.server";
 import { authorLabel } from "../deleted-member";
@@ -46,6 +48,7 @@ import { unicodeReviewCounts, unicodeReviewReasons } from "~/lib/unicode-review"
 // Posts whose title or body match a rule of lib/unicode-review.ts carry unicode_review_reasons: candidates for a person to check, not findings. The text is never altered.
 
 export type ThreadMdOptions = {
+  readingMethod?: ReadingMethod;
   page: number;
   // Append translations after each original; "all" selects every enabled language, null means original only.
   lang: Lang | "all" | null;
@@ -386,5 +389,8 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       next ? `Next page: ${next}` : "End of thread.",
     ),
   );
-  return joinBlocks(blocks);
+  const markdown = joinBlocks(blocks);
+  if (opts.readingMethod && opts.page === 1) await countReading(db, threadId, { method: opts.readingMethod, readerId: opts.readerId,
+    lang: opts.lang === "all" ? opts.displayLang ?? topic.lang as Lang : opts.lang ?? topic.lang as Lang });
+  return markdown;
 }

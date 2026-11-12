@@ -27,9 +27,9 @@ vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/me
 const now = new Date("2026-11-02T12:00:00Z");
 afterEach(() => { vi.unstubAllEnvs(); setTestLocale("en"); });
 
-function sample() {
+function sample(reading: Parameters<typeof selectPublicStats>[0]["reading"] = { since: null, weeks: [] }) {
   const starts = observationWeeks(now);
-  return selectPublicStats({ now, history: [], inventory: { weekly: starts.map(weekStart => ({ weekStart, count: 3 })), pairs: 4, pairsFrom: "2026-10-05T12:00:00Z" },
+  return selectPublicStats({ now, history: [], reading, inventory: { weekly: starts.map(weekStart => ({ weekStart, count: 3 })), pairs: 4, pairsFrom: "2026-10-05T12:00:00Z" },
     replies: starts.map(weekStart => ({ weekStart, topics: 10, crossArea: 2, rate: 0.2, people: 1 })),
     insightful: starts.map(weekStart => ({ weekStart, observed: true, numerator: 5, denominator: 10, people: 4, rate: 0.5 })),
     active: starts.map(weekStart => ({ weekStart, members: 4 })),
@@ -261,4 +261,19 @@ it("applies shared reading gates before cached HTML and Markdown, including inva
     expect((await markdownLoader({ request: harness.request("/stats.txt") })).status).toBe(401);
     expect(await harness.outcome(() => htmlLoader(harness.args(harness.request("/stats"))))).toMatchObject({ status: 302 });
   } finally { harness.restore(); }
+});
+
+it("suppresses reading buckets and rates and selects no operator language pairs", () => {
+  const snapshot = sample({ since: "2026-10-30", weeks: [{ week: "2026-11-02", observed: true, total: 8, translated: 3,
+    sources: [{ source: "ai", count: 3 }], methods: [{ method: "mcp", count: 4 }],
+    pairs: [{ sourceLang: "ja", readLang: "en", count: 3 }],
+  }] });
+  expect(snapshot.reading.weeks[0]).toEqual({ week: "2026-11-02", observed: true, count: 8,
+    translated: { numerator: null, denominator: 8, rate: null },
+    sources: [{ source: "ai", numerator: null, denominator: 8, rate: null }], methods: [{ method: "mcp", count: null }],
+  });
+  const json = JSON.stringify(snapshot.reading);
+  expect(json).not.toContain("sourceLang");
+  expect(json).not.toContain("readLang");
+  expect(json).not.toContain("pairs");
 });

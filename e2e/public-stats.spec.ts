@@ -12,7 +12,7 @@ test("community numbers and their Markdown twin follow reading access on narrow 
   await expect(page.locator('footer a[href="/stats"]')).toHaveCount(publicReading ? 1 : 0);
   await useMember(page, "stats_reader@example.com", "/stats");
   await expect(page.getByRole("heading", { level: 1, name: en.stats_title })).toBeVisible();
-  for (const title of [en.stats_system, en.stats_evaluation, en.stats_reactions, en.stats_scale, en.stats_active, en.stats_retention]) {
+  for (const title of [en.stats_reading_title, en.stats_system, en.stats_evaluation, en.stats_reactions, en.stats_scale, en.stats_active, en.stats_retention]) {
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   }
   // Public documents are the same HTML for everyone, so a closed site shows the entry on member pages only.
@@ -28,7 +28,7 @@ test("community numbers and their Markdown twin follow reading access on narrow 
   const collected = page.locator('main time').first();
   await expect(collected).toBeVisible();
   expect(await collected.textContent()).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
-  for (const title of [en.stats_title, en.stats_evaluation, en.stats_reactions, en.stats_scale]) expect(markdown).toContain(title);
+  for (const title of [en.stats_reading_title, en.stats_title, en.stats_evaluation, en.stats_reactions, en.stats_scale]) expect(markdown).toContain(title);
   for (const text of [en.metrics_ai_title, en.metrics_dir_title, en.metrics_via_title, en.quality_eval_fake]) expect(markdown).not.toContain(text);
   await page.goto("/");
   await expect(page.locator('footer a[href="/stats"]')).toHaveText(en.stats_title);

@@ -279,6 +279,8 @@ try {
   await seedAccountDeletion(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedFigureTranslation } = await import("./seed-figure-translation");
   await seedFigureTranslation(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
+  const { seedReadingCounts } = await import("./seed-reading-counts");
+  await seedReadingCounts(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedTranslationOnRead } = await import("./seed-translation-on-read");
   await seedTranslationOnRead(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedReadLanguagesAuthor } = await import("./seed-read-languages-author");

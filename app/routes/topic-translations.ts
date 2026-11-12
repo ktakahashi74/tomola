@@ -1,3 +1,6 @@
+import { countReading } from "~/lib/reading-counts.server";
+import { isAiCrawler, isBrowserRobot, readingSource } from "~/lib/reading-sources.server";
+import { browserReadingLanguage } from "~/lib/reading-language.server";
 import { data } from "react-router";
 import { z } from "zod";
 import type { Route } from "./+types/topic-translations";
@@ -11,7 +14,7 @@ import { hitRateLimit, rateLimitHeaders, translationReadLimitKey } from "~/lib/r
 import { markTranslationsSeen, requestBodyTranslations, translationPageInputs, TRANSLATION_READ_BATCH_MAX, TRANSLATION_READ_IP_HOURLY, TRANSLATION_READ_MEMBER_HOURLY, TRANSLATION_READ_CALLS_HOURLY } from "~/lib/translation-on-read.server";
 
 const headers = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" };
-const bodySchema = z.object({ intent: z.enum(["request", "status", "seen"]), ids: z.array(z.number().int().positive().safe()).max(TRANSLATION_READ_BATCH_MAX * 2) });
+const bodySchema = z.object({ intent: z.enum(["request", "status", "seen", "read"]), ids: z.array(z.number().int().positive().safe()).max(TRANSLATION_READ_BATCH_MAX * 2), internal: z.boolean().optional(), shared: z.boolean().optional(), referrerHost: z.string().max(253).regex(/^[a-zA-Z0-9.:\[\]-]*$/).optional() });
 export function loader() { throw data("Method not allowed", { status: 405, headers: { ...headers, Allow: "POST" } }); }
 
 // Browser reading only. Session authentication, page visibility, CSRF and browser
@@ -20,7 +23,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   assertSameOrigin(request);
   if (request.headers.get("sec-fetch-site") !== "same-origin" || request.headers.get("sec-fetch-dest") !== "empty" ||
       !["cors", "same-origin"].includes(request.headers.get("sec-fetch-mode") ?? "") ||
-      /bot|crawler|spider|slurp|GPTBot|ChatGPT-User|Claude-User|Perplexity/i.test(request.headers.get("user-agent") ?? "")) throw data("Forbidden", { status: 403, headers });
+      isBrowserRobot(request.headers.get("user-agent") ?? "")) throw data("Forbidden", { status: 403, headers });
   const referrer = request.headers.get("referer");
   const url = new URL(request.url);
   let pageUrl: URL | null = null;
@@ -43,6 +46,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) throw data("Invalid request", { status: 400, headers });
   const { intent } = parsed.data;
+  if (intent === "read" && isAiCrawler(request.headers.get("user-agent") ?? "")) throw data("Forbidden", { status: 403, headers });
   const ids = [...new Set(parsed.data.ids)];
   if (intent !== "seen" && ids.length > TRANSLATION_READ_BATCH_MAX) throw data("Invalid request", { status: 400, headers });
   const ip = clientAddress(request);
@@ -53,6 +57,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   const visible = await translationPageInputs(db, id, { page: parsePage(request), stanceTag: isStanceTag(tag) ? tag : undefined });
   if (!visible) throw data("Not found", { status: 404, headers });
   const lang = displayLangFor(request, profile);
+  if (intent === "read") {
+    if (parsePage(request) === 1) await countReading(db, id, { method: "browser", readerId: user?.id,
+      lang: await browserReadingLanguage(db, visible[0], request, profile),
+      source: readingSource(parsed.data.referrerHost, url.hostname, parsed.data["internal"] ?? true, parsed.data.shared ?? false) });
+    return data({ ok: true }, { headers });
+  }
   if (intent === "seen") {
     await markTranslationsSeen(db, visible, lang, ids, user?.id ?? null);
     return data({ ok: true }, { headers });
