@@ -35,14 +35,14 @@ import { titleBodyContext, TITLE_BODY_MAX_CHARS } from "~/lib/translation-terms"
 import { postTerminologyBodies, translationTermsFor } from "~/lib/translation-terms.server";
 import { firstSeenAtForSource } from "~/lib/translation-first-seen.server";
 import { joinResponsePostLine, localizeResponseBodies, prepareResponsePostTranslation } from "~/lib/response-line.server";
-import { DeferJob, enqueue, isFinalJobFailure, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
+import { DeferJob, enqueue, isFinalJobFailure, jobAttemptLimit, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
 
 // Translation jobs.
 // - translate_entry (entry × target language × source revision): translate title for topics and body with the primary engine, saving kind=primary.
 //   Then queue measure_divergence for topics only, excluding comments.
 // - measure_divergence (topics only): translate body with the secondary engine (kind=secondary), then record judged disagreements with the primary, hidden in the UI.
 // Budget-limit stops wait without failure. BudgetPausedError is DeferJob, so rethrow unchanged.
-// Use secondary translation immediately on primary refusal, or after FALLBACK_AFTER_ATTEMPTS consecutive failures for other reasons.
+// Use secondary translation immediately on primary refusal, or from FALLBACK_AFTER_ATTEMPTS for other failures (earlier when the attempt limit is smaller).
 // Save the secondary output as kind = primary with fallback, shown in UI/Markdown. If secondary is absent or budget is degraded/stopped, do not substitute;
 // retain the original failure: refusal becomes failed, other failures retry. Skip disagreement measurement for this language because the primary output already came from the secondary.
 // Both jobs finish without doing anything (the job is done) when the language of the payload is not enabled (ENABLED_LANGS) at the time of running, so that a job queued before a language
@@ -107,7 +107,7 @@ async function loadEntry(db: Db, p: TranslateJobPayload): Promise<EntryForJob | 
   return { ...row, lang: row.lang as Lang };
 }
 
-// Use secondary after this primary failure count (claims/attempts). Doubling delays from 30 seconds means roughly three and a half minutes of consecutive failures.
+// Default primary failure count (claims/attempts) before trying secondary; a smaller error-specific job limit brings fallback forward to its final attempt.
 export const FALLBACK_AFTER_ATTEMPTS = 4;
 
 async function existingTranslation(db: Db, entryId: number, field: string, lang: string, kind: string) {
@@ -265,7 +265,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
         // Budget waits remain waits without fallback.
         if (error instanceof DeferJob || error instanceof MarkdownBusyError) throw error;
         if (error instanceof LlmError && error.code === "output_leak") throw error;
-        if (!(isRefusal(error) || job.attempts >= FALLBACK_AFTER_ATTEMPTS) || !(await isSecondaryAvailable(ctx.db, options))) throw error;
+        if (!(isRefusal(error) || job.attempts >= Math.min(FALLBACK_AFTER_ATTEMPTS, jobAttemptLimit(job, error))) || !(await isSecondaryAvailable(ctx.db, options))) throw error;
         if (!isRefusal(error)) state.skipPrimary = true;
         console.warn(`[translate] primary failed for job ${job.id} (${safeErrorText(error)}); translating with the secondary engine`);
       }

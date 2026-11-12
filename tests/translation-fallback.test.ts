@@ -1,5 +1,5 @@
 import { quietLogger as quiet } from "./helpers/logger";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -62,6 +62,43 @@ const rows = (db: Db, entryId: number, lang: string) =>
 const revisions = (db: Db, entryId: number) => db.select().from(translationRevisions).where(eq(translationRevisions.entryId, entryId)).orderBy(asc(translationRevisions.id));
 
 describe("fallback to the secondary engine", () => {
+  it.each([
+    ["title", "truncated", 2], ["body", "truncated", 2],
+    ["title", "empty", 3], ["body", "empty", 3],
+    ["title", "invalid_output", 3], ["body", "invalid_output", 3],
+  ] as const)("tries secondary on the final capped %s attempt for %s output (%s attempts)", async (field, code, attempts) => {
+    const db = await setup();
+    const id = await newTopic(db, { title: field === "body" ? "" : "題" });
+    const targets = await db.select().from(jobs).where(eq(jobs.kind, field === "title" ? "translate_title" : "translate_entry"));
+    const target = targets.find(job => (job.payload as { lang: string }).lang === "fr")!;
+    await db.delete(jobs).where(ne(jobs.id, target.id));
+    const calls: string[] = [];
+    const base = createFakeEngine();
+    const primary: TranslationEngine = { ...base, async translate() {
+      calls.push("primary");
+      throw new LlmError(code, "unusable response", { inputTokens: 10, outputTokens: 20 });
+    } };
+    const secondary: TranslationEngine = { ...base, model: "fake-fallback", async translate(req) {
+      calls.push("secondary");
+      return { ...await base.translate(req), model: "fake-fallback" };
+    } };
+    const engines = { primary, secondary, judge: null };
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      expect(await run(db, engines, { now: new Date(t0.getTime() + attempt * 3_600_000) })).toMatchObject({
+        ran: 1, retried: attempt < attempts ? 1 : 0, failed: 0, done: attempt === attempts ? 1 : 0,
+      });
+      expect(calls).toEqual([...Array<string>(attempt).fill("primary"), ...(attempt === attempts ? ["secondary"] : [])]);
+    }
+    expect(await rows(db, id, "fr")).toMatchObject([{ field, kind: "primary", fallback: true, model: "fake-fallback", text: `[fr] ${field === "title" ? "題" : "本文。"}` }]);
+    expect(await db.select().from(jobs)).toMatchObject([{ status: "done", attempts, maxAttempts: 10 }]);
+    expect(await run(db, engines, { now: new Date(t0.getTime() + 24 * 3_600_000) })).toMatchObject({ ran: 0 });
+    expect(calls).toHaveLength(attempts + 1);
+    const usage = await db.select().from(llmUsage);
+    expect(usage.filter(row => row.model === "fake-1")).toHaveLength(attempts);
+    expect(usage.filter(row => row.model === "fake-fallback")).toHaveLength(1);
+    expect(usage).toHaveLength(attempts + 1);
+  });
+
   it("translates with the secondary engine when the primary refuses, and marks the stored primary row as fallback", async () => {
     const db = await setup();
     const id = await newTopic(db);
