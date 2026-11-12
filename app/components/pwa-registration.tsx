@@ -12,13 +12,14 @@ export function PwaRegistration({ pushEnabled = false, memberId = null, loggedOu
   useEffect(() => {
     // A successful logout is acknowledged by the next page's root loader.
     // Until then, cancelled and failed departures keep device recovery intact.
-    if (loggedOut) clearLocalDrafts();
+    const clearing = loggedOut && memberId === null;
+    if (clearing) clearLocalDrafts();
     if (!pushEnabled || !("serviceWorker" in navigator)) return;
     let dispose: (() => void) | undefined;
     let mounted = true;
     void import("~/lib/push/lifecycle.client").then(module => {
       if (!mounted) return;
-      if (loggedOut) void module.clearBrowserPush().catch(() => {});
+      if (clearing) void module.clearBrowserPush().catch(() => {});
       else dispose = module.startPushLifecycle();
     }).catch(() => {});
     return () => { mounted = false; dispose?.(); };

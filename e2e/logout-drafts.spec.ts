@@ -164,3 +164,57 @@ test("a failed logout retains the local writing for recovery", async ({ page }) 
   await expect(body(page)).toHaveValue("Recover this reply after the logout error.");
   await expect(page.locator("[data-member-menu-trigger]")).toHaveCount(1);
 });
+
+for (const reason of ["submit", "delete"] as const) {
+  test(`paused ${reason} keeps device writing and departure checks without autosaving`, async ({ page }) => {
+    await open(page, reason);
+    await body(page).fill("Writing before the pause.");
+    await autosaveState(page, "saved");
+    const result = await page.evaluate(reason => {
+      const form = document.querySelector<HTMLFormElement>('form[data-autosave="ready"]')!;
+      if (reason === "delete") window.dispatchEvent(new Event("tomola:discard-unsaved"));
+      else {
+        // Run the capture listener without sending the publishing request.
+        form.addEventListener("submit", event => event.preventDefault(), { once: true });
+        form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+      }
+      const input = form.querySelector<HTMLTextAreaElement>('textarea[name="body"]')!;
+      input.value = "Writing while the request is pending.";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const detail: { dirty?: boolean } = {};
+      form.dispatchEvent(new CustomEvent("tomola:autosave-dirty", { detail }));
+      const unload = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unload);
+      return { dirty: detail.dirty, prevented: unload.defaultPrevented };
+    }, reason);
+    expect(result.dirty).toBe(true);
+    if (reason === "submit") expect(result.prevented).toBe(true);
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith("tomola:draft:")).map(key => JSON.parse(localStorage.getItem(key)!).body))).toContain("Writing while the request is pending.");
+    let writes = 0;
+    page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/drafts/autosave") writes++; });
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("pagehide"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await page.clock.fastForward(3000);
+    await page.waitForTimeout(500);
+    expect(writes).toBe(0);
+  });
+}
+
+test("visible saved writing does not schedule another acknowledgement", async ({ page }) => {
+  await open(page, "visible");
+  await body(page).fill("Already saved writing.");
+  await autosaveState(page, "saved");
+  await page.evaluate(() => {
+    Object.assign(window, { departureAcknowledgements: 0 });
+    document.querySelector('form[data-autosave="ready"]')!.addEventListener("tomola:form-saved", () => {
+      const target = window as unknown as { departureAcknowledgements: number };
+      target.departureAcknowledgements++;
+    });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.clock.fastForward(3000);
+  expect(await page.evaluate(() => (window as unknown as { departureAcknowledgements: number }).departureAcknowledgements)).toBe(0);
+});

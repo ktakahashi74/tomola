@@ -42,6 +42,8 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
   restoreCallback.current = onRestore;
   const language = useContext(FormLanguageChangeContext);
   const [status, setStatus] = useState<"" | "saving" | "saved" | "failed" | "missing">("");
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
   const [copied, setCopied] = useState(false);
   const [missing, setMissing] = useState(false);
   const [localFailed, setLocalFailed] = useState(false);
@@ -119,9 +121,10 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     let snapshot = rememberedServer?.snapshot ?? (initialDraft.current ? pristine : "");
     if (!newTopic) form.dataset.draftBase = base;
     let recoveryProtected = newTopic;
-    const cannotWrite = () => stopped.current || paused.current || disposed || !ownedStore.active();
+    const cannotPersist = () => stopped.current || disposed || !ownedStore.active();
+    const cannotWrite = () => paused.current || cannotPersist();
     const persist = () => {
-      if (cannotWrite() || !newTopic && !link.current) return;
+      if (cannotPersist() || !newTopic && !link.current) return;
       const current = new FormData(form);
       const title = String(current.get("title") ?? ""), body = String(current.get("body") ?? "");
       // Unchanged loader text must wait for recovery. New edits can be kept
@@ -298,7 +301,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     }
     recoverMissing.current = () => { if (!pending) void save(false, true, 0, true); };
     const changed = () => {
-      if (cannotWrite()) return;
+      if (cannotPersist()) return;
       const current = capture(form);
       if (current === observed) return;
       observed = current;
@@ -306,7 +309,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     };
     const observer = new MutationObserver(changed);
     const online = () => schedule();
-    const visibility = () => { if (document.visibilityState === "hidden") void save(true); else schedule(); };
+    const visibility = () => { if (document.visibilityState === "hidden") void save(true); else if (statusRef.current === "failed") schedule(); };
     const recoveryReady = () => persist();
     const flush = (event: Event) => {
       const detail = (event as CustomEvent<AutosaveRequest>).detail;
@@ -314,7 +317,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
       detail.pending = detail.leaving ? Promise.race([operation, new Promise<null>(resolve => setTimeout(() => resolve(null), 900))]) : operation;
     };
     const dirtiness = (event: Event) => {
-      if (cannotWrite()) { (event as CustomEvent<{ dirty: boolean }>).detail.dirty = false; return; }
+      if (cannotPersist()) { (event as CustomEvent<{ dirty: boolean }>).detail.dirty = false; return; }
       const values = new FormData(form);
       if (newTopic && !link.current && baseOf(String(values.get("title") ?? ""), String(values.get("body") ?? "")) === base) { (event as CustomEvent<{ dirty: boolean }>).detail.dirty = false; return; }
       (event as CustomEvent<{ dirty: boolean }>).detail.dirty = snapshot || newTopic && !link.current
