@@ -54,12 +54,12 @@ it("waits after cancellation across villages and kinds, without treating cancell
   expect(await inviteToVillage(db, "second", "club", "vm_guest", "owner", new Date(now.getTime() + 2 * delay))).toMatchObject({ ok: true });
 });
 
-it("does not query or disclose a roster to ordinary members or anyone in a language village", async () => {
+it("shares a roster with ordinary members but never queries one in language villages", async () => {
   const { db, village } = await world();
   await db.insert(villageMembers).values({ villageId: village.id, userId: "guest" });
   const query = vi.spyOn(db, "select");
-  expect(await villageManagement(db, village.id, "guest")).toMatchObject({ roster: [], invites: [], canReadRoster: false });
-  expect(query.mock.calls.some(([columns]) => Object.values(columns ?? {}).includes(profiles.handle))).toBe(false);
+  expect(await villageManagement(db, village.id, "guest")).toMatchObject({ roster: [{ handle: "vm_guest" }, { handle: "vm_owner" }], invites: [], canReadRoster: true });
+  expect(query.mock.calls.some(([columns]) => Object.values(columns ?? {}).includes(profiles.handle))).toBe(true);
   query.mockClear(); vi.stubEnv("OPERATOR_EMAILS", "second@example.com");
   const language = (await villageBySlug(db, "en"))!;
   query.mockClear();

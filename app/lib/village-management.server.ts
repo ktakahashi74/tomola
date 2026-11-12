@@ -1,3 +1,4 @@
+import { selectDisplayName } from "./display-names.server";
 import { cancelUnavailableVillageInvites } from "./village-invitations.server";
 import { lockVillageSlugClaims, villageSlugHeld } from "~/lib/village-slugs.server";
 import { villageChatEnabled } from "./village-chat-enabled.server";
@@ -6,7 +7,7 @@ import { clearVillageChatMemberState } from "./village-chat-notifications.server
 import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { hitMemberLimit } from "~/lib/rate-limit.server";
 import type { Db } from "~/lib/db/client.server";
-import { notifications, profiles, reports, user, villageDepartures, villageEvents, villageInvites, villageMembers, villages } from "~/lib/db/schema";
+import { notifications, profiles, reports, user, villageEvents, villageInvites, villageMembers, villages } from "~/lib/db/schema";
 import { isOperatorEmail } from "~/lib/operators.server";
 import { enqueueImmediateEmails } from "~/lib/notifications.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -17,7 +18,7 @@ import { activeSharedVillageCondition, enrollInVillage, sharedVillageCondition }
 import { decideVillageLangOf, memberVillageLang, requestVillageTranslations, villageSourceLang } from "~/lib/village-translations.server";
 import { validVillageSlug, villageDescriptionText, villageNameText, villageText, VILLAGE_CREATE_LIMIT, VILLAGE_DECLINE_LIMIT, VILLAGE_INVITE_DAILY_LIMIT, VILLAGE_INVITE_PAUSE_DAYS, VILLAGE_REINVITE_HOURS, VILLAGE_REMOVAL_REASON_MAX, VILLAGE_ROSTER_PAGE_SIZE, type VillageInviteKind } from "~/lib/villages";
 
-export type VillageError = "disabled" | "forbidden" | "not_found" | "invalid" | "slug_taken" | "limit" | "rate_limited" | "paused" | "invite_limit" | "invite_wait" | "pending" | "last_owner" | "self_left";
+export type VillageError = "disabled" | "forbidden" | "not_found" | "invalid" | "slug_taken" | "limit" | "rate_limited" | "paused" | "invite_limit" | "invite_wait" | "pending" | "last_owner";
 export type VillageResult = { ok: true; slug: string } | { ok: false; error: VillageError };
 const fail = (error: VillageError): VillageResult => ({ ok: false, error });
 type Actor = { userId: string; handle: string; suspendedUntil: Date | null };
@@ -53,8 +54,8 @@ async function notify(db: Db, userId: string, actorId: string, villageId: string
   await enqueueImmediateEmails(db, [{ ...row, kind }]);
 }
 
-// Caller holds the sender profile lock. Invitations and direct additions share
-// one rolling-day allowance across recipients and villages.
+// Caller holds the sender profile lock. Historical additions still count
+// toward the rolling-day allowance across recipients and villages.
 async function dailyInvitationCount(db: Db, userId: string, now: Date) {
   const since = new Date(now.getTime() - 86400000);
   const [{ n: invited }] = await db.select({ n: count() }).from(villageInvites)
@@ -62,35 +63,6 @@ async function dailyInvitationCount(db: Db, userId: string, now: Date) {
   const [{ n: added }] = await db.select({ n: count() }).from(villageEvents)
     .where(and(eq(villageEvents.actorId, userId), eq(villageEvents.action, "add_member"), gt(villageEvents.createdAt, since)));
   return Number(invited) + Number(added);
-}
-
-export async function addVillageMember(db: Db, userId: string, slug: string, handle: string, now = new Date()): Promise<VillageResult> {
-  if (!villagesEnabled()) return fail("disabled");
-  const [target] = await db.select({ userId: profiles.userId, handle: profiles.handle }).from(profiles).where(eq(profiles.handleKey, handleKey(handle.trim().replace(/^@/, ""))));
-  if (!target || target.userId === userId) return fail("invalid");
-  return db.transaction(async tx => {
-    const actors = await lockActors(tx, [userId, target.userId]);
-    const actor = actors.find(row => row.userId === userId);
-    if (!canWrite(actor, now) || !actors.some(row => row.userId === target.userId)) return fail("forbidden");
-    const village = await lockedVillage(tx, slug);
-    if (!village || village.endedAt) return fail("not_found");
-    if (!await isOwner(tx, village.id, userId)) return fail("forbidden");
-    if (village.kind !== "invite_public") return fail("invalid");
-    const [member] = await tx.select({ userId: villageMembers.userId }).from(villageMembers).where(and(eq(villageMembers.villageId, village.id), eq(villageMembers.userId, target.userId)));
-    if (member) return fail("invalid");
-    const [departure] = await tx.select({ userId: villageDepartures.userId }).from(villageDepartures).where(and(eq(villageDepartures.villageId, village.id), eq(villageDepartures.userId, target.userId)));
-    if (departure) return fail("self_left");
-    if (await dailyInvitationCount(tx, userId, now) >= VILLAGE_INVITE_DAILY_LIMIT) return fail("invite_limit");
-    // Direct addition grants posting only: do not change defaults or chat consent.
-    await tx.insert(villageMembers).values({ villageId: village.id, userId: target.userId });
-    // A previous join invitation is no longer actionable or awaiting a response.
-    const cancelled = await tx.update(villageInvites).set({ state: "cancelled", respondedAt: now })
-      .where(and(eq(villageInvites.villageId, village.id), eq(villageInvites.userId, target.userId), eq(villageInvites.kind, "join"), eq(villageInvites.state, "pending"))).returning({ id: villageInvites.id });
-    if (cancelled.length) await tx.update(notifications).set({ readAt: now }).where(and(eq(notifications.userId, target.userId), inArray(notifications.villageInviteId, cancelled.map(row => row.id)), isNull(notifications.readAt)));
-    await notify(tx, target.userId, userId, village.id, "village_added");
-    await record(tx, village.id, actor, "add_member", { handle: target.handle }, now);
-    return { ok: true, slug };
-  });
 }
 
 const blank = (value: unknown) => value === undefined || value === null || value === "";
@@ -309,25 +281,25 @@ export async function incomingVillageInvites(db: Db, userId: string) {
 }
 
 export function emptyVillageManagement() {
-  return { roster: [] as Array<{ handle: string; role: string; self: boolean }>, invites: [] as Array<{ id: string; kind: string; handle: string }>, canReadRoster: false, lastOwner: false, rosterPage: 1, rosterHasNext: false, invitesPage: 1, invitesHasNext: false };
+  return { roster: [] as Array<{ handle: string; name: string | null; role: string; self: boolean }>, invites: [] as Array<{ id: string; kind: string; handle: string }>, canReadRoster: false, lastOwner: false, rosterPage: 1, rosterHasNext: false, invitesPage: 1, invitesHasNext: false };
 }
 export async function villageManagement(db: Db, villageId: string, userId: string, page = 1, invitesPage = 1) {
   if (!villagesEnabled()) return emptyVillageManagement();
   const [village] = await db.select({ language: villages.language }).from(villages).where(and(eq(villages.id, villageId), sharedVillageCondition()));
   if (!village || village.language) return emptyVillageManagement();
   const [own] = await db.select({ role: villageMembers.role }).from(villageMembers).where(and(eq(villageMembers.villageId, villageId), eq(villageMembers.userId, userId)));
-  const owner = own?.role === "owner", operator = await isOperator(db, userId);
-  if (!owner && !operator) return emptyVillageManagement();
+  const owner = own?.role === "owner";
+  if (!(await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.userId, userId))).length) return emptyVillageManagement();
   const { offset, limit } = checkPagination({ page, limit: VILLAGE_ROSTER_PAGE_SIZE });
   const readerOwner = sql`exists (select 1 from village_members as roster_reader where roster_reader.village_id = ${villageId} and roster_reader.user_id = ${userId} and roster_reader.role = 'owner')`;
-  const rows = await db.select({ handle: profiles.handle, role: villageMembers.role, self: sql<boolean>`${profiles.userId} = ${userId}` })
+  const rows = await db.select({ displayName: profiles.displayName, displayNameLatin: profiles.displayNameLatin, homeArea: profiles.homeArea, handle: profiles.handle, role: villageMembers.role, self: sql<boolean>`${profiles.userId} = ${userId}` })
     .from(villageMembers).innerJoin(profiles, eq(profiles.userId, villageMembers.userId))
-    .where(and(eq(villageMembers.villageId, villageId), sql`(${readerOwner} or ${operator})`)).orderBy(asc(profiles.handle)).limit(limit + 1).offset(offset);
+    .where(and(eq(villageMembers.villageId, villageId), sql`exists (select 1 from profiles as roster_reader where roster_reader.user_id = ${userId})`)).orderBy(asc(profiles.handle)).limit(limit + 1).offset(offset);
   const [{ owners }] = owner ? await db.select({ owners: count() }).from(villageMembers)
     .where(and(eq(villageMembers.villageId, villageId), eq(villageMembers.role, "owner"), readerOwner)) : [{ owners: 0 }];
   const invitationPage = checkPagination({ page: invitesPage, limit: VILLAGE_ROSTER_PAGE_SIZE });
   // Any current owner can cancel pending invitations, including historical orphans.
   const invites = owner ? await db.select({ id: villageInvites.id, kind: villageInvites.kind, handle: profiles.handle }).from(villageInvites).innerJoin(profiles, eq(profiles.userId, villageInvites.userId))
     .where(and(eq(villageInvites.villageId, villageId), eq(villageInvites.state, "pending"), sql`exists (select 1 from village_members as invite_reader where invite_reader.village_id = ${villageId} and invite_reader.user_id = ${userId} and invite_reader.role = 'owner')`)).orderBy(asc(villageInvites.createdAt), asc(villageInvites.id)).limit(invitationPage.limit + 1).offset(invitationPage.offset) : [];
-  return { roster: rows.slice(0, limit), invites: invites.slice(0, invitationPage.limit), invitesPage, invitesHasNext: invites.length > invitationPage.limit, canReadRoster: true, lastOwner: owner && Number(owners) === 1, rosterPage: page, rosterHasNext: rows.length > limit };
+  return { roster: rows.slice(0, limit).map(({ handle, role, self, ...names }) => ({ handle, role, self, name: selectDisplayName(names) })), invites: invites.slice(0, invitationPage.limit), invitesPage, invitesHasNext: invites.length > invitationPage.limit, canReadRoster: true, lastOwner: owner && Number(owners) === 1, rosterPage: page, rosterHasNext: rows.length > limit };
 }

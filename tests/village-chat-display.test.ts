@@ -28,7 +28,7 @@ it.each(["en", "ja"] as const)("shows the current consent as separate disclosure
 const original = "Original chat text";
 async function render(errorCode: string, historical = false, overrides: Record<string, unknown> = {}) {
   const message: ActiveChatMessage = { id: "a".repeat(32), author: "display_writer", own: false, lang: "ja", parts: [{ type: "text", text: original }], createdSeq: 1, changedSeq: 1, createdAt: "2026-10-15T00:00:00Z", edited: false, deleted: false, hidden: false, translation: { text: null, lang: "en", state: "failed", errorCode } };
-  const loaderData = { village: { slug: "display-chat", name: "Display chat" }, messages: [message], seq: 2, ended: false, historical, hasNewer: true, readSeq: 0, consentRequired: false, linkLang: null, before: null, unreadCounts: {}, report: null, reported: null, now: Date.parse("2026-10-16T00:00:00Z"), window: "", latest: false, unreadAfter: 0, ...overrides };
+  const loaderData = { readers: 2, village: { slug: "display-chat", name: "Display chat" }, messages: [message], seq: 2, ended: false, historical, hasNewer: true, readSeq: 0, consentRequired: false, linkLang: null, before: null, unreadCounts: {}, report: null, reported: null, now: Date.parse("2026-10-16T00:00:00Z"), window: "", latest: false, unreadAfter: 0, ...overrides };
   return renderInRouter(() => createElement(VillageChat, { loaderData } as never), "/v/display-chat/chat");
 }
 it.each(["untranslated_script", "untranslated_similar"])("renders %s as source text without a failure notice", async reason => {

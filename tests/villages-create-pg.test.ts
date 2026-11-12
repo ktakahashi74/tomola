@@ -5,7 +5,7 @@ import { expectSettlesWithin, holdTx, waitForLockWait } from "./helpers/pg-concu
 import { addMember } from "./helpers/db";
 import { entries, notifications, profiles, villageInvites, villageMembers, villages } from "~/lib/db/schema";
 import { changeVillageMembershipResult, ensureLanguageVillages, postingVillages, restoreEndedDefaultVillage, villageBySlug, villageForTopic, changeVillageMembership } from "~/lib/villages.server";
-import { addVillageMember, cancelVillageInvite, createVillage, endVillage, inviteToVillage, respondToVillageInvite } from "~/lib/village-management.server";
+import { cancelVillageInvite, createVillage, endVillage, inviteToVillage, respondToVillageInvite } from "~/lib/village-management.server";
 import { VILLAGE_INVITE_DAILY_LIMIT } from "~/lib/villages";
 import { createTopic } from "~/lib/entries.server";
 import type pg from "pg";
@@ -32,44 +32,46 @@ describe.skipIf(!REAL_PG_URL)("village mutation concurrency on PostgreSQL", { ta
     expect(results.filter(r => r.ok)).toHaveLength(1);
     expect(results.filter(r => !r.ok)).toEqual([{ ok: false, error: "limit" }]);
   });
-  it("shares the last daily slot between a direct addition and an owner invitation", async () => {
+  it("shares the last daily slot between join and owner invitations", async () => {
     const w = await world(), now = new Date(), target = `vcp_direct${seq}`, slug = `direct-cap-${seq}`;
     await addMember(w.db, target, target, { homeArea: "en" });
     await createVillage(w.db, w.owner, { slug, name: "Direct", description: "", kind: "invite_public" });
     await w.db.insert(villageInvites).values(Array.from({ length: VILLAGE_INVITE_DAILY_LIMIT - 1 }, () => ({ villageId: w.village.id, userId: w.guest, invitedBy: w.owner, kind: "owner", state: "cancelled", createdAt: now })));
     const a = await scratch.open("direct-cap-a"), b = await scratch.open("direct-cap-b");
     const results = await expectSettlesWithin(Promise.all([
-      addVillageMember(a, w.owner, slug, target, now),
+      inviteToVillage(a, w.owner, slug, target, "join", now),
       inviteToVillage(b, w.owner, w.slug, w.guest, "owner", now),
-    ]), 10000, "shared addition and invitation quota");
+    ]), 10000, "shared invitation quota");
     expect(results.filter(row => row.ok)).toHaveLength(1);
     expect(results.filter(row => !row.ok)).toEqual([{ ok: false, error: "invite_limit" }]);
   });
-  it("adds a recipient once when two owners act concurrently", async () => {
+  it("creates one pending invitation when two owners invite concurrently", async () => {
     const w = await world(), target = `vcp_once${seq}`, slug = `direct-once-${seq}`;
     await addMember(w.db, target, target, { homeArea: "en" });
     await createVillage(w.db, w.owner, { slug, name: "Direct", description: "", kind: "invite_public" });
     const village = (await villageBySlug(w.db, slug))!;
     await w.db.insert(villageMembers).values({ villageId: village.id, userId: w.guest, role: "owner" });
     const a = await scratch.open("direct-once-a"), b = await scratch.open("direct-once-b");
-    const results = await expectSettlesWithin(Promise.all([addVillageMember(a, w.owner, slug, target), addVillageMember(b, w.guest, slug, target)]), 10000, "concurrent additions");
+    const results = await expectSettlesWithin(Promise.all([inviteToVillage(a, w.owner, slug, target, "join"), inviteToVillage(b, w.guest, slug, target, "join")]), 10000, "concurrent invitations");
     expect(results.filter(row => row.ok)).toHaveLength(1);
-    expect(results.filter(row => !row.ok)).toEqual([{ ok: false, error: "invalid" }]);
+    expect(results.filter(row => !row.ok)).toEqual([{ ok: false, error: "pending" }]);
     expect(await w.db.select().from(notifications).where(eq(notifications.userId, target))).toHaveLength(1);
   });
-  it("observes a voluntary departure before a waiting direct re-addition", async () => {
+  it("observes a voluntary departure before a waiting invitation", async () => {
     const w = await world(), slug = `direct-leave-${seq}`;
     await createVillage(w.db, w.owner, { slug, name: "Direct", description: "", kind: "invite_public" });
-    await addVillageMember(w.db, w.owner, slug, w.guest);
+    const v = (await villageBySlug(w.db, slug))!;
+    await w.db.insert(villageMembers).values({ villageId: v.id, userId: w.guest });
     const blocker = await scratch.open("direct-leave-blocker"), leaving = await scratch.open("direct-leaving"), adding = await scratch.open("direct-readding");
     const held = holdTx(blocker, tx => tx.select().from(profiles).where(eq(profiles.userId, w.guest)).for("update"));
     await held.ready;
     const departure = changeVillageMembershipResult(leaving, w.guest, slug, "leave");
     await waitForLockWait(admin, "direct-leaving");
-    const addition = addVillageMember(adding, w.owner, slug, w.guest);
+    const addition = inviteToVillage(adding, w.owner, slug, w.guest, "join");
     try { await waitForLockWait(admin, "direct-readding"); } finally { await held.commit(); }
     expect(await expectSettlesWithin(departure, 10000, "voluntary departure")).toEqual({ ok: true });
-    expect(await expectSettlesWithin(addition, 10000, "addition after departure")).toEqual({ ok: false, error: "self_left" });
+    expect(await expectSettlesWithin(addition, 10000, "invitation after departure")).toEqual({ ok: true, slug });
+    expect(await w.db.select().from(villageMembers).where(and(eq(villageMembers.villageId, v.id), eq(villageMembers.userId, w.guest)))).toEqual([]);
   });
   it("retains one owner when two owners leave concurrently", async () => {
     const w = await world();

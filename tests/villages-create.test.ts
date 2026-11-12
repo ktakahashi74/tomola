@@ -202,7 +202,7 @@ describe("member-created villages", () => {
     expect(notices.items.find(row => row.kind === "village_removed")?.village?.reason).toBe("A reason for the recipient");
     expect((await listNotifications(db, "second")).items.some(row => row.kind === "village_removed")).toBe(false);
     expect((await postingVillages(db, "guest")).selected).toBe("@vc_guest");
-    expect((await villageManagement(db, (await villageBySlug(db, "club"))!.id, "guest")).roster).toEqual([]);
+    expect((await villageManagement(db, (await villageBySlug(db, "club"))!.id, "guest")).roster).toMatchObject([{ handle: "vc_owner" }]);
   });
   it("refuses removal from an ended village without changing membership or sending a notice", async () => {
     const db = await setup();
@@ -255,7 +255,7 @@ describe("member-created villages", () => {
     expect(anonymous.some(row => row.slug === "closed-test")).toBe(false);
     expect(await villageBySlug(db, "closed-test")).toBeNull();
     const v = (await villageBySlug(db, "club"))!;
-    expect((await villageManagement(db, v.id, "guest")).roster).toEqual([]);
+    expect((await villageManagement(db, v.id, "guest")).roster).toMatchObject([{ handle: "vc_owner" }]);
     await invite(db);
     const incoming = await incomingVillageInvites(db, "guest");
     expect(incoming).toMatchObject([{ slug: "club", members: 1, inviter: "vc_owner", villageKind: "invite_public" }]);

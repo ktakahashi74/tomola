@@ -1,6 +1,7 @@
 // One inventory for both development runs. Everything else runs privately.
 // Media delivery and deleted-parent visibility exercise both authority modes.
 export const publicOnly = [
+  ["village-roster", ".*"],
   ["meta-separators", ".*"],
   ["read-later", "anonymous readers"],
   ["village-icons", ".*"],

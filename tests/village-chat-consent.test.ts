@@ -29,7 +29,7 @@ it("requires consent from both members and owners before selecting messages, wri
     expect(await chatAccess(w.db, w.slug, userId)).toMatchObject({ consented: false, village: { id: w.village.id } });
     const seen = selectedTables(w.db);
     const page = await chatPage(w.db, userId, w.slug, { at: w.messages[0].id, before: 3 }); seen.restore();
-    expect(page).toEqual({ consentRequired: true, consentVersion: 1, previousConsentVersion: null, village: expect.objectContaining({ slug: w.slug }) });
+    expect(page).toEqual({ readers: 2, consentRequired: true, consentVersion: 1, previousConsentVersion: null, village: expect.objectContaining({ slug: w.slug }) });
     expect(seen.queries).toHaveLength(1);
     expect(seen.tables.has("chat_messages")).toBe(false);
     expect(seen.tables.has("chat_sequences")).toBe(false);

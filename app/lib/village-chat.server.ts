@@ -26,13 +26,13 @@ export { ChatError } from "./village-chat";
 export { nextChatSequence } from "./village-chat-sequence.server";
 const bodySchema = z.preprocess(value => typeof value === "string" ? normalizeNewlines(value) : value, z.string().trim().min(1).max(CHAT_BODY_MAX));
 const scope = (villageId: string, userId: string) => and(eq(villageMembers.villageId, villageId), eq(villageMembers.userId, userId));
-export async function chatAccess(db: Db, slug: string, userId: string) {
+export async function chatAccess(db: Db, slug: string, userId: string, countReaders = false) {
   if (!villageChatEnabled()) return null;
-  const [row] = await db.select({ village: villages, version: chatConsents.version }).from(villageMembers).innerJoin(villages, eq(villages.id, villageMembers.villageId))
+  const [row] = await db.select({ village: villages, version: chatConsents.version, ...(countReaders ? { readers: sql<number>`(select count(*)::int from village_members as audience where audience.village_id = ${villages.id})` } : {}) }).from(villageMembers).innerJoin(villages, eq(villages.id, villageMembers.villageId))
     .innerJoin(profiles, eq(profiles.userId, villageMembers.userId))
     .leftJoin(chatConsents, and(eq(chatConsents.villageId, villages.id), eq(chatConsents.userId, villageMembers.userId)))
     .where(and(eq(villageMembers.userId, userId), eq(villages.slug, slug.toLowerCase()), chatVillageCondition()));
-  return row ? { village: row.village, consented: row.version === CHAT_CONSENT_VERSION, previousConsentVersion: row.version } : null;
+  return row ? { ...(countReaders ? { readers: Number(row.readers) } : {}), village: row.village, consented: row.version === CHAT_CONSENT_VERSION, previousConsentVersion: row.version } : null;
 }
 
 // Lock the village before the member, matching lifecycle operations. Never lock profiles.
@@ -171,10 +171,11 @@ async function windowUnread(db: Db, villageId: string, userId: string, after: nu
 }
 
 export async function chatPage(db: Db, userId: string, slug: string, opts: { before?: number; after?: number; at?: string; unread?: boolean; topics?: ChatTopicOptions } = {}) {
-  const access = await chatAccess(db, slug, userId);
+  const access = await chatAccess(db, slug, userId, true);
   if (!access) return null;
   const { village } = access;
-  if (!access.consented) return { consentRequired: true as const, consentVersion: CHAT_CONSENT_VERSION, previousConsentVersion: access.previousConsentVersion, village: publicVillage(village) };
+  const readers = access.readers!;
+  if (!access.consented) return { readers, consentRequired: true as const, consentVersion: CHAT_CONSENT_VERSION, previousConsentVersion: access.previousConsentVersion, village: publicVillage(village) };
   const seq = await currentChatSequence(db, village.id);
   const [read] = await db.select({ seq: chatReads.seq }).from(chatReads).where(and(eq(chatReads.villageId, village.id), eq(chatReads.userId, userId)));
   const visible = and(eq(chatMessages.villageId, village.id), isNull(chatMessages.deletedAt));
@@ -216,7 +217,7 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
     return message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null };
   }), opts.topics);
   const { unreadAfter } = await windowUnread(db, village.id, userId, rows.at(-1)?.message.createdSeq ?? opts.after ?? 0);
-  return { consentRequired: false as const, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
+  return { readers, consentRequired: false as const, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
 }
 
 export async function chatChanges(db: Db, userId: string, slug: string, opts: { since: number; before?: number; after?: number; forward?: number; counts?: boolean; topics?: ChatTopicOptions }) {

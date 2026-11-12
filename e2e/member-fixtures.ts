@@ -12,6 +12,7 @@ export const LONG_SIGNUP_VILLAGE_NAME = `Signup ${"l".repeat(110)}`;
 
 // Independent scenarios own these members; serial steps share only their scenario.
 export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
+  ...["roster_owner", "roster_guest", "roster_reader", "roster_native"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["writer", "reader"].map(role => ({ email: `listmeta_${role}@example.com`, handle: `listmeta_${role}`, homeArea: role === "writer" ? "ja" as const : "en" as const, readLangs: [role === "writer" ? "ja" as const : "en" as const], uiLocale: "en" as const })),
   ...["vi_view_ja", "vi_view_en", "vi_owner", "vi_coowner", "vi_reporter", "vi_operator", "vi_reviewer"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["en", "ja"].map(locale => ({ email: `target_top_${locale}@example.com`, handle: `target_top_${locale}`, homeArea: "en" as const, uiLocale: locale as "en" | "ja" })),

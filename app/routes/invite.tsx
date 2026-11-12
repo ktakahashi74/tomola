@@ -138,6 +138,7 @@ export default function Invite({ loaderData, actionData }: Route.ComponentProps)
         {loaderData.note.unavailable && <p className="ui-meta text-muted-foreground">{loaderData.note.unavailableLabel}</p>}
       </div>}
       {loaderData.village && <p className="break-words">{m.invite_village({ village: loaderData.village.name })}</p>}
+      {loaderData.village && <p className="ui-help">{m.village_join_visibility()}</p>}
       {!loaderData.email ? <><p>{m.invite_invalid()}</p><Link to="/login" className="underline">{m.invite_invalid_login()}</Link></> : loaderData.codePending ? <>
         <p className="break-words">{m.invite_sent({ email: loaderData.codePending.email })}</p>
         <LoginCodeForm key={loaderData.codePending.revision} state={loaderData.codePending} invalid={!!codeError} limited={actionData && "limited" in actionData ? actionData.limited : undefined} invitation />

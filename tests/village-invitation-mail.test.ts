@@ -1,8 +1,9 @@
+import { enqueueImmediateEmails } from "~/lib/notifications.server";
 import { afterEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
 import { notifications, profiles, villageInvites, villages } from "~/lib/db/schema";
-import { addVillageMember, createVillage, inviteToVillage } from "~/lib/village-management.server";
+import { createVillage, inviteToVillage } from "~/lib/village-management.server";
 import { ensureLanguageVillages } from "~/lib/villages.server";
 import { createNotificationHandlers, ensureDigestScheduled } from "~/lib/jobs/notification-jobs.server";
 import { runDueJobs } from "~/lib/jobs/queue.server";
@@ -16,7 +17,7 @@ vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/me
 
 afterEach(() => vi.unstubAllEnvs());
 
-it.each((["immediate", "daily"] as const).flatMap(emailPref => (["native", "latin", "handle", "departed"] as const).map(name => [emailPref, name] as const)))("delivers the adding actor with %s delivery and %s naming", async (emailPref, name) => {
+it.each((["immediate", "daily"] as const).flatMap(emailPref => (["native", "latin", "handle", "departed"] as const).map(name => [emailPref, name] as const)))("delivers the historical adding actor with %s delivery and %s naming", async (emailPref, name) => {
   vi.stubEnv("VILLAGES", "1"); vi.stubEnv("ENABLED_LANGS", "en,ja");
   const db = await createTestDb(); await ensureLanguageVillages(db);
   await addMember(db, "direct_mail_owner", "direct_mail_owner", { homeArea: "en" });
@@ -24,7 +25,9 @@ it.each((["immediate", "daily"] as const).flatMap(emailPref => (["native", "lati
   await db.update(profiles).set({ emailPref, uiLocale: name === "native" ? "ja" : "en" }).where(eq(profiles.userId, "direct_mail_guest"));
   if (name !== "handle") await db.update(profiles).set({ displayName: "招待の持ち主", displayNameLatin: "Inviting Owner", homeArea: "ja" }).where(eq(profiles.userId, "direct_mail_owner"));
   await createVillage(db, "direct_mail_owner", { slug: "direct-mail", name: "Direct mail", description: "", kind: "invite_public" });
-  expect(await addVillageMember(db, "direct_mail_owner", "direct-mail", "direct_mail_guest")).toMatchObject({ ok: true });
+  const [village] = await db.select().from(villages).where(eq(villages.slug, "direct-mail"));
+  const [notice] = await db.insert(notifications).values({ userId: "direct_mail_guest", actorId: "direct_mail_owner", villageId: village.id, kind: "village_added" }).returning();
+  await enqueueImmediateEmails(db, [{ ...notice, kind: "village_added" }]);
   if (name === "departed") {
     const [village] = await db.select().from(villages).where(eq(villages.slug, "direct-mail"));
     await deleteAccount(db, "direct_mail_owner", { confirmation: "direct_mail_owner", villages: { [village.id]: "end" } });

@@ -9,7 +9,7 @@ import { chatConsents, invitations, notifications, profiles, villageMembers, vil
 import { createInvitation, findValidInvitationByToken, markInvitationUsed, revokeInvitation } from "~/lib/invitations.server";
 import { createProfile } from "~/lib/profiles.server";
 import { consumedInvitationVillage, createSignupInvitation, invitationVillage, signupVillageChoices } from "~/lib/signup-village.server";
-import { addVillageMember, endVillage } from "~/lib/village-management.server";
+import { endVillage } from "~/lib/village-management.server";
 import { changeVillageMembership, ensureLanguageVillages, languageVillage } from "~/lib/villages.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { BASE, setupRouteHarness } from "./helpers/route-harness";
@@ -92,7 +92,6 @@ it.each([["invite_public", "en"], ["open", "en"], ["invite_public", "other"]] as
   expect(await db.select().from(chatConsents).where(eq(chatConsents.userId, member.id))).toEqual([]);
   expect(await db.select().from(notifications).where(eq(notifications.userId, member.id))).toMatchObject([{ kind: "village_added", villageId: a.id }]);
   expect(await changeVillageMembership(db, member.id, a.slug!, "leave")).toBe(true);
-  if (kind === "invite_public") expect(await addVillageMember(db, "issuer_a", a.slug!, "signup_exact")).toMatchObject({ error: "self_left" });
 });
 
 it.each(["missing", "wrong_address", "expired", "revoked", "used", "tampered", "cookie_expired"])("keeps legacy registration without village enrollment for a %s remembered invitation", async state => {

@@ -16,7 +16,7 @@ import { createClientDraft, updateClientDraft } from "~/lib/mcp/drafts.server";
 import { canReadThreadPublicly } from "~/lib/md/thread.server";
 import { setVillageFollow, listFollowedVillages } from "~/lib/village-follows.server";
 import { loadMemberPageContent, resolveMemberPage, setIntroduction } from "~/lib/member-pages.server";
-import { endVillage, editVillage, inviteToVillage, addVillageMember } from "~/lib/village-management.server";
+import { endVillage, editVillage, inviteToVillage } from "~/lib/village-management.server";
 import { chatAccess, acceptChatConsent, mutateChat } from "~/lib/village-chat.server";
 import { createVillageReport, moderateVillage } from "~/lib/village-moderation.server";
 import { deleteAccount } from "~/lib/account-delete.server";
@@ -165,7 +165,7 @@ it("refuses shared-village management, chat, reports, and translations for a per
   const { db, village } = await world();
   expect(await changeVillageMembership(db, "pv-reader", "@pv_owner", "join")).toBe(false);
   expect(await changeVillageMembership(db, "pv-owner", "@pv_owner", "leave")).toBe(false);
-  for (const result of [await endVillage(db, "pv-owner", "@pv_owner"), await editVillage(db, "pv-owner", "@pv_owner", { name: "Named", description: "" }), await addVillageMember(db, "pv-owner", "@pv_owner", "pv_reader"), await inviteToVillage(db, "pv-owner", "@pv_owner", "pv_reader", "owner")]) expect(result.ok).toBe(false);
+  for (const result of [await endVillage(db, "pv-owner", "@pv_owner"), await editVillage(db, "pv-owner", "@pv_owner", { name: "Named", description: "" }), await inviteToVillage(db, "pv-owner", "@pv_owner", "pv_reader", "owner")]) expect(result.ok).toBe(false);
   expect(await chatAccess(db, "@pv_owner", "pv-owner")).toBeNull();
   await expect(acceptChatConsent(db, "pv-owner", "@pv_owner")).rejects.toBeDefined();
   await expect(mutateChat(db, "pv-owner", "@pv_owner", "send", { body: "No chat" })).rejects.toBeDefined();

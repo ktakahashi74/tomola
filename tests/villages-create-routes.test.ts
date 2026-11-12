@@ -73,9 +73,9 @@ it("shows invited/ended public pages in HTML and Markdown while preserving priva
   const indexMd = await (await serveVillagesMd(h.request("/villages.md"))).text();
   expect(indexMd).toContain("Public invited village"); expect(indexMd).not.toContain(row.id); expect(indexMd).not.toContain("members:");
   const outsider = await villageLoader(h.args(h.request("/v/route-club", { as: "vcr_guest" }), { slug: "route-club" }));
-  expect(outsider.management.roster).toEqual([]);
+  expect(outsider.management.roster).toMatchObject([{ handle: "vcr_owner" }]);
   const ending = await post("vcr_owner", { intent: "end", confirm: "end" });
-  expect(ending).toMatchObject({ status: 302, location: "/v/route-club?manage=1" });
+  expect(ending).toMatchObject({ status: 302, location: "/v/route-club?manage=1&notice=end" });
   expect((await villageLoader(args)).ended).toBe(true);
   expect((await serveVillageMd(h.request("/v/route-club.md"), "route-club")).status).toBe(200);
   expect(await (await serveVillageMd(h.request("/v/route-club.md"), "route-club")).text()).toContain("ended: true");
@@ -89,7 +89,7 @@ it("creates through the route, receives a private invitation and accepts it thro
   expect(await post("vcr_guest", { intent: "accept-invite", invite: invite.id }, "another-route")).toMatchObject({ status: 302, location: "/v/another-route" });
   expect(await post("vcr_guest", { intent: "post-here" }, "another-route")).toMatchObject({ status: 302, location: "/t/new?village=another-route" });
 });
-it("returns the last-owner error on the page and withholds ordinary members' rosters", async () => {
+it("returns the last-owner error and shares rosters with ordinary members", async () => {
   await createVillage(h.db, h.ids.vcr_owner, { slug: "roster-route", name: "Roster", description: "", kind: "open" });
   expect(await post("vcr_owner", { intent: "leave" }, "roster-route")).toMatchObject({ status: 400, value: { data: { error: "last_owner" } } });
   await changeVillageMembership(h.db, h.ids.vcr_guest, "roster-route", "join");
@@ -97,7 +97,7 @@ it("returns the last-owner error on the page and withholds ordinary members' ros
   expect(owner.management).toMatchObject({ roster: [], rosterPage: 2, lastOwner: true, canReadRoster: true });
   const member = await villageLoader(h.args(h.request("/v/roster-route", { as: "vcr_guest" }), { slug: "roster-route" }));
   expect(member.membership).toMatchObject({ joined: true, members: 2 });
-  expect(member.management).toMatchObject({ roster: [], canReadRoster: false });
+  expect(member.management).toMatchObject({ roster: [{ handle: "vcr_guest" }, { handle: "vcr_owner" }], canReadRoster: true });
   for (const value of ["0", "1e2", "10001"]) expect(await h.outcome(() => villageLoader(h.args(h.request(`/v/roster-route?membersPage=${value}`, { as: "vcr_owner" }), { slug: "roster-route" })))).toMatchObject({ status: 404 });
 });
 
@@ -135,13 +135,14 @@ it("returns management operations to the expanded management section", async () 
   expect(await createVillage(h.db, h.ids.vcr_manage_owner, { slug, name: "Native route management", description: "", kind: "invite_public" })).toMatchObject({ ok: true });
   const [village] = await h.db.select().from(villages).where(eq(villages.slug, slug));
   const manage = async (form: Record<string, string>) => {
-    expect(await post("vcr_manage_owner", form, slug)).toMatchObject({ status: 302, location: `/v/${slug}?manage=1` });
+    expect(await post("vcr_manage_owner", form, slug)).toMatchObject({ status: 302, location: `/v/${slug}?manage=1&notice=${form.intent}${form.intent === "remove-member" ? "#village-roster" : ["invite", "invite-owner", "cancel-invite"].includes(form.intent) ? "#village-invites" : ""}` });
   };
   await manage({ intent: "edit", name: village.name!, description: "Updated description" });
   await manage({ intent: "invite", handle: "vcr_manage_target" });
   const [invitation] = await h.db.select().from(villageInvites).where(eq(villageInvites.villageId, village.id));
   await manage({ intent: "cancel-invite", invite: invitation.id });
-  await manage({ intent: "add-member", handle: "vcr_manage_member" });
+  expect(await post("vcr_manage_owner", { intent: "add-member", handle: "vcr_manage_member" }, slug)).toMatchObject({ status: 400 });
+  await h.db.insert(villageMembers).values({ villageId: village.id, userId: h.ids.vcr_manage_member });
   await manage({ intent: "invite-owner", handle: "vcr_manage_member" });
   await manage({ intent: "remove-member", handle: "vcr_manage_member", reason: "Membership no longer needed" });
   await manage({ intent: "end", confirm: "end" });

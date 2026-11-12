@@ -1857,8 +1857,8 @@
   "village_membership_invitation": "Invitation to join",
   "village_accept": "Accept",
   "village_decline": "Decline",
-  "village_invite_handle": "Member username to add",
-  "village_invite_member": "Add a member",
+  "village_invite_handle": "Member username to invite",
+  "village_invite_member": "Invite a member",
   "village_cancel_invite": "Cancel invitation",
   "village_roster": "Village members",
   "village_owner": "Owner",
@@ -2428,10 +2428,6 @@
   "mcp_perm_offline": "Stay connected",
   "mcp_no_website_declared": "No website declared.",
   "confirm_mcp_resume": "The steps to connect are still in progress. Return to them.",
-  "village_add_member_help": "Members can post immediately and leave at any time. Their default posting village stays the same.",
-  "village_error_self_left": "This person left this village voluntarily and cannot be added directly again.",
-  "village_invite_former": "Send an invitation instead",
-  "village_invite_former_help": "You can invite {handle} to return. They will join only if they accept.",
   "notification_village_added": "You were added to {name} by {actor}. You can post there and leave at any time.",
   "notification_village_membership_reason": "Reason: {reason}",
   "notification_village_membership_ended": "You are no longer a member of {name}. Your posts remain in the village.",
@@ -2709,5 +2705,30 @@
   "push_message_response": "There is a post responding to yours.",
   "push_message_mention": "You were mentioned.",
   "push_message_group": "There are new replies or mentions for you.",
-  "push_message_test": "This is a test notification."
+  "push_message_test": "This is a test notification.",
+  "village_invite_member_help": "They will join this village only if they accept your invitation.",
+  "village_join_visibility": "If you join, people on tomola can see your name in this village's member list. You can read and reply without joining.",
+  "village_member_role": "Member",
+  "village_writers": "People writing in this village",
+  "village_saved": "Changes saved.",
+  "village_end_success": "Village ended.",
+  "village_invite_sent": "Invitation sent.",
+  "village_owner_invite_sent": "Co-owner invitation sent.",
+  "village_invite_cancelled": "Invitation cancelled.",
+  "village_member_removed": "Member removed.",
+  "village_chat_readers": [
+    {
+      "declarations": [
+        "input count",
+        "local n = count: plural"
+      ],
+      "selectors": [
+        "n"
+      ],
+      "match": {
+        "n=one": "{count} person in this village can read this chat.",
+        "n=other": "{count} people in this village can read this chat."
+      }
+    }
+  ]
 }

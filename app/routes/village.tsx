@@ -1,3 +1,5 @@
+import { villageWriters } from "~/lib/village-writers.server";
+import { AuthorLink } from "~/components/author-link";
 import { villageIconUrl } from "~/lib/village-icon.server";
 import { AvatarSettings } from "~/components/avatar-settings";
 import { VillageHeader } from "~/components/village-header";
@@ -46,7 +48,7 @@ import { previewText } from "~/lib/share-text";
 import { VillageInvites } from "~/components/village-invites";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { addVillageMember, cancelVillageInvite, editVillage, emptyVillageManagement, endVillage, incomingVillageInvites, inviteToVillage, removeVillageMember, respondToVillageInvite, villageManagement, type VillageResult } from "~/lib/village-management.server";
+import { cancelVillageInvite, editVillage, emptyVillageManagement, endVillage, incomingVillageInvites, inviteToVillage, removeVillageMember, respondToVillageInvite, villageManagement, type VillageResult } from "~/lib/village-management.server";
 import { villageError } from "~/lib/village-errors";
 import { isFollowingVillage, setVillageFollow } from "~/lib/village-follows.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
@@ -87,7 +89,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (rosterPage === null || invitesPage === null) throw data("Not found", { status: 404 });
   const resolveId = operator && village.language ? parseIdOrNull(url.searchParams.get("resolveReport") ?? undefined) : null;
   const resolveReportId = resolveId !== null && await hasOpenVillageReport(db, village.id, { reportId: resolveId }) ? resolveId : null;
-  const management = user && !village.language && (membership?.owner || operator) ? await villageManagement(db, village.id, user.id, rosterPage, invitesPage) : emptyVillageManagement();
+  const management = user && profile && !village.language ? await villageManagement(db, village.id, user.id, rosterPage, invitesPage) : emptyVillageManagement();
   const result = await listTopics(db, { kind: "village", villageId: village.id }, { page: parsePage(request), viewer, order, asksOnly, titledOnly });
   const peekId = user ? readPeekParam(url) : null;
   // The name and description in the reader's language when they were written in another; ?vorig=1 keeps the original. `source` is always the original, for the owner's form.
@@ -104,6 +106,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ended: village.endedAt !== null,
     operator,
     management,
+    writers: await villageWriters(db, village.id),
     incoming: user ? await localizeVillages(db, (await incomingVillageInvites(db, user.id)).filter(invite => invite.slug === village.slug), villageReaderFor(request, profile)) : [],
     confirmingEnd: !village.language && membership?.owner && url.searchParams.get("end") === "confirm",
     readingLanguage: readingLanguageChoice(request, profile),
@@ -156,15 +159,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   else if (intent === "end") {
     if (form.get("confirm") !== "end") throw data("Bad request", { status: 400 });
     result = await endVillage(db, user.id, params.slug.toLowerCase());
-  } else if (intent === "add-member") result = await addVillageMember(db, user.id, params.slug.toLowerCase(), text("handle"));
-  else if (intent === "invite" || intent === "invite-owner") result = await inviteToVillage(db, user.id, params.slug.toLowerCase(), text("handle"), intent === "invite" ? "join" : "owner");
+  } else if (intent === "invite" || intent === "invite-owner") result = await inviteToVillage(db, user.id, params.slug.toLowerCase(), text("handle"), intent === "invite" ? "join" : "owner");
   else if (intent === "cancel-invite") result = await cancelVillageInvite(db, user.id, params.slug.toLowerCase(), text("invite"));
   else if (intent === "accept-invite" || intent === "decline-invite") result = await respondToVillageInvite(db, user.id, params.slug.toLowerCase(), text("invite"), intent === "accept-invite" ? "accepted" : "declined");
   else if (intent === "remove-member") result = await removeVillageMember(db, user.id, params.slug.toLowerCase(), text("handle"), form.get("reason"));
   if (result) {
-    if (!result.ok) return data({ error: result.error, ...(result.error === "self_left" ? { formerMember: text("handle") } : {}) }, { status: result.error === "forbidden" ? 403 : result.error === "not_found" ? 404 : 400 });
-    const manage = ["edit", "end", "add-member", "invite", "invite-owner", "cancel-invite", "remove-member"].includes(String(intent));
-    throw redirect(`/v/${result.slug}${manage ? "?manage=1" : ""}`);
+    if (!result.ok) return data({ error: result.error }, { status: result.error === "forbidden" ? 403 : result.error === "not_found" ? 404 : 400 });
+    const manage = ["edit", "end", "invite", "invite-owner", "cancel-invite", "remove-member"].includes(String(intent));
+    throw redirect(`/v/${result.slug}${manage ? `?manage=1&notice=${intent}${intent === "remove-member" ? "#village-roster" : intent === "invite" || intent === "invite-owner" || intent === "cancel-invite" ? "#village-invites" : ""}` : ""}`);
   }
   if (intent === "post-here") {
     const joined = await db.transaction(tx => villageForTopic(tx, user.id, params.slug));
@@ -184,8 +186,11 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
   const location = useLocation();
   const owner = membership?.owner ?? false;
   const search = new URLSearchParams(location.search);
-  const managementOpen = search.get("manage") === "1" || confirmingEnd || "resolveReportId" in loaderData || search.has("membersPage") || search.has("invitesPage") || ["#village-roster", "#village-invites"].includes(location.hash);
-  const canManage = owner || operator && !!village.language || management.canReadRoster;
+  const managementOpen = search.get("manage") === "1" || confirmingEnd || "resolveReportId" in loaderData || search.has("invitesPage") || location.hash === "#village-invites";
+  const canManage = owner || operator && !!village.language;
+  const notices: Record<string, () => string> = { edit: m.village_saved, end: m.village_end_success, invite: m.village_invite_sent, "invite-owner": m.village_owner_invite_sent, "cancel-invite": m.village_invite_cancelled, "remove-member": m.village_member_removed };
+  const noticeKey = search.get("notice") ?? "";
+  const notice = canManage && Object.hasOwn(notices, noticeKey) ? notices[noticeKey]() : undefined;
   const leaveForm = <Form method="post"><Button type="submit" variant="outline" name="intent" value="leave" disabled={!ended && management.lastOwner}>{m.village_leave()}</Button></Form>;
   const leaveButton = membership?.joined && (village.kind === "invite_public" && !ended ? <details className="space-y-3"><summary className="link-ui cursor-pointer">{m.village_leave()}</summary><p className="font-semibold">{m.village_leave_confirm()}</p><p>{m.village_leave_invite_help()}</p>{leaveForm}</details> : leaveForm);
   const [shownDescription, restDescription] = splitDescription(villageDescription(village));
@@ -203,8 +208,9 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {shownDescription && <p lang={descriptionLang} className="whitespace-pre-wrap">{shownDescription}</p>}
       {restDescription && <MoreInfo label={m.village_description_more()} name={villageName(village)}><span lang={descriptionLang} className="whitespace-pre-wrap">{restDescription}</span></MoreInfo>}
       {village.translation && <VillageTranslationNote info={village.translation} />}
-      {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground"><span>{m.village_members({ count: membership.members })}</span>{membership.joined && <>{" "}<span>{m.village_joined()}</span></>}</p>}
+      {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}{membership.joined && <>{" "}<span>{m.village_joined()}</span></>}</p>}
     </>} />
+    {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
     {actionData && "error" in actionData && <p role="alert">{villageError(String(actionData.error))}</p>}
     {ended && <p role="status">{m.village_ended()}</p>}
     {!ended && <VillageInvites invites={incoming} />}
@@ -212,14 +218,30 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       <OrderSwitch order={order} />
       {!loaderData.reader && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
     </div>
+    {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
     <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
     <Pagination page={page} hasNext={hasNext} dropParams={["manage", "membersPage", "invitesPage"]} />
+    {management.canReadRoster && <details id="village-roster" open={search.get("notice") === "remove-member" || management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
+      {notice && search.get("notice") === "remove-member" && <p role="status">{notice}</p>}
+      <ul className="space-y-3 py-3">{management.roster.map(member => <li key={member.handle} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="inline-flex flex-wrap gap-x-4"><AuthorLink handle={member.handle} name={member.name} byline />{" "}<span className="text-muted-foreground">{member.role === "owner" ? m.village_owner() : m.village_member_role()}</span></span>
+        {owner && !member.self && <>
+          {!ended && member.role !== "owner" && <Form method="post"><input type="hidden" name="handle" value={member.handle} /><Button type="submit" name="intent" value="invite-owner" variant="outline">{m.village_add_owner()}</Button></Form>}
+          {!ended && member.role !== "owner" && village.kind === "invite_public" && <details className="min-w-0 open:basis-full"><summary className="link-ui cursor-pointer">{m.village_remove_member()}</summary><Form method="post" className="mt-2 max-w-xl space-y-2"><input type="hidden" name="handle" value={member.handle} />
+            <label className="block space-y-1"><span>{m.village_removal_reason()}</span><Textarea name="reason" maxLength={VILLAGE_REMOVAL_REASON_MAX} /></label>
+            <Button type="submit" name="intent" value="remove-member" variant="outline">{m.village_remove_member()}</Button>
+          </Form></details>}
+        </>}
+      </li>)}</ul>
+      <Pagination page={management.rosterPage} hasNext={management.rosterHasNext} pageParam="membersPage" keepFirstPage anchor="#village-roster" label={m.village_roster_pages()} dropParams={["invitesPage", "page"]} />
+    </details>}
     {canManage && <PersistentDetails key={village.slug} id="village-management" open={managementOpen} className="space-y-3">
       <summary className="link-ui cursor-pointer">{m.village_manage()}</summary>
+      {notice && search.get("notice") !== "remove-member" && <p role="status">{notice}</p>}
       {!ended && management.lastOwner && <p className="ui-help">{m.village_error_last_owner()}</p>}
       {owner && !ended && !village.language && <AvatarSettings village action={`/v/${village.slug}/icon`} url={village.iconUrl} uploaded={village.hasIcon} />}
       {(owner || operator && !!village.language) && <section className="space-y-4">
-        <details open={"resolveReportId" in loaderData}><summary className="link-ui cursor-pointer">{m.village_edit()}</summary>
+        <details open={"resolveReportId" in loaderData || search.get("notice") === "edit"}><summary className="link-ui cursor-pointer">{m.village_edit()}</summary>
           <Form method="post" className="mt-3 max-w-xl space-y-3">
             {"resolveReportId" in loaderData && <><input type="hidden" name="resolveReportId" value={loaderData.resolveReportId} /><p className="ui-help">{m.village_edit_resolve_reports()}</p></>}
             {!village.language && <label className="block space-y-1"><span>{m.village_name_field()}</span><Input name="name" defaultValue={source.name} required maxLength={VILLAGE_NAME_MAX} /></label>}
@@ -230,13 +252,8 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
         </details>
         {!ended && owner && village.kind === "invite_public" && <Form method="post" className="max-w-xl space-y-2">
           <label className="block space-y-1"><span>{m.village_invite_handle()}</span><Input name="handle" required /></label>
-          <p className="ui-help text-muted-foreground">{m.village_add_member_help()}</p>
-          <Button type="submit" name="intent" value="add-member">{m.village_invite_member()}</Button>
-        </Form>}
-        {!ended && owner && village.kind === "invite_public" && actionData && "formerMember" in actionData && typeof actionData.formerMember === "string" && <Form method="post" className="space-y-2">
-          <input type="hidden" name="handle" value={actionData.formerMember} />
-          <p className="ui-help">{m.village_invite_former_help({ handle: actionData.formerMember! })}</p>
-          <Button type="submit" name="intent" value="invite" variant="outline">{m.village_invite_former()}</Button>
+          <p className="ui-help text-muted-foreground">{m.village_invite_member_help()}</p>
+          <Button type="submit" name="intent" value="invite">{m.village_invite_member()}</Button>
         </Form>}
         {!ended && owner && <div id="village-invites" className="space-y-2">
         {management.invites.length > 0 && <ul className="space-y-2">{management.invites.map(invite => <li key={invite.id}>
@@ -251,20 +268,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
           <Form method="post" className="flex flex-wrap gap-3"><input type="hidden" name="confirm" value="end" /><Button type="submit" name="intent" value="end">{m.village_end()}</Button><Link to={`/v/${village.slug}`} className="link-ui self-center">{m.village_keep()}</Link></Form>
         </div> : <Link to={`/v/${village.slug}?end=confirm`} className="link-ui inline-block">{m.village_end()}</Link>)}
       </section>}
-      {management.canReadRoster && <details id="village-roster" open={management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
-        {/* A member is the usual thing, so only an owner is marked; the actions sit on the row of the name. */}
-        <ul className="space-y-3 py-3">{management.roster.map(member => <li key={member.handle} className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="inline-flex flex-wrap gap-x-4"><span>@{member.handle}</span>{member.role === "owner" && <>{" "}<span className="text-muted-foreground">{m.village_owner()}</span></>}</span>
-          {owner && !member.self && <>
-            {!ended && member.role !== "owner" && <Form method="post"><input type="hidden" name="handle" value={member.handle} /><Button type="submit" name="intent" value="invite-owner" variant="outline">{m.village_add_owner()}</Button></Form>}
-            {!ended && member.role !== "owner" && village.kind === "invite_public" && <details className="min-w-0 open:basis-full"><summary className="link-ui cursor-pointer">{m.village_remove_member()}</summary><Form method="post" className="mt-2 max-w-xl space-y-2"><input type="hidden" name="handle" value={member.handle} />
-              <label className="block space-y-1"><span>{m.village_removal_reason()}</span><Textarea name="reason" maxLength={VILLAGE_REMOVAL_REASON_MAX} /></label>
-              <Button type="submit" name="intent" value="remove-member" variant="outline">{m.village_remove_member()}</Button>
-            </Form></details>}
-          </>}
-        </li>)}</ul>
-        <Pagination page={management.rosterPage} hasNext={management.rosterHasNext} pageParam="membersPage" keepFirstPage anchor="#village-roster" label={m.village_roster_pages()} dropParams={["invitesPage", "page"]} />
-      </details>}
       {leaveButton}
     </PersistentDetails>}
     {!canManage && leaveButton}

@@ -125,6 +125,7 @@ export default function VillageChat({ loaderData, actionData }: Route.ComponentP
   if (loaderData.consentRequired) {
     return <main className="mx-auto max-w-3xl space-y-4 [overflow-wrap:anywhere]">
       <VillageHeader village={loaderData.village} current="chat" chat={{ joined: true, unread: 0 }} />
+      <ChatReaders village={loaderData.village} count={loaderData.readers} />
       <ChatConsentNotice privacyAvailable={loaderData.privacyAvailable} previousVersion={loaderData.previousConsentVersion} />
       {actionData && "error" in actionData && <p role="alert">{actionData.error === "limit" ? m.village_chat_limit() : actionData.error === "invalid" ? m.village_chat_consent_changed() : m.village_chat_read_only()}</p>}
       <Form method="post"><input type="hidden" name="version" value={loaderData.consentVersion} /><Button type="submit" name="intent" value="consent">{m.village_chat_consent_accept()}</Button></Form>
@@ -287,6 +288,7 @@ function ConsentedChat({ loaderData, actionData }: {
     <VillageHeader village={loaderData.village} current="chat" chat={{ joined: true, unread: readThroughEnd ? 0 : unread }}>
       {hasTranslations && <button type="button" className="ui-meta underline" onClick={() => setOriginals(value => !value)}>{originals ? m.village_chat_translations() : m.village_chat_originals()}</button>}
     </VillageHeader>
+    <ChatReaders village={loaderData.village} count={loaderData.readers} />
     {actionData && "error" in actionData && <p role="alert">{actionData.error === "duplicate" ? m.chat_reports_duplicate() : actionData.error === "unavailable" ? m.chat_reports_unavailable() : actionData.error === "invalid" ? m.village_chat_invalid() : actionData.error === "limit" ? m.village_chat_limit() : m.village_chat_read_only()}</p>}
     {loaderData.reported && <p role="status">{m.chat_reports_flagged()}</p>}
     {!interactive && report && <section role="dialog" aria-label={m.chat_reports_flag()} className="fixed inset-x-4 top-20 z-50 mx-auto max-h-[calc(100dvh-6rem)] max-w-xl overflow-auto rounded border bg-background p-3 shadow">
@@ -361,4 +363,9 @@ function ConsentedChat({ loaderData, actionData }: {
       </Form>}
     </div>
   </main>;
+}
+
+function ChatReaders({ village, count }: { village: { slug: string | null; language: string | null }; count: number }) {
+  const label = m.village_chat_readers({ count });
+  return <p className="ui-help">{village.language ? label : <Link className="link-ui" to={`/v/${village.slug}#village-roster`}>{label}</Link>}</p>;
 }

@@ -25,7 +25,7 @@ async function create(page: Page, slug: string, name: string, invited: boolean) 
   await expect(page.locator("main b")).toHaveCount(0);
 }
 
-test("creates a member-posting public village, adds a writer, posts and ends without losing public reading", async ({ page, browser }) => {
+test("creates a member-posting public village, invites a writer, posts and ends without losing public reading", async ({ page, browser }) => {
   await useMember(page, "vc_creator@example.com");
   await create(page, "owned-public-club", "An owned public club", true);
   await expect(page.locator("#village-management")).not.toHaveAttribute("open", "");
@@ -34,8 +34,8 @@ test("creates a member-posting public village, adds a writer, posts and ends wit
   await openVillageManagement(page);
   await page.getByLabel(m.village_invite_handle, { exact: true }).fill("@VC_JOINER");
   await page.getByRole("button", { name: m.village_invite_member, exact: true }).click();
-  await expect(page.locator("#village-roster li").filter({ hasText: "@vc_joiner" })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: m.village_cancel_invite, exact: true })).toHaveCount(0);
+  await expect(page.locator("#village-roster li").filter({ hasText: "@vc_joiner" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: m.village_cancel_invite, exact: true })).toHaveCount(1);
   const context = await browser.newContext({ locale: "en-US" }); const other = await context.newPage();
   try {
     await useMember(other, "vc_outsider@example.com", "/v/owned-public-club");
@@ -44,11 +44,11 @@ test("creates a member-posting public village, adds a writer, posts and ends wit
     const denied = await other.request.post("/v/owned-public-club", { form: { intent: "post-here" }, headers: { Origin: new URL(other.url()).origin } });
     expect(denied.status()).toBe(404);
     await useMember(other, "vc_joiner@example.com", "/notifications");
-    await expect(other.locator("main").getByText(m.notification_village_added.replace("{name}", "An owned public club").replace("{actor}", "@vc_creator"), { exact: true })).toBeVisible();
+    await expect(other.locator("main").getByText(m.notification_village_invite.replace("{name}", "An owned public club").replace("{handle}", "vc_creator"), { exact: true })).toBeVisible();
     await other.goto("/v/owned-public-club");
-    await expect(other.getByRole("button", { name: m.village_accept, exact: true })).toHaveCount(0);
+    await other.getByRole("button", { name: m.village_accept, exact: true }).click();
     await screenshots(other, "added-member");
-    await expect(other.getByText(m.village_roster, { exact: true })).toHaveCount(0);
+    await expect(other.getByText(m.village_roster, { exact: true })).toHaveCount(1);
     await expect(other.getByRole("button", { name: m.village_leave, exact: true })).toBeHidden();
     await other.locator("summary").filter({ hasText: m.village_leave }).click();
     await expect(other.getByText(m.village_leave_invite_help, { exact: true })).toBeVisible();
@@ -88,66 +88,46 @@ test("creates a member-posting public village, adds a writer, posts and ends wit
   } finally { await context.close(); }
 });
 
-test("adds and removes writers, respects voluntary departure and invites a former member to return", async ({ page, browser }) => {
+test("invites removed and departed members and keeps co-ownership subject to acceptance", async ({ page, browser }) => {
   await useMember(page, "direct_owner@example.com");
-  await create(page, "direct-members", "Direct membership village", true);
-  await openVillageManagement(page);
-  await screenshots(page, "before-add");
-  await page.getByLabel(m.village_invite_handle, { exact: true }).fill("direct_guest");
-  await page.getByRole("button", { name: m.village_invite_member, exact: true }).click();
-  await expect(page.locator("#village-roster li").filter({ hasText: "@direct_guest" })).toHaveCount(1);
+  await create(page, "direct-members", "Invited membership village", true);
   const context = await browser.newContext({ locale: "en-US" }); const guest = await context.newPage();
   try {
-    await useMember(guest, "direct_guest@example.com", "/notifications");
-    await screenshots(guest, "added-notification");
-    await expect(guest.getByText(m.notification_village_added.replace("{name}", "Direct membership village").replace("{actor}", "@direct_owner"), { exact: true })).toBeVisible();
-    await guest.goto("/t/new");
-    await expect(guest.locator('input[name="village"]')).toHaveValue("@direct_guest");
-    await guest.goto("/v/direct-members");
-    await expect(guest.getByRole("link", { name: m.village_post_here, exact: true })).toBeVisible();
-    await guest.getByRole("link", { name: m.village_chat_title, exact: true }).click();
-    await expect(guest.locator('textarea[name="body"]')).toHaveCount(0);
-    await page.locator("#village-roster > summary").click();
+    await useMember(guest, "direct_guest@example.com", "/v/direct-members");
+    const invite = async () => {
+      await openVillageManagement(page);
+      await page.getByLabel(m.village_invite_handle, { exact: true }).fill("direct_guest");
+      await Promise.all([
+        page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.startsWith("/v/direct-members")),
+        page.getByRole("button", { name: m.village_invite_member, exact: true }).click(),
+      ]);
+      await expect(page.locator("#village-invites").getByText("@direct_guest", { exact: true })).toBeVisible();
+      await expect(page.getByRole("status").filter({ hasText: m.village_invite_sent })).toBeVisible();
+      await guest.reload();
+      await expect(guest.getByText(m.village_join_visibility, { exact: true })).toBeVisible();
+      await guest.getByRole("button", { name: m.village_accept, exact: true }).click();
+      await expect(guest.getByRole("link", { name: m.village_post_here, exact: true })).toBeVisible();
+      await page.reload();
+      if (!await page.locator("#village-roster").evaluate(element => (element as HTMLDetailsElement).open)) await page.locator("#village-roster > summary").click();
+    };
+    await invite();
     const member = page.locator("#village-roster li").filter({ hasText: "@direct_guest" });
     await member.locator("summary").filter({ hasText: m.village_remove_member }).click();
     await expect(member.locator('textarea[name="reason"]')).not.toHaveAttribute("required");
-    await screenshots(page, "before-remove");
     await member.getByRole("button", { name: m.village_remove_member, exact: true }).click();
     await expect(member).toHaveCount(0);
-    await guest.goto("/notifications");
-    await expect(guest.getByText(m.notification_village_membership_ended.replace("{name}", "Direct membership village"), { exact: true })).toBeVisible();
-    const endedNotification = guest.locator("li").filter({ hasText: m.notification_village_membership_ended.replace("{name}", "Direct membership village") });
-    await expect(endedNotification.getByRole("link")).toHaveCount(1);
-    await expect(endedNotification.locator("p")).toHaveCount(0);
-    await screenshots(guest, "removed-notification");
-    await page.getByLabel(m.village_invite_handle, { exact: true }).fill("direct_guest");
-    await page.getByRole("button", { name: m.village_invite_member, exact: true }).click();
-    await expect(member).toHaveCount(1);
-    await guest.goto("/v/direct-members");
+    await expect(page.getByRole("status").filter({ hasText: m.village_member_removed })).toBeVisible();
+    await invite();
     await guest.locator("summary").filter({ hasText: m.village_leave }).click();
     await guest.getByRole("button", { name: m.village_leave, exact: true }).click();
     await expect(guest.getByRole("link", { name: m.village_post_here, exact: true })).toHaveCount(0);
-    await page.getByLabel(m.village_invite_handle, { exact: true }).fill("direct_guest");
-    await page.getByRole("button", { name: m.village_invite_member, exact: true }).click();
-    await expect(page.getByRole("alert")).toHaveText(m.village_error_self_left);
-    await page.getByRole("button", { name: m.village_invite_former, exact: true }).click();
-    await expect(page.getByRole("button", { name: m.village_cancel_invite, exact: true })).toBeVisible();
-    await guest.reload();
-    await guest.getByRole("button", { name: m.village_accept, exact: true }).click();
-    await expect(guest.getByRole("link", { name: m.village_post_here, exact: true })).toBeVisible();
-    await page.reload(); await openVillageManagement(page);
-    if (!await page.locator("#village-roster").getAttribute("open").then(value => value !== null)) await page.locator("#village-roster > summary").click();
+    await page.reload(); await invite();
     await member.getByRole("button", { name: m.village_add_owner, exact: true }).click();
-    await expect(page.getByRole("button", { name: m.village_cancel_invite, exact: true })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: m.village_owner_invite_sent })).toBeVisible();
     await guest.reload();
     await expect(guest.locator("#village-management")).toHaveCount(0);
     await guest.getByRole("button", { name: m.village_accept, exact: true }).click();
     await expect(guest.locator("#village-management")).toBeVisible();
-    await page.reload(); await openVillageManagement(page);
-    if (!await page.locator("#village-roster").getAttribute("open").then(value => value !== null)) await page.locator("#village-roster > summary").click();
-    await screenshots(page, "co-owner-roster");
-    await expect(member).toHaveCount(1);
-    await expect(member.getByText(m.village_remove_member, { exact: true })).toHaveCount(0);
   } finally { await context.close(); }
 });
 
@@ -158,8 +138,8 @@ test("creates an open village and permits a member to join while keeping managem
   await expect(page.getByRole("heading", { name: m.village_manage, exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: m.village_join, exact: true }).click();
   await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
-  await expect(page.getByText(m.village_roster, { exact: true })).toHaveCount(0);
-  await expect(page.locator("main").getByText("@vc_open_creator", { exact: false })).toHaveCount(0);
+  await expect(page.getByText(m.village_roster, { exact: true })).toHaveCount(1);
+  await expect(page.locator("#village-roster").getByText("@vc_open_creator", { exact: false })).toHaveCount(1);
   await expect(page.getByRole("button", { name: m.village_add_owner, exact: true })).toHaveCount(0);
   await useMember(page, "vc_open_creator@example.com", "/v/owned-open-club");
   await openVillageManagement(page);
@@ -175,7 +155,7 @@ test("creates an open village and permits a member to join while keeping managem
   await page.goto("/v/en");
   await expect(page.getByText(m.village_roster, { exact: true })).toHaveCount(0);
   await useMember(page, "navigation_operator@example.com", "/v/owned-open-club");
-  await openVillageManagement(page);
+  await expect(page.locator("#village-management")).toHaveCount(0);
   await page.getByText(m.village_roster, { exact: true }).click();
   await expect(page.locator("main").getByText("@vc_outsider", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: m.village_add_owner, exact: true })).toHaveCount(0);
@@ -209,7 +189,7 @@ test("pages invitations and keeps the roster open on return without carrying ros
   await expect(page).toHaveURL(/membersPage=1#village-roster$/);
   await expect(page.locator("#village-roster")).toHaveAttribute("open", "");
   await page.reload(); await waitForClientRoute(page);
-  await expect(page.locator("#village-management")).toHaveAttribute("open", "");
+  await expect(page.locator("#village-management")).not.toHaveAttribute("open", "");
   await expect(page.locator("#village-roster")).toHaveAttribute("open", "");
   await roster.getByRole("link", { name: m.page_next, exact: true }).click();
   await expect(page).toHaveURL(/membersPage=2#village-roster$/);
@@ -224,7 +204,7 @@ test("pages invitations and keeps the roster open on return without carrying ros
     await useMember(native, "vpage_owner@example.com", "/v/paged-village?membersPage=2");
     await native.getByRole("navigation", { name: m.village_roster_pages, exact: true }).getByRole("link", { name: m.page_prev, exact: true }).click();
     await expect(native).toHaveURL(/membersPage=1#village-roster$/);
-    await expect(native.locator("#village-management")).toHaveAttribute("open", "");
+    await expect(native.locator("#village-management")).not.toHaveAttribute("open", "");
     await expect(native.locator("#village-roster")).toHaveAttribute("open", "");
     await native.goto("/v/paged-village?invitesPage=2");
     await native.getByRole("navigation", { name: m.village_invite_pages, exact: true }).getByRole("link", { name: m.page_prev, exact: true }).click();
