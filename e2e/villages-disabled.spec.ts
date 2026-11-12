@@ -10,14 +10,15 @@ test("private startup does not add village fixtures", () => {
 });
 
 test("closed villages render the same application 404 as an unknown route", async ({ page }) => {
-  const missing = await page.goto("/unknown-village-fixture");
-  expect(missing?.status()).toBe(404);
-  const main = await page.locator("main").innerText();
-  const title = await page.title();
-  const footer = await page.locator("footer").innerText();
   const urls = ["/villages", "/villages.md", "/villages.txt", "/villages/new", "/v/en", "/v/en.md", "/v/en.txt", "/mod/village/closed-place", "/settings/chat"];
   for (const signedIn of [false, true]) {
     if (signedIn) await useMember(page, "navigation_member@example.com");
+    // A member's saved display language applies once signed in, so compare within each state.
+    const missing = await page.goto("/unknown-village-fixture");
+    expect(missing?.status()).toBe(404);
+    const main = await page.locator("main").innerText();
+    const title = await page.title();
+    const footer = await page.locator("footer").innerText();
     for (const url of urls) {
       const response = await page.goto(url);
       expect(response?.status()).toBe(404);
