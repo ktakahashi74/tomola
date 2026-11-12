@@ -6,7 +6,7 @@ import { LlmError } from "../llm/errors.server";
 import { loadGlossary, matchGlossary } from "../translations.server";
 import { SAME_AS_SOURCE, saveVillageTranslation, TRANSLATE_VILLAGE_JOB, translatableParts, villageTranslationSettled, villageTranslationSource, type VillageTranslationPayload } from "../village-translations.server";
 import { translatedVillageDescription, translatedVillageName } from "../villages";
-import { DeferJob, type JobHandlers } from "./queue.server";
+import { DeferJob, isFinalJobFailure, type JobHandlers } from "./queue.server";
 
 const payloadSchema = z.object({ villageId: z.string().regex(/^[a-f0-9]{32}$/), lang: z.string().refine(isEnabledLang), sourceHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 const unusable = () => Object.assign(new LlmError("invalid_output", "The village translation could not be used"), { retryable: false });
@@ -46,8 +46,7 @@ export function createVillageTranslationHandlers(deps: { llm?: LlmOptions } = {}
     } catch (error) {
       // A wait for the budget is not a failure.
       if (error instanceof DeferJob) throw error;
-      const permanent = error instanceof LlmError && !error.retryable;
-      if (permanent || job.attempts >= job.maxAttempts) await saveVillageTranslation(ctx.db, payload, { state: "failed", errorCode: error instanceof LlmError ? error.code : "engine" }, { preserveSettled: true });
+      if (isFinalJobFailure(job, error)) await saveVillageTranslation(ctx.db, payload, { state: "failed", errorCode: error instanceof LlmError ? error.code : "engine" }, { preserveSettled: true });
       throw error;
     }
     // Nothing came back that is different from the source: there is nothing to translate. The row says so (it is not a failure, and the operator's preparation does not queue it again);

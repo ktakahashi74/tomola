@@ -9,7 +9,7 @@ import { CHAT_PROMPT_VERSION } from "../llm/prompt.server";
 import { NEAR_COPY_FLAGS } from "../llm/flags";
 import { mentionCandidates } from "../mention-syntax";
 import { isLang } from "../languages";
-import { DeferJob, type JobHandlers } from "./queue.server";
+import { DeferJob, isFinalJobFailure, jobAttemptLimit, type JobHandlers } from "./queue.server";
 
 const payloadSchema = z.object({ messageId: z.string().regex(/^[a-f0-9]{32}$/), lang: z.string().refine(isEnabledLang), sourceHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 class SettledTranslation extends Error {}
@@ -47,19 +47,18 @@ export function createChatTranslationHandlers(opts: LlmOptions = {}): JobHandler
         await save({ state: "paused", errorCode: "budget" });
         throw error;
       }
-      const permanent = error instanceof LlmError && !error.retryable;
       const code = fallbackReason ?? (error instanceof LlmError ? error.code : "engine");
-      if (permanent || job.attempts >= job.maxAttempts) await save({ state: "failed", errorCode: code });
+      if (isFinalJobFailure(job, error)) await save({ state: "failed", errorCode: code });
       // Provider/SQL errors can include source or context. Persist only a fixed
       // category, never an error message, cause or response body.
-      throw Object.assign(new Error(`Chat translation failed (${code})`), { retryable: !permanent });
+      throw Object.assign(new Error(`Chat translation failed (${code})`), { retryable: !(error instanceof LlmError && !error.retryable), maxAttempts: jobAttemptLimit(job, error) });
     }
   };
   return { ...createChatTranslationReportHandlers(opts), async translate_chat(job, ctx) {
     try { await handler(job, ctx); }
     catch (error) {
       if (error instanceof DeferJob) throw error;
-      throw Object.assign(new Error("Chat translation failed"), { retryable: !(typeof error === "object" && error !== null && "retryable" in error && error.retryable === false) });
+      throw Object.assign(new Error("Chat translation failed"), { retryable: !(typeof error === "object" && error !== null && "retryable" in error && error.retryable === false), maxAttempts: jobAttemptLimit(job, error) });
     }
   } };
 }

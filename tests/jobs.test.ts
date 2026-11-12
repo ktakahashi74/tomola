@@ -17,6 +17,7 @@ import {
 } from "~/lib/jobs/queue.server";
 import { isWorkerEnabled, startWorker } from "~/lib/jobs/worker.server";
 import { createTestDb } from "./helpers/db";
+import { LlmError } from "~/lib/llm/errors.server";
 
 // run_at defaults to database now(), so keep the test clock ahead of wall time; otherwise advancing real time can leave queued jobs not yet due.
 const t0 = new Date("2030-10-01T00:00:00Z");
@@ -295,6 +296,22 @@ describe("runDueJobs", () => {
 });
 
 describe("errors that are not retried", () => {
+  it.each([
+    ["truncated", 1, 0, 1], ["truncated", 10, 1, 2], ["empty", 10, 2, 3],
+    ["config", 4, 0, 4], ["unavailable", 4, 0, 4],
+  ] as const)("uses the smaller job/error limit for %s (job limit %s, prior attempts %s)", async (code, maxAttempts, prior, expected) => {
+    const db = await createTestDb();
+    const { id } = await enqueue(db, "limited", {}, { maxAttempts });
+    await db.update(jobs).set({ attempts: prior }).where(eq(jobs.id, id));
+    let now = t0;
+    const handlers = { limited: async () => { throw new LlmError(code, "test failure"); } };
+    for (let attempt = prior; attempt <= expected; attempt++) {
+      await run(db, handlers, now);
+      now = new Date(now.getTime() + 3_600_000);
+    }
+    expect(await one(db, id)).toMatchObject({ status: "failed", attempts: expected, maxAttempts });
+  });
+
   class NoRetry extends Error {
     readonly retryable = false;
   }

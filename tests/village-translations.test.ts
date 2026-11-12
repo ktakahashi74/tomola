@@ -24,6 +24,7 @@ import { buildListMarkdown } from "~/lib/md/lists.server";
 import { translatedVillageDescription, translatedVillageName } from "~/lib/villages";
 import { loader as villageLoader } from "~/routes/village";
 import { loader as villagesLoader } from "~/routes/villages";
+import { LlmError } from "~/lib/llm/errors.server";
 
 it("keeps ambiguous Han village text in the author's main language", () => {
   const env = { ENABLED_LANGS: "ja,en,zh-Hans,zh-Hant" };
@@ -52,6 +53,15 @@ async function world() {
 }
 
 describe("the language of a village and the jobs it queues", () => {
+  it("marks truncated village translations failed at the shared attempt cap", async () => {
+    const { db, id } = await world();
+    const primary: TranslationEngine = { ...createFakeEngine(), async translate() { throw new LlmError("truncated", "cut off"); } };
+    const handlers = createVillageTranslationHandlers({ llm: { engines: engines(primary) } });
+    expect(await runDueJobs(db, handlers, { now: t0, logger: quietLogger })).toMatchObject({ retried: 2 });
+    expect(await runDueJobs(db, handlers, { now: new Date(t0.getTime() + 3_600_000), logger: quietLogger })).toMatchObject({ failed: 2 });
+    expect((await rows(db, id)).map(row => [row.state, row.errorCode])).toEqual([["failed", "truncated"], ["failed", "truncated"]]);
+  });
+
   it("takes the author's main language, or the one they name, and queues one job per other enabled language without the texts", async () => {
     const { db, id } = await world();
     const v = await village(db, "kyoto");

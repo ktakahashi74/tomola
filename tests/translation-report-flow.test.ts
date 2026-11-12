@@ -711,7 +711,19 @@ describe("the automatic re-translation job (role retry)", () => {
     expect((await listOpenReports(db)).map((r) => r.entryId)).toEqual([topicId]);
   });
 
-  it("retries any other failure up to the last attempt, and then sends the report to the moderators (the translation stays)", async () => {
+  it.each([["truncated", 2], ["empty", 3], ["invalid_output", 3]] as const)("routes persistent %s output to moderators after %s attempts", async (code, attempts) => {
+    const { db, topicId } = await setup();
+    const seen: TranslationRequest[] = [];
+    const llm = llmWith(retryEngine(seen, () => new LlmError(code, "unusable")));
+    await report(db, llm, topicId);
+    for (let attempt = 0; attempt < attempts; attempt++) await runJobs(db, llm, new Date(t1.getTime() + attempt * 3_600_000));
+    expect(seen).toHaveLength(attempts);
+    expect((await reports(db))[0]).toMatchObject({ route: "moderator", status: "open", retrySlot: true });
+    expect((await retryJobs(db))[0]).toMatchObject({ status: "done", attempts, maxAttempts: 10 });
+    expect((await rowOf(db, topicId, "body")).model).toBe("fake-1");
+  });
+
+  it("respects a smaller job limit before sending the report to moderators", async () => {
     const { db, topicId } = await setup();
     const llm = llmWith(retryEngine([], () => new LlmError("empty", "empty")));
     await report(db, llm, topicId);

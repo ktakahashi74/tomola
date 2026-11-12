@@ -19,6 +19,23 @@ import { translateChecked } from "~/lib/llm/translate.server";
 import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import type { TranslationEngine } from "~/lib/llm/types";
 import { leakedReasoning } from "./helpers/translation-leak";
+import { LlmError } from "~/lib/llm/errors.server";
+
+it("retains the attempt cap through private-error wrappers and marks truncated chat translations failed", async () => {
+  const w = await world(); await w.send();
+  let calls = 0;
+  const engine: TranslationEngine = { ...createFakeEngine(), async translate() {
+    calls++;
+    throw new LlmError("truncated", "private provider response", { inputTokens: 10, outputTokens: 20 });
+  } };
+  const now = new Date();
+  expect(await w.run({ chatEngine: engine }, now)).toMatchObject({ retried: 1 });
+  expect(await w.run({ chatEngine: engine }, new Date(now.getTime() + 3_600_000))).toMatchObject({ failed: 1, retried: 0 });
+  expect(await w.run({ chatEngine: engine }, new Date(now.getTime() + 7_200_000))).toMatchObject({ ran: 0 });
+  expect(calls).toBe(2);
+  expect(await w.db.select().from(chatMessageTranslations)).toMatchObject([{ state: "failed", errorCode: "truncated" }]);
+  expect(JSON.stringify(await w.db.select().from(jobs))).not.toContain("private provider response");
+});
 
 it.each([false, true])("retries leaked chat once and settles without publishing it (persistent=%s)", async persistent => {
   const w = await world(); await w.send();

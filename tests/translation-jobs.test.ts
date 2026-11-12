@@ -569,17 +569,37 @@ describe("failure handling", () => {
     expect(await enqueueTranslations(db, { id: topicId, lang: "ja", sourceHash: entry.h! })).toBe(16);
   });
 
-  it("retries other LLM errors (output cut off) as before", async () => {
+  it.each([
+    ["truncated", 2], ["empty", 3], ["invalid_output", 3], ["503", 10],
+  ] as const)("bounds %s failures at %s attempts for title and body jobs, retaining charged usage", async (code, attempts) => {
     const db = await setup();
-    await newTopic(db);
+    const topicId = await newTopic(db);
+    const targets = (await db.select().from(jobs)).filter(job => (job.payload as { lang: string }).lang === "fr");
+    await db.delete(jobs).where(inArray(jobs.id, (await db.select().from(jobs)).filter(job => !targets.some(target => target.id === job.id)).map(job => job.id)));
+    let calls = 0;
     const cut: TranslationEngine = {
       id: "fake",
       model: "fake-1",
       async translate() {
-        throw new LlmError("truncated", "output cut off");
+        calls++;
+        if (code === "503") throw Object.assign(new Error("provider unavailable"), { status: 503 });
+        throw new LlmError(code, "unusable response", { inputTokens: 10, outputTokens: 20 });
       },
     };
-    expect(await run(db, { primary: cut, secondary: null, judge: null })).toMatchObject({ ran: 16, retried: 16, failed: 0 });
+    const engines = { primary: cut, secondary: null, judge: null };
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      expect(await run(db, engines, { now: new Date(t0.getTime() + attempt * 3_600_000) })).toMatchObject({
+        ran: 2, retried: attempt < attempts ? 2 : 0, failed: attempt === attempts ? 2 : 0,
+      });
+    }
+    expect(await run(db, engines, { now: new Date(t0.getTime() + 24 * 3_600_000) })).toMatchObject({ ran: 0 });
+    expect(calls).toBe(2 * attempts);
+    expect(await db.select().from(jobs)).toMatchObject(targets.map(() => ({ status: "failed", attempts, maxAttempts: 10 })));
+    expect(await db.select().from(llmUsage)).toHaveLength(code === "503" ? 0 : 2 * attempts);
+    expect(await transRows(db, topicId)).toEqual([]);
+    const [source] = await db.select().from(entries).where(eq(entries.id, topicId));
+    const shown = (await loadEntryDisplays(db, [{ ...source, kind: "topic", lang: "ja" }], { readLangs: ["fr"], displayLang: "fr" })).get(topicId)!;
+    expect(shown).toMatchObject({ translation: null, pending: false, unavailable: true });
   });
 });
 

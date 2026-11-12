@@ -6,7 +6,7 @@ import { FLAG_UNTRANSLATED, HIDDEN_PRIMARY_FLAGS } from "../llm/flags";
 import { jobLlmOptions, LlmError, translate, type LlmOptions } from "../llm/index.server";
 import { loadGlossary, matchGlossary } from "../translations.server";
 import { translatedVillageDescription } from "../villages";
-import { DeferJob, type JobHandlers } from "./queue.server";
+import { DeferJob, isFinalJobFailure, type JobHandlers } from "./queue.server";
 
 const schema = z.object({ invitationId: z.string().uuid(), lang: z.string().refine(isEnabledLang) }).strict();
 
@@ -28,7 +28,7 @@ export function createInvitationNoteHandlers(deps: { llm?: LlmOptions } = {}): J
       await saveInvitationNoteTranslation(ctx.db, payload, { state: "ready", text, model: out.model, promptVersion: out.promptVersion });
     } catch (error) {
       if (error instanceof DeferJob) throw error;
-      if ((error instanceof LlmError && !error.retryable) || job.attempts >= job.maxAttempts) await saveInvitationNoteTranslation(ctx.db, payload, { state: "failed" });
+      if (isFinalJobFailure(job, error)) await saveInvitationNoteTranslation(ctx.db, payload, { state: "failed" });
       throw error;
     }
   } };

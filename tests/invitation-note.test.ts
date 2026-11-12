@@ -15,6 +15,7 @@ import { action } from "~/routes/invites-new";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
 import { quietLogger } from "./helpers/logger";
+import { LlmError } from "~/lib/llm/errors.server";
 import { m } from "~/paraglide/messages.js";
 import { addMember, createTestDb } from "./helpers/db";
 import { auditRetentionTransactions, expectBoundedTransactions } from "./helpers/retention";
@@ -31,6 +32,20 @@ async function make(text = note) {
   return { ...created, invitation: (await findValidInvitationByToken(h.db, created.token))! };
 }
 const run = (primary: TranslationEngine = createFakeEngine()) => runDueJobs(h.db, createInvitationNoteHandlers({ llm: { engines: { primary, secondary: null, judge: null } } }), { limit: 100, logger: quietLogger });
+
+it("marks invitation notes unavailable when truncated output reaches the shared cap", async () => {
+  const db = await createTestDb();
+  await addMember(db, "note_cap", "note_cap", { homeArea: "ja" });
+  const created = await createInvitation(db, { email: "note_cap@example.com", createdBy: "note_cap", note });
+  const invitation = (await findValidInvitationByToken(db, created.token))!;
+  await readInvitationNote(db, invitation.id, "en");
+  const primary: TranslationEngine = { ...createFakeEngine(), async translate() { throw new LlmError("truncated", "cut off"); } };
+  const handlers = createInvitationNoteHandlers({ llm: { engines: { primary, secondary: null, judge: null } } });
+  const now = new Date();
+  expect(await runDueJobs(db, handlers, { now, logger: quietLogger })).toMatchObject({ retried: 1 });
+  expect(await runDueJobs(db, handlers, { now: new Date(now.getTime() + 3_600_000), logger: quietLogger })).toMatchObject({ failed: 1 });
+  expect(await readInvitationNote(db, invitation.id, "en")).toMatchObject({ pending: false, unavailable: true });
+});
 
 it("creates an optional note through the member action and detects its language", async () => {
   const out = await action(h.args(h.request("/invites/new", { as: "invite_note_sender", form: { email: "note_action@example.com", note } })));

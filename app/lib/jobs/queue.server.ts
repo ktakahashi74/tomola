@@ -50,6 +50,18 @@ export function isPermanentFailure(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { retryable?: unknown }).retryable === false;
 }
 
+// Error-specific limits can only shorten the job's configured attempt budget.
+export function jobAttemptLimit(job: Pick<JobRow, "maxAttempts">, error: unknown): number {
+  const limit = error && typeof error === "object" ? (error as { maxAttempts?: unknown }).maxAttempts : undefined;
+  return typeof limit === "number" && Number.isSafeInteger(limit) && limit > 0 ? Math.min(job.maxAttempts, limit) : job.maxAttempts;
+}
+
+// Handlers with a separate display or moderation state use the same boundary
+// as the queue, so a capped failure cannot leave that state pending forever.
+export function isFinalJobFailure(job: Pick<JobRow, "attempts" | "maxAttempts">, error: unknown): boolean {
+  return isPermanentFailure(error) || job.attempts >= jobAttemptLimit(job, error);
+}
+
 export const DEFAULT_MAX_ATTEMPTS = 5;
 // Recover jobs left running beyond this interval as crashed-worker jobs: queued, or failed if the attempt limit was reached.
 // Running jobs refresh locked_at every HEARTBEAT_MS (one quarter of STUCK_AFTER_MS), so long tasks such as daily digest delivery
@@ -318,7 +330,7 @@ export async function runDueJobs(db: Db, handlers: JobHandlers, opts: RunOptions
         continue;
       }
       const message = errorMessage(error);
-      if (isPermanentFailure(error) || job.attempts >= job.maxAttempts) {
+      if (isFinalJobFailure(job, error)) {
         await db.update(jobs).set({ status: "failed", lockedAt: null, lastError: message, updatedAt: now,
           ...(!isPermanentFailure(error) && canRetryTranslationDaily(job.kind, message, job.payload) ? {} : { payload: sql`${jobs.payload} - 'paidTranslationCalls'` }),
         }).where(owned);
@@ -336,7 +348,7 @@ export async function runDueJobs(db: Db, handlers: JobHandlers, opts: RunOptions
           })
           .where(owned);
         stats.retried++;
-        logger.warn(`[jobs] job ${job.id} (${job.kind}) failed (attempt ${job.attempts}/${job.maxAttempts}): ${message}`);
+        logger.warn(`[jobs] job ${job.id} (${job.kind}) failed (attempt ${job.attempts}/${jobAttemptLimit(job, error)}): ${message}`);
       }
     }
   }

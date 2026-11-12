@@ -18,11 +18,24 @@ export type LlmErrorCode =
   // No engine for the selected role (secondary or judge is none).
   | "unavailable";
 
+// Total job attempts, including the first call. Uncharged configuration errors
+// retain the job's own limit; deterministic output failures get fewer attempts.
+const MAX_ATTEMPTS: Record<LlmErrorCode, number | undefined> = {
+  refusal: 1,
+  output_leak: 1,
+  truncated: 2,
+  empty: 3,
+  invalid_output: 3,
+  config: undefined,
+  unavailable: undefined,
+};
+
 // LLM call failure. A job handler can throw it unchanged to trigger retry.
 // usage contains charged tokens even when a returned response was unusable due to refusal/truncation; record them in the ledger.
 export class LlmError extends Error {
   // Refusals and persistent output leaks fail immediately; another job attempt would only repeat rejected input.
   readonly retryable: boolean;
+  readonly maxAttempts: number | undefined;
   constructor(
     readonly code: LlmErrorCode,
     message: string,
@@ -30,7 +43,8 @@ export class LlmError extends Error {
   ) {
     super(message);
     this.name = "LlmError";
-    this.retryable = code !== "refusal" && code !== "output_leak";
+    this.maxAttempts = MAX_ATTEMPTS[code];
+    this.retryable = this.maxAttempts !== 1;
   }
 }
 

@@ -35,7 +35,7 @@ import { titleBodyContext, TITLE_BODY_MAX_CHARS } from "~/lib/translation-terms"
 import { postTerminologyBodies, translationTermsFor } from "~/lib/translation-terms.server";
 import { firstSeenAtForSource } from "~/lib/translation-first-seen.server";
 import { joinResponsePostLine, localizeResponseBodies, prepareResponsePostTranslation } from "~/lib/response-line.server";
-import { DeferJob, enqueue, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
+import { DeferJob, enqueue, isFinalJobFailure, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
 
 // Translation jobs.
 // - translate_entry (entry × target language × source revision): translate title for topics and body with the primary engine, saving kind=primary.
@@ -590,7 +590,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
         throw error;
       }
       // Route refusal immediately. Missing retry engine after configuration changes and invalid configuration cannot recover by waiting. Other failures route to moderators after the attempt limit.
-      if (isRefusal(error) || (error instanceof LlmError && (error.code === "unavailable" || error.code === "config")) || job.attempts >= job.maxAttempts) {
+      if (isFinalJobFailure(job, error) || (error instanceof LlmError && (error.code === "unavailable" || error.code === "config"))) {
         console.warn(`[translate] the retry for report ${report.id} gave up (${safeErrorText(error)}); the report goes to the moderators`);
         await toModerator();
         return;
