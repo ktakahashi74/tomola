@@ -1,4 +1,5 @@
 import { webPushEnabled } from "~/lib/push/config.server";
+import { THEME_COLORS } from "~/lib/theme-colors";
 import { useOperatorSettings } from "~/lib/operator-context";
 import { operatorConfig } from "~/lib/operator-config.server";
 import { operatorCopy } from "~/lib/operator-settings";
@@ -123,8 +124,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {suppressBrowserTranslation && <meta name="google" content="notranslate" />}
         {/* Match browser chrome to the device palette; the manifest uses the light paper colour. */}
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf7" />
-        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1917" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLORS.light} />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content={THEME_COLORS.dark} />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" sizes="any" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

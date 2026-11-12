@@ -762,9 +762,20 @@ const MEMBER_PAGES = () => ["/", "/latest", "/following", `/t/${topicId}`, `/t/$
 test("the manifest is linked and valid, its icons are served, and /sw.js and /offline come with the right headers under the CSP", async ({ request }) => {
   await boss.goto("/");
   await expect(boss.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
-  await expect(boss.locator('meta[name="theme-color"]')).toHaveCount(2);
-  await expect(boss.locator('meta[name="theme-color"][media="(prefers-color-scheme: light)"]')).toHaveAttribute("content", "#fbfaf7");
-  await expect(boss.locator('meta[name="theme-color"][media="(prefers-color-scheme: dark)"]')).toHaveAttribute("content", "#1a1917");
+  const themes = boss.locator('meta[name="theme-color"]');
+  await expect(themes).toHaveCount(2);
+  await expect(themes.nth(0)).toHaveAttribute("media", "(prefers-color-scheme: light)");
+  await expect(themes.nth(1)).toHaveAttribute("media", "(prefers-color-scheme: dark)");
+  for (const theme of await themes.all()) {
+    await boss.emulateMedia({ colorScheme: (await theme.getAttribute("media"))!.includes("dark") ? "dark" : "light" });
+    const colour = await theme.getAttribute("content");
+    expect(await boss.evaluate(value => {
+      const probe = document.createElement("span"); probe.style.color = value!; document.body.append(probe);
+      const matches = getComputedStyle(probe).color === getComputedStyle(document.body).backgroundColor;
+      probe.remove(); return matches;
+    }, colour)).toBe(true);
+  }
+  await boss.emulateMedia({ colorScheme: "light" });
   await expect(boss.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /^\/[a-f0-9]{8}\.png$/);
   const manifestRes = await request.get("/manifest.webmanifest");
   expect(manifestRes.status()).toBe(200);

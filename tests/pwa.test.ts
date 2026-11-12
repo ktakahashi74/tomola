@@ -218,8 +218,13 @@ describe("the offline page (/offline)", () => {
     expect(res.headers.get("content-security-policy")).not.toContain("nonce");
     expect(res.headers.getSetCookie()).toEqual([]);
     const html = await res.text();
-    expect(html).toContain(`<meta name="theme-color" media="(prefers-color-scheme: light)" content="${manifest().theme_color}">`);
-    expect(html).toContain('<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1917">');
+    const themes = [...html.matchAll(/<meta name="theme-color" media="([^"]+)" content="([^"]+)">/g)];
+    expect(themes).toHaveLength(2);
+    expect(themes.map(theme => theme[1])).toEqual(["(prefers-color-scheme: light)", "(prefers-color-scheme: dark)"]);
+    const grounds = html.match(/background:light-dark\(([^,]+),([^)]+)\)/);
+    expect(grounds).not.toBeNull();
+    expect(themes.map(theme => theme[2])).toEqual(grounds!.slice(1));
+    expect(themes[0][2]).toBe(manifest().theme_color);
     expect(html).toMatch(/^<!doctype html>\n<html lang="mul">/);
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/<section(?![^>]*\blang=)[^>]*>/);
