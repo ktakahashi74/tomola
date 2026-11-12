@@ -119,6 +119,15 @@ test("hidden large drafts avoid the keepalive limit and retry when visible", asy
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await autosaveState(page, "saved");
+  await body(page).fill("A short departure save: 日");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await autosaveState(page, "saved");
+  const short = await page.evaluate(() => (window as unknown as { departureCalls: { size: number; keepalive: boolean }[] }).departureCalls.at(-1)!);
+  expect(short.size).toBeLessThanOrEqual(60 * 1024);
+  expect(short.keepalive).toBe(true);
 });
 
 test("logout flushes pending draft edits before ending the session", async ({ page }) => {

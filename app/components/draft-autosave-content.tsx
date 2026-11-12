@@ -9,6 +9,8 @@ import { afterInitialActivation } from "~/lib/initial-activation";
 import { Button } from "~/components/ui/button";
 
 const DELAY = 2500;
+// Leave room below Fetch's shared 64 KiB keepalive body quota.
+const KEEPALIVE_BODY_LIMIT = 60 * 1024;
 const fields = new Set(["title", "body", "lang", "asksStance", "stanceTag", "intro", "village", "villageExplicit", "altOf"]);
 const snapshotOf = (data: FormData) => JSON.stringify([...data].filter(([name]) => fields.has(name)).map(([name, value]) => [name, name === "village" && data.get("villageExplicit") === "0" ? "" : value]));
 const capture = (form: HTMLFormElement) => snapshotOf(new FormData(form));
@@ -241,7 +243,9 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
       setStatus("saving");
       pending = (async () => {
         try {
-          const response = await fetch(`/drafts/autosave${recovering ? "?newdraft=1" : ""}`, { method: "POST", body: new URLSearchParams([...values] as [string, string][]), keepalive: leaving, credentials: "same-origin", redirect: "manual", cache: "no-store" });
+          const body = new URLSearchParams([...values] as [string, string][]);
+          // URLSearchParams serializes to ASCII, including percent-encoded text.
+          const response = await fetch(`/drafts/autosave${recovering ? "?newdraft=1" : ""}`, { method: "POST", body, keepalive: leaving && body.toString().length <= KEEPALIVE_BODY_LIMIT, credentials: "same-origin", redirect: "manual", cache: "no-store" });
           if (cannotWrite()) return null;
           if (response.status === 401 || response.type === "opaqueredirect") { form.dataset.autosaveError = "login_required"; throw new Error("Sign in required"); }
           const saved = await response.json() as AutosavedDraft & { error?: string; latest?: AutosavedDraft; previousMatches?: boolean };
@@ -302,7 +306,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     };
     const observer = new MutationObserver(changed);
     const online = () => schedule();
-    const hidden = () => { if (document.visibilityState === "hidden") void save(true); };
+    const visibility = () => { if (document.visibilityState === "hidden") void save(true); else schedule(); };
     const recoveryReady = () => persist();
     const flush = (event: Event) => {
       const detail = (event as CustomEvent<AutosaveRequest>).detail;
@@ -354,7 +358,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     form.addEventListener("tomola:form-discarded", discard);
     form.addEventListener("tomola:draft-detached", detached);
     form.addEventListener("tomola:draft-recovery-ready", recoveryReady);
-    document.addEventListener("visibilitychange", hidden);
+    document.addEventListener("visibilitychange", visibility);
     const pagehide = () => { void save(true); };
     window.addEventListener("pagehide", pagehide);
     window.addEventListener("online", online);
@@ -377,7 +381,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
       form.removeEventListener("tomola:form-discarded", discard);
       form.removeEventListener("tomola:draft-detached", detached);
       form.removeEventListener("tomola:draft-recovery-ready", recoveryReady);
-      document.removeEventListener("visibilitychange", hidden);
+      document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("pagehide", pagehide);
       window.removeEventListener("online", online);
       window.removeEventListener("tomola:discard-unsaved", pause);
