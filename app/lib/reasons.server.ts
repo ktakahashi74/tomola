@@ -6,7 +6,7 @@ import { entries, profiles, reasonSelections, votes } from "~/lib/db/schema";
 import { isStale, wantsTranslation, type ShownKind } from "~/lib/display";
 import { loadPickedTranslations } from "~/lib/entry-display.server";
 import { getEntryViews, replyLocationAt, type EntryView } from "~/lib/entries.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { replyPagesOf } from "~/lib/objections.server";
 import { markdownToPlainText, MAX_SOURCE_CHARS, plainExcerpt } from "~/lib/plain-text.server";
 import { pickReasons, reasonsSeed, seededRandom, type ReasonCandidate, type ReasonPick } from "~/lib/reasons";
@@ -104,7 +104,7 @@ export const REASON_EXCERPT_CHARS = 240;
 export type ReasonExcerpt = {
   text: string;
   // The language of `text`: the display language when it is the translation, otherwise the original language of the reply.
-  lang: Lang;
+  lang: SourceLang;
   // Whether the excerpt is shorter than the reply (the panel then offers "Read more", which opens the reply in the thread).
   truncated: boolean;
   // The kind of the translation when the excerpt is the translation (the small label next to it), otherwise null.

@@ -66,7 +66,11 @@ describe("publication feedback", () => {
     expect(own.topic).toMatchObject({ posted: false });
     expect(article(html, `p-${topicId}`)).not.toContain("posted_reply");
     expect(own.postedFollowed).toBe(false);
-    expect(article(html, `c-${replyId}`)).toContain("posted_reply");
+    expect(own.postedNotice).not.toBeNull();
+    const replyRouter = createMemoryRouter([{ path: "/", element: createElement(Notice, { topicId: replyId, lang: "ja", reply: true, firstPost: false, initial: own.postedNotice!.langs, editHref: `/c/${replyId}/edit` }) }]);
+    const replyNotice = renderToStaticMarkup(createElement(RouterProvider, { router: replyRouter }));
+    expect(replyNotice).toContain("posted_reply_language");
+    expect(replyNotice).toContain(`href="/c/${replyId}/edit"`);
     const { default: PostedLineContent } = await import("~/components/posted-line-content");
     const line = renderToStaticMarkup(createElement(PostedLineContent, { kind: "reply-followed" }));
     expect(line).toContain("posted_reply_followed");

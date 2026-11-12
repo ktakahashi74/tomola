@@ -7,7 +7,7 @@ import { siteOrigin } from "~/lib/http/csrf.server";
 import { GLOSSARY_PAGE_SIZE, glossaryChangeKind, SINGLE_LINE, type GlossaryChangeKind, type GlossaryContent, type GlossaryVia } from "~/lib/glossary";
 import { LANGS, type Lang } from "~/lib/languages";
 import { checkPagination } from "~/lib/pagination";
-import { inScope, type ModScope, type Viewer } from "~/lib/roles.server";
+import { inLanguageScope, type ModScope, type Viewer } from "~/lib/roles.server";
 import type { GlossaryRow } from "~/lib/translations.server";
 
 // Glossary managed by operators and assigned target-language moderators. Entries are translation candidates/notes, not a single correct answer. keep_original permits retaining source wording.
@@ -127,7 +127,7 @@ export type GlossaryActor = { userId: string; scope: ModScope; via?: GlossaryVia
 
 // Shared create/update/delete authorization: operator or moderator assigned to the entry's target_lang. Language tags must match exactly
 // so a zh-Hans moderator cannot edit zh-Hant targets (scripts are separate languages). Assignment to source lang grants no authority.
-export const canEditGlossary = (scope: ModScope, targetLang: string): boolean => inScope(scope, targetLang);
+export const canEditGlossary = (scope: ModScope, targetLang: string): boolean => inLanguageScope(scope, targetLang);
 
 export type GlossaryWriteOptions = {
   now?: Date;

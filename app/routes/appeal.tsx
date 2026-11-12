@@ -94,7 +94,7 @@ export default function Appeal({ loaderData, actionData }: Route.ComponentProps)
         {entry && (
           <PersistentDetails open={action === "fix_entry"} className="text-sm">
             <summary className="cursor-pointer ui-meta">
-              {m.appeal_entry()} · <span lang={entry.lang}>{LANG_LABELS[entry.lang]}</span>
+              {m.appeal_entry()} · <span lang={entry.lang}>{entry.lang === "other" ? m.source_language_other() : LANG_LABELS[entry.lang]}</span>
             </summary>
             {action === "fix_entry" ? (
               <FixBeforeNow before={before} now={{ title: entry.title, body: entry.body }} lang={entry.lang} />

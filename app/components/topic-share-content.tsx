@@ -3,18 +3,18 @@ import { createPortal } from "react-dom";
 import { useRouteLoaderData } from "react-router";
 import { Button } from "~/components/ui/button";
 import { CopyTextButton } from "~/components/copy-text-button";
-import { LANG_LABELS, type Lang } from "~/lib/languages";
+import { LANG_LABELS, type Lang, type SourceLang } from "~/lib/languages";
 import { useEnabledLangs } from "~/lib/use-enabled-langs";
 import { m } from "~/paraglide/messages.js";
 
 export default function ShareContent({ topicId, readingLang, originalLang, control, floating }: {
-  topicId: number; readingLang: Lang; originalLang: Lang; control: RefObject<HTMLDetailsElement | null>; floating: boolean;
+  topicId: number; readingLang: SourceLang; originalLang: SourceLang; control: RefObject<HTMLDetailsElement | null>; floating: boolean;
 }) {
-  const [lang, setLang] = useState(readingLang);
+  const enabled = useEnabledLangs();
+  const [lang, setLang] = useState<Lang>(enabled.find(lang => lang === readingLang) ?? enabled[0]);
   const [failed, setFailed] = useState(false);
   const select = useRef<HTMLSelectElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const enabled = useEnabledLangs();
   const root = useRouteLoaderData("root") as { siteOrigin?: string } | undefined;
   const url = new URL(`/t/${topicId}?lang=${lang}`, root?.siteOrigin ?? window.location.origin).href;
   useLayoutEffect(() => {

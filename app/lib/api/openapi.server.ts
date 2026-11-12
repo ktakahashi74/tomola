@@ -174,7 +174,7 @@ export function openApiDocument(): Record<string, unknown> {
       "/api/drafts": {
         post: {
           summary: "Create a draft (the member publishes it in the browser)",
-          description: DRAFT_RESPONSE_GUIDE + "\n\nBody: Markdown, optionally with YAML frontmatter (type, title (optional: a topic without a title is a short remark; required when asks_stance is true), lang, reply_to, ai_assistance (optional: none, polish, draft or coauthor; if it is not written, nothing is recorded), asks_stance (topics: true makes a question), alt_of (p-<id> of a question: another way of asking it), stance_tag (replies to a question: agree, disagree, neither or objection)). Stances themselves cannot be written through the API. Posts under a member's name are only those the member has confirmed: the member opens approve_url, checks the displayed text and publishes it in the browser. API and MCP credentials cannot publish. If passkey confirmation is on in the member's settings, publication also asks for a passkey signature. Cookies are ignored; only a draft token works. 30 per hour per token. No CORS headers." + (villagesEnabled() ? " Optional topic frontmatter village selects a joined active public village slug or @your-handle for your own village. Omission stays unspecified until publication uses the current default, falling back to your own village if unset. Invalid explicit destinations return village_required and never fall back." : ""),
+          description: DRAFT_RESPONSE_GUIDE + "\n\nOriginals may be written in any language; lang accepts other as well as software language codes. Reading and interface languages still use enabled languages only. Body: Markdown, optionally with YAML frontmatter (type, title (optional: a topic without a title is a short remark; required when asks_stance is true), lang, reply_to, ai_assistance (optional: none, polish, draft or coauthor; if it is not written, nothing is recorded), asks_stance (topics: true makes a question), alt_of (p-<id> of a question: another way of asking it), stance_tag (replies to a question: agree, disagree, neither or objection)). Stances themselves cannot be written through the API. Posts under a member's name are only those the member has confirmed: the member opens approve_url, checks the displayed text and publishes it in the browser. API and MCP credentials cannot publish. If passkey confirmation is on in the member's settings, publication also asks for a passkey signature. Cookies are ignored; only a draft token works. 30 per hour per token. No CORS headers." + (villagesEnabled() ? " Optional topic frontmatter village selects a joined active public village slug or @your-handle for your own village. Omission stays unspecified until publication uses the current default, falling back to your own village if unset. Invalid explicit destinations return village_required and never fall back." : ""),
           security: [{ draftToken: [] }],
           requestBody: {
             required: true,
@@ -226,7 +226,7 @@ export function openApiDocument(): Record<string, unknown> {
         draftToken: { type: "http", scheme: "bearer", description: "A draft token (tml_draft_…). Only for POST /api/drafts; it cannot read." },
       },
       schemas: {
-        // The nine languages the software supports. Where a language is chosen for a translation (?lang=) or for a draft, only the languages the site uses are accepted (/llms.txt).
+        // Translation and interface choices are limited to enabled software languages. Draft originals use SourceLang.
         Lang: { type: "string", enum: [...LANGS] },
         PrinciplesLang: { type: "string", enum: principlesLangs() },
         Error: { type: "object", required: ["error", "message"], properties: { error: { type: "string" }, message: { type: "string" } } },
@@ -241,12 +241,14 @@ export function openApiDocument(): Record<string, unknown> {
             excerpt: { type: "string", maxLength: 80 }, message: { type: "string" },
           },
         },
+        SourceLang: { type: "string", enum: [...LANGS, "other"], description: "Original post language. Other languages are accepted for writing and translated into every enabled target language." },
         DraftCreated: {
           type: "object",
           required: ["id", "approve_url", "lang", "language", "issues", "issues_truncated"],
           properties: {
-            lang: { $ref: "#/components/schemas/Lang" },
-            language: { type: "object", required: ["source", "detected"], properties: { source: { type: "string", enum: ["explicit", "detected", "default"] }, detected: { anyOf: [{ $ref: "#/components/schemas/Lang" }, { type: "null" }] } } },
+            lang: { $ref: "#/components/schemas/SourceLang" },
+            lang_code: { type: ["string", "null"], description: "Known primary language code for an original marked other, when available." },
+            language: { type: "object", required: ["source", "detected"], properties: { source: { type: "string", enum: ["explicit", "detected", "default"] }, detected: { anyOf: [{ $ref: "#/components/schemas/SourceLang" }, { type: "null" }] } } },
             issues: { type: "array", maxItems: 50, items: { $ref: "#/components/schemas/DraftIssue" } },
             issues_truncated: { type: "boolean" }, issues_notice: { type: "string" },
             issues_unavailable: { type: "boolean", description: "True when diagnostics could not be computed. The draft was saved; an empty issues array is not a clean check." },

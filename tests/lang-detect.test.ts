@@ -75,10 +75,10 @@ describe("entry language resolution", () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     for (const kind of ["topic", "reply"] as const) expect((await applyPastedFrontmatter(raw(sentences.en), kind, { defaultLang: "ja" }))).toMatchObject({ ok: true, input: { lang: "en" }, language: { source: "detected", detected: "en" } });
   });
-  it("falls back for disabled or inconclusive prose, retaining the detection for the notice", async () => {
+  it("records unopened software languages and falls back only for inconclusive prose", async () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
-    expect((await applyPastedFrontmatter(raw(sentences.fr), "topic", { defaultLang: "ja" }))).toMatchObject({ ok: true, input: { lang: "ja" }, language: { source: "default", detected: "fr" } });
-    expect((await applyPastedFrontmatter(raw("ABC2500"), "topic", { defaultLang: "ja" }))).toMatchObject({ ok: true, language: { source: "default", detected: null } });
+    expect((await applyPastedFrontmatter(raw(sentences.fr), "topic", { defaultLang: "ja" }))).toMatchObject({ ok: true, input: { lang: "fr" }, language: { source: "detected", detected: "fr" } });
+    expect((await applyPastedFrontmatter(raw("ABC2500"), "topic", { defaultLang: "ja" }))).toMatchObject({ ok: true, input: { lang: "ja" }, language: { source: "default", detected: null } });
   });
   it("detects only the frontmatter-free body, preserving explicit form and frontmatter language", async () => {
     const body = `---\ntitle: 日本語の題\n---\n${sentences.en}`;

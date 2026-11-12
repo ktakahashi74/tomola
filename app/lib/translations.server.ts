@@ -51,6 +51,7 @@ export async function enqueueTranslations(
   db: Db,
   entry: { id: number; lang: string; sourceHash: string },
 ): Promise<number> {
+  await (await import("./jobs/source-language-jobs.server")).enqueueSourceLanguageCheck(db, entry);
   const [source] = await db.select({ kind: entries.kind, title: entries.title }).from(entries).where(eq(entries.id, entry.id));
   const bodyLangs = await eagerBodyLangs(db, entry.id);
   let created = 0;
@@ -69,7 +70,7 @@ export async function enqueueTranslations(
 // Cancel queued, not yet started translation, divergence, and embedding jobs for a post during deletion. Running jobs cannot be canceled,
 // but save neither translations nor embeddings if the post is deleted before completion (currentSourceHash, entryStillCurrent). Return the number canceled.
 export async function cancelEntryJobs(db: Db, entryId: number): Promise<number> {
-  const matching = and(inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, DIVERGENCE_JOB, RETRANSLATE_REPORT_JOB]), sql`${jobs.payload}->>'entryId' = ${String(entryId)}`)!;
+  const matching = and(inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, DIVERGENCE_JOB, RETRANSLATE_REPORT_JOB, "check_source_language"]), sql`${jobs.payload}->>'entryId' = ${String(entryId)}`)!;
   await discardPaidTranslationCalls(db, matching);
   const rows = await db
     .delete(jobs)

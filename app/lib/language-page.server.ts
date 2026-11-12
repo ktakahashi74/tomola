@@ -24,6 +24,9 @@ export function languagePage(locale: Lang, env: Env = process.env) {
     locale,
     title: m.languages_title({}, options),
     opening: m.languages_opening({}, options),
+    writingTitle: m.languages_writing_title({}, options),
+    writingHelp: m.languages_writing_help({}, options),
+    readingHelp: m.languages_reading_help({}, options),
     principlesLabel: m.footer_principles({}, options),
     groups: groups.map(group => ({ id: group.id, title: group.title, languages: group.tags.map(named) })),
     requestTitle: m.languages_request_title({}, options),
@@ -37,6 +40,7 @@ export function languagePageMarkdown(page: ReturnType<typeof languagePage>): str
   return [
     `# ${page.title}`,
     `${page.opening} [${page.principlesLabel}](/principles#s2)`,
+    `## ${page.writingTitle}`, page.writingHelp, page.readingHelp,
     ...page.groups.filter(group => group.languages.length).map(group => `## ${group.title}\n\n${group.languages.map(lang => `- ${lang.nativeName} — ${lang.name}`).join("\n")}`),
     `## ${page.requestTitle}`,
     page.requestHelp,

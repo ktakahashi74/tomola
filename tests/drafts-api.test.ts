@@ -119,7 +119,7 @@ describe("POST /api/drafts: creating a draft", () => {
     const res = await post(md(raw, "First paragraph with $x^2$.\n\nSecond."));
     expect(res.status).toBe(201);
     const id = res.json.id as number;
-    expect(res.json).toEqual({ id, approve_url: `${BASE}/drafts/${id}`, lang: "en", language: { source: "explicit", detected: null }, issues: [], issues_truncated: false });
+    expect(res.json).toEqual({ id, approve_url: `${BASE}/drafts/${id}`, lang: "en", lang_code: null, language: { source: "explicit", detected: null }, issues: [], issues_truncated: false });
     expect(res.headers.get("content-type")).toBe("application/json; charset=utf-8");
     const draft = await getDraft(h.db, h.ids.hana, id);
     expect(draft).toMatchObject({ kind: "topic", title: "Can symbiosis replace control?", lang: "en", aiAssistance: "draft", via: "api", body: "First paragraph with $x^2$.\n\nSecond.", tokenName: "claude code", rawFrontmatter: raw, threadId: null });
@@ -135,6 +135,14 @@ describe("POST /api/drafts: creating a draft", () => {
     expect(res.status).toBe(201);
     expect(res.json.language).toEqual({ source: "default", detected: null });
     expect(await getDraft(h.db, h.ids.hana, res.json.id as number)).toMatchObject({ lang: "ja", aiAssistance: null, kind: "topic" });
+  });
+
+  it("accepts an explicitly unopened source and exposes its detected language code", async () => {
+    const body = "Αυτή είναι μια συζήτηση για τη γλώσσα και την επικοινωνία μεταξύ των ανθρώπων.";
+    const result = await post(md("lang: other", body));
+    expect(result.status).toBe(201);
+    expect(result.json).toMatchObject({ lang: "other", lang_code: "el", language: { source: "explicit", detected: "other", langCode: "el" } });
+    expect(await getDraft(h.db, h.ids.hana, result.json.id as number)).toMatchObject({ lang: "other", body });
   });
 
   it("detects omitted languages, shares repair messages, and returns non-blocking issues", async () => {
@@ -311,7 +319,6 @@ describe("POST /api/drafts: validation errors", () => {
     ["invalid_title", () => md("title: {a: b}"), "title is an object"],
     ["body_required", () => md("title: T", ""), "empty body"],
     ["invalid_lang", () => md("title: T\nlang: xx"), "unknown language"],
-    ["invalid_lang", () => md("title: T\nlang: other"), "other is not a language"],
     ["invalid_lang", () => md("title: T\nlang: 5"), "numeric language"],
     ["invalid_ai", () => md("title: T\nai_assistance: full"), "unknown ai"],
     // Questions: asks_stance must be boolean; alt_of must be p-<id> of a visible, undeleted question and requires asks_stance: true; stance_tag is only for replies to questions.

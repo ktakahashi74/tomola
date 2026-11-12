@@ -7,7 +7,7 @@ import { generateAuthenticationOptions, verifyAuthenticationResponse, type Authe
 import type { Db, Tx } from "~/lib/db/client.server";
 import { drafts, entries, memberSignatures, passkey, profiles, signingChallenges, user, villageMembers, villages } from "~/lib/db/schema";
 import { applyPastedFrontmatter, formString, readEntryForm, readReplyParent } from "~/lib/entry-form.server";
-import { detectLang } from "~/lib/lang-detect";
+import { detectSourceLanguage, resolvePostLanguage } from "~/lib/lang-detect";
 import { defaultPostLang, type Profile } from "~/lib/profiles.server";
 import { authSecret } from "~/lib/auth/secret.server";
 import { siteUrl } from "~/lib/site-url";
@@ -249,7 +249,11 @@ async function loadIntent(tx: Db, userId: string, pathname: string, form: FormDa
     const bodyError = await checkBodyBudget(content.body, userId);
     if (bodyError) throw new SigningError(bodyError, 400);
   }
-  if ((operation === "publish-draft" || operation === "edit-topic" || operation === "edit-reply") && content.lang) language = { source: "explicit", detected: (await detectLang(content.body, content.lang)) };
+  if ((operation === "publish-draft" || operation === "edit-topic" || operation === "edit-reply") && content.lang) {
+    if (content.lang === "other") content = { ...content, lang: (await resolvePostLanguage(content.body, content.lang, content.lang)).lang };
+    const detected = await detectSourceLanguage(content.body, content.lang);
+    language = { source: "explicit", detected: detected?.lang ?? null, ...(detected?.lang === "other" ? { langCode: detected.langCode } : {}) };
+  }
   const destinationId = target.threadId ?? target.altOf;
   const targetIds = [destinationId, target.parentId].filter((id): id is number => id !== null);
   const targetViews = await getEntryViews(tx, targetIds);

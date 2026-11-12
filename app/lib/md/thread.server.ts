@@ -67,6 +67,7 @@ type Row = {
   id: number;
   kind: string;
   lang: string;
+  langCode?: string | null;
   title: string | null;
   body: string;
   parentId: number | null;
@@ -89,6 +90,7 @@ const columns = {
   id: entries.id,
   kind: entries.kind,
   lang: entries.lang,
+  langCode: entries.langCode,
   title: entries.title,
   body: entries.body,
   parentId: entries.parentId,
@@ -240,6 +242,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       // A topic without a title has no title key (the body starts the text). A reader takes a missing key as "no title".
       title: isTopic ? (e.title ?? undefined) : undefined,
       lang: e.lang,
+      ...(e.langCode ? { lang_code: e.langCode } : {}),
       thread: `p-${threadId}`,
       // Replies without an explicit parent reply target the topic.
       reply_to: isTopic ? null : e.parentId !== null ? `c-${e.parentId}` : `p-${threadId}`,

@@ -1,7 +1,9 @@
+import { isEnabledLang } from "./enabled-langs.server";
+const bucketLang = (lang: string): SourceLang => isEnabledLang(lang) ? lang : "other";
 import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, profiles, readingCounts } from "./db/schema";
-import type { Lang } from "./languages";
+import type { Lang, SourceLang } from "./languages";
 import { observationWeeks } from "./metrics.server";
 import { publicTopicPlace } from "./visibility.server";
 import { READING_METHODS, READING_SOURCES, type ReadingMethod, type ReadingSource } from "./reading-sources.server";
@@ -10,7 +12,7 @@ import { READING_METHODS, READING_SOURCES, type ReadingMethod, type ReadingSourc
 // discarded before the write: no entry, person, device, IP, referrer or user
 // agent is retained, and there is no per-read event or join back to a reader.
 export async function countReading(db: Db, topicId: number, opts: {
-  method: ReadingMethod; lang: Lang | (() => Promise<Lang>); source?: ReadingSource; readerId?: string | null; now?: Date;
+  method: ReadingMethod; lang: SourceLang | (() => Promise<SourceLang>); source?: ReadingSource; readerId?: string | null; now?: Date;
 }) {
   try {
     const [topic] = await db.select({ lang: entries.lang, authorId: entries.authorId }).from(entries)
@@ -21,7 +23,7 @@ export async function countReading(db: Db, topicId: number, opts: {
       if (!reader || reader.excluded) return;
     }
     await db.insert(readingCounts).values({ day: (opts.now ?? new Date()).toISOString().slice(0, 10), method: opts.method,
-      sourceLang: topic.lang as Lang, readLang: typeof opts.lang === "function" ? await opts.lang() : opts.lang, source: opts.method === "browser" ? opts.source ?? "none" : "none", count: 1 })
+      sourceLang: bucketLang(topic.lang), readLang: bucketLang(typeof opts.lang === "function" ? await opts.lang() : opts.lang), source: opts.method === "browser" ? opts.source ?? "none" : "none", count: 1 })
       .onConflictDoUpdate({ target: [readingCounts.day, readingCounts.method, readingCounts.sourceLang, readingCounts.readLang, readingCounts.source], set: { count: sql`${readingCounts.count} + 1` } });
   } catch {
     // Never attach the exception: database errors may contain identifying values.

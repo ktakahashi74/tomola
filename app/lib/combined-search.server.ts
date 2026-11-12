@@ -6,7 +6,7 @@ import { entries, profiles, translations } from "./db/schema";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import { isStale, type ShownKind } from "./display";
 import { safeErrorText } from "./error-text.server";
-import type { Lang } from "./languages";
+import type { Lang, SourceLang } from "./languages";
 import { BudgetPausedError, LlmError } from "./llm/index.server";
 import { FLAG_STRUCTURE_MISMATCH, HIDDEN_PRIMARY_FLAGS } from "./llm/flags";
 import { plainExcerpt } from "./plain-text.server";
@@ -16,7 +16,7 @@ import { publicTopicPlace } from "./visibility.server";
 export type LiteralMatch = {
   field: "title" | "body";
   source: "original" | "translation";
-  lang: Lang;
+  lang: SourceLang;
   text: string;
   translation: SearchTranslation | null;
 };
@@ -67,7 +67,7 @@ export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptio
   return db.select({
     id: entries.id, createdAt: entries.createdAt, kind: entries.kind,
     threadId: sql<number>`coalesce(${entries.threadId}, ${entries.id})`,
-    lang: entries.lang, title: entries.title, body: entries.body, sourceHash: entries.sourceHash,
+    lang: entries.lang, langCode: entries.langCode, title: entries.title, body: entries.body, sourceHash: entries.sourceHash,
     authorHandle: retainedAuthorColumn(entries.authorId),
     topicTitle: topic.title,
     topicBody: sql<string | null>`case when ${topic.title} is null then ${topic.body} end`,
@@ -99,7 +99,7 @@ export async function findLiteral(db: Db, query: string, opts: Pick<SearchOption
       // A literal hit has no cosine distance; machine output omits this placeholder.
       distance: 0,
       match: {
-        field: matchField, source: matchOriginal ? "original" : "translation", lang: matchOriginal ? row.lang as Lang : opts.displayLang,
+        field: matchField, source: matchOriginal ? "original" : "translation", lang: matchOriginal ? row.lang as SourceLang : opts.displayLang,
         text: matchText,
         translation: tr?.kind ? { kind: tr.kind as ShownKind, engine: tr.engine, model: tr.model, fallback: tr.fallback ?? false, stale: isStale(tr.flags ?? []), structureMismatch: tr.flags?.includes(FLAG_STRUCTURE_MISMATCH) } : null,
       },

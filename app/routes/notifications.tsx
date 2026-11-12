@@ -101,7 +101,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
           const grouped = n.threadSize > 1;
           const others = n.threadHandles.length - 2;
           const handles = n.threadHandles.slice(0, 2).map(handle => `@${handle}`).join(", ");
-          const from = n.entryLang && n.entryLang !== loaderData.homeArea ? m.notification_from_lang({ language: localizedLanguageLabel(n.entryLang, getLocale()) }) : null;
+          const from = n.entryLang && n.entryLang !== loaderData.homeArea ? m.notification_from_lang({ language: localizedLanguageLabel(n.entryLang, getLocale(), n.entryLangCode) }) : null;
           return <li key={n.id} id={`n-${n.id}`} className={`space-y-1 py-3 ${n.read ? "text-muted-foreground" : "font-medium"}`}>
             <div>
               {!n.read && <UnreadDot label={m.notification_unread()} className="me-2" />}
@@ -132,6 +132,8 @@ function OpenNotification({ id, target, group, children }: { id: number; target?
 type Item = Route.ComponentProps["loaderData"]["items"][number];
 
 function NotificationText({ n, homeArea, handles, count }: { n: Item; homeArea: string; handles: string[]; count: number }) {
+  if (n.kind === "source_language_mismatch") return <>{n.unavailable ? m.notification_content_unavailable() : <>{m.posted_language_mismatch({ lang: localizedLanguageLabel(n.entryLang ?? "other", getLocale(), n.entryLangCode) })} {m.posted_fix_lang()}</>}</>;
+  if (n.kind === "entry_translation_unavailable") return <>{n.unavailable ? m.notification_content_unavailable() : m.posted_untranslatable()}</>;
   if (n.kind === "translation_report_result") return <>{n.unavailable || !n.translationResult ? m.notification_content_unavailable() : translationReportResultText(n.translationResult, n.topicTitle, getLocale())}</>;
   if (n.kind === "chat_mention" && n.chat) return <span title={n.chat.originalName}>{handles.length ? m.notification_chat_authors({ handles: handles.map(handle => `@${handle}`).join(", "), name: villageName(n.chat) }) : m.notification_chat_anonymous({ name: villageName(n.chat) })}{count > 1 && <> {m.notification_chat_count({ count })}</>}</span>;
   if (n.kind === "village_invite" || n.kind === "village_removed" || n.kind === "village_owner_changed" || n.kind === "village_added") {
@@ -155,7 +157,7 @@ function NotificationText({ n, homeArea, handles, count }: { n: Item; homeArea: 
     const handle = n.actorHandle ?? "?";
     const title = n.topicTitle || m.headline_empty();
     if (n.entryLang && n.entryLang !== homeArea) {
-      const language = localizedLanguageLabel(n.entryLang, getLocale());
+      const language = localizedLanguageLabel(n.entryLang, getLocale(), n.entryLangCode);
       return <>{n.kind === "reply_to_topic" ? m.notification_reply_to_topic_language({ handle, title, language }) : m.notification_reply_to_reply_language({ handle, title, language })}</>;
     }
     return n.kind === "reply_to_topic" ? (

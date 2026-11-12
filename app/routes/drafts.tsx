@@ -1,3 +1,4 @@
+import { languageLabel } from "~/lib/language-label";
 import { Link } from "react-router";
 import { LocalTime } from "~/components/local-time";
 import type { Route } from "./+types/drafts";
@@ -31,7 +32,7 @@ export default function Drafts({ loaderData }: Route.ComponentProps) {
               </Link>
               <div className="ui-meta text-muted-foreground">
                 {d.kind === "topic" ? m.draft_kind_topic() : m.draft_kind_reply()}
-                {d.asksStance && <> · {m.question_badge()}</>} · {LANG_LABELS[d.lang]}
+                {d.asksStance && <> · {m.question_badge()}</>} · {languageLabel(d.lang)}
                 {d.kind === "reply" && d.threadTitle && <> · {m.draft_reply_to({ title: d.threadTitle })}</>}
                 {d.via === "api" && <> · {m.draft_badge_api()}</>} ·{" "}
                 <LocalTime iso={d.updatedAt.toISOString()} formatLabel={(date) => m.draft_updated({ date })} />

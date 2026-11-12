@@ -1,3 +1,4 @@
+import { enabledLangs } from "./enabled-langs.server";
 import { loadDisplayNameReportCards, type DisplayNameReportCard } from "./display-name-moderation.server";
 import { loadAvatarReportCards, type AvatarReportCard } from "./avatar-moderation.server";
 import { retainedAuthorColumn } from "./deleted-member.server";
@@ -7,7 +8,7 @@ import { loadChatReportCards, type ChatReportCard } from "./village-chat-reports
 import { automaticallyResolvedReport } from "./report-resolution.server";
 import { withMarkdownScope, MarkdownBudgetError } from "./markdown-budget.server";
 import { checkBodyBudget } from "~/lib/markdown.server";
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, min, ne, or, sql } from "drizzle-orm";
+import { notInArray, and, asc, desc, eq, gt, inArray, isNotNull, isNull, min, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { entries, moderationActions, profiles, reports, user, villages } from "~/lib/db/schema";
@@ -17,7 +18,7 @@ import { tryRenderEntry } from "~/lib/markdown.server";
 import { resolveSourceMentions } from "~/lib/mentions.server";
 import { touchAltOriginal } from "~/lib/questions.server";
 import { lockReferenceTopics, touchReferenceTopics } from "~/lib/related-discussions.server";
-import { isLang, type Lang } from "~/lib/languages";
+import { isSourceLang, type SourceLang } from "~/lib/languages";
 import { isReason, MAX_SUSPEND_DAYS, REPORT_REASONS, type ModerationAction, type ReportReason } from "~/lib/moderation";
 import { createModerationNotification } from "~/lib/notifications.server";
 import { isOperatorEmail } from "~/lib/operators.server";
@@ -606,7 +607,7 @@ export type ReportCard = {
   entryId: number;
   kind: "topic" | "reply";
   threadId: number;
-  lang: Lang;
+  lang: SourceLang;
   title: string | null;
   body: string;
   hidden: boolean;
@@ -631,7 +632,7 @@ export async function listReportCards(
   const page = opts.page ?? 1;
   const limit = opts.limit ?? CARDS_PER_PAGE;
   if (!scope.operator && scope.langs.length === 0) return { cards: [], page, hasNext: false };
-  const inRange = and(scope.operator ? undefined : inArray(entries.lang, [...scope.langs]), opts.viewerId ? ne(entries.authorId, opts.viewerId) : undefined);
+  const inRange = and(scope.operator ? undefined : or(inArray(entries.lang, [...scope.langs]), notInArray(entries.lang, [...enabledLangs()])), opts.viewerId ? ne(entries.authorId, opts.viewerId) : undefined);
   const statusFilter = opts.handled ? sql`${reports.status} <> 'open'` : eq(reports.status, "open");
   const grouped = await db
     .select({ entryId: reports.entryId, villageId: reports.villageId, chatMessageId: reports.chatMessageId, displayNameUserId: reports.displayNameUserId, avatarUserId: reports.avatarUserId, first: min(reports.createdAt), latest: sql<Date>`max(coalesce(${reports.handledAt}, ${reports.createdAt}))`.mapWith(reports.createdAt) })
@@ -681,7 +682,7 @@ export async function listReportCards(
     if (g.chatMessageId !== null) { const card = chatCards.get(g.chatMessageId); return card ? [card] : []; }
     if (g.villageId !== null) { const card = villageCards.get(g.villageId); return card && !card.owned ? [card] : []; }
     const e = g.entryId === null ? undefined : byId.get(g.entryId);
-    if (!e || !isLang(e.lang)) return [];
+    if (!e || !isSourceLang(e.lang)) return [];
     return [
       {
         entryId: e.id,
@@ -705,7 +706,7 @@ export async function listReportCards(
 
 // One public record row: action kind, reason category, original post language (null for member actions), UTC date only.
 // No actor, reporter, note, affected display name or post link/id.
-export type PublicLogEntry = { automatic?: boolean; action: ModerationAction; reason: ReportReason; date: string } & ({ lang: Lang | null; village?: never } | { village: { name: string; slug: string | null } | null; lang?: never } | { place: "village_chat"; lang?: never; village?: never });
+export type PublicLogEntry = { automatic?: boolean; action: ModerationAction; reason: ReportReason; date: string } & ({ lang: SourceLang | null; village?: never } | { village: { name: string; slug: string | null } | null; lang?: never } | { place: "village_chat"; lang?: never; village?: never });
 export const PUBLIC_LOG_PER_PAGE = 50;
 
 // Newest first; page starts at 1.
@@ -732,7 +733,7 @@ export async function listPublicLog(db: Db, opts: { page?: number; limit?: numbe
       ...(r.automatic ? { automatic: true } : {}),
       action: r.action as ModerationAction,
       reason: r.reason as ReportReason,
-      ...(r.targetChatMessageId !== null ? { place: "village_chat" as const } : r.targetVillageId === null ? { lang: r.lang !== null && isLang(r.lang) ? r.lang : null } : { village: (() => { const v = r.action === "dismiss_village_report" ? undefined : villageById.get(r.targetVillageId); return v && isSharedVillageKind(v.kind) ? { name: villageName(v), slug: v.slug } : null; })() }),
+      ...(r.targetChatMessageId !== null ? { place: "village_chat" as const } : r.targetVillageId === null ? { lang: r.lang !== null && isSourceLang(r.lang) ? r.lang : null } : { village: (() => { const v = r.action === "dismiss_village_report" ? undefined : villageById.get(r.targetVillageId); return v && isSharedVillageKind(v.kind) ? { name: villageName(v), slug: v.slug } : null; })() }),
       date: r.createdAt.toISOString().slice(0, 10),
     })),
     page,

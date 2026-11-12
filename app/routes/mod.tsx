@@ -202,7 +202,7 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
         {review.items.length === 0 && <p>{m.mod_review_empty()}</p>}
         <ul className="space-y-2">
           {review.items.map((item) => <li key={item.entryId} className="flex flex-wrap items-center gap-x-2 rounded border p-3 ui-meta">
-            <span lang={item.lang}>{LANG_LABELS[item.lang]}</span>
+            <span lang={item.lang}>{item.lang === "other" ? m.source_language_other() : LANG_LABELS[item.lang]}</span>
             <span>· {item.kind === "topic" ? m.mod_kind_topic() : m.mod_kind_reply()}</span>
             <Link to={`/t/${item.threadId}#${item.kind === "topic" ? "p" : "c"}-${item.entryId}`} className="underline">{m.mod_open_in_thread()}</Link>
             {item.counts.bidi_control !== undefined && <span>· {m.mod_review_reason_bidi_control({ count: item.counts.bidi_control })}</span>}
@@ -235,7 +235,7 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
       </section> : c.kind === "village" ? <VillageModerationCard key={`v-${c.reportId}`} card={c} handled={tab === "handled"} returnTo={returnTo} /> : (
         <section key={c.entryId} id={`e-${c.entryId}`} className="space-y-3 rounded border p-4">
           <div className="flex flex-wrap items-center gap-x-2 ui-meta text-muted-foreground">
-            <span lang={c.lang}>{LANG_LABELS[c.lang]}</span>
+            <span lang={c.lang}>{c.lang === "other" ? m.source_language_other() : LANG_LABELS[c.lang]}</span>
             <span>· {c.kind === "topic" ? m.mod_kind_topic() : m.mod_kind_reply()}</span>
             <span>· @{c.authorHandle}</span>
             {c.hidden && <span className="rounded bg-notice px-1.5 py-0.5 ui-meta text-notice-foreground">{m.entry_hidden_mark()}</span>}

@@ -6,7 +6,7 @@ import { entries, entryReferences } from "~/lib/db/schema";
 import { parseEntryReferences } from "~/lib/entry-references.server";
 import { loadTitleDisplays } from "~/lib/entry-display.server";
 import { loadReplyLocations } from "~/lib/reply-locations.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { touchQuestion } from "~/lib/questions.server";
 import { publicTopicPlace } from "~/lib/visibility.server";
 
@@ -104,7 +104,7 @@ async function rebuildEntryReferencesImplementation(db: Db, opts: { fromId: numb
 }
 
 export type RelatedDirection = { sourceHref: string; targetHref: string };
-export type RelatedDiscussion = { id: number; title: { text: string; lang: Lang }; incoming: RelatedDirection | null; outgoing: RelatedDirection | null };
+export type RelatedDiscussion = { id: number; title: { text: string; lang: SourceLang }; incoming: RelatedDirection | null; outgoing: RelatedDirection | null };
 type Display = { readLangs: readonly Lang[]; displayLang: Lang; lang?: string | null; typesetTitles?: boolean };
 
 // Shared qualification/grouping for HTML, loader data and Markdown. Every
@@ -124,7 +124,7 @@ export async function listRelatedDiscussions(db: Db, topicId: number, opts: Disp
       isNull(source.deletedAt), isNull(source.hiddenAt), isNull(target.deletedAt), isNull(target.hiddenAt),
       isNull(sourceTopic.deletedAt), isNull(sourceTopic.hiddenAt), isNull(targetTopic.deletedAt), isNull(targetTopic.hiddenAt)))
     .orderBy(sql`${source.createdAt} desc`, sql`${source.id} desc`, asc(target.id));
-  type Group = { id: number; authorId: string; title: string | null; lang: Lang; sourceHash: string | null; incoming?: typeof links[number]; outgoing?: typeof links[number] };
+  type Group = { id: number; authorId: string; title: string | null; lang: SourceLang; sourceHash: string | null; incoming?: typeof links[number]; outgoing?: typeof links[number] };
   const groups = new Map<number, Group>();
   for (const link of links) {
     if (link.sourceTopicId === link.targetTopicId) continue;

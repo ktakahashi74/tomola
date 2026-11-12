@@ -1,7 +1,8 @@
+import { languageLabel } from "~/lib/language-label";
 import { UnsavedFormGuard, type UnsavedInitialValues } from "~/components/unsaved-form-guard";
 import { PersistentDetails } from "~/components/persistent-details";
 import { Button } from "~/components/ui/button";
-import { createContext, useContext, useEffect, useRef, useState, type ComponentProps } from "react";
+import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState, type ComponentProps } from "react";
 import { FormLanguageChangeContext, FormVillageReviewContext, type VillageReview } from "~/components/form-contexts";
 import { flushSync } from "react-dom";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "~/components/ui/dialog";
@@ -14,6 +15,8 @@ import { villageName } from "~/lib/village-name";
 import { isLang, LANG_LABELS } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 import { readerLoginHref } from "~/lib/public-reading";
+
+const SourceLanguageNotice = lazy(() => import("./source-language-notice"));
 
 type Pending = { fields: [string, string][]; action: string; preview: SigningPreview };
 // The intent ("" for the main button) of this form's submission that is in flight, or null. SendButton reads it.
@@ -210,16 +213,16 @@ export function SignedForm({ children, signatureRequired, protectUnsaved, unsave
           {pending.preview.lastEditor?.id && <p>{m.signing_last_ai({ name: pending.preview.lastEditor.name ?? pending.preview.lastEditor.id, id: pending.preview.lastEditor.id, at: pending.preview.lastEditor.at ?? "" })}</p>}
           {pending.preview.lastEditor?.id && <p className="ui-help text-notice-emphasis">{m.signing_client_warning()}</p>}
           {pending.preview.content.lang && <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p>{(pending.preview.language?.source === "detected" ? m.original_lang_detected : pending.preview.language?.source === "default" ? m.original_lang_default : m.original_lang)({ lang: isLang(pending.preview.content.lang) ? LANG_LABELS[pending.preview.content.lang] : pending.preview.content.lang })}</p>
-            {["create-topic", "create-reply", "publish-draft"].includes(pending.preview.operation) && <Select value={pending.preview.content.lang} items={enabled.map(lang => ({ value: lang, label: <span lang={lang}>{LANG_LABELS[lang]}</span> }))} disabled={busy} onValueChange={lang => { if (lang !== null) void changeLanguage(lang); }}>
+            <p>{(pending.preview.language?.source === "detected" ? m.original_lang_detected : pending.preview.language?.source === "default" ? m.original_lang_default : m.original_lang)({ lang: pending.preview.content.lang === "other" ? languageLabel("other", pending.preview.language?.langCode) : isLang(pending.preview.content.lang) ? LANG_LABELS[pending.preview.content.lang] : pending.preview.content.lang })}</p>
+            {["create-topic", "create-reply", "publish-draft"].includes(pending.preview.operation) && <Select value={enabled.some(lang => lang === pending.preview.content.lang) ? pending.preview.content.lang : "other"} items={[...enabled.map(lang => ({ value: lang, label: <span lang={lang}>{LANG_LABELS[lang]}</span> })), { value: "other", label: m.source_language_other() }]} disabled={busy} onValueChange={lang => { if (lang !== null) void changeLanguage(lang); }}>
               <SelectTrigger aria-label={m.field_lang()} className="max-w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>{enabled.map(lang => <SelectItem key={lang} value={lang}><span lang={lang}>{LANG_LABELS[lang]}</span></SelectItem>)}</SelectContent>
+              <SelectContent>{enabled.map(lang => <SelectItem key={lang} value={lang}><span lang={lang}>{LANG_LABELS[lang]}</span></SelectItem>)}<SelectItem value="other">{m.source_language_other()}</SelectItem></SelectContent>
             </Select>}
           </div>}
-          {pending.preview.language?.detected && !enabled.includes(pending.preview.language.detected) && <p role="note">{m.original_lang_disabled({ detected: LANG_LABELS[pending.preview.language.detected], langs: enabled.map(lang => LANG_LABELS[lang]).join(", ") })}</p>}
-          {pending.preview.language?.source === "explicit" && pending.preview.language.detected && enabled.includes(pending.preview.language.detected) && pending.preview.language.detected !== pending.preview.content.lang && ["create-topic", "create-reply", "publish-draft"].includes(pending.preview.operation) && <div>
-            <p>{m.original_lang_mismatch({ detected: LANG_LABELS[pending.preview.language.detected] })}</p>
-            <Button variant="outline" type="button" disabled={busy} onClick={() => void changeLanguage(pending.preview.language!.detected!)}>{m.original_lang_change({ detected: LANG_LABELS[pending.preview.language.detected] })}</Button>
+          {pending.preview.content.lang && !enabled.some(lang => lang === pending.preview.content.lang) && <Suspense fallback={null}><SourceLanguageNotice lang={pending.preview.content.lang} langCode={pending.preview.language?.langCode} /></Suspense>}
+          {pending.preview.language?.source === "explicit" && pending.preview.language.detected && pending.preview.language.detected !== pending.preview.content.lang && ["create-topic", "create-reply", "publish-draft"].includes(pending.preview.operation) && <div>
+            <p>{m.original_lang_mismatch({ detected: languageLabel(pending.preview.language.detected, pending.preview.language.langCode) })}</p>
+            <Button variant="outline" type="button" disabled={busy} onClick={() => void changeLanguage(pending.preview.language!.detected!)}>{m.original_lang_change({ detected: languageLabel(pending.preview.language.detected, pending.preview.language.langCode) })}</Button>
           </div>}
           {pending.preview.content.title && <h3 dir="auto" className="whitespace-pre-wrap font-semibold">{pending.preview.content.title}</h3>}
           <pre dir="auto" className="whitespace-pre-wrap break-words rounded border p-3 font-sans">{pending.preview.content.body}</pre>

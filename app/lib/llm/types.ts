@@ -1,4 +1,4 @@
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import type { ThinkingSetting } from "./thinking";
 import type { TranslationTerms } from "../translation-terms";
 
@@ -30,7 +30,7 @@ export type TranslationRequest = {
   signal?: AbortSignal;
   // Source Markdown, or the title itself when translating a topic title.
   text: string;
-  from: Lang;
+  from: SourceLang;
   to: Lang;
   // Titles are displayed as plain text. Normalize their Markdown only for checks,
   // retaining the engine's original output for storage and display.
@@ -103,7 +103,7 @@ export type JudgeRequest = {
   signal?: AbortSignal;
   // Source sentences from segmentSentences; array indices are their numbers.
   segments: string[];
-  from: Lang;
+  from: SourceLang;
   // Language of both translations, produced by different engines for the same target.
   to: Lang;
   translationA: string;

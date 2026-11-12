@@ -2,8 +2,11 @@
 // reply_to_topic: reply to own topic; reply_to_reply: reply to own reply; moderation: action on own post/member (hide/delete/suspend,
 // without actor identity). appeal_decided: result of an appeal.
 // followed_thread: a new reply in a followed topic (merged into one row per member and topic while it is unread).
-export const NOTIFICATION_KINDS = ["reply_to_topic", "reply_to_reply", "response_to_topic", "moderation", "appeal_decided", "followed_thread", "mention", "village_invite", "village_added", "village_removed", "village_owner_changed", "chat_mention", "translation_report_result"] as const;
+export const NOTIFICATION_KINDS = ["reply_to_topic", "reply_to_reply", "response_to_topic", "moderation", "appeal_decided", "followed_thread", "mention", "village_invite", "village_added", "village_removed", "village_owner_changed", "chat_mention", "translation_report_result", "source_language_mismatch", "entry_translation_unavailable"] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export const IN_APP_ONLY_KINDS = ["source_language_mismatch", "entry_translation_unavailable"] as const satisfies readonly NotificationKind[];
+export type InAppOnlyKind = (typeof IN_APP_ONLY_KINDS)[number];
+export const isInAppOnlyKind = (kind: string): kind is InAppOnlyKind => (IN_APP_ONLY_KINDS as readonly string[]).includes(kind);
 // Kinds that tell about the content of a post (hiding and deleting of the post, the excerpt and the link are shared).
 export const CONTENT_KINDS = ["reply_to_topic", "reply_to_reply", "response_to_topic", "followed_thread", "mention"] as const satisfies readonly NotificationKind[];
 export const isContentKind = (kind: string): kind is (typeof CONTENT_KINDS)[number] => (CONTENT_KINDS as readonly string[]).includes(kind);
@@ -22,6 +25,7 @@ export const AUTO_IMMEDIATE_KINDS = ["reply_to_topic", "reply_to_reply", "respon
 // How one notification is actually mailed, from the recipient's preference and the kind of the notification. SQL does not repeat this table:
 // callers narrow by the preference and apply this function in JavaScript.
 export function effectiveEmailMode(pref: EmailPref, kind: NotificationKind): "immediate" | "daily" | "none" {
+  if (isInAppOnlyKind(kind)) return "none";
   if (pref !== "auto") return pref;
   return (AUTO_IMMEDIATE_KINDS as readonly string[]).includes(kind) ? "immediate" : "daily";
 }

@@ -1,3 +1,4 @@
+import { resolvePostLanguage } from "./lang-detect";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import { withinEditGrace } from "./entry-history.server";
 import { inspectEntrySpam, lockAbuseWriter } from "./moderation-automation.server";
@@ -12,8 +13,8 @@ import { z } from "zod";
 import { AI_ASSISTANCE, type AiAssistance } from "~/lib/ai-assistance";
 import type { Db, Tx } from "~/lib/db/client.server";
 import { divergences, entries, entryRevisions, follows, profiles, reports, topicListingStats, translations, villageFollows, villageMembers, villages, type SavedMentionBinding } from "~/lib/db/schema";
-import { isEnabledLang } from "~/lib/enabled-langs.server";
-import { LANGS, type Area, type Lang } from "~/lib/languages";
+import { enabledLangs } from "~/lib/enabled-langs.server";
+import { SOURCE_LANGS, type SourceLang, type LangSource, type Area, type Lang } from "~/lib/languages";
 import { canSeeHidden, inScope, type Viewer } from "~/lib/roles.server";
 import { checkStanceAttributes, STANCE_TAGS, type StanceAttrError, type StanceTag } from "~/lib/stances";
 import { loadStanceAttrFacts, touchAltOriginal, touchQuestion } from "~/lib/questions.server";
@@ -52,7 +53,8 @@ export type EntryView = {
   id: number;
   visibility: EntryVisibility;
   kind: "topic" | "reply";
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   title: string | null;
   body: string;
   // Rendered HTML, either cached or rendered and saved if absent.
@@ -82,7 +84,8 @@ export type TopicSummary = {
   id: number;
   // Hidden topic, included in listings only if this viewer may see it.
   hidden: boolean;
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   // null: a topic without a title (a short remark). Show `loadTitleDisplays` (the title, or the beginning of the body) where a line is needed.
   title: string | null;
   sourceHash: string | null;
@@ -140,8 +143,10 @@ async function notifiable(body: string, mentions: MentionTargets): Promise<strin
 }
 
 const common = {
-  // New posts use enabled languages; edits validate language changes against the locked entry.
-  lang: z.enum(LANGS).refine((l) => isEnabledLang(l)),
+  // Original languages are independent of the enabled translation and interface languages.
+  lang: z.enum(SOURCE_LANGS),
+  langCode: z.string().regex(/^[a-z]{2,3}$/).nullish(),
+  langSource: z.enum(["explicit", "detected", "default", "checked"]).optional(),
   // Preserve the body exactly as submitted; the source is authoritative. Use trim only to check emptiness.
   body: z
     .string()
@@ -251,6 +256,8 @@ async function createTopicImplementation(
         kind: "topic",
         authorId,
         lang: parsed.data.lang,
+        langCode: parsed.data.lang === "other" ? parsed.data.langCode ?? null : null,
+        langSource: parsed.data.langSource ?? "explicit",
         title: parsed.data.title,
         body: parsed.data.body,
         sourceHash: hash,
@@ -351,6 +358,8 @@ async function createReplyImplementation(
         parentId,
         authorId,
         lang: parsed.data.lang,
+        langCode: parsed.data.lang === "other" ? parsed.data.langCode ?? null : null,
+        langSource: parsed.data.langSource ?? "explicit",
         body: parsed.data.body,
         sourceHash: hash,
         aiAssistance: parsed.data.aiAssistance ?? null,
@@ -488,8 +497,8 @@ export async function deleteOwnEntry(
 // Edit input. asksStance/altOf are absent from UI forms because they cannot change after creation. If submitted values differ from current ones, reject the attribute combination
 // (checkStanceAttributes with mode: "edit"). stanceTag is the reply label; undefined leaves it unchanged, null removes it.
 const editAttributes = { asksStance: z.boolean().optional(), altOf: z.number().int().positive().nullish(), stanceTag: z.enum(STANCE_TAGS).nullish() };
-const topicEditSchema = z.object({ title: titleSchema, body: common.body, lang: z.enum(LANGS).optional(), ...editAttributes });
-const replyEditSchema = z.object({ body: common.body, lang: z.enum(LANGS).optional(), ...editAttributes });
+const topicEditSchema = z.object({ title: titleSchema, body: common.body, lang: z.enum(SOURCE_LANGS).optional(), ...editAttributes });
+const replyEditSchema = z.object({ body: common.body, lang: z.enum(SOURCE_LANGS).optional(), ...editAttributes });
 
 // Editor modes. author: edit title/body (body/label for replies). author-locked: pinned question; title/body cannot change, so show guidance instead of a form.
 // moderator-fix: assigned source-language moderator/operator fixes typos in a pinned question. This is moderation action fix_entry, requiring an explanation and appearing in notifications, public records, and appeals,
@@ -502,7 +511,8 @@ export type EditableEntry = {
   id: number;
   kind: "topic" | "reply";
   threadId: number;
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   title: string | null;
   body: string;
   // Current source revision.
@@ -531,6 +541,7 @@ export async function getEditableEntry(
       kind: entries.kind,
       threadId: entries.threadId,
       lang: entries.lang,
+      langCode: entries.langCode,
       title: entries.title,
       body: entries.body,
       sourceHash: entries.sourceHash,
@@ -555,7 +566,7 @@ export async function getEditableEntry(
       id: row.id,
       kind,
       threadId: row.threadId ?? row.id,
-      lang: row.lang as Lang,
+      lang: row.lang as SourceLang, langCode: row.langCode,
       title: row.title,
       body: row.body,
       sourceHash: row.sourceHash,
@@ -584,7 +595,7 @@ export async function applyEntryEdit(
     now: Date;
     before: { title: string | null; body: string; sourceHash: string | null; lang: string; hiddenAt: Date | null; deletedAt?: Date | null };
     // cardHtml: the card version of a topic body (null for a reply, or when the body was not cut).
-    after: { title: string | null; body: string; lang?: string; html: string; cardHtml?: string | null; bindings?: SavedMentionBinding[]; preparedRender?: PreparedEntryRender };
+    after: { title: string | null; body: string; lang?: string; langCode?: string | null; langSource?: LangSource; html: string; cardHtml?: string | null; bindings?: SavedMentionBinding[]; preparedRender?: PreparedEntryRender };
     tagChange?: { to: StanceTag | null };
     coalesceHistory?: boolean;
   },
@@ -592,7 +603,7 @@ export async function applyEntryEdit(
   const { entryId, editorId, now, before, after } = input;
   const lang = after.lang ?? before.lang;
   const languageChanged = lang !== before.lang;
-  const [entry] = await tx.select({ kind: entries.kind, mentionRevision: entries.mentionRevision }).from(entries).where(eq(entries.id, entryId));
+  const [entry] = await tx.select({ kind: entries.kind, mentionRevision: entries.mentionRevision, langCode: entries.langCode, langSource: entries.langSource }).from(entries).where(eq(entries.id, entryId));
   const previous = await readMentionBindings(tx, entryId, entry.mentionRevision);
   const bindings = after.bindings ?? await bindMentionSpellings(tx, after.body, previous);
   const bodyUnchanged = before.body === after.body && JSON.stringify(previous) === JSON.stringify(bindings);
@@ -615,6 +626,8 @@ export async function applyEntryEdit(
       title: after.title,
       body: after.body,
       lang,
+      langCode: lang === "other" ? (Object.hasOwn(after, "langCode") ? after.langCode ?? null : entry.langCode) : null,
+      langSource: after.langSource ?? (entry.langSource === "checked" ? "detected" : entry.langSource),
       sourceHash: hash,
       mentionRevision: entry.mentionRevision + 1,
       html: rendered.cacheable === false ? null : rendered.html,
@@ -706,7 +719,7 @@ async function editEntryImplementation(
   const { kind } = found.entry;
   let title: string | null = null;
   let body: string;
-  let attributes: { lang?: Lang; asksStance?: boolean; altOf?: number | null; stanceTag?: StanceTag | null };
+  let attributes: { lang?: SourceLang; asksStance?: boolean; altOf?: number | null; stanceTag?: StanceTag | null };
   if (kind === "topic") {
     const parsed = topicEditSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: fieldError(parsed.error.issues) };
@@ -716,6 +729,8 @@ async function editEntryImplementation(
     if (!parsed.success) return { ok: false, error: fieldError(parsed.error.issues) };
     ({ body, ...attributes } = parsed.data);
   }
+  const language = attributes.lang ? await resolvePostLanguage(body, attributes.lang, found.entry.lang) : null;
+  if (language) attributes.lang = language.lang as SourceLang;
   const bodyError = await checkBodyBudget(body, editorId);
   if (bodyError) return { ok: false, error: bodyError };
   const now = opts.now ?? new Date();
@@ -734,6 +749,7 @@ async function editEntryImplementation(
         body: entries.body,
         sourceHash: entries.sourceHash,
         lang: entries.lang,
+        langCode: entries.langCode,
         threadId: entries.threadId,
         authorId: entries.authorId,
         deletedAt: entries.deletedAt,
@@ -771,11 +787,11 @@ async function editEntryImplementation(
     // A question keeps its title (the proposition): the edit cannot empty it. The input has no asksStance, so this is checked on the stored row (before the lock check).
     if (kind === "topic" && current.asksStance && title === null) return { ok: false as const, error: "invalid_title" as const };
     const lang = attributes.lang ?? current.lang;
-    if (lang !== current.lang && !isEnabledLang(lang)) return { ok: false as const, error: "invalid_lang" as const };
     const textChanged = current.title !== title || current.body !== body || current.lang !== lang;
     const tagChanged = nextTag !== currentTag;
     // Authors cannot edit the title/body/language of a question pinned by a stance.
     if (textChanged && current.stanceLockedAt !== null) return { ok: false as const, error: "locked" as const };
+    if (!textChanged && attributes.lang) await tx.update(entries).set({ langSource: "explicit", langCode: lang === "other" ? language?.langCode ?? current.langCode : null }).where(eq(entries.id, entryId));
     if (!textChanged && !tagChanged) {
       return { ok: true as const, id: entryId, threadId, changed: false };
     }
@@ -792,7 +808,7 @@ async function editEntryImplementation(
       editorId,
       now,
       before: { title: current.title, body: current.body, sourceHash: current.sourceHash, lang: current.lang, hiddenAt: current.hiddenAt },
-      after: { title, body, lang, html: "", preparedRender },
+      after: { title, body, lang, langCode: language ? language.langCode : found.entry.langCode, ...(language ? { langSource: "explicit" as const } : {}), html: "", preparedRender },
       tagChange: tagChanged ? { to: nextTag } : undefined,
       coalesceHistory: await withinEditGrace(tx, entryId, now),
     });
@@ -815,6 +831,7 @@ const viewColumns = {
   id: entries.id,
   kind: entries.kind,
   lang: entries.lang,
+  langCode: entries.langCode,
   title: entries.title,
   body: entries.body,
   html: entries.html,
@@ -839,6 +856,7 @@ type ViewRow = {
   id: number;
   kind: string;
   lang: string;
+  langCode?: string | null;
   title: string | null;
   body: string;
   html: string | null;
@@ -936,7 +954,7 @@ function toView(
     ...row,
     visibility,
     kind: row.kind as EntryView["kind"],
-    lang: row.lang as Lang,
+    lang: row.lang as SourceLang, langCode: row.langCode,
     aiAssistance: row.aiAssistance as AiAssistance | null,
     authorHandle: row.authorHandle ?? "?",
     stanceTag: row.stanceTag as StanceTag | null,
@@ -1077,7 +1095,7 @@ export function visibleTo(viewer: Viewer | undefined): SQL | undefined {
   if (!viewer) return isNull(entries.hiddenAt);
   if (viewer.scope.operator) return undefined;
   const clauses = [isNull(entries.hiddenAt), eq(entries.authorId, viewer.userId)];
-  if (viewer.scope.langs.length > 0) clauses.push(inArray(entries.lang, [...viewer.scope.langs]));
+  if (viewer.scope.langs.length > 0) clauses.push(or(inArray(entries.lang, [...viewer.scope.langs]), notInArray(entries.lang, [...enabledLangs()]))!);
   return or(...clauses);
 }
 
@@ -1099,7 +1117,8 @@ export async function listTopics(
   if (opts.titledOnly) conditions.push(isNotNull(entries.title));
   if (scope.kind === "langs") {
     if (scope.langs.length === 0) return { topics: [], page, limit, hasNext: false };
-    conditions.push(inArray(opts.order === "created" ? entries.lang : topicListingStats.lang, [...scope.langs]));
+    const lang = opts.order === "created" ? entries.lang : topicListingStats.lang;
+    conditions.push(or(inArray(lang, [...scope.langs]), notInArray(lang, [...enabledLangs()]))!);
   } else if (scope.kind === "not-langs" && scope.langs.length > 0) {
     conditions.push(notInArray(opts.order === "created" ? entries.lang : topicListingStats.lang, [...scope.langs]));
   } else if (scope.kind === "village") {
@@ -1127,6 +1146,7 @@ export async function listTopics(
     .select({
       id: entries.id,
       lang: entries.lang,
+      langCode: entries.langCode,
       title: entries.title,
       sourceHash: entries.sourceHash,
       authorId: entries.authorId,
@@ -1146,7 +1166,7 @@ export async function listTopics(
     topics: rows.slice(0, limit).map((r) => ({
       id: r.id,
       hidden: r.hiddenAt !== null,
-      lang: r.lang as Lang,
+      lang: r.lang as SourceLang, langCode: r.langCode,
       title: r.title,
       sourceHash: r.sourceHash,
       authorId: r.authorId,

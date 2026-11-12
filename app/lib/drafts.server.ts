@@ -1,3 +1,4 @@
+import { resolvePostLanguage } from "./lang-detect";
 import { recordDraftPublication } from "./eval/signals.server";
 import { checkBodyBudget } from "~/lib/markdown.server";
 import { withEntryRender } from "./entry-render-preparation.server";
@@ -18,8 +19,7 @@ import {
   type EntryVia,
 } from "~/lib/entries.server";
 import { headlineFromBody } from "~/lib/headline.server";
-import { isEnabledLang } from "~/lib/enabled-langs.server";
-import { LANGS, type Lang } from "~/lib/languages";
+import { SOURCE_LANGS, type SourceLang, type Lang } from "~/lib/languages";
 import { plainExcerpt } from "~/lib/plain-text.server";
 import { loadStanceAttrFacts } from "~/lib/questions.server";
 import { checkStanceAttributes, STANCE_TAGS, type StanceAttrError, type StanceTag } from "~/lib/stances";
@@ -42,7 +42,7 @@ export type Draft = {
   threadAsksStance: boolean;
   parentId: number | null;
   responseTo: number | null;
-  lang: Lang;
+  lang: SourceLang;
   title: string | null;
   body: string;
   version: number;
@@ -102,9 +102,8 @@ export type DraftError =
 // and title newlines/control characters, using entry rules.
 const fields = {
   village: z.unknown().optional(),
-  // Enabled languages only (ENABLED_LANGS): a draft in a language that is not enabled cannot be saved. A draft saved before its language was closed asks for another language
-  // when it is published (the publish check is in entries.server.ts).
-  lang: z.enum(LANGS).refine((l) => isEnabledLang(l)),
+  // Original languages are independent of enabled reading languages.
+  lang: z.enum(SOURCE_LANGS),
   title: z
     .string()
     .max(MAX_TITLE_LENGTH)
@@ -155,7 +154,7 @@ function toDraft(row: DraftRow, threadTitle: string | null = null, tokenName: st
     threadAsksStance,
     parentId: row.parentId,
     responseTo: row.responseTo,
-    lang: row.lang as Lang,
+    lang: row.lang as SourceLang,
     // A row saved before the title was normalized may hold "" or whitespace: that is "no title" too.
     title: titleOrNull(row.title),
     body: row.body,
@@ -432,7 +431,7 @@ export async function listDrafts(db: Db, authorId: string, opts: { limit?: numbe
     kind: draft.kind as Draft["kind"],
     threadId: draft.threadId,
     threadTitle: (await threadLine(threadTitle, threadBody)),
-    lang: draft.lang as Lang,
+    lang: draft.lang as SourceLang,
     title: titleOrNull(draft.title),
     via: draft.via as EntryVia,
     updatedAt: draft.updatedAt,
@@ -499,7 +498,8 @@ async function publishDraftImplementation(
         .returning();
       if (!draft) return { ok: false, error: "not_found" };
       const via = draft.via as EntryVia;
-      const common = { lang: draft.lang, body: draft.body, aiAssistance: draft.aiAssistance };
+      const resolved = await resolvePostLanguage(draft.body, draft.lang, draft.lang);
+      const common = { ...resolved, body: draft.body, aiAssistance: draft.aiAssistance };
       if (draft.kind === "topic") {
         const res = await createTopic(tx, authorId, { ...common, title: draft.title, asksStance: draft.asksStance, altOf: draft.altOf }, { via, now: opts.now, responseTo: draft.responseTo, ...(villagesEnabled() ? { villageId: draft.villageId, villageDisplayed: opts.villageDisplayed } : {}) });
         if (!res.ok) throw new PublishFailed(res.error, res.village);

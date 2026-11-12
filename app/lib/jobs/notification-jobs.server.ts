@@ -19,7 +19,7 @@ import { localizeVillage, localizeVillages, villageReaderOfMember } from "~/lib/
 import { memberMailLocale } from "~/lib/mail/magic-link.server";
 import { siteUrl } from "~/lib/md/urls.server";
 import { isReason, type AppealStatus, type ModerationAction } from "~/lib/moderation";
-import { AUTO_IMMEDIATE_KINDS, effectiveEmailMode, isContentKind, type NotificationKind } from "~/lib/notifications";
+import { AUTO_IMMEDIATE_KINDS, IN_APP_ONLY_KINDS, effectiveEmailMode, isContentKind, isInAppOnlyKind, type NotificationKind } from "~/lib/notifications";
 import { listNotifications, notificationEmailDelaySeconds, SEND_DIGEST_JOB, SEND_NOTIFICATION_EMAIL_JOB } from "~/lib/notifications.server";
 import { getProfile, type Profile } from "~/lib/profiles.server";
 import { dateOf, ensureDailyJob, nextDailyAt } from "./daily.server";
@@ -136,6 +136,7 @@ async function buildItems(db: Db, rows: readonly NotificationRow[], recipient: R
 
   for (const row of rows) {
     const kind = row.kind as NotificationKind;
+    if (isInAppOnlyKind(kind)) { suppressed.add(row.id); continue; }
     if (kind === "chat_mention" || kind === "village_invite" || kind === "translation_report_result") continue;
     if (kind === "village_added" || kind === "village_removed" || kind === "village_owner_changed") {
       if (!villagesEnabled()) { suppressed.add(row.id); continue; }
@@ -312,6 +313,7 @@ export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobH
     const since = new Date(now.getTime() - DIGEST_WINDOW_DAYS * DAY_MS);
     const autoImmediateKinds = villageChatEnabled() ? [...AUTO_IMMEDIATE_KINDS] : AUTO_IMMEDIATE_KINDS.filter(kind => kind !== "chat_mention");
     return and(
+      notInArray(notifications.kind, [...IN_APP_ONLY_KINDS]),
       or(eq(profiles.emailPref, "daily"), and(eq(profiles.emailPref, "auto"), notInArray(notifications.kind, autoImmediateKinds))),
       isNull(notifications.emailedAt), isNull(notifications.readAt),
       gt(notifications.createdAt, since), lt(notifications.createdAt, before),

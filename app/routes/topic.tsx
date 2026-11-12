@@ -62,7 +62,7 @@ import { loadOwnTranslationReports } from "~/lib/translation-reports.server";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { loadReactions, NO_REACTIONS } from "~/lib/votes.server";
-import { isLang, type Lang } from "~/lib/languages";
+import { isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { languageLabel } from "~/lib/language-label";
 import { threadMdMiddleware } from "~/lib/md/twin.server";
 import { readingReturnMiddleware } from "~/lib/auth/reading-return.server";
@@ -310,6 +310,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       id: e.id,
       placeholder: null,
       lang: e.lang,
+      langCode: e.langCode,
       avatarUrl: avatars.get(e.authorHandle),
       authorHandle: e.authorHandle,
       authorName: name.name,
@@ -334,7 +335,8 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   };
   // Right after posting a topic, its author is told in which language it was published and into which it is being translated (and welcomed, once, for the first).
   const ownPostedTopic = !!user && topic.visibility === "visible" && topic.authorId === user.id && readPostedId(url) === topic.id;
-  const postedNotice = ownPostedTopic ? { first: await isFirstTopic(db, user.id), langs: await postedTranslationStates(db, { id: topic.id, lang: topic.lang, sourceHash: topic.sourceHash }) } : null;
+  const ownPostedEntry = !!user ? shown.find(entry => entry.visibility === "visible" && entry.authorId === user.id && readPostedId(url) === entry.id) : null;
+  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry) } : null;
   const showVillage = villagesEnabled() && topic.visibility !== "hidden-redacted";
   const showContinuation = showVillage && topic.visibility === "visible";
   const continuation = showContinuation ? loadedContinuation : null;
@@ -485,6 +487,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 function EntryMeta({
   id,
   lang,
+  langCode,
   handle,
   name,
   latin,
@@ -501,7 +504,8 @@ function EntryMeta({
   id?: string;
   reader?: boolean;
   readingLang?: Lang;
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   handle: string;
   name?: string | null;
   latin?: string | null;
@@ -519,7 +523,7 @@ function EntryMeta({
   return <div id={id}>
     <ListMeta items={[
       { key: "author", content: <>{avatar && <img src={avatar} alt="" className="member-avatar me-2 inline-block rounded" />}{leading}<AuthorLink handle={handle} name={name} latin={latin} reader={reader} byline /></> },
-      !controls && lang !== readingLang && { key: "original", content: m.reading_lang_original({ name: languageLabel(lang) }) },
+      !controls && lang !== readingLang && { key: "original", content: m.reading_lang_original({ name: languageLabel(lang, langCode) }) },
       { key: "posted", content: <span>{m.history_posted()} <LocalTime iso={createdAt.toISOString()} style="stamp" /></span> },
       editedAt && { key: "updated", content: <Link to={historyTo} className="underline">{m.history_updated()} <LocalTime iso={editedAt.toISOString()} style="stamp" /></Link> },
       !!controls && { key: "controls", content: controls },
@@ -672,14 +676,14 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             {r.parent.state === "visible" ? <Link to={r.parent.href} className="underline">{m.reply_parent_link({ handle: r.parent.authorHandle })}</Link>
               : r.parent.state === "deleted" ? m.reply_parent_deleted() : m.reply_parent_unavailable()}
           </p>}
-          {r.posted && (loaderData.postedFollowed ? <PostedLine kind="reply-followed" /> : <p role="status" className="text-success">{m.posted_reply()}</p>)}
+          {r.posted && <PostedTopicNotice topicId={r.id} lang={r.lang} langCode={r.langCode} firstPost={false} initial={loaderData.postedNotice?.langs ?? []} editHref={`/c/${r.id}/edit`} reply followed={loaderData.postedFollowed} />}
           {loaderData.edited === r.id && r.own && <PostedLine kind="edited" />}
           {r.hidden && <HiddenMark action={r.hiddenAction} />}
           <TranslatedEntry
             key={displayKey(r.id, r.display)}
             id={r.id}
             kind="reply"
-            lang={r.lang}
+            lang={r.lang} langCode={r.langCode}
             title={null}
             html={r.html}
             display={r.display}
@@ -690,7 +694,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                 id={`reply-meta-${r.id}`}
                 readingLang={loaderData.displayLang}
                 reader={loaderData.reader}
-                lang={r.lang}
+                lang={r.lang} langCode={r.langCode}
                 handle={r.authorHandle}
                 name={r.authorName}
                 latin={r.authorNameLatin}
@@ -777,7 +781,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           <PlaceholderEntry entry={topic} />
         ) : (
           <>
-            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} place={loaderData.village ? villageName(loaderData.village.kind === "personal" ? { ...loaderData.village, name: "" } : loaderData.village) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} editHref={`/t/${topic.id}/edit`} />}
+            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? villageName(loaderData.village.kind === "personal" ? { ...loaderData.village, name: "" } : loaderData.village) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} editHref={`/t/${topic.id}/edit`} />}
             {loaderData.edited === topic.id && topic.own && <PostedLine kind="edited" />}
             {topic.hidden && <HiddenMark action={topic.hiddenAction} />}
             {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={langs => setSettled(previous => ({ id: topic.id, langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])] }))} /></Suspense>}
@@ -786,7 +790,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
               key={displayKey(topic.id, topic.display)}
               id={topic.id}
               kind="topic"
-              lang={topic.lang}
+              lang={topic.lang} langCode={topic.langCode}
               title={topic.title}
               headline={topic.headline ?? undefined}
               html={topic.html}

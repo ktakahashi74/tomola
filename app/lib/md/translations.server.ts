@@ -3,7 +3,7 @@ import type { Db } from "~/lib/db/client.server";
 import { entries, translations } from "~/lib/db/schema";
 import { isStale, pickTranslation, SHOWN_KINDS, type ShownKind } from "~/lib/display";
 import { enabledLangs } from "~/lib/enabled-langs.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { loadReportNotices } from "~/lib/translation-reports.server";
 import { FLAG_STRUCTURE_MISMATCH } from "~/lib/llm/flags";
 import { localizeResponseBodies } from "../response-line.server";
@@ -43,7 +43,7 @@ function reportOf(notice: "open" | "retried" | undefined, status: "machine" | "h
   return notice === "retried" && status === "machine" ? "retranslated" : null;
 }
 
-export type MdTranslationInput = { id: number; lang: Lang; sourceHash: string | null };
+export type MdTranslationInput = { id: number; lang: SourceLang; sourceHash: string | null };
 
 // For each post, reads the languages of the translations that can be shown (the enabled languages (ENABLED_LANGS) in the order of LANGS, without the original language; a translation
 // into a language that is not enabled is not used even if its row remains) and the requested translations.

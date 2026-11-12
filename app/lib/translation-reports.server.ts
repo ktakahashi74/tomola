@@ -16,7 +16,7 @@ import { isRetryConfigured, type LlmOptions } from "~/lib/llm/index.server";
 import { currentRetryCaps } from "~/lib/llm/retry-caps.server";
 import { RENDER_VERSION } from "~/lib/markdown.server";
 import { resolveSourceMentions } from "~/lib/mentions.server";
-import { inScope, type ModScope } from "~/lib/roles.server";
+import { inLanguageScope, type ModScope } from "~/lib/roles.server";
 import { recordRevision } from "~/lib/translation-revisions.server";
 import { firstSeenAtForSource } from "~/lib/translation-first-seen.server";
 import { RETRANSLATE_REPORT_JOB, retranslateDedupeKey, TRANSLATE_MAX_ATTEMPTS, type RetranslateReportPayload } from "~/lib/translations.server";
@@ -336,7 +336,7 @@ async function resolveReportWithHumanTranslationImplementation(
       .where(and(eq(translationReports.id, reportId), eq(translationReports.status, "open")));
     if (!peek) return { ok: false as const, error: "not_found" as const };
     // Moderators may correct only translations into their assigned languages.
-    if (opts.scope && !inScope(opts.scope, peek.lang)) return { ok: false as const, error: "forbidden" as const };
+    if (opts.scope && !inLanguageScope(opts.scope, peek.lang)) return { ok: false as const, error: "forbidden" as const };
     const entry = await lockReviewableEntry(tx, peek.entryId, "update");
     const [report] = await tx
       .select()
@@ -397,7 +397,7 @@ async function resolveReportWithHumanTranslationImplementation(
 export async function dismissReport(db: Db, operatorId: string, reportId: number, opts: { now?: Date; scope?: ModScope } = {}): Promise<boolean> {
   return db.transaction(async tx => {
     const [peek] = await tx.select().from(translationReports).where(and(eq(translationReports.id, reportId), eq(translationReports.status, "open")));
-    if (!peek || (opts.scope && !inScope(opts.scope, peek.lang))) return false;
+    if (!peek || (opts.scope && !inLanguageScope(opts.scope, peek.lang))) return false;
     const entry = await lockReviewableEntry(tx, peek.entryId, "update");
     if (!entry) return false;
     const [report] = await tx.select().from(translationReports).where(and(eq(translationReports.id, reportId), eq(translationReports.status, "open"))).for("update");

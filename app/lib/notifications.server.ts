@@ -15,8 +15,8 @@ import { loadPickedTranslations, loadTitleDisplays } from "~/lib/entry-display.s
 import { wantsTranslation } from "~/lib/display";
 import { DEFAULT_MAX_ATTEMPTS } from "~/lib/jobs/queue.server";
 import { SEND_NOTIFICATION_EMAIL_JOB } from "~/lib/jobs/mail-kinds";
-import { LANGS, type Lang } from "~/lib/languages";
-import { effectiveEmailMode, isContentKind, type EmailPref, type NotificationKind } from "~/lib/notifications";
+import { LANGS, type Lang, type SourceLang } from "~/lib/languages";
+import { effectiveEmailMode, isContentKind, isInAppOnlyKind, type EmailPref, type NotificationKind } from "~/lib/notifications";
 import { followedThreadHrefs } from "~/lib/reply-locations.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { sharedVillageCondition } from "~/lib/villages.server";
@@ -65,7 +65,7 @@ export async function enqueueImmediateEmails(
   if (created.length === 0) return 0;
   await enqueuePush(db, created, opts.now);
   // Result notices describe the outcome and use available topic titles; they do not need new excerpt translations.
-  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result").map(item => item.id));
+  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && !isInAppOnlyKind(item.kind)).map(item => item.id));
   const runAt = new Date((opts.now ?? new Date()).getTime() + notificationEmailDelaySeconds() * 1000);
   const prefOf = new Map<string, EmailPref>();
   for (const ids of notificationBatches([...new Set(created.map(c => c.userId))])) {
@@ -405,8 +405,9 @@ export type NotificationItem = {
   // and the language it was written in. null when the post cannot be shown.
   excerpt: string | null;
   // The language the excerpt is written in: the reader's own when the excerpt is a translation, else the language of the original.
-  excerptLang: Lang | null;
-  entryLang: Lang | null;
+  excerptLang: SourceLang | null;
+  entryLang: SourceLang | null;
+  entryLangCode?: string | null;
 };
 
 export const NOTIFICATIONS_PER_PAGE = 30;
@@ -481,7 +482,7 @@ export async function listNotifications(
     entryIds.length === 0
       ? []
       : db
-          .select({ id: entries.id, authorId: entries.authorId, kind: entries.kind, threadId: entries.threadId, title: entries.title, hiddenAt: entries.hiddenAt, deletedAt: entries.deletedAt, publicPlace: notificationPlace().as("public_place"), lang: entries.lang, sourceHash: entries.sourceHash, ...(opts.excerpts ? { body: entries.body } : {}) })
+          .select({ id: entries.id, authorId: entries.authorId, kind: entries.kind, threadId: entries.threadId, title: entries.title, hiddenAt: entries.hiddenAt, deletedAt: entries.deletedAt, publicPlace: notificationPlace().as("public_place"), lang: entries.lang, langCode: entries.langCode, sourceHash: entries.sourceHash, ...(opts.excerpts ? { body: entries.body } : {}) })
           .from(entries)
           .where(inArray(entries.id, entryIds)),
     actorIds.length === 0 ? [] : db.select({ userId: profiles.userId, handle: profiles.handle, displayName: profiles.displayName, displayNameLatin: profiles.displayNameLatin, homeArea: profiles.homeArea }).from(profiles).where(inArray(profiles.userId, actorIds)),
@@ -513,7 +514,7 @@ export async function listNotifications(
     opts.typesetTitles ?? false,
   );
   const responseIds = new Set(pageRows.filter(row => row.kind === "response_to_topic").map(row => row.entryId));
-  const excerpts = opts.excerpts ? await notificationExcerpts(db, entryRows.filter(e => !e.deletedAt && !e.hiddenAt && (e.kind === "reply" || e.kind === "topic")).map(e => ({ id: e.id, kind: e.kind as "topic" | "reply", lang: e.lang as Lang, sourceHash: e.sourceHash, body: (e as { body?: string }).body ?? "", response: responseIds.has(e.id) })), opts.display ?? { readLangs: LANGS, displayLang: "en" }) : new Map<number, { text: string; lang: Lang }>();
+  const excerpts = opts.excerpts ? await notificationExcerpts(db, entryRows.filter(e => !e.deletedAt && !e.hiddenAt && (e.kind === "reply" || e.kind === "topic")).map(e => ({ id: e.id, kind: e.kind as "topic" | "reply", lang: e.lang as Lang, sourceHash: e.sourceHash, body: (e as { body?: string }).body ?? "", response: responseIds.has(e.id) })), opts.display ?? { readLangs: LANGS, displayLang: "en" }) : new Map<number, { text: string; lang: SourceLang }>();
   const entryById = new Map(entryRows.map((e) => [e.id, e]));
   const topicById = new Map(topicRows.map((t) => [t.id, t]));
   const handles = new Map(actorRows.map((a) => [a.userId, a.handle]));
@@ -528,7 +529,7 @@ export async function listNotifications(
     const entry = r.entryId !== null ? entryById.get(r.entryId) : undefined;
     const topic = entry ? topicById.get(entry.threadId ?? entry.id) : undefined;
     // The content kinds (CONTENT_KINDS) tell about a post. The topic comes from the notification's own thread_id when it has one (followed_thread always does).
-    const isContent = isContentKind(kind) || kind === "translation_report_result";
+    const isContent = isContentKind(kind) || isInAppOnlyKind(kind) || kind === "translation_report_result";
     const contentTopic = r.threadId !== null ? topicById.get(r.threadId) : topic;
     const topicReadable = contentTopic !== undefined && !contentTopic.deletedAt && !contentTopic.hiddenAt && (!["response_to_topic", "translation_report_result"].includes(kind) || !!contentTopic.publicPlace);
     const entryReadable = entry !== undefined && !entry.deletedAt && !entry.hiddenAt && (!["response_to_topic", "translation_report_result"].includes(kind) || !!entry.publicPlace);
@@ -572,7 +573,8 @@ export async function listNotifications(
       appealReversed: appeal?.reversed ?? null,
       excerpt: kind !== "translation_report_result" && shownEntry && r.entryId !== null ? excerpts.get(r.entryId)?.text ?? null : null,
       excerptLang: kind !== "translation_report_result" && shownEntry && r.entryId !== null ? excerpts.get(r.entryId)?.lang ?? null : null,
-      entryLang: kind !== "translation_report_result" && shownEntry && entry ? entry.lang as Lang : null,
+      entryLang: kind !== "translation_report_result" && shownEntry && entry ? entry.lang as SourceLang : null,
+      entryLangCode: shownEntry && entry ? entry.langCode : null,
     };
   });
   return { items, page, hasNext: rows.length > limit };
@@ -580,8 +582,8 @@ export async function listNotifications(
 
 // The first line of a post, in the language the reader reads it in (the translation if the reader wants one and it exists, else the original), without markup and cut short.
 const EXCERPT_LENGTH = 120;
-async function notificationExcerpts(db: Db, rows: ReadonlyArray<{ id: number; kind: "topic" | "reply"; lang: Lang; sourceHash: string | null; body: string; response: boolean }>, display: { readLangs: readonly Lang[]; displayLang: Lang }): Promise<Map<number, { text: string; lang: Lang }>> {
-  const out = new Map<number, { text: string; lang: Lang }>();
+async function notificationExcerpts(db: Db, rows: ReadonlyArray<{ id: number; kind: "topic" | "reply"; lang: SourceLang; sourceHash: string | null; body: string; response: boolean }>, display: { readLangs: readonly Lang[]; displayLang: Lang }): Promise<Map<number, { text: string; lang: SourceLang }>> {
+  const out = new Map<number, { text: string; lang: SourceLang }>();
   if (!rows.length) return out;
   const wanting = rows.filter(row => wantsTranslation(row.lang, display.readLangs, display.displayLang));
   const picked = wanting.length ? await loadPickedTranslations(db, wanting.map(({ id, kind, lang, sourceHash }) => ({ id, kind, lang, sourceHash })), display.displayLang, ["body"]) : new Map();

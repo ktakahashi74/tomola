@@ -1,4 +1,4 @@
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 
 // Target-language instructions. Post translation (prompt.server.ts) and interface-message translation
 // (app/lib/i18n/translate-messages.server.ts, `pnpm i18n:translate`) share these exact instructions to avoid inconsistent edits.
@@ -44,8 +44,8 @@ export const SOURCE_LANG_SPECS: Partial<Record<Lang, string>> = {
     "Latin letters inside Japanese text may be a name, a term, a quotation, a slogan or a sentence in a foreign language: treat each by its role. Keeping them as they are is not always natural in the target language.",
 };
 
-export function sourceLangSpec(lang: Lang): string | undefined {
-  return SOURCE_LANG_SPECS[lang];
+export function sourceLangSpec(lang: SourceLang): string | undefined {
+  return lang === "other" ? undefined : SOURCE_LANG_SPECS[lang];
 }
 
 // Target-language instruction, or undefined if absent.

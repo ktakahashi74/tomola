@@ -1,4 +1,4 @@
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 
 // ui: the language of the screen when it comes from the address (a shared ?lang= link, or an earlier choice that pinned it), otherwise null (cookie, browser language, default).
 export type ReadingLanguageChoice = { current: Lang; usual: Lang; enabled: readonly Lang[]; ui?: Lang | null };
@@ -34,7 +34,7 @@ export function readingLangSearch(search: string, target: Lang, usual: Lang | nu
 }
 
 // An article language choice clears only that article's version override.
-export function entryReadingLangSearch(search: string, target: Lang, choice: ReadingLanguageChoice, originalLang: Lang | undefined, entryId: number): string {
+export function entryReadingLangSearch(search: string, target: Lang, choice: ReadingLanguageChoice, originalLang: SourceLang | undefined, entryId: number): string {
   const explicit = target === choice.usual && target !== originalLang;
   const params = new URLSearchParams(readingLangSearch(search, target, explicit ? null : choice.usual, choice.ui ?? null));
   for (const name of ["orig", "tr", "old"]) {

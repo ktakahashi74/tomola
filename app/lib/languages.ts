@@ -1,6 +1,11 @@
 export const LANGS = ["ja", "en", "fr", "de", "zh-Hant", "zh-Hans", "ko", "th", "vi"] as const;
 export type Lang = (typeof LANGS)[number];
 
+export const SOURCE_LANGS = [...LANGS, "other"] as const;
+export type SourceLang = typeof SOURCE_LANGS[number];
+export type LangSource = "explicit" | "detected" | "default" | "checked";
+export const isSourceLang = (value: unknown): value is SourceLang => value === "other" || isLang(value);
+
 export const LATIN_SCRIPT_LANGS: readonly string[] = ["en", "fr", "de", "vi"] satisfies readonly Lang[];
 
 export const AREAS = [...LANGS, "other"] as const;

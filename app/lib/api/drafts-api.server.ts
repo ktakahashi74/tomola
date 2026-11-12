@@ -181,7 +181,7 @@ async function createDraftResponse(request: Request, opts: { db?: Db; now?: Date
     declared = interpreted.declared;
   }
   const body = normalizeNewlines(extracted.body);
-  const { lang, language } = await withMarkdownScope("write", auth.token.userId, () => resolvePostLanguage(body, declared.lang, defaultPostLang(profile)));
+  const { lang, langCode, language } = await withMarkdownScope("write", auth.token.userId, () => resolvePostLanguage(body, declared.lang, defaultPostLang(profile)));
   // Not stated in the frontmatter: nothing is recorded (null), not "none".
   const aiAssistance = declared.aiAssistance ?? null;
 
@@ -221,7 +221,7 @@ async function createDraftResponse(request: Request, opts: { db?: Db; now?: Date
     return fail(request, 500, "internal", "Internal error. Try again later.");
   }
   const issues = await checkDraftIssues(db, { kind: declared.kind, lang, title, body, authorId: auth.token.userId });
-  return memberResponse(request, JSON.stringify({ id: created.id, lang, language, issues: issues.issues, issues_truncated: issues.issuesTruncated,
+  return memberResponse(request, JSON.stringify({ id: created.id, lang, lang_code: langCode, language, issues: issues.issues, issues_truncated: issues.issuesTruncated,
     ...(issues.issuesNotice ? { issues_notice: issues.issuesNotice } : {}), ...(issues.issuesUnavailable ? { issues_unavailable: true } : {}),
     approve_url: siteUrl(`/drafts/${created.id}`), ...(villagesEnabled() && declared.kind === "topic" ? { village: created.village ?? null } : {}) }), { format: "json", status: 201, rate });
 }

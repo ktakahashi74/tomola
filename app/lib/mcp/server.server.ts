@@ -5,9 +5,9 @@ import { McpServer, createMcpHandler, requireScopes } from "@modelcontextprotoco
 import { z } from "zod";
 import type { Db } from "~/lib/db/client.server";
 import { isEnabledLang, enabledLangs } from "~/lib/enabled-langs.server";
-import { LANGS } from "~/lib/languages";
+import { LANGS, SOURCE_LANGS } from "~/lib/languages";
 import { defaultPostLang } from "~/lib/profiles.server";
-import { resolvePostLanguage } from "~/lib/lang-detect";
+import { detectSourceLanguage, resolvePostLanguage } from "~/lib/lang-detect";
 import { checkDraftIssues } from "~/lib/draft-issues.server";
 import { messageOf } from "~/lib/draft-errors.server";
 import { AI_USE_GUIDANCE, AI_USE_GUIDANCE_TITLE } from "~/lib/api/ai-use-guidance.server";
@@ -46,7 +46,7 @@ const draftError = (code: string) => {
   return message === code ? code : `${code}: ${message}`;
 };
 const draftFields = {
-  lang: z.enum(LANGS, { error: () => draftError("invalid_lang") }).refine(isEnabledLang, { error: () => draftError("invalid_lang") }).optional(),
+  lang: z.enum(SOURCE_LANGS, { error: () => draftError("invalid_lang") }).optional(),
   title: z.string().max(MAX_TITLE_LENGTH, { error: () => draftError("invalid_title") }).nullable().optional(),
   body: z.string().max(MAX_BODY_LENGTH, { error: () => draftError("body_too_long") }).optional(),
   aiAssistance: z.enum(AI_ASSISTANCE, { error: () => draftError("invalid_ai") }).nullable().optional(),
@@ -55,7 +55,7 @@ const draftFields = {
 };
 const failure = (message: string) => ({ ...mcpText(message, "error"), isError: true });
 const draftView = async (db: Db, row: NonNullable<Awaited<ReturnType<typeof getClientDraft>>> & { village?: string | null }) => ({
-  id: row.id, kind: row.kind, threadId: row.threadId, parentId: row.parentId, lang: row.lang, title: row.title, body: row.body,
+  id: row.id, kind: row.kind, threadId: row.threadId, parentId: row.parentId, lang: row.lang, langCode: row.lang === "other" ? (await detectSourceLanguage(row.body))?.langCode ?? null : null, title: row.title, body: row.body,
   asksStance: row.asksStance, altOf: row.altOf, stanceTag: row.stanceTag, version: row.version, updatedAt: row.updatedAt.toISOString(),
   clientId: row.clientId, clientName: row.clientName, clientUri: row.clientUri, approvalUrl: siteUrl(`/drafts/${row.id}`),
   ...(villagesEnabled() && row.kind === "topic" ? { village: Object.hasOwn(row, "village") ? row.village ?? null : await villageSlug(db, row.villageId) } : {}),
@@ -122,7 +122,7 @@ function createTomolaMcpServer(db: Db, principal: McpPrincipal | null, onBusy?: 
       const translated = await loadMdTranslations(db, visible, selectedLang);
       const reasons = POSITIONS.map((position) => ({ position, replies: panel.pick[position].filter((replyId) => visible.some((v) => v.id === replyId)).map((replyId) => {
         const view = panel.views.get(replyId)!;
-        return { id: replyId, original: view.body, lang: view.lang, sourceVersion: view.sourceHash, translation: translated.shown.get(replyId)?.[0] ?? null, contextUrl: siteUrl(panel.locations.get(replyId)!) };
+        return { id: replyId, original: view.body, lang: view.lang, langCode: view.langCode ?? null, sourceVersion: view.sourceHash, translation: translated.shown.get(replyId)?.[0] ?? null, contextUrl: siteUrl(panel.locations.get(replyId)!) };
       }) }));
       return `${counts}\n\n${mdBlock({ type: "daily_reasons", content_trust: "untrusted_user_content" }, JSON.stringify(reasons))}`;
     }));

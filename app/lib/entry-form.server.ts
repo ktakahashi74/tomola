@@ -54,7 +54,7 @@ export function readEntryForm(form: FormData) {
 export type PastedError = "frontmatter_invalid" | "frontmatter_type_mismatch" | "body_too_complex" | "village_required";
 
 // What the form states, plus the optional ai_assistance that only frontmatter can carry (null: not stated).
-export type EntryFormInput = ReturnType<typeof readEntryForm> & { aiAssistance: AiAssistance | null };
+export type EntryFormInput = ReturnType<typeof readEntryForm> & { aiAssistance: AiAssistance | null; langCode?: string | null; langSource?: string };
 
 export type PastedResult =
   | { ok: true; input: EntryFormInput; language: LanguageDecision; parentId?: number }
@@ -82,7 +82,7 @@ export async function applyPastedFrontmatter(
   if (!extracted.pasted) {
     const resolved = (await resolve(input.body, input.lang));
     if ("error" in resolved) return { ok: false, error: resolved.error! };
-    return { ok: true, input: { ...input, ...(input.villageExplicit === false ? { village: undefined } : {}), lang: resolved.lang, aiAssistance: null }, language: resolved.language, parentId: opts.parentId ?? undefined };
+    return { ok: true, input: { ...input, ...(input.villageExplicit === false ? { village: undefined } : {}), lang: resolved.lang, langCode: resolved.langCode, langSource: resolved.langSource, aiAssistance: null }, language: resolved.language, parentId: opts.parentId ?? undefined };
   }
   const interpreted = interpretFrontmatter(extracted.data, { requireReplyTo: false });
   if (!interpreted.ok) return { ok: false, error: interpreted.error === "village_required" ? "village_required" : "frontmatter_invalid" };
@@ -108,7 +108,7 @@ export async function applyPastedFrontmatter(
       // The title field of the form is a string, empty when there is no title (the service turns an empty title into "no title").
       title: input.title.trim() !== "" ? input.title : declared.title === undefined ? "" : normalizeNewlines(declared.title),
       body: normalizeNewlines(extracted.body),
-      lang: resolved.lang,
+      lang: resolved.lang, langCode: resolved.langCode, langSource: resolved.langSource,
       aiAssistance: declared.aiAssistance ?? null,
       asksStance: input.asksStance || (declared.asksStance ?? false),
       altOf: input.altOf !== null ? input.altOf : (declared.altOf ?? null),

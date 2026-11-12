@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { buttonVariants } from "~/components/ui/button";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { cn } from "~/lib/utils";
 import { m } from "~/paraglide/messages.js";
 
 const ShareContent = lazy(() => import("./topic-share-content"));
 
-export function TopicShare({ topicId, readingLang, originalLang, floating = false }: { topicId: number; readingLang: Lang; originalLang: Lang; floating?: boolean }) {
+export function TopicShare({ topicId, readingLang, originalLang, floating = false }: { topicId: number; readingLang: SourceLang; originalLang: SourceLang; floating?: boolean }) {
   const control = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

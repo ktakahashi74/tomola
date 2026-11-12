@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, translations } from "./db/schema";
 import { pickTranslation, SHOWN_KINDS } from "./display";
-import { isLang, type Lang } from "./languages";
+import { isLang, type Lang, type SourceLang } from "./languages";
 import { loadResponsePostTargets, parseResponsePost, responsePostLine } from "./response-post.server";
 
 type Source = { id: number; lang: string; body: string };
@@ -45,7 +45,7 @@ async function loadLines(db: Db, sources: readonly Source[], langs: readonly Lan
 
 // Jobs translate only the remaining body, then store a complete translation.
 // An unreadable target stays ordinary source text; no extra information is read.
-export async function prepareResponsePostTranslation(db: Db, body: string, from: Lang, to: Lang) {
+export async function prepareResponsePostTranslation(db: Db, body: string, from: SourceLang, to: Lang) {
   const line = (await loadLines(db, [{ id: 0, lang: from, body }], [to])).get(key(0, to));
   // An opening with nothing after it goes through ordinary translation (an empty request
   // would fail or be flagged); reading still replaces the opening.

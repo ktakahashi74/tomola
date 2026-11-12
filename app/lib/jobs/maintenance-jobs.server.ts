@@ -1,7 +1,7 @@
 import { reconcileMissingTranslations } from "./translation-backfill.server";
 import { pruneChatTranslationReports } from "~/lib/chat-translation-reports.server";
 import { pruneChatReportSnapshots } from "~/lib/village-chat-reports.server";
-import { and, inArray, lt, ne } from "drizzle-orm";
+import { sql, and, inArray, lt, ne } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { jobs } from "~/lib/db/schema";
 import { RETENTION, daysBefore } from "~/lib/retention";
@@ -41,7 +41,7 @@ export async function ensureCleanupScheduledThrottled(db: Db, now: Date = new Da
 // Drain expired finished jobs in bounded transactions, returning the total deleted count.
 export async function deleteFinishedJobs(db: Db, now: Date, results?: RetentionResults): Promise<number> {
   return (await drainRetentionRows(db, "finished_jobs", jobs,
-    and(inArray(jobs.status, ["done", "failed"]), ne(jobs.kind, "translation_retry_marker"), lt(jobs.updatedAt, daysBefore(now, RETENTION.finishedJobDays)))!, results)).removed;
+    and(inArray(jobs.status, ["done", "failed"]), ne(jobs.kind, "translation_retry_marker"), sql`not (${jobs.kind} = 'source_language_receipt' and exists (select 1 from entries e where e.id::text = ${jobs.payload}->>'entryId' and e.source_hash = ${jobs.payload}->>'sourceHash' and e.mention_revision::text = ${jobs.payload}->>'revision' and e.deleted_at is null))`, lt(jobs.updatedAt, daysBefore(now, RETENTION.finishedJobDays)))!, results)).removed;
 }
 
 export function createMaintenanceHandlers(): JobHandlers {

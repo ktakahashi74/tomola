@@ -1,3 +1,4 @@
+import { isEnabledLang } from "./enabled-langs.server";
 import { safeErrorText } from "~/lib/error-text.server";
 import { and, asc, eq, ilike, inArray, notInArray, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
@@ -8,7 +9,7 @@ import { isOperatorEmail, operatorEmails } from "~/lib/operators.server";
 // Roles and their language scope.
 // - Operators: users in OPERATOR_EMAILS, checked against environment emails on every request; environment is canonical. roles.operator rows
 //   support queries/history: insert on login/session load via requireMember; remove absent operators at startup via syncOperatorRoles.
-// - Moderators: appointed by operators per original post language; scope covers only assigned-language posts/reports/hiding/suspension sources.
+// - Moderators: appointed per original language; unopened source languages are shared by every moderator.
 
 // UI/action scope: operators cover all languages; others only assigned langs.
 export type ModScope = { operator: boolean; langs: readonly Lang[] };
@@ -18,8 +19,11 @@ export const NO_SCOPE: ModScope = { operator: false, langs: [] };
 // Whether moderator in any language or operator, permitting /mod access.
 export const isModerator = (scope: ModScope): boolean => scope.operator || scope.langs.length > 0;
 
-// Whether original post language falls in scope.
-export const inScope = (scope: ModScope, lang: string): boolean => scope.operator || (scope.langs as readonly string[]).includes(lang);
+// Chat and translation-target permissions retain their assigned-language boundary.
+export const inLanguageScope = (scope: ModScope, lang: string): boolean => scope.operator || (scope.langs as readonly string[]).includes(lang);
+
+// Original posts in unopened languages are shared by all moderators.
+export const inScope = (scope: ModScope, lang: string): boolean => inLanguageScope(scope, lang) || (scope.langs.length > 0 && !isEnabledLang(lang));
 
 // Viewer user/scope for deciding whether hidden post content may be shown (app/lib/moderation-view.ts).
 export type Viewer = { userId: string; scope: ModScope };

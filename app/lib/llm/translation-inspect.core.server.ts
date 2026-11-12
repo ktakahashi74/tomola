@@ -1,5 +1,5 @@
 import { preservesFigureMath, sameFigureLabel } from "~/lib/figure";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { FLAG_LINK_MISMATCH, FLAG_QUALITY_MISMATCH, FLAG_STRUCTURE_MISMATCH, FLAG_UNTRANSLATED, FLAG_UNTRANSLATED_SCRIPT, FLAG_UNTRANSLATED_SIMILAR } from "./flags";
 import { detectCopy, type CopyVerdict } from "./copy-detection.core.server";
 import { checkChatContent, checkStructure, normalizeTranslationDollars } from "./structure.core.server";
@@ -15,14 +15,14 @@ const normalizeSpace = (s: string) => s.replace(/\s+/g, " ").trim();
 // Detect source copying instead of translation: whitespace-normalized identical output, very little target-language script,
 // or high character-bigram similarity (copy-detection.server.ts). Exempt same-language requests and Simplified/Traditional pairs (normally high overlap despite different characters),
 // short text, posts without prose (code/math only), and name/model-number-heavy text. near:false skips the two near-copy checks for fake engines.
-export function judgeCopy(source: string, translated: string, from: Lang, to: Lang, opts: { near?: boolean; mentions?: readonly string[]; plainText?: boolean } = {}): CopyVerdict {
+export function judgeCopy(source: string, translated: string, from: SourceLang, to: Lang, opts: { near?: boolean; mentions?: readonly string[]; plainText?: boolean } = {}): CopyVerdict {
   if (from === to) return { copy: false };
   if ((from === "zh-Hans" && to === "zh-Hant") || (from === "zh-Hant" && to === "zh-Hans")) return { copy: false };
   if (normalizeSpace(source).length < UNTRANSLATED_MIN_LENGTH) return { copy: false };
   return detectCopy(source, translated, from, to, opts);
 }
 
-export const looksUntranslated = (source: string, translated: string, from: Lang, to: Lang, opts: { mentions?: readonly string[] } = {}): boolean => judgeCopy(source, translated, from, to, opts).copy;
+export const looksUntranslated = (source: string, translated: string, from: SourceLang, to: Lang, opts: { mentions?: readonly string[] } = {}): boolean => judgeCopy(source, translated, from, to, opts).copy;
 
 // The flag for a copy verdict: an exact copy hides the translation (untranslated); a near copy may be a wrong call, so its flag does not hide it.
 const COPY_FLAG = { identical: FLAG_UNTRANSLATED, script: FLAG_UNTRANSLATED_SCRIPT, similar: FLAG_UNTRANSLATED_SIMILAR } as const;

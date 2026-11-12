@@ -41,7 +41,7 @@ it("uses interface messages for all supported post languages", () => {
   for (const locale of ["ja", "en"] as const) {
     setTestLocale(locale);
     const expected = [m.language_name_ja(), m.language_name_en(), m.language_name_fr(), m.language_name_de(), m.language_name_zh_hant(), m.language_name_zh_hans(), m.language_name_ko(), m.language_name_th(), m.language_name_vi()];
-    expect(LANGS.map(languageLabel)).toEqual(expected);
+    expect(LANGS.map(lang => languageLabel(lang))).toEqual(expected);
   }
 });
 it("gives unusable invitations a matching page and document title without an address", async () => {

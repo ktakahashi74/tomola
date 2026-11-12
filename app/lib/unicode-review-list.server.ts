@@ -1,7 +1,8 @@
-import { and, desc, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { enabledLangs } from "./enabled-langs.server";
+import { or, notInArray, and, desc, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { entries } from "~/lib/db/schema";
-import { isLang, type Lang } from "~/lib/languages";
+import { isSourceLang, type SourceLang } from "~/lib/languages";
 import type { ModScope } from "~/lib/roles.server";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "~/lib/visibility.server";
 import { unicodeReviewCounts, UNICODE_REVIEW_DAYS, UNICODE_REVIEW_PAGE_SIZE, UNICODE_REVIEW_SCAN_LIMIT, type UnicodeReviewCounts } from "~/lib/unicode-review";
@@ -13,7 +14,7 @@ import { unicodeReviewCounts, UNICODE_REVIEW_DAYS, UNICODE_REVIEW_PAGE_SIZE, UNI
 
 // The window (30 days), the matches shown per request (50) and the rows read per request (500; a request that reaches it says so and offers the rest) are in lib/unicode-review.ts.
 
-export type UnicodeReviewItem = { entryId: number; kind: "topic" | "reply"; threadId: number; lang: Lang; counts: UnicodeReviewCounts };
+export type UnicodeReviewItem = { entryId: number; kind: "topic" | "reply"; threadId: number; lang: SourceLang; counts: UnicodeReviewCounts };
 export type UnicodeReviewPage = {
   items: UnicodeReviewItem[];
   // The request stopped before the end of the range (500 rows read, or 50 matches shown); `cursor` continues from there.
@@ -49,7 +50,7 @@ export async function listUnicodeReviewCandidates(
     .where(and(
       visibleWithTopic(),
       gte(entries.changedAt, since),
-      scope.operator ? undefined : inArray(entries.lang, [...scope.langs]),
+      scope.operator ? undefined : or(inArray(entries.lang, [...scope.langs]), notInArray(entries.lang, [...enabledLangs()])),
       opts.viewerId ? ne(entries.authorId, opts.viewerId) : undefined,
       after,
     ))
@@ -60,7 +61,7 @@ export async function listUnicodeReviewCandidates(
   let last = scanned.at(-1);
   for (const row of scanned) {
     const counts = unicodeReviewCounts(row.title, row.body);
-    if (Object.keys(counts).length === 0 || !isLang(row.lang)) continue;
+    if (Object.keys(counts).length === 0 || !isSourceLang(row.lang)) continue;
     items.push({ entryId: row.id, kind: row.kind as "topic" | "reply", threadId: row.threadId ?? row.id, lang: row.lang, counts });
     if (items.length === UNICODE_REVIEW_PAGE_SIZE) { last = row; break; }
   }

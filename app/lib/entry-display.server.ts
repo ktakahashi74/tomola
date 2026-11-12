@@ -7,7 +7,7 @@ import { entries, translations } from "~/lib/db/schema";
 import { decideShown, isStale, pickOlderTranslation, pickTranslation, SHOWN_KINDS, wantsTranslation, type ShownKind, type Shown } from "~/lib/display";
 import { renderTranslationHtml } from "~/lib/entries.server";
 import { headlineFromBody } from "~/lib/headline.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { RENDER_VERSION, type RenderedEntry } from "~/lib/markdown.server";
 import type { MentionTargets } from "~/lib/mentions-md.server";
 import { resolveSourceSnapshotsFor, resolveTranslationMentionsFor, type SourceMentionSnapshot } from "~/lib/mentions.server";
@@ -71,7 +71,7 @@ export type EntryDisplay = {
   translation: TranslationView | null;
 };
 
-export type DisplayInput = { id: number; kind: "topic" | "reply"; lang: Lang; sourceHash: string | null };
+export type DisplayInput = { id: number; kind: "topic" | "reply"; lang: SourceLang; sourceHash: string | null };
 export type DisplayOptions = {
   // Topic HTML only: browser translation work and first-display reports.
   browser?: ReadonlySet<number>;
@@ -275,7 +275,7 @@ export async function loadEntryDisplays(db: Db, inputs: readonly DisplayInput[],
 // A topic without a title (a short remark) gets the same rule applied to its body, and shows the beginning of the body (headlineFromBody; fromBody: true). text is an empty string for a body with no text (an image without alt text, for example).
 export type TitleDisplay = {
   text: string;
-  lang: Lang;
+  lang: SourceLang;
   // Translation kind when showing a translation; null for the source.
   kind: ShownKind | null;
   engine: string | null;
@@ -343,7 +343,7 @@ export async function loadTopicLineTranslations(
 
 export type TopicLine = {
   text: string;
-  lang: Lang;
+  lang: SourceLang;
   // The row of the translation (when a translation is shown; null for the original).
   row: LineTranslation | null;
   pending: boolean;
@@ -352,7 +352,7 @@ export type TopicLine = {
 
 // Decides the one line that names a topic (loadTitleDisplays and search share this rule). body: needed only for a topic without a title.
 export async function topicLine(
-  topic: { id: number; lang: Lang; title: string | null; body?: string },
+  topic: { id: number; lang: SourceLang; title: string | null; body?: string },
   picked: PickedLineTranslations | undefined,
   wants: boolean,
   displayLang: Lang,
@@ -386,7 +386,7 @@ export async function loadTitlelessBodies(db: Db, topics: ReadonlyArray<{ id: nu
 export async function loadTitleDisplays(
   db: Db,
   // body need not be given. When it is not, this function reads the bodies of the topics without a title only, in one query (the bodies of topics with a title are not read).
-  topics: ReadonlyArray<{ id: number; lang: Lang; title: string | null; sourceHash: string | null; body?: string }>,
+  topics: ReadonlyArray<{ id: number; lang: SourceLang; title: string | null; sourceHash: string | null; body?: string }>,
   opts: Pick<DisplayOptions, "readLangs" | "displayLang">,
   // Shared selection preserves saved text; only screen callers opt into typography.
   typeset = false,

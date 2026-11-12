@@ -4,11 +4,11 @@ import { namedAuthorLabel } from "~/lib/deleted-member";
 import { reasonLabelFor } from "~/lib/mail/reason-label";
 import type { MailMessage } from "~/lib/mail/mail.server";
 import type { ModerationAction, ReportReason, AppealStatus } from "~/lib/moderation";
-import type { NotificationKind } from "~/lib/notifications";
+import type { InAppOnlyKind, NotificationKind } from "~/lib/notifications";
 import { m } from "~/paraglide/messages.js";
 import type { Locale } from "~/paraglide/runtime.js";
 import { localizedLanguageLabel } from "~/lib/language-label";
-import type { Lang } from "~/lib/languages";
+import type { SourceLang } from "~/lib/languages";
 
 // Plain-text notification mail in the recipient's profiles.ui_locale, in the same module location as magic-link.server.ts.
 // A followed_thread mail tells how many replies were merged (count) and shows the author, the excerpt and the place of the latest reply. When the latest reply is hidden
@@ -21,7 +21,7 @@ import type { Lang } from "~/lib/languages";
 export type MailItem = {
   translationResult?: TranslationReportResult;
   automatic?: boolean;
-  kind: NotificationKind;
+  kind: Exclude<NotificationKind, InAppOnlyKind>;
   url: string;
   villageName?: string;
   handle?: string;
@@ -36,7 +36,7 @@ export type MailItem = {
   appealReversed?: boolean | null;
   // followed_thread: how many replies are merged into the notification.
   count?: number;
-  replyLanguage?: Lang;
+  replyLanguage?: SourceLang;
 };
 
 export const EXCERPT_CHARS = 200;

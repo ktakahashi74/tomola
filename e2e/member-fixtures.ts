@@ -54,6 +54,10 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "villages_suspended@example.com", handle: "villages_suspended", homeArea: "en", uiLocale: "en" },
 ];
 export const MEMBER_FIXTURES: readonly SeedMember[] = [
+  { email: "scribe_other_public@example.com", handle: "scribe_other_public", homeArea: "en", uiLocale: "en" },
+  { email: "scribe_other_check@example.com", handle: "scribe_other_check", homeArea: "en", uiLocale: "en" },
+  { email: "scribe_other_mismatch@example.com", handle: "scribe_other_mismatch", homeArea: "en", uiLocale: "en" },
+  ...["en", "ja"].map(locale => ({ email: `scribe_other_${locale}@example.com`, handle: `scribe_other_${locale}`, homeArea: "en" as const, uiLocale: locale as "en" | "ja" })),
   { email: "invite_bulk_operator@example.com", handle: "invite_bulk_operator", homeArea: "en", uiLocale: "en" },
   ...["saved", "invalidated", "reply", "large", "failed", "flush", "submit", "delete", "visible"].map(name => ({ email: `departure_${name}@example.com`, handle: `departure_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["ja", "en"].flatMap(lang => [390, 1366].map(width => ({ email: `push_ui_${width}_${lang}@example.com`, handle: `push_ui_${width}_${lang}`, homeArea: "en" as const, uiLocale: lang as "ja" | "en" }))),

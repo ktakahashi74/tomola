@@ -5,7 +5,7 @@ import { enableSigningAuthenticator, acceptSignedWrite } from "../e2e/signing-he
 
 const french = "Nous avons une place pour les personnes qui veulent partager leurs idées avec les autres.";
 
-test("disabled French prose retains the default and shows a non-blocking notice", async ({ browser }) => {
+test("unopened French prose preserves its language and shows a non-blocking notice", async ({ browser }) => {
   const context = await browser.newContext({ extraHTTPHeaders: clientHeaders("10.26.0.2") });
   const page = await context.newPage();
   try {
@@ -23,11 +23,11 @@ test("disabled French prose retains the default and shows a non-blocking notice"
     await waitForFormReady(page.locator('form', { has: page.locator('input[name="title"]') }));
     await page.getByLabel(enMessages.field_body, { exact: true }).fill(french);
     await page.getByRole("button", { name: enMessages.submit_post, exact: true }).click();
-    await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_default, { lang: "日本語" }), { exact: true })).toBeVisible();
-    await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_disabled, { detected: "Français", langs: "日本語, English" }), { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_detected, { lang: "Français" }), { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_other_named, { lang: "French" }), { exact: true })).toBeVisible();
     await acceptSignedWrite(page);
-    await expect(page).toHaveURL(/\/t\/(\d+)\?posted=\1$/);
+    await expect(page).toHaveURL(url => /^\/t\/\d+$/.test(url.pathname));
     const data = await (await context.request.get("/settings/export")).json();
-    expect(data.entries.find((entry: { body: string }) => entry.body === french).lang).toBe("ja");
+    expect(data.entries.find((entry: { body: string }) => entry.body === french).lang).toBe("fr");
   } finally { await context.close(); }
 });

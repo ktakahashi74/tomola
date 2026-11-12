@@ -3,7 +3,7 @@ import type { Db } from "~/lib/db/client.server";
 import { distributionViewerFor, readDistributions } from "~/lib/distribution.server";
 import type { TopicSummary } from "~/lib/entries.server";
 import { loadTitleDisplays, type TitleDisplay } from "~/lib/entry-display.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import type { Profile } from "~/lib/profiles.server";
 import { loadLatestReplyLocations } from "~/lib/reply-locations.server";
 import { toDistributionView, type DistributionView } from "~/lib/stance-ui";
@@ -17,7 +17,8 @@ import type { WithVillageTranslation } from "~/lib/village-translation-view";
 // or the original with 「翻訳待ち」 if no translation exists.
 export type TopicItem = {
   id: number;
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   displayLang?: Lang;
   authorHandle: string;
   authorName?: string | null;
@@ -70,7 +71,7 @@ export async function toTopicItems(
   const names = await loadDisplayNames(db, topics.map(t => t.authorHandle));
   return topics.map((t) => ({
     id: t.id,
-    lang: t.lang,
+    lang: t.lang, langCode: t.langCode,
     displayLang: opts.displayLang,
     authorHandle: t.authorHandle,
     authorName: selectDisplayName(names.get(t.authorHandle)),

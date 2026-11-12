@@ -7,7 +7,7 @@ import { loadPickedTranslations } from "~/lib/entry-display.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { headlineFromBody } from "~/lib/headline.server";
 import { shareLanguageHint } from "~/lib/share-language";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { canReadMedia } from "~/lib/media-references.server";
 import { mediaPath } from "~/lib/media";
 import { markdownToPlainText } from "~/lib/plain-text.server";
@@ -74,17 +74,17 @@ async function publicImage(db: Db, found: { id: string; alt: string }, origin: s
   return { url: `${origin}${mediaPath(found.id, row.width, row.height)}`, width: row.width, height: row.height, alt: found.alt };
 }
 
-export type TopicShare = { title: string; author: string | null; lang: Lang; description: string | null; image: ShareImage | null };
+export type TopicShare = { title: string; author: string | null; lang: SourceLang; description: string | null; image: ShareImage | null };
 
 // For a topic everyone may read (checked by the caller). Explicit reading language, then preview hint, then source language; never reader preferences.
 // The title and body must both be available in the requested language. The image is the first in the source, with that version's alt text when it has the same image.
-export async function topicShare(db: Db, topic: { id: number; authorHandle?: string; lang: Lang; title: string | null; body: string; sourceHash: string | null }, search: string): Promise<TopicShare> {
+export async function topicShare(db: Db, topic: { id: number; authorHandle?: string; lang: SourceLang; title: string | null; body: string; sourceHash: string | null }, search: string): Promise<TopicShare> {
   const origin = siteOrigin();
   let markdown = topic.body;
   let lang = topic.lang;
   let title = topic.title;
-  const requested = shareLanguageHint(search, enabledLangs())?.lang ?? topic.lang;
-  if (requested !== topic.lang) {
+  const requested = shareLanguageHint(search, enabledLangs())?.lang;
+  if (requested && requested !== topic.lang) {
     const rows = (await loadPickedTranslations(db, [{ id: topic.id, kind: "topic", lang: topic.lang, sourceHash: topic.sourceHash }], requested, topic.title === null ? ["body"] : ["title", "body"])).get(topic.id);
     if (rows?.body && (topic.title === null || rows.title)) {
       markdown = rows.body.text;

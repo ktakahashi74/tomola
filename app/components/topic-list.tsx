@@ -64,7 +64,7 @@ export function TopicList({
           {" "}<LocalTime iso={order === "activity" ? t.lastActivityAt : t.createdAt} className="topic-date ui-meta text-muted-foreground" />
           <ListMeta items={[
             { key: "author", content: <AuthorLink handle={t.authorHandle} name={t.authorName} reader={reader} /> },
-            showOriginalLanguage && !(compactMeta && t.title.kind) && (!compactMeta || t.lang !== t.displayLang) && { key: "language", content: <span>{languageLabel(t.lang)}</span> },
+            showOriginalLanguage && !(compactMeta && t.title.kind) && (!compactMeta || t.lang !== t.displayLang) && { key: "language", content: <span>{languageLabel(t.lang, t.langCode)}</span> },
             t.replyCount > 0 && { key: "replies", content: t.latestReply ? (
               <Link to={`/t/${t.id}${pageSearch(langParam ? `?lang=${langParam}` : "", t.latestReply.page)}#c-${t.latestReply.id}`} className="link-ui">
                 {m.home_replies({ count: t.replyCount })}
@@ -74,7 +74,7 @@ export function TopicList({
             t.village && { key: "village", content: <Link to={`/v/${t.village.slug}`} title={villageNameTitle(t.village)} className="link-ui">{t.village.name}</Link> },
             t.asksStance && { key: "question", badge: true, content: <Badge variant="secondary" className="bg-info text-info-foreground">{m.question_badge()}</Badge> },
             t.hidden && { key: "hidden", badge: true, content: <Badge variant="secondary" title={m.entry_hidden_mark()} className="bg-notice text-notice-foreground">{m.entry_hidden_mark_short()}</Badge> },
-            t.title.kind && { key: "translation", badge: !compactMeta, content: <TranslationLabel kind={t.title.kind} engine={t.title.engine} fallback={t.title.fallback} stale={t.title.stale} structureMismatch={t.title.structureMismatch} concise={compactMeta} fromLang={compactMeta && showOriginalLanguage ? languageLabel(t.lang) : undefined} plain={compactMeta && !showOriginalLanguage} /> },
+            t.title.kind && { key: "translation", badge: !compactMeta, content: <TranslationLabel kind={t.title.kind} engine={t.title.engine} fallback={t.title.fallback} stale={t.title.stale} structureMismatch={t.title.structureMismatch} concise={compactMeta} fromLang={compactMeta && showOriginalLanguage ? languageLabel(t.lang, t.langCode) : undefined} plain={compactMeta && !showOriginalLanguage} /> },
             t.title.pending && { key: "pending", content: <span className="ui-meta"><PendingText short /></span> },
             t.title.unavailable && { key: "unavailable", content: <span role="status" className="ui-meta">{m.translation_unavailable()}</span> },
             t.insightful.total > 0 && { key: "insightful", content: <CountWithLanguages count={t.insightful} kind="insightful" /> },

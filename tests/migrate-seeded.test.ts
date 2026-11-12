@@ -41,6 +41,9 @@ describe.skipIf(!REAL_PG_URL)('upgrade a populated historical PostgreSQL databas
       const started = performance.now();
       await migrateDatabase({ kind: 'pg', url: scratch.url });
       expect((await pool.query(`SELECT id, kind, thread_id, title, body, author_id FROM entries ORDER BY id`)).rows).toEqual(before);
+      expect((await pool.query(`SELECT lang, lang_code, lang_source FROM entries ORDER BY id`)).rows).toEqual([
+        { lang: 'ja', lang_code: null, lang_source: null }, { lang: 'en', lang_code: null, lang_source: null },
+      ]);
       expect((await pool.query(`SELECT body FROM drafts`)).rows).toEqual([{ body: 'Unpublished fixture' }]);
       expect((await pool.query(`SELECT text FROM translations`)).rows).toEqual([{ text: 'Historical translation' }]);
       expect((await pool.query(`SELECT kind, priority FROM jobs ORDER BY id`)).rows).toEqual([

@@ -99,7 +99,7 @@ export default function ModerationLog({ loaderData }: Route.ComponentProps) {
                   </TableCell>
                   <TableCell className="py-1 pe-3">{actionLabel(e.action)}{e.automatic && <span className="ms-2 ui-meta">{m.moderation_automatic()}</span>}</TableCell>
                   <TableCell className="py-1 pe-3">{reasonLabel(e.reason)}</TableCell>
-                  <TableCell className="py-1 pe-3">{"place" in e ? m.mod_kind_chat() : "village" in e ? e.village ? loaderData.villageLinks ? <Link className="underline" to={`/v/${e.village.slug}`}>{e.village.name}</Link> : e.village.name : m.mod_kind_village() : e.lang ? <span lang={e.lang}>{LANG_LABELS[e.lang]}</span> : "—"}</TableCell>
+                  <TableCell className="py-1 pe-3">{"place" in e ? m.mod_kind_chat() : "village" in e ? e.village ? loaderData.villageLinks ? <Link className="underline" to={`/v/${e.village.slug}`}>{e.village.name}</Link> : e.village.name : m.mod_kind_village() : e.lang ? <span lang={e.lang}>{e.lang === "other" ? m.source_language_other() : LANG_LABELS[e.lang]}</span> : "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

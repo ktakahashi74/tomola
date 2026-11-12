@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/compone
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { m } from "~/paraglide/messages.js";
 import { useAiOpenReturn } from "~/components/use-ai-open-return";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { languageLabel } from "~/lib/language-label";
 
 // "AIで開く": open the chosen AI (ChatGPT, Claude or a user-provided URL template) with a prompt containing the page's Markdown-twin URL
@@ -59,7 +59,7 @@ export function AiChoiceForm(props: ComponentProps<typeof ChoiceForm>) {
 
 // mdUrl: this page's token-free absolute Markdown-twin URL. mdPath: the same page's path without a token
 // ("Markdownでコピー" fetches it using the session cookie).
-export function OpenInAi({ mdUrl, mdPath, reader = false, showNoScript = true, sourceLang, readingLang }: { mdUrl: string; mdPath: string; reader?: boolean; showNoScript?: boolean; sourceLang?: Lang; readingLang?: Lang }) {
+export function OpenInAi({ mdUrl, mdPath, reader = false, showNoScript = true, sourceLang, readingLang }: { mdUrl: string; mdPath: string; reader?: boolean; showNoScript?: boolean; sourceLang?: SourceLang; readingLang?: SourceLang }) {
   const [mounted, setMounted] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // Dialog initial values: reread the saved localStorage choice each time the dialog opens, rather than on every render.

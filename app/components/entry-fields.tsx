@@ -6,7 +6,7 @@ import { entryErrorMessage } from "~/lib/entry-error-message";
 import { EntryPreview } from "~/components/entry-preview";
 import { BodyCounter } from "~/components/body-counter";
 import { MentionTextarea } from "~/components/mention-autocomplete";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 
 // Shared post-form fields (body and language). No field asks how AI was used; only pasted frontmatter or the API carries ai_assistance.
@@ -48,8 +48,8 @@ export function EntryFields({
   previewLanguage,
 }: {
   previewKind?: "topic" | "reply";
-  defaultLang?: Lang;
-  fixedLang?: Lang;
+  defaultLang?: SourceLang;
+  fixedLang?: SourceLang;
   // The values chosen in the form that is drawn again after a refusal (the value of the select; "" is "automatic"). Without them the selects start at their defaults.
   selectedLang?: string;
   defaultBody?: string;

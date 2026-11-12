@@ -10,7 +10,7 @@ import type { ReadingLanguageChoice } from "~/lib/reading-lang";
 import { ReadingToc } from "~/components/reading-toc";
 import { toggleSearch, type Shown } from "~/lib/display";
 import type { EntryDisplay } from "~/lib/entry-display.server";
-import { LANG_LABELS, type Lang } from "~/lib/languages";
+import { LANG_LABELS, type Lang, type SourceLang } from "~/lib/languages";
 import type { ReadingInfo, ReadingVersions } from "~/lib/reading";
 import { languageLabel } from "~/lib/language-label";
 import { m } from "~/paraglide/messages.js";
@@ -34,6 +34,7 @@ export function TranslatedEntry({
   id,
   kind,
   lang,
+  langCode,
   title,
   headline,
   html,
@@ -52,7 +53,8 @@ export function TranslatedEntry({
 }: {
   id: number;
   kind: "topic" | "reply";
-  lang: Lang;
+  lang: SourceLang;
+  langCode?: string | null;
   // The title of the original (topics only). null for a topic means a topic without a title.
   title: string | null;
   // For a topic without a title: the one line at the start of the body of the original (headlineFromBody).
@@ -63,7 +65,7 @@ export function TranslatedEntry({
   // Content between the title and body, such as the author line. A function gets the reading info and, for a reply, the one-line translation status and switch (null when the reply has none), so that
   // the reply can draw it alongside the author and time. A reading header receives its translation switches and notes in the same slot, and its language menu separately.
   // `view` (the reading layout only) says what the reader is reading, in one phrase for the byline: the language of the original, or "AI-translated from English (Gemini)", with the model for a tooltip.
-  meta: ReactNode | ((info: ReadingInfo | null, controls: ReactNode, view: { text: string; title?: string; lang: Lang }, languageMenu: ReactNode) => ReactNode);
+  meta: ReactNode | ((info: ReadingInfo | null, controls: ReactNode, view: { text: string; title?: string; lang: SourceLang }, languageMenu: ReactNode) => ReactNode);
   // Content below the body, such as a mistranslation report while a translation is shown; receives whether a translation is being displayed.
   footer?: (shownTranslation: EntryDisplay["translation"]) => ReactNode;
   showHeading?: boolean;
@@ -72,7 +74,7 @@ export function TranslatedEntry({
   readingLanguage?: { choice: ReadingLanguageChoice; translating?: ReadonlySet<Lang> };
   toolsBefore?: ReactNode;
   toolsAfter?: ReactNode;
-  readingActions?: (lang: Lang) => { actions: ReactNode; actionMenu: ReactNode };
+  readingActions?: (lang: SourceLang) => { actions: ReactNode; actionMenu: ReactNode };
   quotable?: boolean;
   // Tells the page which translation is shown now (the one a report of a wrong translation is about), for a control that the page draws outside this component. Called after every change of the version shown.
   onReportedChange?: (translation: EntryDisplay["translation"]) => void;
@@ -159,7 +161,7 @@ export function TranslatedEntry({
   // A reply's status and switch sit after its name and time: the source language when the original is
   // shown, or translation provenance, with pending/failure notes beside the original. The model is in the label tooltip.
   const replyControls = kind === "reply" && (tr || display.pending || display.unavailable) ? (() => {
-    const label = languageLabel(lang);
+    const label = languageLabel(lang, langCode);
     const parts: ReactNode[] = [];
     if (showing) parts.push(<TranslationLabel key="label" fromLang={label} kind={showing.kind} engine={showing.engine} model={showing.model} fallback={showing.fallback} stale={showing.stale} structureMismatch={showing.structureMismatch} />);
     else if (showingOlder) parts.push(<Fragment key="label"><TranslationLabel fromLang={label} kind={showingOlder.kind} engine={showingOlder.engine} model={showingOlder.model} /> <span className="text-notice-muted">{m.label_older()}</span></Fragment>);
@@ -174,10 +176,10 @@ export function TranslatedEntry({
   })() : null;
   // The reading layout: what is read is said once, in the byline (view). This row holds only what is left: the switch between the translation and the original, and the notes.
   const view = showing
-    ? { text: translationFromText(showing.kind, showing.engine, languageLabel(lang)), title: showing.model ?? undefined }
+    ? { text: translationFromText(showing.kind, showing.engine, languageLabel(lang, langCode)), title: showing.model ?? undefined }
     : showingOlder
-      ? { text: translationFromText(showingOlder.kind, showingOlder.engine, languageLabel(lang)), title: showingOlder.model ?? undefined }
-      : { text: LANG_LABELS[lang] };
+      ? { text: translationFromText(showingOlder.kind, showingOlder.engine, languageLabel(lang, langCode)), title: showingOlder.model ?? undefined }
+      : { text: languageLabel(lang, langCode) };
   const languageMenu = reading && readingLanguage && <ReadingLangMenu {...readingLanguage} text={m.reading_other_languages_read()} originalLang={lang} entryId={id} align="start" plain className="inline-block align-baseline"
     onSelectLanguage={target => {
       // Ordinary language choices navigate; only returning from the source switch stays in place.

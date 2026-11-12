@@ -4,7 +4,7 @@ import { EntryReactions } from "~/components/reactions";
 import { TranslationLabel } from "~/components/translation-label";
 import { AuthorLink } from "~/components/author-link";
 import { MoreInfo } from "~/components/ui/more-info";
-import { type Lang } from "~/lib/languages";
+import { type Lang, type SourceLang } from "~/lib/languages";
 import { languageLabel } from "~/lib/language-label";
 import type { ReasonExcerpt } from "~/lib/reasons.server";
 import { POSITIONS, type Position } from "~/lib/stances";
@@ -24,7 +24,7 @@ import { m } from "~/paraglide/messages.js";
 // One picked reply. `lang` is the original language of the text (the writer's home area is not part of it).
 export type ReasonView = {
   id: number;
-  lang: Lang;
+  lang: SourceLang;
   authorHandle: string;
   authorName?: string | null;
   excerpt: ReasonExcerpt;

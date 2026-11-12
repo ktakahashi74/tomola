@@ -66,6 +66,7 @@ async function items(db: Db, topics: readonly TopicSummary[], opts: ListMdOption
       title: t.title ?? undefined,
       excerpt: t.title === null ? (await headlineFromBody(bodies.get(t.id) ?? "")) : undefined,
       lang: t.lang,
+      ...(t.langCode ? { lang_code: t.langCode } : {}),
       author: authorLabel(t.authorHandle),
       ...displayNameFields(names.get(t.authorHandle)),
       created: isoSeconds(t.createdAt),

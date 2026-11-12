@@ -8,12 +8,12 @@ import { isPrunedRevision } from "./retention";
 import type { Db, Tx } from "~/lib/db/client.server";
 import { appeals, entries, entryRevisions, moderationActions, profiles, reports, chatReportSnapshots, villageMembers, villageEvents, villages } from "~/lib/db/schema";
 import { applyEntryEdit, hasNul, recomputeThreadActivity, renderEntryHtml } from "~/lib/entries.server";
-import { isLang, type Lang } from "~/lib/languages";
+import { isSourceLang, type SourceLang } from "~/lib/languages";
 import { APPEALABLE_ACTIONS, isReason, type AppealStatus, type ModerationAction, type ReportReason } from "~/lib/moderation";
 import { readMentionBindings, resolveSourceMentions } from "~/lib/mentions.server";
 import { latestEntryAction, lockEntry, lockMember } from "~/lib/moderation.server";
 import { createAppealNotification } from "~/lib/notifications.server";
-import { inScope, isModerator, type ModScope } from "~/lib/roles.server";
+import { inLanguageScope, isModerator, type ModScope } from "~/lib/roles.server";
 import { enqueueEmbedding } from "~/lib/embeddings.server";
 import { touchAltOriginal } from "~/lib/questions.server";
 import { lockReferenceTopics, touchReferenceTopics } from "~/lib/related-discussions.server";
@@ -53,7 +53,7 @@ export type AppealableAction = {
   // Suspension deadline, for suspensions.
   until: Date | null;
   // Hidden or deleted entries belonging to the subject; show their content to that member.
-  entry: { id: number; threadId: number; kind: "topic" | "reply"; lang: Lang; title: string | null; body: string } | null;
+  entry: { id: number; threadId: number; kind: "topic" | "reply"; lang: SourceLang; title: string | null; body: string } | null;
   // For fix_entry, the title and body immediately before the edit (entry_revisions at the action's revision_id). entry holds the current title and body. Null for other actions.
   before: PreFixText | null;
   appeal: AppealSummary | null;
@@ -125,7 +125,7 @@ export async function getAppealableAction(db: Db, userId: string, actionId: numb
       .select({ id: entries.id, threadId: entries.threadId, kind: entries.kind, lang: entries.lang, title: entries.title, body: entries.body })
       .from(entries)
       .where(eq(entries.id, action.targetEntryId));
-    if (e && isLang(e.lang)) entry = { id: e.id, threadId: e.threadId ?? e.id, kind: e.kind as "topic" | "reply", lang: e.lang, title: e.title, body: e.body };
+    if (e && isSourceLang(e.lang)) entry = { id: e.id, threadId: e.threadId ?? e.id, kind: e.kind as "topic" | "reply", lang: e.lang, title: e.title, body: e.body };
   }
   const [chat] = action.chatMessageId ? await db.select({ body: chatReportSnapshots.body, lang: chatReportSnapshots.lang, createdAt: chatReportSnapshots.messageCreatedAt, prunedAt: chatReportSnapshots.prunedAt }).from(chatReportSnapshots).where(and(eq(chatReportSnapshots.messageId, action.chatMessageId), eq(chatReportSnapshots.authorId, userId))) : [];
   return {
@@ -217,7 +217,7 @@ export type AppealCard = {
   actionDate: Date;
   until: Date | null;
   // The affected entry (hide/delete), with its content shown for review. For suspensions, the reported entry, if any.
-  entry: { id: number; threadId: number; kind: "topic" | "reply"; lang: Lang; title: string | null; body: string; hidden: boolean; deleted: boolean } | null;
+  entry: { id: number; threadId: number; kind: "topic" | "reply"; lang: SourceLang; title: string | null; body: string; hidden: boolean; deleted: boolean } | null;
   // For fix_entry, the title and body immediately before the edit (entry holds the current values). Null for other actions.
   before: PreFixText | null;
 };
@@ -297,7 +297,7 @@ export async function listOpenAppeals(db: Db, reviewer: { id: string; scope: Mod
     const affected = action.action === "clear_avatar" || action.action === "clear_display_name" || action.action === "suspend" || action.action === "exclude_reactions" ? action.targetUserId : chatId ? chat?.authorId : action.entryAuthorId;
     if (!affected && !action.targetVillageId || action.targetVillageId !== null && owned.has(action.targetVillageId)) continue;
     const e = entryById.get(entryIdOf(action) ?? -1);
-    const entry: AppealCard["entry"] = e && isLang(e.lang) ? { id: e.id, threadId: e.threadId ?? e.id, kind: e.kind as "topic" | "reply", lang: e.lang, title: e.title, body: e.body, hidden: e.hiddenAt !== null, deleted: e.deletedAt !== null } : null;
+    const entry: AppealCard["entry"] = e && isSourceLang(e.lang) ? { id: e.id, threadId: e.threadId ?? e.id, kind: e.kind as "topic" | "reply", lang: e.lang, title: e.title, body: e.body, hidden: e.hiddenAt !== null, deleted: e.deletedAt !== null } : null;
     const v = action.targetVillageId === null ? undefined : villageById.get(action.targetVillageId);
     const event = action.villageEventId === null ? undefined : eventById.get(action.villageEventId);
     const detail = event?.villageId === action.targetVillageId ? event.detail : undefined;
@@ -397,7 +397,7 @@ export async function decideAppeal(
       if (mine) return { ok: false as const, error: "reporter" as const };
     }
     if (action.chatMessageId) {
-      if (!action.chatLang || !inScope(reviewer.scope, action.chatLang)) return { ok: false as const, error: "forbidden" as const };
+      if (!action.chatLang || !inLanguageScope(reviewer.scope, action.chatLang)) return { ok: false as const, error: "forbidden" as const };
       const [mine] = await tx.select({ id: reports.id }).from(reports).where(and(eq(reports.chatMessageId, action.chatMessageId), eq(reports.reporterId, reviewer.id))).limit(1);
       if (mine) return { ok: false as const, error: "reporter" as const };
     }

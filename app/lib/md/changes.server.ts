@@ -55,6 +55,7 @@ export type Change = {
   threadId: number;
   title: string | null;
   lang: string;
+  langCode?: string | null;
   handle: string | null;
   changedAt: Date;
   sourceHash: string | null;
@@ -95,7 +96,7 @@ export async function loadChanges(db: Db, opts: { since: Date | null; cursor?: C
       kind: entries.kind,
       threadId: entries.threadId,
       title: entries.title,
-      lang: entries.lang,
+      lang: entries.lang, langCode: entries.langCode,
       handle: retainedAuthorColumn(entries.authorId, profiles.handle, "handle"),
       createdAt: entries.createdAt,
       editedAt: entries.editedAt,
@@ -123,7 +124,7 @@ export async function loadChanges(db: Db, opts: { since: Date | null; cursor?: C
       id: r.id,
       threadId: r.threadId ?? r.id,
       title: r.title,
-      lang: r.lang,
+      lang: r.lang, langCode: r.langCode,
       handle: r.handle,
       changedAt: r.changedAt,
       sourceHash: r.sourceHash,
@@ -156,6 +157,7 @@ export async function buildChangesMarkdown(db: Db, opts: { since: Date | null; c
       // No title key for a topic without a title (and for a reply).
       title: c.entryKind === "topic" ? (c.title ?? undefined) : undefined,
       lang: c.lang,
+      ...(c.langCode ? { lang_code: c.langCode } : {}),
       author: authorLabel(c.handle),
       ...displayNameFields(names.get(c.handle ?? "")),
       version: versionOf(c.sourceHash) ?? undefined,

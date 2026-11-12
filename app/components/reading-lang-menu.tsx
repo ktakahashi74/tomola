@@ -2,7 +2,7 @@ import { ChevronDown } from "lucide-react";
 import { PendingText } from "~/components/pending-text";
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router";
-import { LANG_LABELS, type Lang } from "~/lib/languages";
+import { LANG_LABELS, type Lang, type SourceLang } from "~/lib/languages";
 import { entryReadingLangSearch, readingLangSearch, type ReadingLanguageChoice } from "~/lib/reading-lang";
 import { m } from "~/paraglide/messages.js";
 
@@ -15,7 +15,7 @@ export function ReadingLangMenu({ choice, text, title, originalLang, entryId, tr
   // A tooltip for the visible name (the model that made a translation).
   title?: string;
   // The language of the original, when the menu belongs to one article: its entry reads "(original)".
-  originalLang?: Lang;
+  originalLang?: SourceLang;
   // Article menus clear this entry's previous source/translation toggle.
   // Translation choices can override saved original-reading preferences.
   entryId?: number;

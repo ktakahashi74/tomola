@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { SHARE_LANG_PARAM } from "~/lib/share-language";
 
 // Follow the body version without navigation, revalidation or a new history entry.
-export function ShareCardAddress({ topicId, originalLang, readingLang }: { topicId: number; originalLang: Lang; readingLang: Lang }) {
+export function ShareCardAddress({ topicId, originalLang, readingLang }: { topicId: number; originalLang: SourceLang; readingLang: SourceLang }) {
   const location = useLocation();
   useEffect(() => {
     const url = new URL(window.location.href);

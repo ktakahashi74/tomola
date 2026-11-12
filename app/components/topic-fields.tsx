@@ -9,7 +9,7 @@ import { PostSettings } from "~/components/post-settings";
 import { VillageTarget } from "~/components/village-target";
 import { DraftKeeper } from "~/components/draft-keeper";
 import type { PostingVillages } from "~/lib/villages.server";
-import { LANG_LABELS, isLang, type Lang } from "~/lib/languages";
+import { LANG_LABELS, isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { startsWithFrontmatter } from "~/lib/text";
 import { m } from "~/paraglide/messages.js";
 
@@ -19,7 +19,7 @@ import { m } from "~/paraglide/messages.js";
 export function TopicFields({ defaultLang, defaultTitle = "", defaultBody = "", selectedLang = "", autoLang = true, asksStance, onAsksStanceChange, intro, onIntroChange, showIntro, alt, altNotFound, altFixedNote, sharePrefilled, BodyEditor, posting, invalidatePreviewOnEdit = false, keeper, notices, error, errorId, children }: {
   error?: string;
   errorId?: string;
-  defaultLang: Lang;
+  defaultLang: SourceLang;
   defaultTitle?: string;
   defaultBody?: string;
   selectedLang?: string;
@@ -62,7 +62,7 @@ export function TopicFields({ defaultLang, defaultTitle = "", defaultBody = "", 
   }, []);
   const titleNeeded = asksStance || Boolean(alt);
   const fixedQuestion = Boolean(alt) || altFixedNote !== undefined;
-  const summary = lang === "" && autoLang ? m.post_summary_lang_auto() : m.post_summary_lang({ lang: isLang(lang || defaultLang) ? LANG_LABELS[(lang || defaultLang) as Lang] : lang });
+  const summary = lang === "" && autoLang ? m.post_summary_lang_auto() : m.post_summary_lang({ lang: (lang || defaultLang) === "other" ? m.source_language_other() : isLang(lang || defaultLang) ? LANG_LABELS[(lang || defaultLang) as Lang] : lang });
   return <>
     {notices}
     {keeper && <DraftKeeper {...keeper} />}

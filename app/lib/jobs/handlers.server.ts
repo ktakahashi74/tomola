@@ -1,3 +1,4 @@
+import { createSourceLanguageHandlers } from "./source-language-jobs.server";
 import { createPushHandlers } from "./push-jobs.server";
 import { createFigureHandlers } from "./figure-jobs.server";
 import { createAccountDeletionHandlers } from "./account-delete-jobs.server";
@@ -22,4 +23,4 @@ import type { JobHandlers } from "./queue.server";
 // cleanup_jobs (remove jobs finished over 30 days ago, daily UTC 03:00): jobs/maintenance-jobs.server.ts.
 // rebuild_render_cache rebuilds saved body and card HTML at the current version, newest topics first (render-cache.server.ts).
 // Handlers throw on failure for retry; throw DeferJob when temporarily unable to run, such as a budget limit.
-export const jobHandlers: JobHandlers = { ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() };
+export const jobHandlers: JobHandlers = { ...createSourceLanguageHandlers(), ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() };

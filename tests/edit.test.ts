@@ -192,15 +192,16 @@ describe("editEntry", () => {
     }
   });
 
-  it("rejects disabled languages and language-only edits to pinned questions", async () => {
+  it("accepts unopened source languages but rejects unknown codes and language-only edits to pinned questions", async () => {
     const { db, topicId, replyId } = await setup();
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     try {
       for (const id of [topicId, replyId]) {
-        for (const lang of ["vi", "unknown"]) {
+        for (const lang of ["unknown"]) {
           expect(await editEntry(db, "u1", id, { title: "元の題", body: "元の本文", lang })).toEqual({ ok: false, error: "invalid_lang" });
         }
       }
+      expect(await editEntry(db, "u1", replyId, { body: "元の本文", lang: "vi" })).toMatchObject({ ok: true });
       await db.update(entries).set({ asksStance: true, stanceLockedAt: t1 }).where(eq(entries.id, topicId));
       expect(await editEntry(db, "u1", topicId, { title: "元の題", body: "元の本文", lang: "en" })).toEqual({ ok: false, error: "locked" });
     } finally { vi.unstubAllEnvs(); }

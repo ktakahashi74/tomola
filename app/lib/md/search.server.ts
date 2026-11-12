@@ -46,6 +46,7 @@ export async function buildSearchMarkdown(db: Db, query: string, found: readonly
         // A topic without a title has no title key (and no thread_title for its replies): a reader takes a missing key as "no title".
         [isTopic ? "title" : "thread_title"]: f.topicTitle ?? undefined,
         lang: f.lang,
+        ...(f.langCode ? { lang_code: f.langCode } : {}),
         author: authorLabel(f.authorHandle),
         ...displayNameFields(names.get(f.authorHandle ?? "")),
         distance: f.match ? undefined : Math.round(f.distance * 10_000) / 10_000,

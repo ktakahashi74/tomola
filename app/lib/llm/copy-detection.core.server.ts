@@ -1,4 +1,4 @@
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { withoutResolvedMentions } from "~/lib/mention-syntax";
 import { proseOf } from "./structure.core.server";
 import { chatParts } from "../village-chat";
@@ -100,7 +100,7 @@ export type CopyVerdict = { copy: boolean; reason?: "identical" | "script" | "si
 // Structure inspection separately catches gross omissions using prose-length ratios and block counts.
 // A translation that is only part translated (the first half French, the second half still English) is not found: its similarity to the source is about 0.5, far below
 // NEAR_COPY_SIMILARITY, and it has Latin letters, which the script check for a Latin target does not count against it.
-export function detectCopy(source: string, translated: string, from: Lang, to: Lang, opts: { near?: boolean; mentions?: readonly string[]; plainText?: boolean } = {}): CopyVerdict {
+export function detectCopy(source: string, translated: string, from: SourceLang, to: Lang, opts: { near?: boolean; mentions?: readonly string[]; plainText?: boolean } = {}): CopyVerdict {
   // The @mentions are names that the translation keeps as written: they are not content, and must not make a translation look like a copy.
   const prose = opts.plainText ? (text: string) => chatParts(text).filter(part => part.type !== "link").map(part => part.text).join("") : proseOf;
   const a = withoutResolvedMentions(prose(source), opts.mentions);
@@ -117,7 +117,7 @@ export function detectCopy(source: string, translated: string, from: Lang, to: L
   const minShare = TARGET_SCRIPT_MIN_SHARE[to];
   if (minShare !== undefined && !nounList && scriptShare(a, to) < SOURCE_ALREADY_IN_SCRIPT && scriptShare(b, to) < minShare) return { copy: true, reason: "script" };
   // Similarity: over the characters of the source's script when the scripts differ, over all letters when they are the same.
-  const onlySourceScript = scriptName(from) === scriptName(to) ? undefined : LANG_SCRIPT_CHARS[from];
+  const onlySourceScript = from === "other" ? undefined : scriptName(from) === scriptName(to) ? undefined : LANG_SCRIPT_CHARS[from];
   if (from !== to && bigramDice(a, b, onlySourceScript) >= NEAR_COPY_SIMILARITY) return { copy: true, reason: "similar" };
   return { copy: false };
 }

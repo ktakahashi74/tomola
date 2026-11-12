@@ -14,7 +14,7 @@ import { createMemoryMailbox } from "~/lib/mail/transports.server";
 import { deleteEntry, excludeReactions, fixEntry, hideEntry, includeReactions, suspendMember, unsuspendMember } from "~/lib/moderation.server";
 import { sourceHash } from "~/lib/source-hash.server";
 import { setStance } from "~/lib/stances.server";
-import { listNotifications, SEND_DIGEST_JOB, SEND_NOTIFICATION_EMAIL_JOB } from "~/lib/notifications.server";
+import { enqueueImmediateEmails, listNotifications, SEND_DIGEST_JOB, SEND_NOTIFICATION_EMAIL_JOB } from "~/lib/notifications.server";
 import { m } from "~/paraglide/messages.js";
 import { escapeRegex } from "./helpers/message-markup";
 import { addMember, createTestDb } from "./helpers/db";
@@ -953,4 +953,17 @@ it.each([false, true])("batches the shared immediate check only when push is ena
     expect(check).toHaveBeenCalledTimes(enabled ? 1 : 0);
     if (enabled) expect(check.mock.calls[0][2]).toHaveLength(2);
   } finally { check.mockRestore(); vi.unstubAllEnvs(); }
+});
+
+
+it.each(["auto", "immediate", "daily", "none"] as const)("never mails author language notices with %s preferences, even without emailed markers", async emailPref => {
+  const { db, topic, box, run } = await setup();
+  await setPrefs(db, "alice", { emailPref });
+  const notices = await db.insert(notifications).values(["source_language_mismatch", "entry_translation_unavailable"].map(kind => ({ userId: "alice", kind, entryId: topic, threadId: topic }))).returning();
+  expect(await enqueueImmediateEmails(db, notices.map(row => ({ ...row, kind: row.kind as "source_language_mismatch" | "entry_translation_unavailable" })))).toBe(0);
+  const now = new Date(Date.now() + 36 * 60 * 60_000);
+  await db.insert(jobs).values({ kind: SEND_DIGEST_JOB, payload: { date: digestDate(now) } });
+  expect(await run(now)).toMatchObject({ failed: 0 });
+  expect(box.sent).toHaveLength(0);
+  expect(await emailJobs(db)).toHaveLength(0);
 });

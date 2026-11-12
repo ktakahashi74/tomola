@@ -22,7 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { AI_ASSISTANCE } from "../ai-assistance";
 import { GLOSSARY_VIAS, type GlossaryContent } from "../glossary";
-import { AREAS, LANGS, type Lang } from "../languages";
+import { AREAS, LANGS, SOURCE_LANGS, type SourceLang, type Lang } from "../languages";
 import { APPEAL_STATUSES, CHAT_ACTIONS, ENTRY_ACTIONS, MEMBER_ACTIONS, MODERATION_ACTIONS, REPORT_REASONS, REPORT_STATUSES, VILLAGE_ACTIONS } from "../moderation";
 import { FOLLOW_STATES } from "../follows";
 import { DEFAULT_EMAIL_PREF, EMAIL_PREFS, NOTIFICATION_KINDS } from "../notifications";
@@ -461,6 +461,8 @@ export const entries = pgTable(
       .notNull()
       .references(() => user.id),
     lang: text("lang").notNull(),
+    langCode: text("lang_code"),
+    langSource: text("lang_source").$type<"explicit" | "detected" | "default" | "checked">(),
     title: text("title"),
     body: text("body").notNull(),
     // Rendered HTML cache. Re-render when displayed if htmlVersion differs from RENDER_VERSION in markdown.server.ts.
@@ -557,7 +559,9 @@ export const entries = pgTable(
       .on(t.threadId, t.stanceTag, t.createdAt, t.id)
       .where(sql`${t.stanceTag} is not null`),
     check("entries_kind_check", oneOf(t.kind, ENTRY_KINDS)),
-    check("entries_lang_check", oneOf(t.lang, LANGS)),
+    check("entries_lang_code_check", sql`${t.langCode} is null or (${t.lang} = 'other' and ${t.langCode} ~ '^[a-z]{2,3}$')`),
+    check("entries_lang_source_check", sql`${t.langSource} is null or ${oneOf(t.langSource, ["explicit", "detected", "default", "checked"])}`),
+    check("entries_lang_check", oneOf(t.lang, SOURCE_LANGS)),
     check("entries_ai_assistance_check", oneOf(t.aiAssistance, AI_ASSISTANCE)),
     check("entries_via_check", oneOf(t.via, ENTRY_VIAS)),
     // Null passes CHECK, representing an author without a profile.
@@ -1690,16 +1694,16 @@ export const pushDeliveries = pgTable("push_deliveries", {
 export const readingCounts = pgTable("reading_counts", {
   day: date("day").notNull(),
   method: text("method").notNull().$type<typeof READING_METHODS[number]>(),
-  sourceLang: text("source_lang").notNull().$type<Lang>(),
-  readLang: text("read_lang").notNull().$type<Lang>(),
+  sourceLang: text("source_lang").notNull().$type<SourceLang>(),
+  readLang: text("read_lang").notNull().$type<SourceLang>(),
   source: text("source").notNull().$type<typeof READING_SOURCES[number]>(),
   count: bigint("count", { mode: "number" }).notNull().default(0),
 }, t => [
   primaryKey({ columns: [t.day, t.method, t.sourceLang, t.readLang, t.source] }),
   check("reading_counts_method_check", oneOf(t.method, READING_METHODS)),
   check("reading_counts_source_check", oneOf(t.source, READING_SOURCES)),
-  check("reading_counts_source_lang_check", oneOf(t.sourceLang, LANGS)),
-  check("reading_counts_read_lang_check", oneOf(t.readLang, LANGS)),
+  check("reading_counts_source_lang_check", oneOf(t.sourceLang, SOURCE_LANGS)),
+  check("reading_counts_read_lang_check", oneOf(t.readLang, SOURCE_LANGS)),
   check("reading_counts_count_check", sql`${t.count} >= 0`),
   check("reading_counts_machine_source_check", sql`${t.method} = 'browser' or ${t.source} = 'none'`),
 ]);

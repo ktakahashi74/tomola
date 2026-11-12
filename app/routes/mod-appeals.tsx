@@ -126,7 +126,7 @@ export default function ModAppeals({ loaderData, actionData }: Route.ComponentPr
           {c.entry && (
             <PersistentDetails open className="text-sm">
               <summary className="cursor-pointer ui-meta">
-                {m.appeal_entry()} · <span lang={c.entry.lang}>{LANG_LABELS[c.entry.lang]}</span>
+                {m.appeal_entry()} · <span lang={c.entry.lang}>{c.entry.lang === "other" ? m.source_language_other() : LANG_LABELS[c.entry.lang]}</span>
                 {c.entry.deleted && <> · {m.entry_deleted_placeholder()}</>}
                 {c.entry.hidden && <> · {m.entry_hidden_mark_short()}</>}
               </summary>

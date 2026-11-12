@@ -1,6 +1,7 @@
 // One inventory for both development runs. Everything else runs privately.
 // Media delivery and deleted-parent visibility exercise both authority modes.
 export const publicOnly = [
+  ["other-languages", "public readers"],
   ["reading-counts", ".*"],
   ["village-join-state", ".*"],
   ["village-roster", ".*"],
@@ -53,6 +54,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["other-languages", "unopened language replies|background source check|explicit source choice"],
   ["list-seen-sync", "account list boundaries|failed account exchange"],
   ["logout-drafts", ".*"],
   ["web-push", ".*"],

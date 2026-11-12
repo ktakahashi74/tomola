@@ -3,7 +3,7 @@ import type { Db } from "./db/client.server";
 import { entries, jobs, translations } from "./db/schema";
 import { pickTranslation, SHOWN_KINDS } from "./display";
 import { HIDDEN_PRIMARY_FLAGS } from "./llm/flags";
-import type { Lang } from "./languages";
+import type { Lang, SourceLang } from "./languages";
 import { TRANSLATE_JOB, translateDedupeKey } from "./translations.server";
 
 export type TranslationAvailability = "available" | "pending" | "unavailable" | "unrequested";
@@ -13,7 +13,7 @@ export const availabilityKey = (entryId: number, lang: string) => `${entryId}:${
 // precedence over its previous failed output, so an automatic retry becomes pending.
 export async function loadTranslationAvailability(
   db: Db,
-  inputs: readonly { id: number; lang: Lang; sourceHash: string | null }[],
+  inputs: readonly { id: number; lang: SourceLang; sourceHash: string | null }[],
   langs: readonly Lang[],
   knownAvailable?: ReadonlyMap<number, readonly Lang[]>,
   opts: { currentOnly?: boolean } = {},

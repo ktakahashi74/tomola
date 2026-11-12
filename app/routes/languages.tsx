@@ -27,6 +27,7 @@ export default function Languages({ loaderData: page }: Route.ComponentProps) {
     <main className="reading-column space-y-6">
       <h1 className="reading-title">{page.title}</h1>
       <p>{page.opening} <Link to="/principles#s2" className="underline">{page.principlesLabel}</Link></p>
+      <section className="space-y-2" aria-labelledby="languages-writing"><h2 id="languages-writing" className="text-lg font-semibold">{page.writingTitle}</h2><p>{page.writingHelp}</p><p>{page.readingHelp}</p></section>
       {page.groups.filter(group => group.languages.length).map(group => <section key={group.id} aria-labelledby={`languages-${group.id}`} className="space-y-2">
         <h2 id={`languages-${group.id}`} className="text-lg font-semibold">{group.title}</h2>
         <ul className="space-y-1">

@@ -7,7 +7,7 @@ import type { Db } from "./db/client.server";
 import { appeals, chatAccessLog, chatConsents, chatMessages, chatReportSnapshots, moderationActions, notifications, profiles, reports, villageMembers, villages } from "./db/schema";
 import { checkInput, madeByOperator, MAX_REPORT_NOTE, type Actor, type ReportSummary } from "./moderation.server";
 import { isReason, type ReportReason } from "./moderation";
-import { inScope } from "./roles.server";
+import { inLanguageScope } from "./roles.server";
 import { isLang, type Lang } from "./languages";
 import { villageChatEnabled } from "./village-chat-enabled.server";
 import { chatVillageCondition } from "./village-chat-villages.server";
@@ -119,7 +119,7 @@ export async function chatCaseMetadata(db: Db, actor: Actor, target: ChatCase) {
   if (!messageId) throw new ChatReportError("not_found");
   const [row] = await db.select({ lang: chatReportSnapshots.lang, authorId: chatReportSnapshots.authorId, createdSeq: chatReportSnapshots.createdSeq, prunedAt: chatReportSnapshots.prunedAt, hiddenAt: chatMessages.hiddenAt, villageId: chatMessages.villageId, villageName: villages.name, villageLanguage: villages.language, villageKind: villages.kind })
     .from(chatReportSnapshots).innerJoin(chatMessages, eq(chatMessages.id, chatReportSnapshots.messageId)).innerJoin(villages, eq(villages.id, chatMessages.villageId)).where(eq(chatReportSnapshots.messageId, messageId));
-  if (!row || !inScope(actor.scope, row.lang) || row.authorId === actor.id) throw new ChatReportError("forbidden");
+  if (!row || !inLanguageScope(actor.scope, row.lang) || row.authorId === actor.id) throw new ChatReportError("forbidden");
   // As with post reports, a moderator may handle their own report, but never their own writing.
   if (target.kind === "appeal") {
     const [mine] = await db.select({ id: reports.id }).from(reports).where(and(eq(reports.chatMessageId, messageId), eq(reports.reporterId, actor.id))).limit(1);

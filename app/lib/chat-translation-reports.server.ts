@@ -10,7 +10,7 @@ import { villageChatEnabled } from "./village-chat-enabled.server";
 import { chatVillageCondition } from "./village-chat-villages.server";
 import { villageText } from "./villages";
 import { hitRateLimit } from "./rate-limit.server";
-import { inScope } from "./roles.server";
+import { inLanguageScope } from "./roles.server";
 import type { Actor } from "./moderation.server";
 import { isEnabledLang } from "./enabled-langs.server";
 import { isLang } from "./languages";
@@ -80,7 +80,7 @@ export async function listChatTranslationReports(db: Db, actor: Actor, page = 1,
 export async function chatTranslationReportMetadata(db: Db, actor: Actor, id: number) {
   const [row] = await db.select({ id: chatTranslationReports.id, messageId: chatTranslationReports.messageId, sourceLang: chatTranslationReports.sourceLang, lang: chatTranslationReports.lang, status: chatTranslationReports.status, authorId: chatMessages.authorId }).from(chatTranslationReports)
     .innerJoin(chatMessages, eq(chatMessages.id, chatTranslationReports.messageId)).where(eq(chatTranslationReports.id, id));
-  if (!row || !inScope(actor.scope, row.lang) || row.authorId === actor.id) throw new ChatTranslationReportError("not_found");
+  if (!row || !inLanguageScope(actor.scope, row.lang) || row.authorId === actor.id) throw new ChatTranslationReportError("not_found");
   return row;
 }
 export async function readChatTranslationReport(db: Db, actor: Actor, id: number, now = new Date()) {

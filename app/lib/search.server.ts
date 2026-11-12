@@ -9,7 +9,7 @@ import { entries, entryEmbeddings, profiles } from "~/lib/db/schema";
 import { isStale, wantsTranslation, type ShownKind } from "~/lib/display";
 import { loadPickedTranslations, loadTopicLineTranslations, topicLine } from "~/lib/entry-display.server";
 import { replyLocationAt } from "~/lib/entries.server";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { embed, resolveEmbeddingEngine, type LlmOptions } from "~/lib/llm/index.server";
 import { plainExcerpt } from "~/lib/plain-text.server";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
@@ -37,15 +37,15 @@ export type SearchHit = {
   createdAt: Date;
   kind: "topic" | "reply";
   threadId: number;
-  lang: Lang;
+  lang: SourceLang;
   authorHandle: string | null;
   authorName?: string | null;
   // Cosine distance: 0 same direction, 2 opposite.
   distance: number;
   // The title of the topic (for a reply, the title of the topic of its thread); the translation in the display language if there is one. For a topic without a title, the beginning of its body (fromBody; the same rule as loadTitleDisplays).
-  title: { text: string; lang: Lang; translation: SearchTranslation | null; pending: boolean; fromBody: boolean };
+  title: { text: string; lang: SourceLang; translation: SearchTranslation | null; pending: boolean; fromBody: boolean };
   // Post-body excerpt, using display-language translation when available.
-  excerpt: { text: string; lang: Lang; translation: SearchTranslation | null; pending: boolean; unavailable?: boolean };
+  excerpt: { text: string; lang: SourceLang; translation: SearchTranslation | null; pending: boolean; unavailable?: boolean };
   // Human page URL; replies include page/anchor.
   href: string;
 };
@@ -56,6 +56,7 @@ export type SearchFound = {
   kind: string;
   threadId: number;
   lang: string;
+  langCode?: string | null;
   title: string | null;
   body: string;
   sourceHash: string | null;
@@ -86,7 +87,7 @@ export async function findSimilar(db: Db, vector: readonly number[], model: stri
         createdAt: entries.createdAt,
         kind: entries.kind,
         threadId: sql<number>`coalesce(${entries.threadId}, ${entries.id})`.as("thread_id"),
-        lang: entries.lang,
+        lang: entries.lang, langCode: entries.langCode,
         title: entries.title,
         body: entries.body,
         sourceHash: entries.sourceHash,
@@ -167,7 +168,7 @@ const asTranslation = (row: { kind: ShownKind; engine: string | null; model: str
 export async function toHits(db: Db, found: readonly SearchFound[], opts: Pick<SearchOptions, "readLangs" | "displayLang" | "carryLang">, typeset = false): Promise<SearchHit[]> {
   if (found.length === 0) return [];
   const names = await loadDisplayNames(db, found.map(f => f.authorHandle));
-  const bodyInputs = found.map((f) => ({ id: f.id, kind: f.kind as "topic" | "reply", lang: f.lang as Lang, sourceHash: f.sourceHash }));
+  const bodyInputs = found.map((f) => ({ id: f.id, kind: f.kind as "topic" | "reply", lang: f.lang as SourceLang, sourceHash: f.sourceHash }));
   const topics = [...new Map(found.map((f) => [f.threadId, { id: f.threadId, kind: "topic" as const, lang: f.topicLang as Lang, sourceHash: f.topicSourceHash, title: f.topicTitle, body: f.topicBody ?? undefined }])).values()];
   const [pages, bodies, lines] = await Promise.all([
     replyPagesOf(db, found.filter(f => f.kind === "reply")),
@@ -190,14 +191,14 @@ export async function toHits(db: Db, found: readonly SearchFound[], opts: Pick<S
         createdAt: f.createdAt,
         kind: f.kind as "topic" | "reply",
         threadId: f.threadId,
-        lang: f.lang as Lang,
+        lang: f.lang as SourceLang,
         authorHandle: f.authorHandle,
         authorName: selectDisplayName(names.get(f.authorHandle ?? "")),
         distance: f.distance,
         title: { text: line.text, lang: line.lang, translation: line.row ? asTranslation(line.row) : null, pending: line.pending && availability.get(availabilityKey(f.threadId, opts.displayLang)) !== "unavailable", fromBody: line.fromBody },
         excerpt: showBody
           ? { text: (await plainExcerpt(bodyRow.text, EXCERPT_CHARS)), lang: opts.displayLang, translation: asTranslation(bodyRow), pending: false }
-          : { text: (await plainExcerpt(f.body, EXCERPT_CHARS)), lang: f.lang as Lang, translation: null, pending: bodyWants && availability.get(availabilityKey(f.id, opts.displayLang)) !== "unavailable", ...(bodyWants && availability.get(availabilityKey(f.id, opts.displayLang)) === "unavailable" ? { unavailable: true } : {}) },
+          : { text: (await plainExcerpt(f.body, EXCERPT_CHARS)), lang: f.lang as SourceLang, translation: null, pending: bodyWants && availability.get(availabilityKey(f.id, opts.displayLang)) !== "unavailable", ...(bodyWants && availability.get(availabilityKey(f.id, opts.displayLang)) === "unavailable" ? { unavailable: true } : {}) },
         href: f.kind === "reply" ? replyLocationAt(f.threadId, f.id, pages.get(f.id) ?? 1, { lang: opts.carryLang }) : `/t/${f.threadId}${opts.carryLang ? `?lang=${opts.carryLang}` : ""}`,
       };
     }),

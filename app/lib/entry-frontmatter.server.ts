@@ -1,6 +1,6 @@
 import { markdownTask, MarkdownBudgetError, isMarkdownWrite } from "./markdown-budget.server";
 import { AI_ASSISTANCE, type AiAssistance } from "~/lib/ai-assistance";
-import { isLang, type Lang } from "~/lib/languages";
+import { isSourceLang, type SourceLang } from "~/lib/languages";
 import { isStanceTag, type StanceTag } from "~/lib/stances";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 
@@ -64,7 +64,7 @@ export type Declared = {
   // Explicit type if supplied, otherwise undefined. Used to detect kind mismatches in pasted-form input.
   explicitType?: "topic" | "reply";
   title?: string;
-  lang?: Lang;
+  lang?: SourceLang;
   aiAssistance?: AiAssistance;
   // Reply target: p-<id> for topics, c-<id> for replies.
   replyTo?: ReplyTarget;
@@ -123,7 +123,7 @@ export function interpretFrontmatter(
   }
   const lang = get("lang");
   if (lang !== undefined) {
-    if (!isLang(lang)) return { ok: false, error: "invalid_lang" };
+    if (!isSourceLang(lang)) return { ok: false, error: "invalid_lang" };
     declared.lang = lang;
   }
   const ai = get("ai_assistance");

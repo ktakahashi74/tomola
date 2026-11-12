@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import { chatParts } from "../village-chat";
-import type { Lang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { sourceLangSpec, targetLangSpec } from "./lang-specs";
 import type { GlossaryHint, JudgeRequest, TranslationRequest } from "./types";
 
@@ -29,7 +29,7 @@ export const INVITATION_NOTE_PROMPT_VERSION = "invitation-note-v1";
 export const JUDGE_PROMPT_VERSION = "judge-v3";
 
 // The prompt version an engine reports for a request.
-export const promptVersionOf = (req: Pick<TranslationRequest, "chat" | "village" | "invitationNote" | "figure">): string => req.figure ? "figure-translation-v4" : req.invitationNote ? INVITATION_NOTE_PROMPT_VERSION : req.chat ? CHAT_PROMPT_VERSION : req.village ? VILLAGE_PROMPT_VERSION : PROMPT_VERSION;
+export const promptVersionOf = (req: Pick<TranslationRequest, "chat" | "village" | "invitationNote" | "figure"> & { from?: SourceLang }): string => req.from === "other" ? "translate-other-v1" : req.figure ? "figure-translation-v4" : req.invitationNote ? INVITATION_NOTE_PROMPT_VERSION : req.chat ? CHAT_PROMPT_VERSION : req.village ? VILLAGE_PROMPT_VERSION : PROMPT_VERSION;
 
 // Per-request nonce on delimiter tags such as `<source-3f9a…>`, preventing user-input closing tags from ending a section.
 export function newNonce(): string {
@@ -81,12 +81,12 @@ export const LANG_NAMES: Record<Lang, string> = {
   vi: "Vietnamese",
 };
 
-export function translationSystemPrompt(from: Lang, to: Lang, nonce = "", chat = false, village?: "name" | "description", invitationNote = false, terminology = false, figure = false): string {
+export function translationSystemPrompt(from: SourceLang, to: Lang, nonce = "", chat = false, village?: "name" | "description", invitationNote = false, terminology = false, figure = false): string {
   const t = (name: (typeof TAG_NAMES)[number]) => `<${name}-NONCE>`;
   const spec = targetLangSpec(to);
   const sourceSpec = sourceLangSpec(from);
   return [
-    `You are a professional translator for a multilingual discussion forum. Translate the text inside ${t("source")} tags from ${LANG_NAMES[from]} into ${LANG_NAMES[to]}.`,
+    `You are a professional translator for a multilingual discussion forum. Translate the text inside ${t("source")} tags from ${from === "other" ? "the language of the source text" : LANG_NAMES[from]} into ${LANG_NAMES[to]}.`,
     ...(spec ? ["", `Target language: ${spec}`] : []),
     ...(sourceSpec ? ["", `Source language: ${sourceSpec}`] : []),
     "",
@@ -221,7 +221,7 @@ export function judgeSystemPrompt(nonce = ""): string {
 export function judgeUserPrompt(req: JudgeRequest, nonce = newNonce()): string {
   return [
     `Boundary nonce: ${nonce}. Section tags use the suffix -${nonce}.`,
-    `Source language: ${LANG_NAMES[req.from]}. Language of both translations: ${LANG_NAMES[req.to]}.`,
+    `Source language: ${req.from === "other" ? "the language of the source text" : LANG_NAMES[req.from]}. Language of both translations: ${LANG_NAMES[req.to]}.`,
     "",
     wrap("source_sentences", nonce, req.segments.map((s, i) => `[${i}] ${neutralizeTags(s)}`).join("\n")),
     "",
