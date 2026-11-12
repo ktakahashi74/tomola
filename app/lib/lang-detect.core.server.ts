@@ -29,7 +29,7 @@ export function detectLang(body: string, hint?: string | null): Lang | null {
   if (kana === 0 && han > letters.length / 2) {
     const a = letters.filter(ch => simplified.has(ch)).length;
     const b = letters.filter(ch => traditional.has(ch)).length;
-    if (han === letters.length && (hint === "ja" || hint === "zh-Hans" || hint === "zh-Hant")) {
+    if (hint === "ja" || hint === "zh-Hans" || hint === "zh-Hant") {
       // Japanese shinjitai overlap both scripts. Short text and repeated markers
       // need author context; longer text can override it with varied evidence.
       const markers = a > b ? simplified : traditional;

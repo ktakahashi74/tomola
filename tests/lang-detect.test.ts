@@ -17,7 +17,7 @@ const sentences = {
 
 describe("prose language detection", () => {
   const hintedCases: (readonly [text: string, hint: string, lang: string | null])[] = [
-    ...["確認", "時間変更", "開始", "学会", "国会", "会議延期", "了解", "確認確認確認確認確認確認"].map(text => [text, "ja", "ja"] as const),
+    ...["確認", "時間変更", "時間変更OK", "会議室A", "開始", "学会", "国会", "会議延期", "了解", "確認確認確認確認確認確認"].map(text => [text, "ja", "ja"] as const),
     ...["确认", "会议延期", "谢谢"].map(text => [text, "zh-Hans", "zh-Hans"] as const),
     ...["確認", "謝謝"].map(text => [text, "zh-Hant", "zh-Hant"] as const),
     [sentences["zh-Hans"], "ja", "zh-Hans"],
@@ -32,7 +32,7 @@ describe("prose language detection", () => {
     expect(detectLang(text, hint)).toBe(lang);
   });
   it("preserves unhinted and non-CJK-hinted detection", () => {
-    for (const text of [...Object.values(sentences), "確認", "学会", "山川水土木日月", "確認 API"]) {
+    for (const text of [...Object.values(sentences), "確認", "学会", "時間変更OK", "会議室A", "山川水土木日月", "確認 API"]) {
       expect(detectLang(text, "en")).toBe(detectLang(text));
     }
     expect(detectLang("確認 API", "ja")).toBe(detectLang("確認 API"));
@@ -67,7 +67,7 @@ describe("prose language detection", () => {
 describe("entry language resolution", () => {
   const raw = (body: string, lang = "") => ({ title: "", body, lang, asksStance: false, altOf: null, stanceTag: null });
   it("passes the member default through the worker for short Han posts", async () => {
-    for (const body of ["確認", "時間変更", "開始", "学会", "国会"]) {
+    for (const body of ["確認", "時間変更", "時間変更OK", "会議室A", "開始", "学会", "国会"]) {
       expect(await applyPastedFrontmatter(raw(body), "topic", { defaultLang: "ja" })).toMatchObject({ ok: true, input: { lang: "ja" }, language: { detected: "ja" } });
     }
   });

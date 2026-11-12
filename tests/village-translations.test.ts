@@ -23,6 +23,7 @@ import { changeVillageMembership, ensureLanguageVillages, listJoinedVillages, li
 import { buildListMarkdown } from "~/lib/md/lists.server";
 import { translatedVillageDescription, translatedVillageName } from "~/lib/villages";
 import { loader as villageLoader } from "~/routes/village";
+import { loader as villagesLoader } from "~/routes/villages";
 
 it("keeps ambiguous Han village text in the author's main language", () => {
   const env = { ENABLED_LANGS: "ja,en,zh-Hans,zh-Hant" };
@@ -31,7 +32,6 @@ it("keeps ambiguous Han village text in the author's main language", () => {
   expect(detectedVillageLang("確認", env, author.homeArea)).toBe("ja");
   expect(detectedVillageLang("確認", env)).toBe("zh-Hant");
 });
-import { loader as villagesLoader } from "~/routes/villages";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const t0 = new Date("2026-10-25T00:00:00Z");
