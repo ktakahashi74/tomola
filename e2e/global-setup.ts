@@ -48,6 +48,10 @@ export default async function globalSetup(config: FullConfig) {
     DIVERGENCE_JUDGE: "none",
     GEMINI_API_KEY: "",
     ANTHROPIC_API_KEY: "",
+    // Development mail stays in stdout; build runs replace this with local fake SMTP below.
+    SMTP_URL: "",
+    MAIL_FROM: "",
+    MAIL_DECOY_TO: "",
     // Fake embeddings for semantic search produce similar vectors across languages without network access.
     EMBEDDING_ENGINE: "fake",
     // hana is an operator for /admin/metrics; olga operates the moderation tests (e2e/moderation.spec.ts); gwen operates glossary tests (e2e/glossary.spec.ts).
