@@ -8,6 +8,7 @@ import type { Db } from "~/lib/db/client.server";
 import { evaluationHistory } from "~/lib/eval/metrics.server";
 import { translationInventory, translationQualitySignals } from "~/lib/eval/signals.server";
 import { collectPublicStats, createPublicStatsReader, PUBLIC_STATS_TTL_MS, publicCount, publicRate, selectPublicStats } from "~/lib/public-stats.server";
+import { readingStatsSection } from "~/lib/reading-stats-view";
 import { publicStatsMarkdown } from "~/lib/public-stats-view";
 import { observationWeeks, reportStats } from "~/lib/metrics.server";
 import { createTopic } from "~/lib/entries.server";
@@ -276,4 +277,17 @@ it("suppresses reading buckets and rates and selects no operator language pairs"
   expect(json).not.toContain("sourceLang");
   expect(json).not.toContain("readLang");
   expect(json).not.toContain("pairs");
+});
+
+it.each(["en", "ja"] as const)("distinguishes measured empty reading weeks from unmeasured weeks in %s", locale => {
+  setTestLocale(locale);
+  const empty = { total: 0, translated: 0, sources: [{ source: "search" as const, count: 0 }], methods: [{ method: "mcp" as const, count: 0 }], pairs: [] };
+  const snapshot = sample({ since: "2026-11-02", weeks: [
+    { ...empty, week: "2026-10-26", observed: false }, { ...empty, week: "2026-11-02", observed: true },
+  ] });
+  const section = readingStatsSection(snapshot.reading, "2026-11-02");
+  expect(section.tables[0].rows[0].slice(1)).toEqual([m.stats_unmeasured(), m.stats_unmeasured()]);
+  expect(section.tables[0].rows[1].slice(1)).toEqual(["0", "—"]);
+  expect(section.tables[1].rows[1].slice(1)).toEqual(["—"]);
+  expect(section.tables[2].rows[1].slice(1)).toEqual(["0"]);
 });

@@ -16,9 +16,9 @@ export function readingStatsSection(reading: PublicStats["reading"], currentWeek
     reading.since ? m.stats_reading_since({ since: reading.since }) : m.stats_unmeasured(),
     m.stats_reading_translation_help(), m.stats_reading_source_help(), m.stats_reading_tools_help()], tables: [
     { caption: m.stats_reading_title(), headers: [m.metrics_col_week(), m.stats_count(), m.stats_reading_translated()],
-      rows: reading.weeks.map(row => [week(row.week), cell(row.observed, small(row.count)), cell(row.observed, row.translated.denominator === 0 ? m.stats_unmeasured() : percent(row.translated.rate))]) },
+      rows: reading.weeks.map(row => [week(row.week), cell(row.observed, small(row.count)), cell(row.observed, row.translated.denominator === 0 ? "—" : percent(row.translated.rate))]) },
     { caption: m.stats_reading_sources(), headers: [m.metrics_col_week(), ...Object.values(sourceLabels)],
-      rows: reading.weeks.map(row => [week(row.week), ...row.sources.map(source => cell(row.observed, source.denominator === 0 ? m.stats_unmeasured() : percent(source.rate)))]) },
+      rows: reading.weeks.map(row => [week(row.week), ...row.sources.map(source => cell(row.observed, source.denominator === 0 ? "—" : percent(source.rate)))]) },
     { caption: m.stats_reading_tools(), headers: [m.metrics_col_week(), ...Object.values(methodLabels)],
       rows: reading.weeks.map(row => [week(row.week), ...row.methods.map(method => cell(row.observed, small(method.count)))]) },
   ] };

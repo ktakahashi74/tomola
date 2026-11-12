@@ -10,7 +10,7 @@ import { clientAddress } from "~/lib/http/client-ip.server";
 import { displayLangFor } from "~/lib/display-lang.server";
 import { parseId, parsePage } from "~/lib/params.server";
 import { isStanceTag } from "~/lib/stances";
-import { hitRateLimit, rateLimitHeaders, translationReadLimitKey } from "~/lib/rate-limit.server";
+import { hitMemoryReadLimit, hitRateLimit, rateLimitHeaders, translationReadLimitKey } from "~/lib/rate-limit.server";
 import { markTranslationsSeen, requestBodyTranslations, translationPageInputs, TRANSLATION_READ_BATCH_MAX, TRANSLATION_READ_IP_HOURLY, TRANSLATION_READ_MEMBER_HOURLY, TRANSLATION_READ_CALLS_HOURLY } from "~/lib/translation-on-read.server";
 
 const headers = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" };
@@ -51,7 +51,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (intent !== "seen" && ids.length > TRANSLATION_READ_BATCH_MAX) throw data("Invalid request", { status: 400, headers });
   const ip = clientAddress(request);
   const callsKey = user ? translationReadLimitKey(user.id, "calls") : ip ? `ip:translation-read-calls:${ip}` : "translation-read-calls:unknown";
-  const calls = await hitRateLimit(db, { key: callsKey, limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600 });
+  // Read-only visitors leave no IP-bearing database row. Translation intents
+  // retain their established persistent limits independently of this counter.
+  const calls = intent === "read"
+    ? hitMemoryReadLimit(db, callsKey, { limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600 })
+    : await hitRateLimit(db, { key: callsKey, limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600 });
   if (!calls.allowed) throw data("Too many requests", { status: 429, headers: { ...headers, ...rateLimitHeaders(calls) } });
   const tag = pageUrl.searchParams.get("tag");
   const visible = await translationPageInputs(db, id, { page: parsePage(request), stanceTag: isStanceTag(tag) ? tag : undefined });
@@ -59,7 +63,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const lang = displayLangFor(request, profile);
   if (intent === "read") {
     if (parsePage(request) === 1) await countReading(db, id, { method: "browser", readerId: user?.id,
-      lang: await browserReadingLanguage(db, visible[0], request, profile),
+      lang: () => browserReadingLanguage(db, visible[0], request, profile),
       source: readingSource(parsed.data.referrerHost, url.hostname, parsed.data["internal"] ?? true, parsed.data.shared ?? false) });
     return data({ ok: true }, { headers });
   }

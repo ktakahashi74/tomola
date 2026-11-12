@@ -222,7 +222,7 @@ export function rateLimitHeaders(result: RateLimitResult): Record<string, string
 
 // Read limits are process-local. Databases remain isolated in tests and embedded deployments.
 const memoryReads = new WeakMap<Db, Map<string, { count: number; reset: number }>>();
-function hitMemoryReadLimit(db: Db, key: string, rule: RateLimitRule, now = new Date()): RateLimitResult {
+export function hitMemoryReadLimit(db: Db, key: string, rule: RateLimitRule, now = new Date()): RateLimitResult {
   let counters = memoryReads.get(db);
   if (!counters) { counters = new Map(); memoryReads.set(db, counters); }
   const time = now.getTime(), windowMs = rule.windowSeconds * 1000;

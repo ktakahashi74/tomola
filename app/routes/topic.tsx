@@ -346,7 +346,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   if (request.method === "GET" && url.pathname === `/t/${topic.id}` && thread.page === 1 && topic.visibility === "visible" &&
       !/prefetch/i.test(`${request.headers.get("purpose")} ${request.headers.get("sec-purpose")}`) &&
       isAiCrawler(request.headers.get("user-agent") ?? "")) {
-    await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: await browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
+    await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
   }
   return {
     reader: !user,
@@ -564,15 +564,12 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search}`;
   const reportsRead = page === 1 && topic.placeholder === null && !topic.hidden;
-  // Hash links and loader revalidation keep the same displayed article.
-  const readingDisplay = useRef<{ page: string; sent?: boolean }>({ page: returnTo });
   useEffect(() => {
-    if (!reportsRead) { readingDisplay.current = { page: returnTo }; return; }
+    if (!reportsRead) return;
     let active = true, stop: (() => void) | undefined;
     void import("~/lib/translation-seen").then(module => {
       if (active) {
-        readingDisplay.current = module.readingDisplayFor(readingDisplay.current, returnTo);
-        stop = module.markTopicRead(readingDisplay.current);
+        stop = module.markTopicRead(returnTo);
       }
     }).catch(() => {});
     return () => { active = false; stop?.(); };

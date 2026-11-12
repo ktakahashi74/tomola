@@ -12,6 +12,7 @@ import { parseIdOrNull, parseOrderParam } from "~/lib/params.server";
 import type { TopicOrder } from "~/lib/entries.server";
 import { resolveDisplayLang } from "~/lib/display";
 import type { Db } from "~/lib/db/client.server";
+import { isAiCrawler, isBrowserRobot } from "~/lib/reading-sources.server";
 
 // Page Markdown twins: .md and .txt both return identical text/plain; charset=utf-8 content.
 //
@@ -64,7 +65,9 @@ async function threadMd(request: Request, stem: string): Promise<Response> {
   const query = parseQuery(request, true, true);
   if (query instanceof Response) return query;
   const lang = resolveDisplayLang({ query: query.lang, profile: auth.profile ?? { displayLang: null, readLangs: [] }, uiLocale: auth.profile?.uiLocale, enabled: enabledLangs() });
-  const markdown = await buildThreadMarkdown(auth.db, id, { ...query, readingMethod: request.method === "GET" ? "via" in auth && auth.via === "read-token" ? "api" : "markdown" : undefined, lang: query.allTranslations ? "all" : lang, displayLang: lang, k: auth.carryK, readLangs: auth.profile?.readLangs ?? [], readerId: auth.profile?.userId });
+  const agent = request.headers.get("user-agent") ?? "";
+  const countRead = request.method === "GET" && (!isBrowserRobot(agent) || isAiCrawler(agent));
+  const markdown = await buildThreadMarkdown(auth.db, id, { ...query, readingMethod: countRead ? "via" in auth && auth.via === "read-token" ? "api" : "markdown" : undefined, lang: query.allTranslations ? "all" : lang, displayLang: lang, k: auth.carryK, readLangs: auth.profile?.readLangs ?? [], readerId: auth.profile?.userId });
   return markdown === null ? notFound(request, "text") : memberResponse(request, markdown, { rate: auth.rate });
 }
 

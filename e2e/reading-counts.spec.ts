@@ -15,6 +15,14 @@ test("anonymous original and translated displays report once, and client navigat
   await expect.poll(() => responses.length).toBe(1);
   expect(reads).toEqual([{ intent: "read", ids: [], internal: false, shared: true, referrerHost: "" }]);
   await waitForClientRoute(page);
+  for (const search of ["?lang=en", "?lang=ja&tag=agree", "?lang=ja&page=2", "?lang=ja&page=1", "?lang=ja&posted=7"]) {
+    await page.evaluate(async path => {
+      await (window as unknown as { __reactRouterDataRouter: { navigate(path: string): Promise<void> } }).__reactRouterDataRouter.navigate(path);
+    }, `/t/${first}${search}`);
+    await waitForClientRoute(page);
+    await expect(page.locator(`#p-${first}`)).toBeVisible();
+  }
+  expect(reads).toHaveLength(1);
   await page.evaluate(async id => {
     await (window as unknown as { __reactRouterDataRouter: { navigate(path: string): Promise<void> } }).__reactRouterDataRouter.navigate(`/t/${id}?lang=en&sl=en`);
   }, next);
@@ -26,6 +34,11 @@ test("anonymous original and translated displays report once, and client navigat
   expect(responses).toEqual([200, 200]);
   expect(reads).toHaveLength(2);
   await page.evaluate(() => { location.hash = "reply"; });
+  await waitForClientRoute(page);
+  expect(reads).toHaveLength(2);
+  await page.evaluate(async path => {
+    await (window as unknown as { __reactRouterDataRouter: { navigate(path: string): Promise<void> } }).__reactRouterDataRouter.navigate(path);
+  }, `/t/${first}?lang=en`);
   await waitForClientRoute(page);
   expect(reads).toHaveLength(2);
 });

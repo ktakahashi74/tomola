@@ -1,5 +1,5 @@
 import { getTableColumns, eq, sql } from "drizzle-orm";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { addMember, createTestDb } from "./helpers/db";
 import { createTopic } from "~/lib/entries.server";
 import { entries, profiles, readingCounts, villages } from "~/lib/db/schema";
@@ -50,4 +50,17 @@ it("keeps machine methods separate and aggregates them without creating event re
   expect(rows.filter(row => row.count > 0).map(row => [row.method, row.source, row.count]).sort()).toEqual([
     ["ai_crawler", "none", 1], ["api", "none", 1], ["markdown", "none", 1], ["mcp", "none", 1],
   ]);
+});
+
+it("contains failures in count-only language resolution without logging their details", async () => {
+  const db = await createTestDb();
+  await addMember(db, "reading_failure", "reading_failure");
+  const topic = await createTopic(db, "reading_failure", { lang: "ja", title: "Failure", body: "本文。" });
+  if (!topic.ok) throw new Error(topic.error);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await expect(countReading(db, topic.id, { method: "ai_crawler", lang: async () => { throw new Error("private IP and user agent"); } })).resolves.toBeUndefined();
+    expect(warn.mock.calls).toEqual([["[reading-counts] Could not count read"]]);
+    expect((await db.select().from(readingCounts)).every(row => row.count === 0)).toBe(true);
+  } finally { warn.mockRestore(); }
 });

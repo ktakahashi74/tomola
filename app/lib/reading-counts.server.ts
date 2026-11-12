@@ -10,18 +10,23 @@ import { READING_METHODS, READING_SOURCES, type ReadingMethod, type ReadingSourc
 // discarded before the write: no entry, person, device, IP, referrer or user
 // agent is retained, and there is no per-read event or join back to a reader.
 export async function countReading(db: Db, topicId: number, opts: {
-  method: ReadingMethod; lang: Lang; source?: ReadingSource; readerId?: string | null; now?: Date;
+  method: ReadingMethod; lang: Lang | (() => Promise<Lang>); source?: ReadingSource; readerId?: string | null; now?: Date;
 }) {
-  const [topic] = await db.select({ lang: entries.lang, authorId: entries.authorId }).from(entries)
-    .where(and(eq(entries.id, topicId), eq(entries.kind, "topic"), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace()));
-  if (!topic || opts.readerId === topic.authorId) return;
-  if (opts.readerId) {
-    const [reader] = await db.select({ excluded: profiles.reactionsExcludedAt }).from(profiles).where(eq(profiles.userId, opts.readerId));
-    if (!reader || reader.excluded) return;
+  try {
+    const [topic] = await db.select({ lang: entries.lang, authorId: entries.authorId }).from(entries)
+      .where(and(eq(entries.id, topicId), eq(entries.kind, "topic"), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace()));
+    if (!topic || opts.readerId === topic.authorId) return;
+    if (opts.readerId) {
+      const [reader] = await db.select({ excluded: profiles.reactionsExcludedAt }).from(profiles).where(eq(profiles.userId, opts.readerId));
+      if (!reader || reader.excluded) return;
+    }
+    await db.insert(readingCounts).values({ day: (opts.now ?? new Date()).toISOString().slice(0, 10), method: opts.method,
+      sourceLang: topic.lang as Lang, readLang: typeof opts.lang === "function" ? await opts.lang() : opts.lang, source: opts.method === "browser" ? opts.source ?? "none" : "none", count: 1 })
+      .onConflictDoUpdate({ target: [readingCounts.day, readingCounts.method, readingCounts.sourceLang, readingCounts.readLang, readingCounts.source], set: { count: sql`${readingCounts.count} + 1` } });
+  } catch {
+    // Never attach the exception: database errors may contain identifying values.
+    console.warn("[reading-counts] Could not count read");
   }
-  await db.insert(readingCounts).values({ day: (opts.now ?? new Date()).toISOString().slice(0, 10), method: opts.method,
-    sourceLang: topic.lang as Lang, readLang: opts.lang, source: opts.method === "browser" ? opts.source ?? "none" : "none", count: 1 })
-    .onConflictDoUpdate({ target: [readingCounts.day, readingCounts.method, readingCounts.sourceLang, readingCounts.readLang, readingCounts.source], set: { count: sql`${readingCounts.count} + 1` } });
 }
 
 export async function weeklyReadings(db: Db, now: Date) {

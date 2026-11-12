@@ -11,17 +11,17 @@ it("waits for visibility, deduplicates navigation displays, and drops raw referr
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page: "/t/1?lang=en&sl=en" };
-  const cleanup = markTopicRead(display);
+  const cleanup = markTopicRead(display.page);
   expect(fetch).not.toHaveBeenCalled();
   visible = true; listeners.forEach(fn => fn());
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: "read", ids: [], internal: false, shared: true, referrerHost: "www.google.com" });
   expect(fetch.mock.calls[0][1].body).not.toContain("private");
-  const again = markTopicRead(display);
+  const again = markTopicRead(display.page);
   expect(fetch).toHaveBeenCalledTimes(1);
   cleanup(); again();
   vi.stubGlobal("location", new URL("https://forum.example/t/2"));
-  markTopicRead({ page: "/t/2" })();
+  markTopicRead("/t/2")();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ internal: true, referrerHost: "" });
 });
 it("removes hidden-page callbacks when navigation leaves before the page becomes visible", async () => {
@@ -34,7 +34,7 @@ it("removes hidden-page callbacks when navigation leaves before the page becomes
     addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) });
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
-  markTopicRead({ page: "/t/3" })();
+  markTopicRead("/t/3")();
   visible = true; listeners.forEach(fn => fn());
   expect(fetch).not.toHaveBeenCalled();
 });
@@ -48,7 +48,7 @@ it("treats the first article after a client navigation from a list as internal",
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   history.state = { key: "article-navigation" };
-  markTopicRead({ page: "/t/4" })();
+  markTopicRead("/t/4")();
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ internal: true, referrerHost: "" });
 });
 
@@ -61,26 +61,32 @@ it.each([
   vi.stubGlobal("location", new URL(address, "https://forum.example"));
   vi.stubGlobal("document", { visibilityState: "visible", referrer: "", addEventListener() {}, removeEventListener() {} });
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
-  const { markTopicRead, readingDisplayFor } = await import("~/lib/translation-seen");
+  const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page };
-  markTopicRead(display)();
-  const caughtUp = readingDisplayFor(display, `${address}#reply`);
-  expect(caughtUp).toBe(display);
-  markTopicRead(caughtUp)();
+  markTopicRead(display.page)();
+  markTopicRead(`${address}#reply`)();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][0]).toBe(`/t/5/translations${new URL(address, "https://forum.example").search}`);
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ internal: false, shared });
-  const moved = readingDisplayFor(display, "/t/7?lang=en");
-  expect(moved).toEqual({ page: "/t/7?lang=en" });
+
 });
 
-it("does not report a display after its reading query has changed", async () => {
+it("counts each pathname once across query changes, pagination and navigation away and back", async () => {
   vi.resetModules();
   vi.stubGlobal("window", { history: { state: null } });
-  vi.stubGlobal("location", new URL("https://forum.example/t/6?lang=en&sl=en"));
   vi.stubGlobal("document", { visibilityState: "visible", referrer: "", addEventListener() {}, removeEventListener() {} });
-  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("location", new URL("https://forum.example/t/6?lang=ja"));
   const { markTopicRead } = await import("~/lib/translation-seen");
-  markTopicRead({ page: "/t/6?lang=ja&sl=ja" })();
-  expect(fetch).not.toHaveBeenCalled();
+  for (const page of ["/t/6?lang=ja", "/t/6?lang=en", "/t/6?tag=agree", "/t/6?page=2", "/t/6?page=1", "/t/6?posted=7", "/t/6?orig=6&tr=7&old=1", "/t/7", "/t/6?lang=fr#reply"]) {
+    vi.stubGlobal("location", new URL(page, "https://forum.example"));
+    markTopicRead(page)();
+  }
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls[0][0]).toBe("/t/6/translations?lang=ja");
+  expect(fetch.mock.calls[1][0]).toBe("/t/7/translations");
+  // A new document starts a new in-memory set.
+  vi.resetModules();
+  (await import("~/lib/translation-seen")).markTopicRead("/t/6?lang=fr")();
+  expect(fetch).toHaveBeenCalledTimes(3);
 });

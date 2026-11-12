@@ -5,11 +5,11 @@ import { entries, profiles, rateLimits, readingCounts, translations } from "~/li
 import { createTopic } from "~/lib/entries.server";
 import { action } from "~/routes/topic-translations";
 import { TRANSLATION_READ_CALLS_HOURLY } from "~/lib/translation-on-read.server";
-import { hitRateLimit } from "~/lib/rate-limit.server";
+import { hitMemoryReadLimit, hitRateLimit } from "~/lib/rate-limit.server";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 
 let h: RouteHarness;
-afterEach(() => { h?.restore(); vi.unstubAllEnvs(); setTestLocale("en"); });
+afterEach(() => { h?.restore(); vi.restoreAllMocks(); vi.unstubAllEnvs(); setTestLocale("en"); });
 async function seed() {
   h = await setupRouteHarness();
   vi.stubEnv("PUBLIC_READING", "1");
@@ -21,7 +21,7 @@ async function seed() {
   await h.db.insert(translations).values({ entryId: result.id, lang: "en", field: "body", kind: "primary", text: "Read.", sourceHash: topic.sourceHash, engine: "fake" });
   return result.id;
 }
-function post(id: number, search: string, opts: { intent?: "read" | "seen"; ids?: number[]; as?: string; internal?: boolean; shared?: boolean; referrerHost?: string; headers?: Record<string, string> } = {}) {
+function post(id: number, search: string, opts: { intent?: "read" | "seen" | "status" | "request"; ids?: number[]; as?: string; internal?: boolean; shared?: boolean; referrerHost?: string; headers?: Record<string, string> } = {}) {
   const base = h.request(`/t/${id}/translations${search}`, { as: opts.as });
   const headers = new Headers(base.headers);
   Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}${search}`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
@@ -59,11 +59,35 @@ it("excludes the author and excluded members and rejects bots, foreign requests 
   await h.db.update(profiles).set({ reactionsExcludedAt: new Date() }).where(eq(profiles.userId, h.ids.readvisitor));
   await post(id, "?lang=en", { as: "readvisitor" });
   expect((await h.db.select().from(readingCounts)).every(row => row.count === 0)).toBe(true);
-  for (const headers of [{ "user-agent": "GPTBot" }, { "user-agent": "Google-Extended" }, { origin: "https://outside.example" }] as Record<string, string>[]) {
+  for (const headers of [{ "user-agent": "GPTBot" }, { "user-agent": "Meta-ExternalFetcher" }, { origin: "https://outside.example" }] as Record<string, string>[]) {
     expect(await h.outcome(() => post(id, "?lang=en", { headers }))).toMatchObject({ status: 403 });
   }
   await h.db.delete(rateLimits);
-  await hitRateLimit(h.db, { key: "translation-read-calls:unknown", limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600, cost: TRANSLATION_READ_CALLS_HOURLY });
+  for (let i = 0; i < TRANSLATION_READ_CALLS_HOURLY; i++) hitMemoryReadLimit(h.db, "translation-read-calls:unknown", { limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600 });
   expect(await h.outcome(() => post(id, "?lang=en"))).toMatchObject({ status: 429 });
   expect((await h.db.select().from(readingCounts)).every(row => row.count === 0)).toBe(true);
+});
+
+it("limits anonymous read notifications in memory without storing IPs and preserves translation intent limits", async () => {
+  const id = await seed();
+  vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
+  const headers = { "x-forwarded-for": "192.0.2.41" };
+  await h.db.delete(rateLimits);
+  await post(id, "?lang=ja", { headers });
+  expect(await h.db.select().from(rateLimits)).toEqual([]);
+  const rule = { limit: TRANSLATION_READ_CALLS_HOURLY, windowSeconds: 3600 };
+  for (let i = 1; i < rule.limit; i++) hitMemoryReadLimit(h.db, "ip:translation-read-calls:192.0.2.41", rule);
+  expect(await h.outcome(() => post(id, "?lang=ja", { headers }))).toMatchObject({ status: 429 });
+  expect(await h.db.select().from(rateLimits)).toEqual([]);
+  expect(await h.outcome(() => post(id, "?lang=ja", { headers: { "x-forwarded-for": "192.0.2.42" } }))).toMatchObject({ status: 200 });
+  await post(id, "?lang=ja", { as: "readvisitor", headers });
+  expect(await h.db.select().from(rateLimits)).toEqual([]);
+  // The read counter does not spend or replace translation call limits.
+  for (const intent of ["seen", "status", "request"] as const) {
+    await h.db.delete(rateLimits);
+    await post(id, "?lang=en", { intent, headers });
+    expect((await h.db.select().from(rateLimits)).map(row => row.key)).toContain("ip:translation-read-calls:192.0.2.41");
+    await hitRateLimit(h.db, { key: "ip:translation-read-calls:192.0.2.41", ...rule, cost: rule.limit });
+    expect(await h.outcome(() => post(id, "?lang=en", { intent, headers }))).toMatchObject({ status: 429 });
+  }
 });
