@@ -98,9 +98,9 @@ describe("the web app manifest", () => {
     expect(m.start_url).toBe("/");
     expect(m.scope).toBe("/");
     expect(m.display).toBe("standalone");
-    // Both colours are white: the app has a light theme only (app/app.css). The icon itself stays dark. lang is not set (the same name in every language).
-    expect(m.background_color).toBe("#ffffff");
-    expect(m.theme_color).toBe("#ffffff");
+    // The manifest has one palette: use the light paper. lang is unset (the same name in every language).
+    expect(m.background_color).toBe("#fbfaf7");
+    expect(m.theme_color).toBe("#fbfaf7");
     expect(m.lang).toBeUndefined();
   });
 
@@ -126,7 +126,9 @@ describe("the web app manifest", () => {
   });
 
   it("keeps home-screen and share images on opaque paper, with the maskable and share marks inside their safe circles", async () => {
-    for (const [file, size, radius] of [["icon-maskable-512.png", 512, 512 * 0.4], ["apple-touch-icon.png", 180, Infinity], ["share-default.png", 512, 128]] as const) {
+    const mark = await sharp(readPublic("icons/logomark.svg")).ensureAlpha().raw().toBuffer();
+    expect(mark[3]).toBe(0);
+    for (const [file, size, radius] of [["icon-192.png", 192, Infinity], ["icon-512.png", 512, Infinity], ["icon-maskable-512.png", 512, 512 * 0.4], ["apple-touch-icon.png", 180, Infinity], ["share-default.png", 512, 128]] as const) {
       const { data, info } = await sharp(readPublic(`icons/${file}`)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       expect([info.width, info.height]).toEqual([size, size]);
       let ink = 0;
@@ -216,7 +218,8 @@ describe("the offline page (/offline)", () => {
     expect(res.headers.get("content-security-policy")).not.toContain("nonce");
     expect(res.headers.getSetCookie()).toEqual([]);
     const html = await res.text();
-    expect(html).toContain(`<meta name="theme-color" content="${manifest().theme_color}">`);
+    expect(html).toContain(`<meta name="theme-color" media="(prefers-color-scheme: light)" content="${manifest().theme_color}">`);
+    expect(html).toContain('<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1917">');
     expect(html).toMatch(/^<!doctype html>\n<html lang="mul">/);
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/<section(?![^>]*\blang=)[^>]*>/);

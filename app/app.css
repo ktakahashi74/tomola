@@ -124,7 +124,6 @@
   --member-avatar-size: 3rem;
 }
 
-/* Use only the light theme for now; dark mode is not supported yet. */
 html,
 body {
   @apply bg-background;
@@ -140,8 +139,11 @@ main:focus {
   @apply font-semibold text-info-emphasis;
 }
 
-/* Reading and interface voices share these named stacks and ink values. */
+/* Reading and interface voices share these named stacks and ink values.
+   light-dark() keeps each pair together and follows the device unless the root overrides it. */
 :root {
+  color-scheme: light dark;
+  --paper: #fbfaf7;
   --reading-cjk-size: 1.125rem;
   --reading-cjk-measure: calc(39 * var(--reading-cjk-size));
   --site-gutter: 1rem;
@@ -157,51 +159,52 @@ main:focus {
   --font-reading-zh-hant: "Songti TC", "Noto Serif CJK TC", "Source Han Serif TC", "Source Han Serif TW", "Microsoft JhengHei", serif;
   --font-reading-ko: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", var(--font-ui);
   --font-ui: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --reading-ink: #1f1f1f;
-  --reading-ink-strong: #111;
-  --reading-counters: #555;
-  --reading-bullets: #888;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --text-supporting: #5f5f5f;
-  --rule: #e4e2dd;
-  --reading-discussion: #f6f5f2;
-  --location-accent: #7c2424;
+  --reading-ink: light-dark(#1f1f1f, #e4e1db);
+  --reading-ink-strong: light-dark(#111, #f1eee8);
+  --reading-counters: light-dark(#555, #b6b1a9);
+  --reading-bullets: light-dark(#888, #9f9991);
+  --background: light-dark(var(--paper), #1a1917);
+  --foreground: light-dark(oklch(0.145 0 0), #e4e1db);
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+  --primary: light-dark(oklch(0.205 0 0), #e4e1db);
+  --primary-foreground: light-dark(oklch(0.985 0 0), #1a1917);
+  --secondary: light-dark(oklch(0.97 0 0), #2d2b27);
+  --secondary-foreground: light-dark(oklch(0.205 0 0), #e4e1db);
+  --muted: light-dark(oklch(0.97 0 0), #2d2b27);
+  --text-supporting: light-dark(#5f5f5f, #b7b1a7);
+  --rule: light-dark(#e4e2dd, #44413a);
+  /* Keep the original paper-to-discussion OKLCH lightness gap and warm hue. */
+  --reading-discussion: light-dark(oklch(0.95511675 0.00412213 91.4464), #23211e);
+  --location-accent: light-dark(#7c2424, oklch(0.75 0.105 24.5));
   --muted-foreground: var(--text-supporting);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --accent: light-dark(oklch(0.97 0 0), #2d2b27);
+  --accent-foreground: light-dark(oklch(0.205 0 0), #e4e1db);
+  --destructive: light-dark(oklch(0.577 0.245 27.325), oklch(0.78 0.17 27.325));
+  --border: light-dark(oklch(0.922 0 0), #7b756b);
+  --input: light-dark(oklch(0.922 0 0), #7b756b);
+  --ring: light-dark(oklch(0.708 0 0), #c4bdb1);
   --radius: 0.625rem;
   /* State colours by meaning. Components say "success", "notice" (a caution), "info" (a question, a stance mark, a new reply), "unread" or "selected", never a palette colour,
-     so a designer can change a state in one place. The values are the palette values the screens used before this step. */
-  --success: oklch(52.7% 0.154 150.069);
-  --success-foreground: oklch(44.8% 0.119 151.328);
-  --success-soft: oklch(98.2% 0.018 155.826);
-  --success-border: oklch(87.1% 0.15 154.449);
-  --notice: oklch(96.2% 0.059 95.617);
-  --notice-foreground: oklch(41.4% 0.112 45.904);
-  --notice-emphasis: oklch(47.3% 0.137 46.201);
-  --notice-muted: oklch(55.5% 0.163 48.998);
-  --notice-soft: oklch(98.7% 0.022 95.277);
-  --notice-border: oklch(87.9% 0.169 91.605);
-  --notice-strong: oklch(66.6% 0.179 58.318);
-  --info: oklch(95.1% 0.026 236.824);
-  --info-foreground: oklch(39.1% 0.09 240.876);
-  --info-emphasis: oklch(44.3% 0.11 240.79);
-  --unread: oklch(76.9% 0.188 70.08);
-  /* The chosen state of a toggle: a light grey ground with the ink as its border (Button "pressed"). */
+     so a designer can change a state in one place. The light values retain the existing state palette. */
+  --success: light-dark(oklch(52.7% 0.154 150.069), oklch(0.78 0.13 150.069));
+  --success-foreground: light-dark(oklch(44.8% 0.119 151.328), oklch(0.84 0.10 151.328));
+  --success-soft: light-dark(oklch(98.2% 0.018 155.826), #203328);
+  --success-border: light-dark(oklch(87.1% 0.15 154.449), #4b7256);
+  --notice: light-dark(oklch(96.2% 0.059 95.617), #3c301b);
+  --notice-foreground: light-dark(oklch(41.4% 0.112 45.904), #eed9a3);
+  --notice-emphasis: light-dark(oklch(47.3% 0.137 46.201), #f3ca75);
+  --notice-muted: light-dark(oklch(55.5% 0.163 48.998), #d7b77c);
+  --notice-soft: light-dark(oklch(98.7% 0.022 95.277), #2d261a);
+  --notice-border: light-dark(oklch(87.9% 0.169 91.605), #796339);
+  --notice-strong: light-dark(oklch(66.6% 0.179 58.318), #edb65d);
+  --info: light-dark(oklch(95.1% 0.026 236.824), #20323b);
+  --info-foreground: light-dark(oklch(39.1% 0.09 240.876), #bddbe8);
+  --info-emphasis: light-dark(oklch(44.3% 0.11 240.79), #91c8e0);
+  --unread: light-dark(oklch(76.9% 0.188 70.08), #efbd76);
+  /* The chosen state of a toggle: a muted ground with the ink as its border (Button "pressed"). */
   --selected: var(--muted);
   --selected-foreground: var(--foreground);
   /* The four spacing steps (4, 8, 16, 32 px = Tailwind 1, 2, 4, 8). A heading has 32 above, 8 below; items in a list have 16 between them. PageHeader and the heading classes hold these. */
@@ -210,6 +213,14 @@ main:focus {
   --space-3: 1rem;
   --space-4: 2rem;
 }
+
+/* Explicit root preferences override the device without duplicating the palette. */
+:root[data-color-scheme="light"] { color-scheme: light; }
+:root[data-color-scheme="dark"] { color-scheme: dark; }
+
+/* Preserve image colours and give transparent article/figure pixels a light ground.
+   Logos and member/village icons live outside the rendered prose. */
+.longread :where(img) { background-color: light-dark(transparent, var(--paper)); }
 
 .longread { color: var(--reading-ink); }
 .longread :where(h1, h2, h3, h4, h5, h6, strong, b, a:not(.mention)) { color: var(--reading-ink-strong); }
@@ -399,6 +410,10 @@ main:focus {
   clip-path: inset(0 -100vmax);
 }
 .reading-discussion :where(.border-t, .border-s, .border-b) { border-color: var(--rule); }
+/* Keep the existing state inks readable on the darker light-mode discussion ground. */
+.reading-discussion :where(p.text-success, p.text-destructive) {
+  background-color: light-dark(var(--paper), transparent);
+}
 body:has(.reading-topic) {
   --reading-action-offset: 1rem;
   --reading-action-size: 2.5rem;

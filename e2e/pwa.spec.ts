@@ -8,7 +8,20 @@ import { captureLogomarkPreviews } from "./logomark-preview";
 test("the manifest is linked and served while ordinary scenarios block service workers", async ({ page, request }) => {
   await page.goto("/login");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#ffffff");
+  const themes = page.locator('meta[name="theme-color"]');
+  await expect(themes).toHaveCount(2);
+  await expect(themes.nth(0)).toHaveAttribute("media", "(prefers-color-scheme: light)");
+  await expect(themes.nth(1)).toHaveAttribute("media", "(prefers-color-scheme: dark)");
+  for (const theme of await themes.all()) {
+    await page.emulateMedia({ colorScheme: (await theme.getAttribute("media"))!.includes("dark") ? "dark" : "light" });
+    const colour = await theme.getAttribute("content");
+    expect(await page.evaluate(value => {
+      const probe = document.createElement("span"); probe.style.color = value!; document.body.append(probe);
+      const matches = getComputedStyle(probe).color === getComputedStyle(document.body).backgroundColor;
+      probe.remove(); return matches;
+    }, colour)).toBe(true);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute("href", /^\/t[a-f0-9]{8}\.svg$/);
   await expect(page.locator('link[rel="icon"][href^="/favicon.ico?v="]')).toHaveAttribute("sizes", "16x16 32x32 48x48");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /^\/[a-f0-9]{8}\.png$/);
@@ -36,4 +49,22 @@ test("the manifest is linked and served while ordinary scenarios block service w
   }
   expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
   await captureLogomarkPreviews(page);
+});
+
+// Check device changes and future server-rendered preferences without pinning palette values.
+test("device palettes react live and explicit root preferences take precedence", async ({ page }) => {
+  await page.goto("/login");
+  const background = () => page.locator("body").evaluate(body => getComputedStyle(body).backgroundColor);
+  await page.emulateMedia({ colorScheme: "light" });
+  const light = await background();
+  await page.emulateMedia({ colorScheme: "dark" });
+  const dark = await background();
+  expect(dark).not.toBe(light);
+  await page.locator("html").evaluate(html => html.setAttribute("data-color-scheme", "light"));
+  expect(await background()).toBe(light);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.locator("html").evaluate(html => html.setAttribute("data-color-scheme", "dark"));
+  expect(await background()).toBe(dark);
+  await page.locator("html").evaluate(html => html.removeAttribute("data-color-scheme"));
+  expect(await background()).toBe(light);
 });

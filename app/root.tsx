@@ -121,10 +121,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="tomola-operator" content={JSON.stringify(operator)} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {suppressBrowserTranslation && <meta name="google" content="notranslate" />}
-        {/* Add to home screen (PWA; public/manifest.webmanifest). theme-color matches the manifest's theme_color. */}
-        {/* The theme colour is white because the app has a light theme only (app/app.css); the icon stays dark. */}
+        {/* Match browser chrome to the device palette; the manifest uses the light paper colour. */}
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf7" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1917" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" sizes="any" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

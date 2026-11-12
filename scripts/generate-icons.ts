@@ -57,7 +57,9 @@ async function favicon(source: Buffer): Promise<Buffer> {
 export async function generateIcons(publicDir = path.resolve(import.meta.dirname, "../public")): Promise<void> {
   const tab = await readFile(path.join(publicDir, "icons/icon.svg"));
   const source = await readFile(path.join(publicDir, "icons/logomark.svg"));
-  const render = (size: number) => sharp(source).resize(size, size, resizeOptions).png().toBuffer();
+  // In-page artwork is transparent; installed icons and share images retain white paper.
+  const onWhite = Buffer.from(source.toString().replace(/(<svg\b[^>]*>)/, '$1<rect width="100%" height="100%" fill="#FFFFFF"/>'));
+  const render = (size: number) => sharp(onWhite).resize(size, size, resizeOptions).png().toBuffer();
   const onPaper = async (size: number, markSize: number) => sharp({
     create: { width: size, height: size, channels: 3, background: "#FFFFFF" },
   }).composite([{

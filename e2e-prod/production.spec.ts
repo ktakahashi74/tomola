@@ -762,7 +762,9 @@ const MEMBER_PAGES = () => ["/", "/latest", "/following", `/t/${topicId}`, `/t/$
 test("the manifest is linked and valid, its icons are served, and /sw.js and /offline come with the right headers under the CSP", async ({ request }) => {
   await boss.goto("/");
   await expect(boss.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
-  await expect(boss.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#ffffff");
+  await expect(boss.locator('meta[name="theme-color"]')).toHaveCount(2);
+  await expect(boss.locator('meta[name="theme-color"][media="(prefers-color-scheme: light)"]')).toHaveAttribute("content", "#fbfaf7");
+  await expect(boss.locator('meta[name="theme-color"][media="(prefers-color-scheme: dark)"]')).toHaveAttribute("content", "#1a1917");
   await expect(boss.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /^\/[a-f0-9]{8}\.png$/);
   const manifestRes = await request.get("/manifest.webmanifest");
   expect(manifestRes.status()).toBe(200);
