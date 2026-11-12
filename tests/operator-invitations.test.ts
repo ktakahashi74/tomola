@@ -118,6 +118,19 @@ it.each(["en", "ja"] as const)("sends one plaintext invitation per recipient in 
   expect(await h.db.select().from(jobs).where(eq(jobs.kind, "translate_invitation_note"))).toEqual([]);
 });
 
+it.each(["en", "ja"] as const)("uses the handle once in the subject and introduction when display names are absent in %s", async locale => {
+  await h.db.update(profiles).set({ displayName: null, displayNameLatin: null }).where(eq(profiles.userId, h.ids.bulk_operator));
+  await post({ email: `bulk_unnamed_${locale}@example.com`, sendEmail: "1", mailLocale: locale });
+  const mail = box.sent[0];
+  const intro = mail.text.split("\n\n")[0];
+  for (const text of [mail.subject, intro]) {
+    expect(text.match(/@bulk_operator/g)).toHaveLength(1);
+    expect(text).not.toMatch(/[()（）]/u);
+  }
+  expect(intro).toBe(m.mail_signup_invitation_intro_handle({ handle: "bulk_operator" }, { locale }));
+  expect(mail.subject).toBe(m.mail_signup_invitation_subject({ name: "@bulk_operator" }, { locale }));
+});
+
 it("omits absent note and village sections and includes a selected signup village", async () => {
   await post({ email: "bulk_optional@example.com", sendEmail: "1", mailLocale: "en" });
   expect(box.sent[0].text).not.toContain(m.mail_signup_invitation_note({ name: "", note: "" }, { locale: "en" }));
@@ -137,19 +150,37 @@ it("rolls back creation and allowance for an invalid village", async () => {
   expect(await allowance()).toBe(0);
 });
 
-it("revokes a failed delivery, retains its charge, and continues with later recipients without logging content", async () => {
+it.each([
+  { metadata: "code", kind: "EAUTH" },
+  { metadata: "name", kind: "TypeError" },
+  { metadata: "unsafe", kind: "Error" },
+  { metadata: "primitive", kind: "Error" },
+])("revokes failed delivery and logs only its safe kind with $metadata metadata", async ({ metadata, kind }) => {
   const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  const secrets: string[] = [];
   const transport = { kind: "memory" as const, async send(mail: Parameters<typeof box.transport.send>[0]) {
-    if (mail.to === "bulk_failed@example.com") throw new Error(`Provider included ${mail.text}`);
+    if (mail.to === "bulk_failed@example.com") {
+      const url = /https?:\/\/\S+\/invite\/([A-Za-z0-9_-]+)/.exec(mail.text)!;
+      secrets.push(mail.to, mail.subject, mail.text, url[0], url[1], "Private delivery note", "Provider included");
+      const message = `Provider included ${mail.to}\n${mail.subject}\n${mail.text}`;
+      if (metadata === "primitive") throw message;
+      const error = new TypeError(message);
+      if (metadata === "code") throw Object.assign(error, { code: "EAUTH" });
+      if (metadata === "unsafe") throw Object.assign(error, { name: message, code: url[1] });
+      throw error;
+    }
     await box.transport.send(mail);
   } };
   globalMail.__tomolaMailer = createMailer(transport, "tomola <no-reply@example.org>");
-  expect(await post({ email: "bulk_failed@example.com\nbulk_success@example.com", sendEmail: "1", mailLocale: "ja" }))
+  expect(await post({ email: "bulk_failed@example.com\nbulk_success@example.com", sendEmail: "1", mailLocale: "ja", note: "Private delivery note" }))
     .toMatchObject({ error: null, results: [{ status: "send_failed" }, { status: "sent" }] });
   expect((await pending()).find(row => row.email === "bulk_failed@example.com")?.revokedAt).toBeInstanceOf(Date);
   expect(box.sent).toHaveLength(1);
   expect(await allowance()).toBe(2);
-  expect(log).not.toHaveBeenCalled();
+  expect(log.mock.calls).toEqual([[`[invitations] Email delivery failed: ${kind}`]]);
+  const output = log.mock.calls.flat().join("\n");
+  expect(output).not.toMatch(/[\r\n]/u);
+  for (const secret of secrets) expect(output).not.toContain(secret);
 });
 
 it("redacts invitation content in the development transport", async () => {
@@ -188,4 +219,13 @@ it("offers only enabled mail languages, rejects a disabled choice, and separates
     expect(html.includes('name="sendEmail"')).toBe(operator);
     expect(/<textarea[^>]*name="email"/.test(html)).toBe(operator);
   }
+});
+
+it.each([1, 2])("shows message sharing only for a single result with a link, given %i results", async count => {
+  const loaderData = await loader(h.args(h.request("/invites/new", { as: "bulk_operator" })));
+  const actionData = await post({ email: Array.from({ length: count }, (_, i) => `bulk_manual_${i}@example.com`).join("\n") });
+  const html = await renderInRouter(() => createElement(InvitesNew, { loaderData, actionData } as never), "/invites/new");
+  expect(html.includes('id="invitation-message"')).toBe(count === 1);
+  expect(html.includes(m.invites_copy_message())).toBe(count === 1);
+  expect(box.sent).toEqual([]);
 });

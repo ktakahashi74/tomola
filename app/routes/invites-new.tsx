@@ -132,7 +132,7 @@ export default function InvitesNew({ actionData, loaderData }: Route.ComponentPr
         <h2 className="text-xl font-semibold">{m.invites_bulk_results()}</h2>
         <ul className="divide-y">{results.map(result => <li key={result.email} className="space-y-2 py-2">
           <p className="break-all">{result.email}: {invitationStatusText(result.status)}</p>
-          {result.url && <InvitationLink url={result.url} compact />}
+          {result.url && <InvitationLink key={result.url} url={result.url} compact={results.length > 1} />}
         </li>)}</ul>
         {results.some(result => result.url) && <p className="ui-help text-muted-foreground">{m.invites_once()}</p>}
       </section>}

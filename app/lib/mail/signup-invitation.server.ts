@@ -11,12 +11,15 @@ export function signupInvitationMail(input: {
   to: string; url: string; locale: Locale; sender: DisplayNames & { handle: string; homeArea: string }; note: string; village: string | null;
 }): MailMessage {
   const options = { locale: input.locale };
-  const name = selectDisplayName(input.sender, input.locale) ?? `@${input.sender.handle}`;
+  const displayName = selectDisplayName(input.sender, input.locale);
+  const name = displayName ?? `@${input.sender.handle}`;
   return {
     to: input.to, locale: input.locale, sensitive: true,
     subject: m.mail_signup_invitation_subject({ name }, options),
     text: [
-      m.mail_signup_invitation_intro({ name, handle: input.sender.handle }, options),
+      displayName
+        ? m.mail_signup_invitation_intro({ name, handle: input.sender.handle }, options)
+        : m.mail_signup_invitation_intro_handle({ handle: input.sender.handle }, options),
       m.mail_signup_invitation_about({}, options),
       ...(input.note ? [m.mail_signup_invitation_note({ name, note: input.note }, options)] : []),
       m.mail_signup_invitation_link({ days: INVITATION_TTL_DAYS, url: input.url }, options),

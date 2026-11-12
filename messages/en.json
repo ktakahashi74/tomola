@@ -62,6 +62,7 @@
   "invites_result_send_failed": "Email could not be sent. The invitation was revoked. You can try again.",
   "mail_signup_invitation_subject": "{name} has invited you to tomola",
   "mail_signup_invitation_intro": "{name} (@{handle}) has invited you to tomola.",
+  "mail_signup_invitation_intro_handle": "@{handle} has invited you to tomola.",
   "mail_signup_invitation_about": "tomola is a place where people who speak different languages write in their own language, and read and respond to others' posts in theirs.",
   "mail_signup_invitation_note": "A note from {name}:\n{note}",
   "mail_signup_invitation_link": "You can sign up with the link below. It works once, with this email address only, for {days} days.\n{url}",

@@ -62,6 +62,7 @@
   "invites_result_send_failed": "送れませんでした。招待は取り消しました。もう一度お試しください。",
   "mail_signup_invitation_subject": "{name} さんから tomola への招待",
   "mail_signup_invitation_intro": "{name}（@{handle}）さんから、tomola への招待が届いています。",
+  "mail_signup_invitation_intro_handle": "@{handle} さんから、tomola への招待が届いています。",
   "mail_signup_invitation_about": "tomola は、言語の違う人どうしが、それぞれ自分の言語で書き、ほかの人の投稿を自分の言語で読んで応える場です。",
   "mail_signup_invitation_note": "{name} さんからの一言：\n{note}",
   "mail_signup_invitation_link": "次のリンクから登録できます。リンクは、このメールアドレスで 1 回だけ、{days} 日の間使えます。\n{url}",

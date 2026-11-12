@@ -25,6 +25,15 @@ class BatchRejected extends Error {
   constructor(readonly reason: BatchError, readonly rate?: RateLimitResult) { super(reason); }
 }
 
+function mailFailureKind(error: unknown): string {
+  // Provider messages and arbitrary metadata can contain recipient-bound secrets.
+  const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+  const codes = ["EAUTH", "ECONNECTION", "ECONNREFUSED", "ECONNRESET", "ESOCKET", "ETIMEDOUT", "EDNS", "ETLS", "EPROTOCOL", "EENVELOPE", "EMESSAGE", "ESTREAM"];
+  if (typeof code === "string" && codes.includes(code)) return code;
+  const names = ["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError", "EvalError", "AggregateError"];
+  return error instanceof Error && names.includes(error.name) ? error.name : "Error";
+}
+
 // Classification, allowance and creation commit together. The profile lock also
 // follows the profile -> village order used by signup and ownership changes.
 export async function createOperatorInvitations(db: Db, actor: { id: string; email: string }, input: {
@@ -84,7 +93,8 @@ export async function createOperatorInvitations(db: Db, actor: { id: string; ema
         await sendMail(signupInvitationMail({ to: invitation.email, url, locale: input.locale, sender: batch.sender,
           note: input.note, village: batch.villageName }));
         batch.results.push({ email: invitation.email, status: "sent" });
-      } catch {
+      } catch (error) {
+        console.error(`[invitations] Email delivery failed: ${mailFailureKind(error)}`);
         await revokeInvitation(db, actor.id, invitation.id);
         batch.results.push({ email: invitation.email, status: "send_failed" });
       }

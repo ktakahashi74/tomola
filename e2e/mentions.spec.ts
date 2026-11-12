@@ -53,7 +53,7 @@ test("typing @ and a start of a handle in the body offers the members; the arrow
   expect(response.status()).toBe(200);
   expect(response.headers()["cache-control"]).toBe("private, no-store");
   await expect(suggestions(mei)).toBeVisible();
-  await expect(suggestions(mei).getByRole("option", { name: "@ben", exact: true })).toBeVisible();
+  await expect(suggestions(mei).getByRole("option")).toHaveText(["@ben"]);
   await expect(body).toHaveAttribute("aria-autocomplete", "list");
   await expect(body).toHaveAttribute("aria-activedescendant", /.+/);
   // Escape closes it, and the text stays as it was.

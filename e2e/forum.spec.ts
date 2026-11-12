@@ -54,6 +54,8 @@ test("the member invites another member in a different home area, who signs up",
   await hana.getByRole("button", { name: enMessages.invites_bulk_submit, exact: true }).click();
   const invite = await hana.locator("code").innerText();
   expect(invite).toContain("/invite/");
+  expect(await hana.getByLabel(enMessages.invites_message_label, { exact: true }).inputValue()).toContain(invite);
+  await expect(hana.getByRole("button", { name: enMessages.invites_copy_message, exact: true })).toBeVisible();
   await signUp(somchai, invite, "somchai@example.com", { handle: "somchai", mainLang: "th" });
   await expect(async () => {
     await somchai.goto(topicPath);
