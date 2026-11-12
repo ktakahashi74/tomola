@@ -29,6 +29,8 @@ See [tomola's principles](../app/content/principles/en.md) for the member-facing
 
 Creating an account currently requires an invitation; there is no public self-registration setting. With `PUBLIC_READING` unset, reading posts also requires membership. `PUBLIC_READING=1` permits signed-out reading of home, threads and replies, source-language lists and public villages. Eligible topics have no village or belong to a public-kind village with a URL. There is no creation-date boundary: existing eligible posts become readable too. There is no option to publish only posts made after the setting changes. Ordinary deletion and hiding exclusions remain.
 
+At `/invites/new`, operators can paste up to 20 email addresses at once and send an individual, recipient-bound invitation email from tomola in a selected enabled language, or copy the links themselves. The existing limit of 20 invitations per day remains; ordinary members still create one link at a time and deliver it themselves when member invitations are enabled.
+
 Writing, member pages, following lists, chat, and protected machine reads such as search and stance aggregates require membership and the relevant permissions. Principles, why pages and guidance such as `llms.txt` are independent of post visibility. Readability is distinct from permission to reuse posts or publication of the software.
 
 | Area | Current mechanisms |

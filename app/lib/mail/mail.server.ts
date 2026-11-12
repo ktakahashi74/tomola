@@ -8,7 +8,7 @@ import { createDevTransport, createSmtpTransport, type MailTransport } from "./t
 // Tests pass createMemoryMailbox from transports.server.ts to createMailer.
 // Plain-text body, optional HTML. Callers supply validated recipient emails.
 
-export type MailMessage = { to: string; subject: string; text: string; html?: string; locale?: Locale };
+export type MailMessage = { to: string; subject: string; text: string; html?: string; locale?: Locale; sensitive?: boolean };
 
 export type Mailer = {
   // Active transport: "smtp" | "dev" | "memory".

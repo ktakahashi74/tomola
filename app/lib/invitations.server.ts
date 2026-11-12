@@ -31,7 +31,7 @@ export function hashInvitationToken(token: string): string {
 export async function createInvitation(
   db: Db,
   input: { email: string; createdBy?: string | null; villageId?: string | null; note?: string; ttlDays?: number; now?: Date },
-): Promise<{ token: string; email: string; expiresAt: Date }> {
+): Promise<{ id: string; token: string; email: string; expiresAt: Date }> {
   const now = input.now ?? new Date();
   const email = normalizeEmail(input.email);
   if (isDeletedIdentity(input.createdBy, email)) throw new Error("Address is not eligible for invitation");
@@ -41,8 +41,9 @@ export async function createInvitation(
   const noteLang = note ? detectLang(note, author?.homeArea) ?? (isLang(author?.homeArea) ? author.homeArea : memberVillageLang(author ?? { homeArea: "other", uiLocale: null, displayLang: null, readLangs: [] })) : null;
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + (input.ttlDays ?? INVITATION_TTL_DAYS) * DAY_MS);
+  const id = randomUUID();
   await db.insert(invitations).values({
-    id: randomUUID(),
+    id,
     email,
     tokenHash: hashInvitationToken(token),
     createdBy: input.createdBy ?? null,
@@ -52,7 +53,7 @@ export async function createInvitation(
     createdAt: now,
     expiresAt,
   });
-  return { token, email, expiresAt };
+  return { id, token, email, expiresAt };
 }
 
 // The username of the member who made an invitation, for the invitation page. Null when it has no sender or the sender has no profile any more.

@@ -36,7 +36,7 @@ it("allows operators to load, create and revoke invitations while restricted", a
   const as = "invite_operator";
   expect(await h.outcome(() => loader(h.args(h.request("/invites/new", { as }))))).toMatchObject({ status: 200 });
   const created = await action(h.args(h.request("/invites/new", { as, form: { email: "operator_recipient@example.com" } })));
-  expect(created).toMatchObject({ error: null, url: expect.stringContaining("/invite/") });
+  expect(created).toMatchObject({ error: null, results: [{ email: "operator_recipient@example.com", status: "created", url: expect.stringContaining("/invite/") }] });
   const [row] = await h.db.select().from(invitations).where(eq(invitations.email, "operator_recipient@example.com"));
   expect(row.createdBy).toBe(h.ids[as]);
   expect(await action(h.args(h.request("/invites/new", { as, form: { intent: "revoke", id: row.id } })))).toEqual({ url: null, error: null });

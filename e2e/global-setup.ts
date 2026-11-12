@@ -55,7 +55,7 @@ export default async function globalSetup(config: FullConfig) {
     // Fake embeddings for semantic search produce similar vectors across languages without network access.
     EMBEDDING_ENGINE: "fake",
     // hana is an operator for /admin/metrics; olga operates the moderation tests (e2e/moderation.spec.ts); gwen operates glossary tests (e2e/glossary.spec.ts).
-    OPERATOR_EMAILS: "zresult_wide_mod@example.com,zresult_narrow_mod@example.com,vi_operator@example.com,vi_reviewer@example.com,av_operator@example.com,av_reviewer@example.com,dn_operator@example.com,hana@example.com,olga@example.com,gwen@example.com,opal@example.com,mobile@example.com,navigation_operator@example.com,ai_readiness_operator@example.com" + (config.metadata.publicReading ? ",vr_operator@example.com,vr_reviewer@example.com,crflow_op@example.com" : ""),
+    OPERATOR_EMAILS: "bulk_invite_operator@example.com,zresult_wide_mod@example.com,zresult_narrow_mod@example.com,vi_operator@example.com,vi_reviewer@example.com,av_operator@example.com,av_reviewer@example.com,dn_operator@example.com,hana@example.com,olga@example.com,gwen@example.com,opal@example.com,mobile@example.com,navigation_operator@example.com,ai_readiness_operator@example.com" + (config.metadata.publicReading ? ",vr_operator@example.com,vr_reviewer@example.com,crflow_op@example.com" : ""),
     WORKER_ENABLED: "true",
     MAINTENANCE_FLAG_FILE: path.join(dir, "maintenance"),
     REVISION: "0123456789abcdef0123456789abcdef01234567",

@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
 // Mail transports, called by Mailer in mail.server.ts after adding the sender.
-export type OutgoingMail = { from: string; to: string; subject: string; text: string; html?: string };
+export type OutgoingMail = { from: string; to: string; subject: string; text: string; html?: string; sensitive?: boolean };
 export type MailTransport = { readonly kind: "smtp" | "dev" | "memory"; send(mail: OutgoingMail): Promise<void> };
 
 // SMTP via nodemailer, with timeouts so a stuck connection cannot indefinitely hold a login request.
@@ -32,6 +32,8 @@ export function createDevTransport(log: (line: string) => void = (line) => conso
   return {
     kind: "dev",
     async send(mail) {
+      // Invitation credentials and personal notes must not enter development logs.
+      if (mail.sensitive) { log("[mail] Sensitive content omitted (development transport; no delivery)."); return; }
       log(`[mail] to=${mail.to} subject=${mail.subject}\n${mail.text}\n[/mail]`);
     },
   };
