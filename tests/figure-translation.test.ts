@@ -21,6 +21,8 @@ import { LlmError } from "~/lib/llm/errors.server";
 import { backfillFigures } from "~/lib/figure-backfill.server";
 import * as figureFonts from "~/lib/figure-fonts.server";
 import * as llm from "~/lib/llm/index.server";
+import * as markdownBudget from "~/lib/markdown-budget.server";
+import { FLAG_MARKDOWN_BUDGET } from "~/lib/llm/flags";
 import { leakedReasoning } from "./helpers/translation-leak";
 import { putMedia, deleteMedia, readFigureSource } from "~/lib/media-store.server";
 import { loadEntryDisplays } from "~/lib/entry-display.server";
@@ -69,6 +71,19 @@ async function world(imageBytes?: Buffer) {
 }
 
 describe("figure translation pipeline", () => {
+  it("discards every label when translation checks exceed the Markdown budget", async () => {
+    const w = await world(); await w.run(1);
+    vi.mocked(w.engine.translate).mockResolvedValue({ text: JSON.stringify(["図のラベル"]), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 10 });
+    const run = markdownBudget.markdownTask;
+    vi.spyOn(markdownBudget, "markdownTask").mockImplementation(<T>(operation: string, args: unknown[]): Promise<T> =>
+      operation === "inspectTranslation" ? Promise.reject(new markdownBudget.MarkdownBudgetError()) : run<T>(operation, args));
+    const translate = vi.spyOn(llm, "translate");
+    expect(await w.run()).toMatchObject({ done: 1, failed: 0 });
+    expect((await translate.mock.results[0].value).flags).toContain(FLAG_MARKDOWN_BUDGET);
+    expect(w.engine.translate).toHaveBeenCalledTimes(2);
+    expect((await db.select().from(figureTranslations))[0]).toMatchObject({ state: "skipped", bytes: null, labels: null, labelResults: [expect.objectContaining({ translation: null })] });
+  });
+
   it.each([
     { source: "“水位” \\epsilon の増加に対する体積の依存性", normalized: "“水位” ε の増加に対する体積の依存性", translated: "Volume vs. water level ε", status: "rendered" },
     { source: "\\epsilon", normalized: "ε", translated: "ε", status: "unchanged" },

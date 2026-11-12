@@ -15,7 +15,7 @@ import { primaryEngineId, primaryModelOf } from "~/lib/llm/config.server";
 import { promptVersionOf } from "~/lib/llm/prompt.server";
 import { completionEstimate, meteredCall } from "~/lib/llm/metering.server";
 import { costMicro } from "~/lib/llm/pricing.server";
-import { HIDDEN_PRIMARY_FLAGS } from "~/lib/llm/flags";
+import { FLAG_MARKDOWN_BUDGET, HIDDEN_PRIMARY_FLAGS } from "~/lib/llm/flags";
 import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import { preservesFigureMath } from "~/lib/figure";
 import { loadGlossary, matchGlossary } from "~/lib/translations.server";
@@ -104,7 +104,7 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
         if (!(error instanceof LlmError) || error.retryable) throw error;
       }
       const parseLabels = (out: typeof result, sources: string[]): (string | null)[] => {
-        if (!out || out.flags.includes("markdown_budget")) return sources.map(() => null);
+        if (!out || out.flags.includes(FLAG_MARKDOWN_BUDGET)) return sources.map(() => null);
         try {
           const parsed = z.array(z.string().trim().min(1).max(2000)).length(sources.length).safeParse(JSON.parse(out.text));
           if (!parsed.success) return sources.map(() => null);
