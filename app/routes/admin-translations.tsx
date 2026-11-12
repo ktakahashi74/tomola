@@ -6,6 +6,7 @@ import { data, Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/admin-translations";
 import { TranslationLabel } from "~/components/translation-label";
 import { requireModerator } from "~/lib/auth/session.server";
+import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { formString } from "~/lib/entry-form.server";
 import { LANG_LABELS } from "~/lib/languages";
 import { normalizeNewlines } from "~/lib/text";
@@ -21,6 +22,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  assertSameOrigin(request);
   const { user, db, scope } = await requireModerator(request);
   const form = await request.formData();
   const reportId = parseId(formString(form, "reportId"));

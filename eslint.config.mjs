@@ -2,6 +2,7 @@ import parser from '@typescript-eslint/parser';
 import hooks from 'eslint-plugin-react-hooks';
 import a11y from 'eslint-plugin-jsx-a11y';
 import writer from './scripts/lint/writer-gate.mjs';
+import sameOrigin from './scripts/lint/same-origin.mjs';
 
 export default [
   { ignores: ['node_modules/**', '.data/**', 'build/**', '.react-router/**', 'app/paraglide/**', 'project.inlang/**'] },
@@ -19,5 +20,5 @@ export default [
     files: ['e2e/**/*.ts', 'e2e-prod/**/*.ts'],
     rules: { 'react-hooks/rules-of-hooks': 'off', 'react-hooks/exhaustive-deps': 'off' },
   },
-  { files: ['app/routes/*.{ts,tsx}'], plugins: { local: { rules: { 'writer-gate': writer } } }, rules: { 'local/writer-gate': 'error' } },
+  { files: ['app/routes/*.{ts,tsx}'], plugins: { local: { rules: { 'writer-gate': writer, 'same-origin': sameOrigin } } }, rules: { 'local/writer-gate': 'error', 'local/same-origin': 'error' } },
 ];

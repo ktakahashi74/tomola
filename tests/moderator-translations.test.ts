@@ -67,6 +67,15 @@ describe("the translation reports a moderator sees", () => {
 });
 
 describe("writing a human fix", () => {
+  it("checks the origin before authentication or changing a translation report", async () => {
+    const { action } = await import("~/routes/admin-translations");
+    for (const as of [undefined, "frmod"]) {
+      const request = h.request("/admin/translations", { as, form: { reportId: String(reportFr), intent: "dismiss" }, headers: { Origin: "https://other.example" } });
+      expect(await h.outcome(() => action(h.args(request)))).toMatchObject({ status: 403 });
+    }
+    expect((await h.db.select().from(translationReports).where(eq(translationReports.id, reportFr)))[0].status).toBe("open");
+  });
+
   it("is allowed for the moderator of the target language only, through the writer gate", async () => {
     const { action } = await import("~/routes/admin-translations");
     const post = (as: string, form: Record<string, string>) => h.outcome(() => action(h.args(h.request("/admin/translations", { as, form }))));

@@ -99,6 +99,28 @@ test('focused follows module dependencies and includes implicit route/document c
 import { Linter } from 'eslint';
 import parser from '@typescript-eslint/parser';
 import writerRule from '../scripts/lint/writer-gate.mjs';
+import sameOriginRule from '../scripts/lint/same-origin.mjs';
+import { SAME_ORIGIN_EXCEPTIONS } from '../scripts/lint/same-origin-exceptions.mjs';
+test('same-origin AST checks action calls, aliases and wrappers with explicit exceptions', () => {
+  const lint = (code, filename = 'route.ts') => new Linter().verify(code, [{ files: ['**/*.{ts,tsx}'], languageOptions: { parser }, plugins: { local: { rules: { origin: sameOriginRule } } }, rules: { 'local/origin': 'error' } }], { filename });
+  const prelude = 'import {assertSameOrigin as check} from "~/lib/http/csrf.server";';
+  for (const code of [
+    'export async function action() { check(request); }',
+    'export const action = async () => { check (request); };',
+    'async function run() { check(request); } export const action = wrapper(run);',
+    'const run = () => check(request); export { run as action };',
+  ]) assert.equal(lint(prelude + code).length, 0, code);
+  for (const code of [
+    'export function loader() { check(request); } export function action() { /* check(request) */ return null; }',
+    'export function action() { const check = () => null; return check(); }',
+    'export { action } from "./other";',
+  ]) assert.equal(lint(prelude + code).length, 1);
+  assert.equal(lint('import {assertSameOrigin} from "other"; export function action() { assertSameOrigin(request); }').length, 1);
+  for (const [filename, reason] of Object.entries(SAME_ORIGIN_EXCEPTIONS)) {
+    assert.ok(reason.trim());
+    assert.equal(lint('export function action() { return null; }', filename).length, 0);
+  }
+});
 const lintAction = code => new Linter().verify(code, [{ languageOptions: { parser }, plugins: { local: { rules: { writer: writerRule } } }, rules: { 'local/writer': 'error' } }]);
 test('writer gate AST handles whitespace, aliases and wrappers without borrowing a loader gate or a comment', () => {
   const prelude = 'import {requireWriter as check} from "~/lib/auth/session.server";';
