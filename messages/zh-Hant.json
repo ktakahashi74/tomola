@@ -2160,5 +2160,26 @@
       }
     }
   ],
-  "settings_language_advanced": "進階語言設定"
+  "settings_language_advanced": "進階語言設定",
+  "stats_reading_title": "閱讀情況",
+  "stats_reading_help": "公開文章每週透過瀏覽器被閱讀的次數：計為造訪次數，而非人數。頁面顯示時會發送一次通知；不計入預先擷取與大部分機器人。已驗證的作者本人以及排除在觀察範圍外的成員不計入。",
+  "stats_reading_since": "測量始於 {since}（UTC）。較早的週次未予測量；第一週可能僅包含部分期間。",
+  "stats_reading_translated": "閱讀翻譯的比例",
+  "stats_reading_translation_help": "翻譯比例：以不同於原文的語言透過瀏覽器閱讀的次數，除以該週所有計入的瀏覽器閱讀次數。",
+  "stats_reading_sources": "閱讀來源途徑",
+  "stats_reading_source_help": "各來源比例的分母為該週所有計入的瀏覽器閱讀次數。僅從外部開啟的第一個頁面會歸類為外部來源或分享連結；後續的站內瀏覽均計為內部來源。系統不會保留網域與搜尋字詞。",
+  "stats_reading_tools": "工具與 AI 檢索器",
+  "stats_reading_tools_help": "每週成功讀取文章的次數，依 Markdown、讀取權杖 API、MCP 與自主宣告的 AI 檢索器分別計算。不計入回覆分頁切換與 HEAD 請求。這些是請求次數，而非人數或經確認的 AI 身分；請求所有語言的存取會在其解析後的顯示語言中計為一次。",
+  "stats_reading_share": "指定語言分享連結",
+  "stats_reading_search": "搜尋",
+  "stats_reading_social": "社群網路",
+  "stats_reading_ai": "AI 工具",
+  "stats_reading_other": "其他網站",
+  "stats_reading_none": "無參照位址",
+  "stats_reading_internal": "站內",
+  "stats_reading_markdown": "Markdown",
+  "stats_reading_crawler": "AI 檢索器",
+  "metrics_reading_help": "涵蓋所有閱讀方式的每週「原文語言 × 閱讀語言」組合次數。此為閱讀次數，非不重複人數。統計數據不包含任何文章或讀者識別碼。",
+  "metrics_reading_source_lang": "原文語言",
+  "metrics_reading_read_lang": "閱讀語言"
 }

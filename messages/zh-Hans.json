@@ -2160,5 +2160,26 @@
       }
     }
   ],
-  "settings_language_advanced": "更多语言设置"
+  "settings_language_advanced": "更多语言设置",
+  "stats_reading_title": "阅读情况",
+  "stats_reading_help": "公开文章在浏览器中的每周阅读次数：统计的是访问次数，而非人数。页面可见时发送一次通知；预加载和大多数网络机器人不计入统计。已通过身份验证的作者本人及排除在观察范围之外的成员不计入。",
+  "stats_reading_since": "统计开始于 {since}（UTC）。早于该时间的周未进行统计；第一周可能仅包含部分时间。",
+  "stats_reading_translated": "译文阅读比例",
+  "stats_reading_translation_help": "译文阅读比例：使用与原文不同的语言进行的浏览器阅读次数，除以该周计入的所有浏览器阅读次数。",
+  "stats_reading_sources": "访问来源",
+  "stats_reading_source_help": "各类来源的占比均以该周计入的所有浏览器阅读次数为分母。仅从站外首次打开的页面会被归为外部来源或分享链接类别；后续站内浏览计为站内访问。不保留域名和搜索词。",
+  "stats_reading_tools": "工具与 AI 爬虫",
+  "stats_reading_tools_help": "每周成功读取文章的请求次数，分别统计 Markdown、读取令牌 API、MCP 以及自声明的 AI 爬虫。回复翻页和 HEAD 请求不包含在内。这些是请求次数，不代表人数或经过验证的 AI 身份；请求所有语言时，在其解析出的显示语言中计为一次。",
+  "stats_reading_share": "指定语言的分享链接",
+  "stats_reading_search": "搜索引擎",
+  "stats_reading_social": "社交网络",
+  "stats_reading_ai": "AI 工具",
+  "stats_reading_other": "其他网站",
+  "stats_reading_none": "无来源信息",
+  "stats_reading_internal": "站内浏览",
+  "stats_reading_markdown": "Markdown",
+  "stats_reading_crawler": "AI 爬虫",
+  "metrics_reading_help": "涵盖所有阅读方式的每周“原文语言 × 阅读语言”统计。这些是阅读次数，而非独立访客人数。统计数据中不包含任何文章或读者标识符。",
+  "metrics_reading_source_lang": "原文语言",
+  "metrics_reading_read_lang": "阅读语言"
 }

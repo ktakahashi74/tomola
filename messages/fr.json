@@ -2785,5 +2785,26 @@
       }
     }
   ],
-  "settings_language_advanced": "Paramètres de langue avancés"
+  "settings_language_advanced": "Paramètres de langue avancés",
+  "stats_reading_title": "Lectures",
+  "stats_reading_help": "Lectures hebdomadaires d’articles publics sur navigateur : visites, pas personnes. Une page visible envoie une notification ; les préchargements et la plupart des robots ne sont pas comptabilisés. Les auteurs authentifiés et les membres exclus de l’observation sont omis.",
+  "stats_reading_since": "Les mesures ont commencé le {since} (UTC). Les semaines antérieures ne sont pas mesurées ; la première semaine peut être partielle.",
+  "stats_reading_translated": "Lu en traduction",
+  "stats_reading_translation_help": "Part des traductions : lectures sur navigateur dans une langue différente de l’original, divisées par l’ensemble des lectures comptabilisées sur navigateur cette semaine-là.",
+  "stats_reading_sources": "Provenance des lectures",
+  "stats_reading_source_help": "Chaque part de source utilise l’ensemble des lectures comptabilisées sur navigateur cette semaine-là comme dénominateur. Seule la première page ouverte depuis l’extérieur reçoit une catégorie de source externe ou de lien partagé ; la navigation ultérieure est interne. Les domaines et les termes de recherche ne sont pas conservés.",
+  "stats_reading_tools": "Outils et robots d’indexation IA",
+  "stats_reading_tools_help": "Lectures hebdomadaires d’articles réussies, comptabilisées séparément pour Markdown, l’API de jetons de lecture, MCP et les robots d’indexation IA autodéclarés. La pagination des réponses et les requêtes HEAD sont exclues. Il s’agit de nombres de requêtes, pas de personnes ni d’identités d’IA vérifiées ; une requête pour toutes les langues compte une fois dans sa langue d’affichage résolue.",
+  "stats_reading_share": "Lien de partage linguistique",
+  "stats_reading_search": "Recherche",
+  "stats_reading_social": "Réseaux sociaux",
+  "stats_reading_ai": "Outils d’IA",
+  "stats_reading_other": "Autres sites",
+  "stats_reading_none": "Aucun référent",
+  "stats_reading_internal": "Au sein de ce site",
+  "stats_reading_markdown": "Markdown",
+  "stats_reading_crawler": "Robots d’indexation IA",
+  "metrics_reading_help": "Comptes hebdomadaires langue originale × langue de lecture pour l’ensemble des méthodes de lecture. Il s’agit de lectures, pas de personnes uniques. Les comptes ne contiennent aucun identifiant d’article ou de lecteur.",
+  "metrics_reading_source_lang": "Langue originale",
+  "metrics_reading_read_lang": "Langue de lecture"
 }
