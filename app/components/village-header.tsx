@@ -48,7 +48,7 @@ export function VillageHeader({ village, current, chat, actions, purpose, childr
       {children != null && <div className="flex items-center gap-3 sm:ms-auto">{children}</div>}
     </header>;
   }
-  return <header data-village-header>
+  return <header data-village-header className="relative">
     <PageHeader
       title={name}
       heading={<div className="flex flex-wrap items-center gap-x-3"><h1 lang={villageNameLang(village)} className="heading-1">{icon}{name}</h1>{village.kind === "invite_public" && <span title={m.village_invite_only_help()} className="rounded border px-1.5 ui-meta text-muted-foreground">{m.village_invite_only()}</span>}</div>}

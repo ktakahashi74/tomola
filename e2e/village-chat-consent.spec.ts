@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, enMessages as m, formatMessage, state, uiMessages, useMember, waitForClientRoute } from "./helpers";
+import { openVillageMembership, captureScreenshot, enMessages as m, formatMessage, state, uiMessages, useMember, waitForClientRoute } from "./helpers";
 import { CHAT_CONSENT_VERSION } from "../app/lib/village-chat-consent";
 
 test("current chat consent protects version-one readers and must be renewed after leaving and rejoining", async ({ page, browser }) => {
@@ -74,10 +74,11 @@ test("current chat consent protects version-one readers and must be renewed afte
     await member.goto("/notifications"); await waitForClientRoute(member);
     await expect(member.getByRole("link", { name: formatMessage(m.notification_chat_authors, { name: "chat-consent", handles: "@ccn_owner" }), exact: true })).toHaveCount(1);
     await member.goto("/v/chat-consent"); await waitForClientRoute(member);
+    await openVillageMembership(member);
     await member.getByRole("button", { name: m.village_leave, exact: true }).click();
     await expect(member.getByRole("button", { name: m.village_join, exact: true })).toBeVisible();
     await member.getByRole("button", { name: m.village_join, exact: true }).click();
-    await expect(member.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+    await expect(member.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
     await waitForClientRoute(member);
     await member.getByRole("link", { name: m.village_chat_title, exact: true }).click();
     await expect(member).toHaveURL(/\/v\/chat-consent\/chat$/);

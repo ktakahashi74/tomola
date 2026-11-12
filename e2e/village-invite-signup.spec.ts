@@ -1,7 +1,7 @@
 import { hostCookieName } from "./helpers";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { captureScreenshot, completeTrialFields, enMessages, loginWithMagicLink, state, useMember as openMemberPage, waitForClientRoute } from "./helpers";
+import { openVillageMembership, captureScreenshot, completeTrialFields, enMessages, loginWithMagicLink, state, useMember as openMemberPage, waitForClientRoute } from "./helpers";
 import { LONG_SIGNUP_VILLAGE_NAME } from "./member-fixtures";
 import fs from "node:fs";
 import path from "node:path";
@@ -69,7 +69,7 @@ test("an invitation from a village carries the opened destination through signup
     await completeTrialFields(guest);
     await guest.getByRole("button", { name: enMessages.onboarding_join, exact: true }).click();
     await expect(guest).toHaveURL(/\/v\/signup-entry-a$/);
-    await guest.locator("summary").filter({ hasText: enMessages.village_leave }).click();
+    await openVillageMembership(guest);
     await expect(guest.getByRole("button", { name: enMessages.village_leave, exact: true })).toBeVisible();
     await guest.goto("/v/signup-entry-b");
     await expect(guest.getByRole("button", { name: enMessages.village_leave, exact: true })).toHaveCount(0);

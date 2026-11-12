@@ -79,6 +79,14 @@ export async function openVillageManagement(page: Page) {
   return management;
 }
 
+export async function openVillageMembership(page: Page) {
+  const summary = page.locator("[data-village-header] summary").filter({ hasText: enMessages.village_joined });
+  const details = summary.locator("..");
+  if (await details.getAttribute("open") === null) await summary.click();
+  await expect(details).toHaveAttribute("open", "");
+  return details;
+}
+
 export async function openUserMenu(page: Page) {
   const menu = page.locator("[data-member-menu][data-open]");
   await expect(async () => {

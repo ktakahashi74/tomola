@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "./editor-fixture";
-import { formatMessage, captureScreenshot, enMessages as m, state, useMember, waitForClientRoute } from "./helpers";
+import { openVillageMembership, formatMessage, captureScreenshot, enMessages as m, state, useMember, waitForClientRoute } from "./helpers";
 async function evidence(page: Page, label: string) {
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -16,7 +16,7 @@ test("deletes an own message from settings after leaving and removes it from the
   try {
     await useMember(peer, "co_reader@example.com", `/v/${slug}`);
     await useMember(page, "co_author@example.com", `/v/${slug}`); await waitForClientRoute(page);
-    await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+    await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
     await page.getByRole("link", { name: m.village_chat_title, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/v/${slug}/chat$`)); await waitForClientRoute(page);
     await peer.goto(`/v/${slug}/chat`); await waitForClientRoute(peer);
@@ -35,6 +35,7 @@ test("deletes an own message from settings after leaving and removes it from the
       await expect(message).toBeVisible(); bulkIds.push((await message.getAttribute("data-chat-message"))!);
     }
     await page.goto(`/v/${slug}`); await waitForClientRoute(page);
+    await openVillageMembership(page);
     await page.getByRole("button", { name: m.village_leave, exact: true }).click();
     await expect(page.getByRole("button", { name: m.village_join, exact: true })).toBeVisible();
     await page.goto("/settings#settings-export"); await waitForClientRoute(page);
@@ -68,7 +69,7 @@ test("shows public topic cards in a live message and opens the public reply form
   try {
     await useMember(peer, "co_reader@example.com", `/v/${slug}`);
     await page.goto(`/v/${slug}`); await waitForClientRoute(page);
-    await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+    await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
     await page.getByRole("link", { name: m.village_chat_title, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/v/${slug}/chat$`)); await waitForClientRoute(page);
     await peer.goto(`/v/${slug}/chat`); await waitForClientRoute(peer);

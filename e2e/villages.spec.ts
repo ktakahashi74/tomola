@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { allListIds, captureScreenshot, clientHeaders, enMessages as m, state, useMember, waitForClientRoute } from "./helpers";
+import { openVillageMembership, allListIds, captureScreenshot, clientHeaders, enMessages as m, state, useMember, waitForClientRoute } from "./helpers";
 
 const name = (lang: string) => m.village_language_name.replace("{language}", new Intl.DisplayNames(["en"], { type: "language", languageDisplay: "standard" }).of(lang)!);
 
@@ -27,7 +27,7 @@ test("villages show public reading, placement, ordering and member join/leave", 
     // The villages the member has joined are listed under their own heading.
     await expect(page.getByRole("heading", { name: m.villages_joined_heading, exact: true })).toBeVisible();
     await page.locator("main").getByRole("link", { name: name("en"), exact: true }).click();
-    await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+    await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
     const owned = fixture.topics.map(topic => topic.id);
     for (const [order, expected] of [["created", [owned[2], owned[1], owned[0]]], ["activity", [owned[0], owned[2], owned[1]]], ["insightful", [owned[1], owned[2], owned[0]]]] as const) {
       expect((await allListIds(page, `/v/en?order=${order}`)).filter(id => owned.includes(id))).toEqual(expected);
@@ -36,7 +36,8 @@ test("villages show public reading, placement, ordering and member join/leave", 
     await page.goto("/v/ja");
     for (const topic of fixture.topics) await expect(page.locator(`#q-${topic.id}`)).toHaveCount(0);
     await page.getByRole("button", { name: m.village_join, exact: true }).click();
-    await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
+    await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
+    await openVillageMembership(page);
     await page.getByRole("button", { name: m.village_leave, exact: true }).click();
     await expect(page.getByRole("button", { name: m.village_join, exact: true })).toBeVisible();
     expect((await publicPage.request.get("/v/absent-village")).status()).toBe(404);
@@ -73,6 +74,7 @@ test("a member can use a personal destination without joining another village", 
   expect(await twin.text()).toMatch(/village: ["']?@villages_other/);
   await page.goto("/v/en");
   await page.getByRole("button", { name: m.village_join, exact: true }).click();
+  await openVillageMembership(page);
   await page.getByRole("button", { name: m.village_leave, exact: true }).click();
   await expect(page.getByRole("button", { name: m.village_join, exact: true })).toBeVisible();
 });

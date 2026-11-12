@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { captureScreenshot, enMessages as m, useMember, waitForClientRoute, openVillageManagement } from "./helpers";
+import { openVillageMembership, captureScreenshot, enMessages as m, useMember, waitForClientRoute, openVillageManagement } from "./helpers";
 
 async function screenshots(page: Page, label: string) {
   for (const width of [1280, 1100, 390]) {
@@ -50,10 +50,10 @@ test("creates a member-posting public village, invites a writer, posts and ends 
     await screenshots(other, "added-member");
     await expect(other.getByText(m.village_roster, { exact: true })).toHaveCount(1);
     await expect(other.getByRole("button", { name: m.village_leave, exact: true })).toBeHidden();
-    await other.locator("summary").filter({ hasText: m.village_leave }).click();
+    await other.locator("summary").filter({ hasText: m.village_joined }).click();
     await expect(other.getByText(m.village_leave_invite_help, { exact: true })).toBeVisible();
     await expect(other.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
-    await other.locator("summary").filter({ hasText: m.village_leave }).click();
+    await other.locator("summary").filter({ hasText: m.village_joined }).click();
     await other.getByRole("link", { name: m.village_post_here, exact: true }).click(); await waitForClientRoute(other);
     await expect(other.locator('input[name="village"]')).toHaveValue("owned-public-club");
     await other.locator('textarea[name="body"]').fill("A member's public village post.");
@@ -118,7 +118,7 @@ test("invites removed and departed members and keeps co-ownership subject to acc
     await expect(member).toHaveCount(0);
     await expect(page.getByRole("status").filter({ hasText: m.village_member_removed })).toBeVisible();
     await invite();
-    await guest.locator("summary").filter({ hasText: m.village_leave }).click();
+    await openVillageMembership(guest);
     await guest.getByRole("button", { name: m.village_leave, exact: true }).click();
     await expect(guest.getByRole("link", { name: m.village_post_here, exact: true })).toHaveCount(0);
     await page.reload(); await invite();
@@ -137,6 +137,7 @@ test("creates an open village and permits a member to join while keeping managem
   await useMember(page, "vc_outsider@example.com", "/v/owned-open-club");
   await expect(page.getByRole("heading", { name: m.village_manage, exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: m.village_join, exact: true }).click();
+  await openVillageMembership(page);
   await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeVisible();
   await expect(page.getByText(m.village_roster, { exact: true })).toHaveCount(1);
   await expect(page.locator("#village-roster").getByText("@vc_open_creator", { exact: false })).toHaveCount(1);
@@ -146,6 +147,7 @@ test("creates an open village and permits a member to join while keeping managem
   await page.getByText(m.village_roster, { exact: true }).click();
   await expect(page.locator("main").getByText("@vc_outsider", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: m.village_add_owner, exact: true })).toBeVisible();
+  await openVillageMembership(page);
   await expect(page.getByRole("button", { name: m.village_leave, exact: true })).toBeDisabled();
   await screenshots(page, "owner-roster");
   // A forged departure uses the page's ordinary error, not a missing-page response.

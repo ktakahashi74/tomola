@@ -11,12 +11,21 @@ import { setVote } from "../app/lib/votes.server";
 import { changeVillageMembership, setDefaultVillage } from "../app/lib/villages.server";
 import { createDraft } from "../app/lib/drafts.server";
 import { createSignupInvitation } from "../app/lib/signup-village.server";
-import { createVillage } from "../app/lib/village-management.server";
+import { createVillage, endVillage } from "../app/lib/village-management.server";
 import { acceptChatConsent, mutateChat } from "../app/lib/village-chat.server";
 import { villageChatEnabled } from "../app/lib/village-chat-enabled.server";
 
 export async function seedVillages(db: Db, dir: string) {
   if (!villagesEnabled()) return;
+  const joinMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
+  const joinId = (handle: string) => joinMembers.find(member => member.handle === handle)!.id;
+  for (const [slug, kind, owner] of [["join-state-open", "open", "zjoin_owner"], ["join-state-invite", "invite_public", "zjoin_owner"], ["join-state-ended", "invite_public", "zjoin_ended"], ["join-state-native", "open", "zjoin_native"]] as const) {
+    const created = await createVillage(db, joinId(owner), { slug, name: slug, kind, description: "A public village for reading and participation." });
+    if (!created.ok) throw new Error("Join state village creation failed");
+  }
+  const [joinInvite] = await db.select().from(villages).where(eq(villages.slug, "join-state-invite"));
+  await db.insert(villageMembers).values({ villageId: joinInvite.id, userId: joinId("zjoin_invited") });
+  if (!(await endVillage(db, joinId("zjoin_ended"), "join-state-ended")).ok) throw new Error("Join state village ending failed");
   // Destination-review fixtures model members who already chose their language village.
   const destinationMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
   for (const member of destinationMembers.filter(member => member.handle.startsWith("vtarget_") && member.handle !== "vtarget_join" || member.handle === "villages_member")) {
