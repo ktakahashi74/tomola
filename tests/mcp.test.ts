@@ -1184,7 +1184,7 @@ describe("connecting an AI tool", () => {
     const post = async (next: string) => await logout({ request: new Request(`${base}/logout`, { method: "POST", headers: { cookie, origin: base }, body: new URLSearchParams({ next }) }) } as never) as Response;
     const back = await post("/mcp/login?client_id=x&sig=y");
     expect(back.headers.get("location")).toBe("/mcp/login?client_id=x&sig=y");
-    expect(back.headers.getSetCookie().join(";")).not.toContain("tomola.logged-out=1");
+    expect(back.headers.getSetCookie().join(";")).toContain("tomola.logged-out=1");
     await relogin();
     for (const next of ["https://evil.example/mcp/login?a=1", "//evil.example/mcp/login?a=1", "/settings", "/mcp/consent?a=1"]) {
       const response = await post(next);

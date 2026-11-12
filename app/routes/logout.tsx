@@ -36,8 +36,8 @@ export async function action({ request }: Route.ActionArgs) {
   const res = await auth.api.signOut({ headers: request.headers, request, asResponse: true });
   const headers = new Headers(res.headers);
   clearLoginCodeCookies(request, headers);
-  if (returnToConnection) return redirect(target, { headers });
   headers.append("Set-Cookie", logoutNoticeCookie(request, true));
+  if (returnToConnection) return redirect(target, { headers });
   // Where reading needs no login, leaving a session leads back to the posts, with the notice on top; otherwise to the login screen.
   return redirect(publicReading() ? "/" : "/login", { headers });
 }

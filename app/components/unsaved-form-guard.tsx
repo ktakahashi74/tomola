@@ -45,9 +45,9 @@ export function UnsavedFormGuard({ form, mode, bypass, initial, retainOnSamePath
     if (form.current) void flushDraft(form.current, true);
     if (!bypass.current && dirty()) { event.preventDefault(); event.returnValue = ""; }
   }, [bypass, dirty, form]);
-  const approveDeparture = useCallback(() => {
+  const approveDeparture = useCallback((discardLocal = true) => {
     // The member chose to leave and discard what was typed: the copy kept on this device goes too (see DraftKeeper).
-    form.current?.dispatchEvent(new Event("tomola:form-discarded"));
+    if (discardLocal) form.current?.dispatchEvent(new Event("tomola:form-discarded"));
     bypass.current = true;
     window.removeEventListener("beforeunload", check);
   }, [bypass, check, form]);
@@ -64,7 +64,11 @@ export function UnsavedFormGuard({ form, mode, bypass, initial, retainOnSamePath
       if (form.current) await flushDraft(form.current, true);
       if (!active) return;
       if (!dirty()) blocker.proceed();
-      else if (window.confirm(m.leave_unsaved_confirm())) { approveDeparture(); blocker.proceed(); }
+      else if (window.confirm(m.leave_unsaved_confirm())) {
+        // Logout clears device writing only after the server ends the session.
+        approveDeparture(blocker.location.pathname !== "/logout");
+        blocker.proceed();
+      }
       else blocker.reset();
     })();
     return () => { active = false; };

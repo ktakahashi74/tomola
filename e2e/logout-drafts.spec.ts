@@ -79,8 +79,8 @@ test("reply logout asks first, preserves cancellation, and clears only after suc
   let confirmations = 0;
   page.on("dialog", async dialog => { confirmations++; expect(dialog.message()).toBe(en.leave_unsaved_confirm); await dialog.dismiss(); });
   await logout(page);
+  await expect.poll(() => confirmations).toBe(1);
   await expect(body(page)).toHaveValue("An unsent reply.");
-  expect(confirmations).toBe(1);
   expect(await records(page)).toEqual(before);
   await expect(page.locator("[data-member-menu-trigger]")).toHaveCount(1);
   page.removeAllListeners("dialog");

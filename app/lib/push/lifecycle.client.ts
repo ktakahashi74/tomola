@@ -105,13 +105,8 @@ export function startPushLifecycle() {
     const data = (event as FormDataEvent).formData;
     if (path === "/logout" || path === "/settings" && data.get("intent") === "revoke-other-sessions") appendPushIdentity(data);
   };
-  const submit = (event: Event) => {
-    const form = event.target;
-    if (form instanceof HTMLFormElement && new URL(form.action, location.href).pathname === "/logout") void clearBrowserPush().catch(() => {});
-  };
   document.addEventListener("formdata", formdata);
-  document.addEventListener("submit", submit, true);
   document.addEventListener("visibilitychange", visible);
   void reconcile();
-  return () => { disposed = true; document.removeEventListener("formdata", formdata); document.removeEventListener("submit", submit, true); document.removeEventListener("visibilitychange", visible); };
+  return () => { disposed = true; document.removeEventListener("formdata", formdata); document.removeEventListener("visibilitychange", visible); };
 }

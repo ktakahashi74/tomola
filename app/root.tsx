@@ -30,7 +30,7 @@ import { SiteFooter } from "~/components/site-footer";
 import { paraglideMiddleware } from "./paraglide/server.js";
 import { getLocale } from "./paraglide/runtime.js";
 import { m } from "~/paraglide/messages.js";
-import { logoutNoticeMiddleware } from "~/lib/auth/logout-notice.server";
+import { hasLogoutNotice, logoutNoticeMiddleware } from "~/lib/auth/logout-notice.server";
 import { welcomeMiddleware } from "~/lib/auth/welcome.server";
 import { sessionCookieMiddleware } from "~/lib/auth/session-cookies.server";
 import { getDb } from "~/lib/db/client.server";
@@ -81,7 +81,7 @@ export const middleware: MiddlewareFunction[] = [
 // Start one job worker on the process's first load (startWorker uses globalThis to prevent duplicate startup;
 // WORKER_ENABLED=false disables it). Worker startup failure must not block pages.
 // Synchronize operator role rows with OPERATOR_EMAILS once per process, removing operators not listed.
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
   try {
     startWorker();
   } catch (error) {
@@ -98,7 +98,7 @@ export async function loader() {
   }
   // The enabled languages (ENABLED_LANGS), for the language choices (useEnabledLangs in app/lib/use-enabled-langs.ts). Add keys here, do not change the shape.
   const labels = shellLabels();
-  return { ...footerNotices(), labels, webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
+  return { ...footerNotices(), labels, loggedOut: hasLogoutNotice(request), webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -177,7 +177,7 @@ export default function App() {
   const member = useRouteLoaderData<typeof import("~/routes/member-layout").loader>("routes/member-layout");
   return (
     <>
-      <PwaRegistration pushEnabled={rootData?.webPush ?? false} memberId={member && "userId" in member ? member.userId : null} />
+      <PwaRegistration loggedOut={rootData?.loggedOut ?? false} pushEnabled={rootData?.webPush ?? false} memberId={member && "userId" in member ? member.userId : null} />
       <Outlet />
     </>
   );
