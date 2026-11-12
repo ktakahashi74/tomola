@@ -4,7 +4,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { Client as LegacyClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport as LegacyTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { eq, inArray } from "drizzle-orm";
+import { DrizzleQueryError, eq, inArray } from "drizzle-orm";
+import * as search from "~/lib/search.server";
+import * as clientDrafts from "~/lib/mcp/drafts.server";
+import * as rates from "~/lib/rate-limit.server";
 import { createAuth } from "~/lib/auth/auth.server";
 import { isAllowedAuthEndpoint } from "~/lib/auth/endpoints.server";
 import type { Db } from "~/lib/db/client.server";
@@ -464,6 +467,7 @@ describe("MCP ownership and output security", () => {
     try {
       for (const query of ["a".repeat(501), "😀".repeat(501), "   \n\t  "]) {
         const output = await (await modern("tools/call", readToken, { name: "tomola_search", arguments: { query } })).json();
+        expect(output.result.isError).toBe(true);
         expect(JSON.stringify(output)).toContain("Invalid query");
       }
       expect(embed).not.toHaveBeenCalled();
@@ -472,6 +476,44 @@ describe("MCP ownership and output security", () => {
       }
       expect(embed.mock.calls.map(call => call[1].text)).toEqual(["a".repeat(500), "😀".repeat(500), "alpha beta"]);
     } finally { embed.mockRestore(); }
+  });
+  it.each([
+    ["tomola_search", { query: "PRIVATE_MCP_QUERY" }, "read"],
+    ["tomola_draft_create", { kind: "topic", title: "PRIVATE_MCP_TITLE", body: "PRIVATE_MCP_BODY" }, "draft"],
+    ["tomola_draft_list", {}, "draft"],
+  ] as const)("logs one sanitized line for an unexpected %s failure", async (name, args, scope) => {
+    const error = new DrizzleQueryError("select $1", ["PRIVATE_MCP_QUERY", "PRIVATE_MCP_BODY", "PRIVATE_MCP_TITLE", "PRIVATE_MCP_HANDLE", readToken, draftToken], Object.assign(new Error("Database unavailable"), { code: "08006" }));
+    const operation = name === "tomola_search" ? vi.spyOn(search, "searchFound").mockRejectedValue(error)
+      : name === "tomola_draft_create" ? vi.spyOn(clientDrafts, "createClientDraft").mockRejectedValue(error)
+      : vi.spyOn(clientDrafts, "listClientDrafts").mockRejectedValue(error);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const output = await (await modern("tools/call", scope === "read" ? readToken : draftToken, { name, arguments: args })).json();
+      expect(output.result.isError).toBe(true);
+      expect(JSON.stringify(output)).toContain("temporarily unavailable");
+      expect(logged).toHaveBeenCalledTimes(1);
+      expect(logged.mock.calls[0]).toEqual([`[mcp] ${name}: DrizzleQueryError: select $1 code: 08006`]);
+      expect(JSON.stringify(logged.mock.calls)).not.toMatch(/PRIVATE_MCP_/);
+      for (const token of [readToken, draftToken]) expect(JSON.stringify(logged.mock.calls)).not.toContain(token);
+    } finally { operation.mockRestore(); logged.mockRestore(); }
+  });
+  it("marks invalid activity positions and tool rate limits as failures", async () => {
+    for (const args of [{ since: "invalid" }, { cursor: "invalid" }]) {
+      const output = await (await modern("tools/call", readToken, { name: "tomola_activity", arguments: args })).json();
+      expect(output.result.isError).toBe(true);
+      expect(JSON.stringify(output)).toContain("Invalid since or cursor.");
+    }
+    const limit = vi.spyOn(rates, "hitMemberLimit").mockResolvedValue({ allowed: false, count: 1, remaining: 0, retryAfterSeconds: 60, limit: 1, resetAt: new Date() });
+    try {
+      for (const [name, args, message] of [
+        ["tomola_search", { query: "Rate limit fixture" }, "Search rate limit reached."],
+        ["tomola_activity", { notifications: true }, "Notification rate limit reached."],
+      ] as const) {
+        const output = await (await modern("tools/call", readToken, { name, arguments: args })).json();
+        expect(output.result.isError).toBe(true);
+        expect(JSON.stringify(output)).toContain(message);
+      }
+    } finally { limit.mockRestore(); }
   });
 });
 
