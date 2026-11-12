@@ -1902,6 +1902,8 @@
   "village_membership_invitation": "Invitation à rejoindre le village",
   "village_accept": "Accepter",
   "village_decline": "Refuser",
+  "village_invite_handle": "Nom d’utilisateur du membre à inviter",
+  "village_invite_member": "Inviter un membre",
   "village_cancel_invite": "Annuler l’invitation",
   "village_roster": "Membres du village",
   "village_owner": "Propriétaire",
@@ -2756,5 +2758,31 @@
   "push_message_response": "Il y a une publication répondant à la vôtre.",
   "push_message_mention": "Vous avez été mentionné.",
   "push_message_group": "Vous avez de nouvelles réponses ou mentions.",
-  "push_message_test": "Ceci est une notification de test."
+  "push_message_test": "Ceci est une notification de test.",
+  "village_invite_member_help": "Il ne rejoindra ce village que s’il accepte votre invitation.",
+  "village_join_visibility": "Si vous le rejoignez, les utilisateurs de tomola pourront voir votre nom dans la liste des membres de ce village. Vous pouvez lire et répondre sans rejoindre.",
+  "village_member_role": "Membre",
+  "village_writers": "Personnes écrivant dans ce village",
+  "village_saved": "Modifications enregistrées.",
+  "village_end_success": "Village clôturé.",
+  "village_invite_sent": "Invitation envoyée.",
+  "village_owner_invite_sent": "Invitation de copropriétaire envoyée.",
+  "village_invite_cancelled": "Invitation annulée.",
+  "village_member_removed": "Membre retiré.",
+  "village_chat_readers": [
+    {
+      "declarations": [
+        "input count",
+        "local n = count: plural"
+      ],
+      "selectors": [
+        "n"
+      ],
+      "match": {
+        "n=one": "{count} personne dans ce village peut lire ce chat.",
+        "n=many": "{count} de personnes dans ce village peuvent lire ce chat.",
+        "n=other": "{count} personnes dans ce village peuvent lire ce chat."
+      }
+    }
+  ]
 }

@@ -18,7 +18,7 @@ export function VillageInvites({ invites }: { invites: VillageInviteView[] }) {
         { key: "inviter", content: m.village_invited_by({ handle: invite.inviter }) },
         { key: "invitation", content: invite.kind === "owner" ? m.village_owner_invitation() : m.village_membership_invitation() },
       ]} />
-      <p className="ui-help">{m.village_join_visibility()}</p>
+      {invite.kind !== "owner" && <p className="ui-help">{m.village_join_visibility()}</p>}
       <Form method="post" action={`/v/${invite.slug}`} className="flex flex-wrap gap-2">
         <input type="hidden" name="invite" value={invite.id} />
         <Button type="submit" name="intent" value="accept-invite">{m.village_accept()}</Button>

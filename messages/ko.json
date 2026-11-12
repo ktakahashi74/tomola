@@ -1813,6 +1813,8 @@
   "village_membership_invitation": "참여 초대",
   "village_accept": "수락",
   "village_decline": "거절",
+  "village_invite_handle": "초대할 회원의 사용자 이름",
+  "village_invite_member": "회원 초대하기",
   "village_cancel_invite": "초대 취소",
   "village_roster": "빌리지 멤버",
   "village_owner": "소유자",
@@ -2651,5 +2653,29 @@
   "push_message_response": "내 게시물에 응답하는 게시물이 있습니다.",
   "push_message_mention": "회원님이 멘션되었습니다.",
   "push_message_group": "새로운 답글이나 멘션이 있습니다.",
-  "push_message_test": "테스트 알림입니다."
+  "push_message_test": "테스트 알림입니다.",
+  "village_invite_member_help": "초대를 수락해야만 이 빌리지에 참여하게 됩니다.",
+  "village_join_visibility": "참여하면 tomola의 다른 사용자가 이 빌리지의 회원 목록에서 회원님의 이름을 볼 수 있습니다. 참여하지 않고도 글을 읽거나 답글을 작성할 수 있습니다.",
+  "village_member_role": "회원",
+  "village_writers": "이 빌리지에서 글을 쓰고 있는 사람",
+  "village_saved": "변경사항을 저장했습니다.",
+  "village_end_success": "빌리지를 종료했습니다.",
+  "village_invite_sent": "초대를 보냈습니다.",
+  "village_owner_invite_sent": "공동 소유자 초대를 보냈습니다.",
+  "village_invite_cancelled": "초대를 취소했습니다.",
+  "village_member_removed": "회원을 제외했습니다.",
+  "village_chat_readers": [
+    {
+      "declarations": [
+        "input count",
+        "local n = count: plural"
+      ],
+      "selectors": [
+        "n"
+      ],
+      "match": {
+        "n=other": "이 빌리지의 {count}명이 이 대화를 읽을 수 있습니다."
+      }
+    }
+  ]
 }

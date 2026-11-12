@@ -1373,6 +1373,8 @@
   "village_membership_invitation": "加入村的邀请",
   "village_accept": "接受",
   "village_decline": "拒绝",
+  "village_invite_handle": "要邀请的成员用户名",
+  "village_invite_member": "邀请成员",
   "village_cancel_invite": "取消邀请",
   "village_roster": "村里的人",
   "village_owner": "所有者",
@@ -2133,5 +2135,29 @@
   "push_message_response": "有回应您帖子的新内容。",
   "push_message_mention": "有人提及了您。",
   "push_message_group": "您有新的回复或提及。",
-  "push_message_test": "这是一条测试通知。"
+  "push_message_test": "这是一条测试通知。",
+  "village_invite_member_help": "对方接受邀请后才会加入此村庄。",
+  "village_join_visibility": "加入后，tomola 上的用户可以在此村庄的成员列表中看到你的名字。即使不加入，你也可以浏览和回复。",
+  "village_member_role": "成员",
+  "village_writers": "在此村庄发言的用户",
+  "village_saved": "更改已保存。",
+  "village_end_success": "村庄已结束。",
+  "village_invite_sent": "邀请已发送。",
+  "village_owner_invite_sent": "共同所有者邀请已发送。",
+  "village_invite_cancelled": "邀请已取消。",
+  "village_member_removed": "成员已移除。",
+  "village_chat_readers": [
+    {
+      "declarations": [
+        "input count",
+        "local n = count: plural"
+      ],
+      "selectors": [
+        "n"
+      ],
+      "match": {
+        "n=other": "此村庄中有 {count} 人可以阅读此聊天。"
+      }
+    }
+  ]
 }

@@ -10,6 +10,7 @@ export function OrderSwitch({ order, compact = false }: { order: TopicOrder; com
     const params = new URLSearchParams(location.search);
     params.delete("page");
     params.delete("manage");
+    params.delete("notice");
     if (target !== "created") params.set("order", target);
     else params.delete("order");
     const search = params.toString();

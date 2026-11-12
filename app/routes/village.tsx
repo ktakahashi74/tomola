@@ -220,7 +220,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     </div>
     {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
     <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
-    <Pagination page={page} hasNext={hasNext} dropParams={["manage", "membersPage", "invitesPage"]} />
+    <Pagination page={page} hasNext={hasNext} dropParams={["manage", "membersPage", "invitesPage", "notice"]} />
     {management.canReadRoster && <details id="village-roster" open={search.get("notice") === "remove-member" || management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
       {notice && search.get("notice") === "remove-member" && <p role="status">{notice}</p>}
       <ul className="space-y-3 py-3">{management.roster.map(member => <li key={member.handle} className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -233,7 +233,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
           </Form></details>}
         </>}
       </li>)}</ul>
-      <Pagination page={management.rosterPage} hasNext={management.rosterHasNext} pageParam="membersPage" keepFirstPage anchor="#village-roster" label={m.village_roster_pages()} dropParams={["invitesPage", "page"]} />
+      <Pagination page={management.rosterPage} hasNext={management.rosterHasNext} pageParam="membersPage" keepFirstPage anchor="#village-roster" label={m.village_roster_pages()} dropParams={["invitesPage", "page", "notice"]} />
     </details>}
     {canManage && <PersistentDetails key={village.slug} id="village-management" open={managementOpen} className="space-y-3">
       <summary className="link-ui cursor-pointer">{m.village_manage()}</summary>
@@ -261,7 +261,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
             <input type="hidden" name="invite" value={invite.id} /><Button variant="outline" type="submit" name="intent" value="cancel-invite">{m.village_cancel_invite()}</Button>
           </Form>
         </li>)}</ul>}
-        <Pagination page={management.invitesPage} hasNext={management.invitesHasNext} pageParam="invitesPage" keepFirstPage anchor="#village-invites" label={m.village_invite_pages()} dropParams={["membersPage", "page"]} />
+        <Pagination page={management.invitesPage} hasNext={management.invitesHasNext} pageParam="invitesPage" keepFirstPage anchor="#village-invites" label={m.village_invite_pages()} dropParams={["membersPage", "page", "notice"]} />
         </div>}
         {!ended && !village.language && (confirmingEnd ? <div className="space-y-3" role="region" aria-label={m.village_end_confirm()}>
           <h3 className="font-semibold">{m.village_end_confirm()}</h3><p>{m.village_end_help()}</p>
