@@ -5,7 +5,7 @@ import { defaultLangOf, LANGS, type Lang } from "~/lib/languages";
 import { READING_ONLY_PARAM } from "~/lib/reading-lang";
 
 // How the interface language is decided. Only the server decides; the browser reads the server's decision.
-//   1. The language cookie (PARAGLIDE_LOCALE), if it names an enabled language. Explicit choices, completed registration and login with a saved language write it; automatic browser resolution never does.
+//   1. The language cookie (PARAGLIDE_LOCALE), if it names an enabled language. Explicit choices and registration with an enabled main language write it; login and automatic browser resolution never do.
 //   2. The member's saved display language (profiles.ui_locale), if enabled. Guests skip this step.
 //   3. The lang query parameter, if it names an enabled language and the address has no reading-only mark (rl, app/lib/reading-lang.ts); a mark that names an enabled language (rl=fr) sets the screen language itself. Neither changes saved preferences.
 //   4. The first language of Accept-Language (in order of q) that matches an enabled language: the whole tag, or the part before the first "-" ("en-US" is en).
@@ -89,12 +89,16 @@ export function setRequestUiLocale(request: Request, locale: string | null): voi
   memberLocales.set(request, locale);
 }
 
+export function getRequestUiLocale(request: Request): string | null {
+  return memberLocales.get(request) ?? null;
+}
+
 export function uiLocaleCookie(request: Request, locale: Lang): string {
   return `${cookieName}=${locale}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;
 }
 
 // The source lets callers distinguish a page's language from a preference that can be remembered.
-export function negotiateUiLocale(request: Request, enabled: readonly Lang[], saved: string | null | undefined = memberLocales.get(request)): { locale: Lang; source: "cookie" | "profile" | "query" | "accept-language" | "default" } {
+export function negotiateUiLocale(request: Request, enabled: readonly Lang[], saved: string | null = null): { locale: Lang; source: "cookie" | "profile" | "query" | "accept-language" | "default" } {
   const cookie = cookieLocale(request);
   if (cookie !== null) {
     const lang = LANGS.find((l) => l === cookie);
@@ -119,7 +123,7 @@ export function negotiateUiLocale(request: Request, enabled: readonly Lang[], sa
 // Keep browser translation available unless the reader chose a screen language or the screen matches their first browser language.
 // defaultMainLang already checks only the highest-ranked acceptable tag, ignoring the region and normalizing Chinese by script.
 export function shouldSuppressBrowserTranslation(request: Request, enabled: readonly Lang[]): boolean {
-  const { locale, source } = negotiateUiLocale(request, enabled);
+  const { locale, source } = negotiateUiLocale(request, enabled, getRequestUiLocale(request));
   return source === "cookie" || source === "profile" || defaultMainLang(request.headers.get("accept-language"), enabled) === locale;
 }
 
@@ -152,5 +156,5 @@ export function withLocaleHeaders(response: unknown): unknown {
 // Registers the server half of Paraglide's custom strategy "custom-htmlLang" (strategy: custom-htmlLang, cookie, baseLocale in vite.config.ts). Paraglide's middleware asks it
 // for the locale of each request, so the decision above is the only one. The browser half is in app/lib/http/locale-strategy.ts. Registered once, when this module is first imported.
 defineCustomServerStrategy(HTML_LANG_STRATEGY, {
-  getLocale: (request) => (request ? negotiateUiLocale(request, enabledLangs()).locale : undefined),
+  getLocale: (request) => (request ? negotiateUiLocale(request, enabledLangs(), getRequestUiLocale(request)).locale : undefined),
 });

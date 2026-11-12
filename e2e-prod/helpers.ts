@@ -1,7 +1,7 @@
 import fs from "node:fs";
 export { openUserMenu, openAdminMenu } from "../e2e/helpers";
 export { captureScreenshot, waitForClientRoute } from "../e2e/helpers";
-import { completeTrialFields, enMessages, restoreMember } from "../e2e/helpers";
+import { completeTrialFields, enMessages, openUserMenu, restoreMember, uiMessages, waitForClientRoute } from "../e2e/helpers";
 import { PROD_MEMBERS } from "./member-fixtures";
 import { expect, type Page } from "@playwright/test";
 import { test as base, richEditorTest as richBase } from "../e2e/editor-fixture";
@@ -100,6 +100,16 @@ export async function signUp(
   await page.getByRole("button", { name: enMessages.onboarding_join }).click();
   await expect(page).toHaveURL(new URL("/", state().baseURL).href);
   await expect(page.locator("[data-member-menu-trigger]")).toHaveAttribute("title", `@${profile.handle}`);
+  await expect(page.locator("html")).toHaveAttribute("lang", profile.mainLang);
+  // The remaining production scenarios use English labels independently of the main language.
+  if (profile.mainLang !== "en") {
+    await waitForClientRoute(page);
+    const messages = await uiMessages(page);
+    const menu = await openUserMenu(page);
+    await menu.getByRole("menuitem", { name: messages.nav_language, exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "English", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  }
   // Languages to read beyond the default (the main language) are set in /settings.
   if (profile.read) await setReadLangs(page, profile.read);
 }

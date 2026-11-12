@@ -3,7 +3,7 @@ import { defineCustomClientStrategy, toLocale } from "~/paraglide/runtime.js";
 // The browser half of Paraglide's custom strategy "custom-htmlLang" (the server half is in app/lib/http/locale.server.ts). The server decides the interface
 // language of every page and renders it in <html lang>. In the browser, getLocale() uses that attribute (read once, see below), so hydration always uses the language the server rendered and the
 // browser never applies its own matching rule (Paraglide's navigator.languages matching knows nothing about ENABLED_LANGS or the Chinese scripts).
-// setLocale does nothing here: Paraglide also calls it on the first getLocale(). Only the switcher explicitly writes the language cookie, then reloads.
+// setLocale does nothing here: Paraglide also calls it on the first getLocale(). Explicit language choices persist through the server before reloading; registration can also set the cookie.
 // The name must follow the pattern custom-[A-Za-z0-9_-]+ (Paraglide 2.25).
 export const HTML_LANG_STRATEGY = "custom-htmlLang";
 

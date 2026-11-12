@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultMainLang, negotiateUiLocale, parseAcceptLanguage, pickEnabledLang, shouldSuppressBrowserTranslation, withLocaleHeaders } from "~/lib/http/locale.server";
+import { defaultMainLang, negotiateUiLocale, parseAcceptLanguage, pickEnabledLang, setRequestUiLocale, shouldSuppressBrowserTranslation, withLocaleHeaders } from "~/lib/http/locale.server";
 import { defineHtmlLangStrategy } from "~/lib/http/locale-strategy";
 import { LANGS, type Lang } from "~/lib/languages";
 import { customClientStrategies, customServerStrategies } from "~/paraglide/runtime.js";
@@ -110,6 +110,16 @@ describe("defaultMainLang", () => {
 
 describe("negotiateUiLocale", () => {
   const req = (headers: Record<string, string> = {}, query = "") => new Request(`https://forum.example.org/${query}`, { headers });
+
+  it("uses only an explicitly supplied saved locale even when middleware cached another account", () => {
+    const request = req({ "accept-language": "en" });
+    setRequestUiLocale(request, "ja");
+    expect(negotiateUiLocale(request, JA_EN)).toEqual({ locale: "en", source: "accept-language" });
+    expect(negotiateUiLocale(request, JA_EN, undefined)).toEqual({ locale: "en", source: "accept-language" });
+    expect(negotiateUiLocale(request, JA_EN, null)).toEqual({ locale: "en", source: "accept-language" });
+    expect(negotiateUiLocale(request, JA_EN, "ja")).toEqual({ locale: "ja", source: "profile" });
+    expect(customServerStrategies.get("custom-htmlLang")!.getLocale(request)).toBe("ja");
+  });
 
   it("uses the cookie when it names an enabled language, before the query and Accept-Language", () => {
     expect(negotiateUiLocale(req({ cookie: "PARAGLIDE_LOCALE=ja", "accept-language": "en" }, "?lang=en"), JA_EN)).toEqual({ locale: "ja", source: "cookie" });

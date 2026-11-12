@@ -625,15 +625,16 @@ test("the cookie, query and browser language decide the interface language among
   }
 });
 
-test("a shared topic language sets the interface without saving a language preference", async ({ browser }) => {
+test("a shared topic language preserves the member's saved interface without setting a language cookie", async ({ browser }) => {
   const saved = await mikaContext.storageState();
   const context = await browser.newContext({ locale: "ja-JP", storageState: { ...saved, cookies: saved.cookies.filter(c => c.name !== "PARAGLIDE_LOCALE") } });
   try {
     const page = await context.newPage();
     const watch = await watchCsp(page);
-    const response = await page.goto(`/t/${topicId}?lang=en`);
+    const response = await page.goto(`/t/${topicId}?lang=ja`);
     expect(response!.status()).toBe(200);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("heading", { level: 1, name: "共生と協力について", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: enMessages.nav_new_topic, exact: true })).toBeVisible();
     await expect(page.getByRole("contentinfo").getByRole("link", { name: enMessages.footer_why, exact: true })).toBeVisible();
     expect((await response!.allHeaders())["set-cookie"] ?? "").not.toContain("PARAGLIDE_LOCALE=");
@@ -643,10 +644,10 @@ test("a shared topic language sets the interface without saving a language prefe
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await waitForClientRoute(page);
-    // A new document without the query returns to the browser preference.
+    // A new document without the query retains the saved interface before the browser preference.
     await page.goto(`/t/${topicId}`);
-    await expect(page.locator("html")).toHaveAttribute("lang", "ja");
-    await expect(page.getByRole("link", { name: messagesOf("ja").nav_new_topic, exact: true })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("link", { name: enMessages.nav_new_topic, exact: true })).toBeVisible();
     await waitForClientRoute(page);
     expect((await context.cookies()).find(c => c.name === "PARAGLIDE_LOCALE")).toBeUndefined();
     expectClean(watch);

@@ -4,7 +4,8 @@ import { getSessionProfile, requireMember } from "~/lib/auth/session.server";
 import { profiles } from "~/lib/db/schema";
 import { displayLangFor, readingLanguageChoice, screenReadLangsFor } from "~/lib/display-lang.server";
 import { prepareUiLocale } from "~/lib/http/member-locale.server";
-import { negotiateUiLocale, shouldSuppressBrowserTranslation } from "~/lib/http/locale.server";
+import { getRequestUiLocale, negotiateUiLocale, setRequestUiLocale, shouldSuppressBrowserTranslation } from "~/lib/http/locale.server";
+import * as sessions from "~/lib/auth/session.server";
 import * as members from "~/lib/members.server";
 import { getProfile, rememberUiLocale, setUiLocale } from "~/lib/profiles.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
@@ -31,7 +32,7 @@ describe("saved display language", () => {
   it.each(["", "?lang=fr", "?lang=fr&rl=1", "?lang=en&rl=fr"])("uses the saved language before browser and shared-link languages: %s", async search => {
     const request = h.request(`/settings${search}`, { as: "locale_reader", headers: { "accept-language": "en" } });
     await prepareUiLocale(request);
-    expect(negotiateUiLocale(request, enabled)).toEqual({ locale: "ja", source: "profile" });
+    expect(negotiateUiLocale(request, enabled, getRequestUiLocale(request))).toEqual({ locale: "ja", source: "profile" });
     expect(shouldSuppressBrowserTranslation(request, enabled)).toBe(true);
     expect(await stored()).toBe("ja");
   });
@@ -53,7 +54,7 @@ describe("saved display language", () => {
     request.headers.append("cookie", "; PARAGLIDE_LOCALE=en");
     const read = vi.spyOn(members, "getActiveMember");
     await prepareUiLocale(request);
-    expect(negotiateUiLocale(request, enabled)).toEqual({ locale: "en", source: "cookie" });
+    expect(negotiateUiLocale(request, enabled, getRequestUiLocale(request))).toEqual({ locale: "en", source: "cookie" });
     expect(read).not.toHaveBeenCalled();
     expect(await stored()).toBe("ja");
   });
@@ -81,15 +82,50 @@ describe("saved display language", () => {
     expect(statements).toEqual([]);
   });
 
-  it.each(["en", "ja"])("restores the saved language cookie on login from a %s guest screen", async locale => {
+  it.each(["en", "ja"])("uses the saved language without setting a language cookie on login from a %s guest screen", async locale => {
     const token = await h.issueLink("locale_reader@example.com");
     const response = await (await import("~/routes/auth-confirm")).action(h.args(h.request("/auth/confirm", {
       form: { token }, headers: { cookie: h.linkCookie(token), "accept-language": locale },
     }))) as Response;
     expect(response.status).toBe(303);
     expect(response.headers.has("X-Remix-Reload-Document")).toBe(locale !== "ja");
-    expect(response.headers.getSetCookie()).toContain("PARAGLIDE_LOCALE=ja; Path=/; Max-Age=34560000; SameSite=Lax");
+    expect(response.headers.getSetCookie().some(cookie => cookie.startsWith("PARAGLIDE_LOCALE="))).toBe(false);
     expect(await stored()).toBe("ja");
+  });
+
+  it.each([false, true])("ignores another account's cached locale when the login target has a profile: %s", async hasProfile => {
+    const handle = hasProfile ? "locale_unset" : "locale_new";
+    await h.signIn(handle, { profile: hasProfile });
+    if (hasProfile) await h.db.update(profiles).set({ uiLocale: null }).where(eq(profiles.userId, h.ids[handle]));
+    const token = await h.issueLink(`${handle}@example.com`);
+    const request = h.request("/auth/confirm", {
+      as: "locale_reader", form: { token }, headers: { "accept-language": "en" },
+    });
+    request.headers.append("cookie", `; ${h.linkCookie(token)}`);
+    await prepareUiLocale(request);
+    expect(getRequestUiLocale(request)).toBe("ja");
+    const response = await (await import("~/routes/auth-confirm")).action(h.args(request)) as Response;
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(hasProfile ? "/" : "/onboarding");
+    expect(response.headers.has("X-Remix-Reload-Document")).toBe(false);
+    expect(response.headers.getSetCookie().some(cookie => cookie.startsWith("PARAGLIDE_LOCALE="))).toBe(false);
+    expect((await getProfile(h.db, h.ids[handle]))?.uiLocale ?? null).toBe(hasProfile ? "en" : null);
+    expect(await stored()).toBe("ja");
+  });
+
+  it.each([
+    ["?lang=fr", "en", "fr", "query"],
+    ["", "en", "en", "accept-language"],
+    ["", "de", "en", "default"],
+  ])("falls back to guest rules on lookup failure: %s %s", async (search, accept, locale, source) => {
+    const request = h.request(`/principles${search}`, { as: "locale_reader", headers: { "accept-language": accept } });
+    setRequestUiLocale(request, "ja");
+    vi.spyOn(sessions, "getSessionProfile").mockRejectedValueOnce(new Error("private lookup details"));
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(prepareUiLocale(request)).resolves.toBeUndefined();
+    expect(getRequestUiLocale(request)).toBeNull();
+    expect(negotiateUiLocale(request, enabled, getRequestUiLocale(request))).toEqual({ locale, source });
+    expect(warning).toHaveBeenCalledExactlyOnceWith("Member display language unavailable; using guest language negotiation.");
   });
 
   it("preserves guest negotiation, including pinned reading marks", async () => {
@@ -99,7 +135,7 @@ describe("saved display language", () => {
     ]) {
       const request = h.request(`/${search}`, { headers: { cookie, "accept-language": "en" } });
       await prepareUiLocale(request);
-      expect(negotiateUiLocale(request, enabled)).toEqual({ locale, source });
+      expect(negotiateUiLocale(request, enabled, getRequestUiLocale(request))).toEqual({ locale, source });
     }
   });
 
@@ -108,7 +144,7 @@ describe("saved display language", () => {
       await h.db.update(profiles).set({ uiLocale: value }).where(eq(profiles.userId, h.ids.locale_reader));
       const request = h.request("/?lang=fr", { as: "locale_reader", headers: { "accept-language": "en" } });
       await prepareUiLocale(request);
-      expect(negotiateUiLocale(request, enabled)).toEqual({ locale: "fr", source: "query" });
+      expect(negotiateUiLocale(request, enabled, getRequestUiLocale(request))).toEqual({ locale: "fr", source: "query" });
       expect(await stored()).toBe(value);
     }
   });
@@ -152,16 +188,18 @@ describe("explicit display language saves", () => {
 });
 
 describe("signup display language", () => {
-  it.each([["ja", "ja"], ["other", "en"]])("aligns main language %s with display language %s", async (homeArea, expected) => {
-    const handle = `locale_signup_${homeArea}`;
+  it.each([["ja", "ja", "en", ""], ["other", "en", "en", ""], ["other", "fr", "fr", "?lang=fr"]])("aligns main language %s with display language %s from screen %s", async (homeArea, expected, screen, search) => {
+    setTestLocale(screen as "en" | "fr");
+    const handle = `locale_signup_${homeArea}_${screen}`;
     await h.signIn(handle, { profile: false });
-    const request = h.request("/onboarding", { as: handle, headers: { "accept-language": "en-US" }, form: { handle, homeArea, ...trialForm } });
+    const request = h.request(`/onboarding${search}`, { as: handle, headers: { "accept-language": "en-US" }, form: { handle, homeArea, ...trialForm } });
     let response: Response | undefined;
     try { await (await import("~/routes/onboarding")).action(h.args(request)); }
     catch (error) { if (!(error instanceof Response)) throw error; response = error; }
     expect(response?.status).toBe(302);
-    expect(response?.headers.has("X-Remix-Reload-Document")).toBe(expected !== "en");
-    expect(response?.headers.getSetCookie()).toContain(`PARAGLIDE_LOCALE=${expected}; Path=/; Max-Age=34560000; SameSite=Lax`);
+    expect(response?.headers.has("X-Remix-Reload-Document")).toBe(expected !== screen);
+    const cookies = response!.headers.getSetCookie().filter(cookie => cookie.startsWith("PARAGLIDE_LOCALE="));
+    expect(cookies).toEqual(homeArea === "ja" ? [`PARAGLIDE_LOCALE=ja; Path=/; Max-Age=34560000; SameSite=Lax`] : []);
     expect((await getProfile(h.db, h.ids[handle]))?.uiLocale).toBe(expected);
   });
 });

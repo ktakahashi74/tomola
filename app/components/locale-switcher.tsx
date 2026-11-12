@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 
 // The interface language switcher: enabled languages by their own names, followed by a link to request another language.
 // The names are data (LANG_LABELS), not messages, and follow the order of LANGS.
-// Only an explicit choice writes the cookie and reloads; the server reads the cookie and decides the language (app/lib/http/locale.server.ts).
+// A choice saves the cookie and the member's account preference before reloading; the server decides the language (app/lib/http/locale.server.ts).
 // `globe`: draw a globe before the name, so that a bare language name in a header reads as the language of the screen (and not of the posts).
 // `clearReadingLanguage`: the guest header's choice also clears a page's reading override so posts follow the screen language.
 export function LocaleSwitcher(props: { "aria-label"?: string; globe?: boolean; clearReadingLanguage?: boolean } = {}) {

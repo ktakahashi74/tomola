@@ -376,7 +376,6 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </section>}
           {!enhanced && <Button type="submit">{m.save_changes()}</Button>}
         </Form>
-
       </section>
 
       <section id="settings-ai" aria-labelledby="settings-ai-section-heading" className="scroll-mt-4 space-y-4">

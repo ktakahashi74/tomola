@@ -92,7 +92,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
   let res: Awaited<ReturnType<typeof createProfile>>;
   const mainLang = String(form.get("homeArea") ?? "");
-  const signupLocale = isLang(mainLang) && enabledLangs().includes(mainLang) ? mainLang : getLocale();
+  const signupLocale = isLang(mainLang) && enabledLangs().includes(mainLang) ? mainLang : undefined;
   try {
     res = await createProfile(
       db,
@@ -102,7 +102,7 @@ export async function action({ request }: Route.ActionArgs) {
         homeArea: mainLang,
       },
       // For "other" the default read language is the language of this screen (an enabled language).
-      { uiLocale: signupLocale, ...(trialRequired ? { trial } : {}) },
+      { uiLocale: signupLocale ?? getLocale(), ...(trialRequired ? { trial } : {}) },
     );
   } catch (error) {
     // Treat a primary-key conflict from simultaneous submissions as an already-created profile.

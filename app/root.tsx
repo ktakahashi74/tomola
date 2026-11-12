@@ -37,7 +37,7 @@ import { getDb } from "~/lib/db/client.server";
 import { readTranslationWaits } from "~/lib/translation-wait.server";
 import { NORMAL_WAITS, TranslationWaitContext } from "~/lib/translation-wait";
 import { enabledLangs, previewLangs } from "~/lib/enabled-langs.server";
-import { negotiateUiLocale, withLocaleHeaders } from "~/lib/http/locale.server";
+import { getRequestUiLocale, negotiateUiLocale, withLocaleHeaders } from "~/lib/http/locale.server";
 import { prepareUiLocale } from "~/lib/http/member-locale.server";
 import { securityHeadersMiddleware } from "~/lib/http/security-headers.server";
 import { startWorker } from "~/lib/jobs/worker.server";
@@ -67,7 +67,7 @@ export const middleware: MiddlewareFunction[] = [
     try { return await next(); }
     catch (error) {
       if (error instanceof MarkdownBusyError) {
-        const { locale } = negotiateUiLocale(ctx.request, enabledLangs());
+        const { locale } = negotiateUiLocale(ctx.request, enabledLangs(), getRequestUiLocale(ctx.request));
         throw Response.json({ error: "temporarily_unavailable", message: m.error_unavailable({}, { locale }), retryAfter: "1" }, { status: 503, headers: { "Retry-After": "1" } });
       }
       throw error;

@@ -39,5 +39,21 @@ test("Japanese main language sets the display language after signup in an Englis
     await expect(page.locator("html")).toHaveAttribute("lang", "ja");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+    const otherDevice = await browser.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.247") });
+    try {
+      const otherPage = await otherDevice.newPage();
+      await otherPage.goto("/login?next=/settings");
+      await confirmMagicLink(otherPage, await requestMagicLink(otherPage, "locale_signup@example.com"));
+      await expect(otherPage).toHaveURL(/\/settings$/);
+      await expect(otherPage.locator("html")).toHaveAttribute("lang", "ja");
+      expect((await otherDevice.cookies()).some(cookie => cookie.name === "PARAGLIDE_LOCALE")).toBe(false);
+      await waitForClientRoute(page);
+      await page.locator("#settings-languages").getByRole("combobox", { name: ja.language_select, exact: true }).click();
+      await page.getByRole("listbox").getByRole("option", { name: "English", exact: true }).click();
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await otherPage.reload();
+      await expect(otherPage.locator("html")).toHaveAttribute("lang", "en");
+      expect((await otherDevice.cookies()).some(cookie => cookie.name === "PARAGLIDE_LOCALE")).toBe(false);
+    } finally { await otherDevice.close(); }
   } finally { await context.close(); }
 });

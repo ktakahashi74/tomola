@@ -20,7 +20,7 @@ import "~/lib/startup.server";
 import { testSiteEnabled } from "~/lib/site-stage.server";
 import { m } from "~/paraglide/messages.js";
 import { enabledLangs } from "~/lib/enabled-langs.server";
-import { negotiateUiLocale, shouldSuppressBrowserTranslation } from "~/lib/http/locale.server";
+import { getRequestUiLocale, negotiateUiLocale, shouldSuppressBrowserTranslation } from "~/lib/http/locale.server";
 import { BrowserTranslationContext } from "~/lib/browser-translation";
 import { TestSiteNoticeContext } from "~/lib/test-site-notice";
 import { addStylePreloads } from "~/lib/http/style-preloads.server";
@@ -68,7 +68,7 @@ export default function handleRequest(
   // Resource responses never enter here. Early HTML errors still need the
   // notice, even when the root loader could not run. The client reads this
   // already-rendered text before hydration instead of translating it again.
-  const { locale } = negotiateUiLocale(request, enabledLangs());
+  const { locale } = negotiateUiLocale(request, enabledLangs(), getRequestUiLocale(request));
   let fallbackNotice: string | null = null;
   if (testSiteEnabled()) {
     fallbackNotice = operatorCopy(operatorConfig(), locale).testSiteNotice ?? m.test_site_notice({}, { locale });
