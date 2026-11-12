@@ -1,6 +1,6 @@
 // One inventory for both development runs. Everything else runs privately.
 // Media delivery and deleted-parent visibility exercise both authority modes.
-const publicOnly = [
+export const publicOnly = [
   ["meta-separators", ".*"],
   ["read-later", "anonymous readers"],
   ["village-icons", ".*"],
@@ -47,9 +47,8 @@ const publicOnly = [
   ["reading-page", "public and no-JavaScript readers"],
   ["reply-branches", "public readers can open branch tails"],
   ["return-reading", ".*"],
-  ["screen-trim", "public readers can open"],
-];
-const bothModes = [
+] as const;
+export const bothModes = [
   ["logout-drafts", ".*"],
   ["web-push", ".*"],
   ["install-guide", ".*"],
@@ -87,7 +86,8 @@ const bothModes = [
   ["reply-branches", "keeps the reading position on history return"],
   ["media", "file selection, insertion, preview and posted image at width 390"],
   ["deleted-replies", "deletion omits unused replies"],
-];
-const match = (cases: string[][]) => new RegExp(cases.map(([file, titles]) => `${file}\\.spec\\.ts.*(?:${titles})`).join("|"));
-export const publicOnlyTests = match(publicOnly);
-export const publicReadingTests = match([...publicOnly, ...bothModes]);
+] as const;
+export const readingModePattern = (cases: readonly (readonly [string, string])[]) => new RegExp(cases.map(([file, titles]) =>
+  `(?:^|[\\s/\\\\])${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.spec\\.ts\\s.*(?:${titles})`).join("|"));
+export const publicOnlyTests = readingModePattern(publicOnly);
+export const publicReadingTests = readingModePattern([...publicOnly, ...bothModes]);

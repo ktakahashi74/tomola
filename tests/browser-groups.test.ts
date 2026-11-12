@@ -3,9 +3,46 @@ import { expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { spawnSync } from "node:child_process";
+import type { JSONReport, JSONReportSuite } from "@playwright/test/reporter";
 import { browserFiles, browserFilePatterns, browserPorts, partitionBrowserFiles, browserGroupCount, privateBrowserGroups } from "../scripts/browser-groups";
-import { publicOnlyTests } from "../e2e/reading-modes";
+import { publicOnly, bothModes, publicOnlyTests, readingModePattern } from "../e2e/reading-modes";
 import { modulePath, moduleTarget } from "../e2e/support/module-route";
+
+it("keeps every reading-mode row matched to collected browser tests, including generated titles", () => {
+  const environment = { ...process.env };
+  for (const key of ["E2E_BROWSER_GROUP", "PLAYWRIGHT_JSON_OUTPUT_FILE", "PLAYWRIGHT_JSON_OUTPUT_NAME", "PLAYWRIGHT_JSON_OUTPUT_DIR"]) delete environment[key];
+  const titles = (suites: JSONReportSuite[], parents: string[] = []): string[] => suites.flatMap(suite => {
+    const prefix = [...parents, suite.title];
+    return [...suite.specs.map(spec => [...prefix, spec.title].join(" ")), ...titles(suite.suites ?? [], prefix)];
+  });
+  // The private inverse and public inventory together cover every collected test.
+  // Listing evaluates declarations and loops without running setup or test bodies.
+  const allTitles = ["playwright.config.ts", "playwright.public.config.ts"].flatMap(config => {
+    const listed = spawnSync(process.execPath, [path.resolve("node_modules/@playwright/test/cli.js"), "test", "-c", config, "--list", "--reporter=json"], {
+      env: environment, encoding: "utf8", timeout: 30_000, maxBuffer: 16 * 1024 * 1024,
+    });
+    expect(listed.error, listed.stderr).toBeUndefined();
+    expect(listed.status, listed.stderr).toBe(0);
+    const report = JSON.parse(listed.stdout) as JSONReport;
+    expect(report.errors).toEqual([]);
+    expect(report.suites.length).toBeGreaterThan(0);
+    return titles(report.suites);
+  });
+  for (const cases of [publicOnly, bothModes]) for (const row of cases) {
+    expect(allTitles.filter(title => readingModePattern([row]).test(title)), `Unmatched reading-mode row: ${row.join(" / ")}`).not.toHaveLength(0);
+  }
+}, 65_000);
+
+it("anchors reading-mode filenames at a delimiter in file lists and Playwright title paths", () => {
+  const pattern = readingModePattern([["moderation", "operator signs up"]]);
+  for (const prefix of ["", "chromium ", "chromium nested/", "chromium nested\\"]) {
+    expect(pattern.test(`${prefix}moderation.spec.ts moderation operator signs up`)).toBe(true);
+    for (const file of ["ai-moderation", "village-moderation", "othermoderation"]) expect(pattern.test(`${prefix}${file}.spec.ts operator signs up`)).toBe(false);
+  }
+  expect(readingModePattern([["moderation", ".*"]]).test("moderation.spec.ts ")).toBe(true);
+  expect(pattern.test("moderation.spec.tsx operator signs up")).toBe(false);
+});
 
 it("partitions each private file exactly once and preserves complete files", () => {
   const groups = privateBrowserGroups().map(group => browserFiles(process.cwd(), group));
