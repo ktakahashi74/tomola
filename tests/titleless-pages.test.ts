@@ -1,7 +1,7 @@
 import { quietLogger as quiet } from "./helpers/logger";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { StaticRouter } from "react-router";
+import { createStaticHandler, createStaticRouter, StaticRouter, StaticRouterProvider, type StaticHandlerContext } from "react-router";
 import { eq } from "drizzle-orm";
 import { parse as parseYaml } from "yaml";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -200,12 +200,15 @@ describe("lists", () => {
     expect(new Map(ja.topics.map((t) => [t.id, t.title])).get(bare)).toMatchObject({ text: FIRST_LINE, lang: "ja", kind: null, fromBody: true });
   });
 
-  it("links the line in the list component, and says so when there is no text", () => {
+  it("links the line in the list component, and says so when there is no text", async () => {
     const item = (id: number, text: string, fromBody: boolean) => ({
       id, createdAt: "2026-10-03T00:00:00Z", lastActivityAt: "2026-10-03T00:00:00Z", latestReply: null, lang: "ja" as const, authorHandle: "hana", replyCount: 0, hidden: false, asksStance: false, insightful: { total: 0, langs: 0 },
       title: { text, lang: "ja" as const, kind: null, engine: null, fallback: false, stale: false, pending: false, fromBody },
     });
-    const html = renderToStaticMarkup(createElement(StaticRouter, { location: "/latest" }, createElement(TopicList, { topics: [item(1, FIRST_LINE, true), item(2, "", true), item(3, "題", false)], langParam: null, empty: "none" })));
+    // The list reads route data, so render it inside a data router as the app does.
+    const routes = [{ path: "/latest", element: createElement(TopicList, { topics: [item(1, FIRST_LINE, true), item(2, "", true), item(3, "題", false)], langParam: null, empty: "none" }) }];
+    const context = (await createStaticHandler(routes).query(new Request("http://localhost/latest"))) as StaticHandlerContext;
+    const html = renderToStaticMarkup(createElement(StaticRouterProvider, { router: createStaticRouter(routes, context), context }));
     expect(html).toMatch(new RegExp(`href="/t/1"[^>]*>${FIRST_LINE}</a>`));
     expect(html).toMatch(new RegExp(`href="/t/2"[^>]*>${m.headline_empty().replace(/[()]/g, "\\$&")}</a>`));
     expect(html).toMatch(/href="\/t\/3"[^>]*>題<\/a>/);
