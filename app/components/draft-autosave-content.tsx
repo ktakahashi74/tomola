@@ -117,8 +117,9 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     let snapshot = rememberedServer?.snapshot ?? (initialDraft.current ? pristine : "");
     if (!newTopic) form.dataset.draftBase = base;
     let recoveryProtected = newTopic;
+    const cannotWrite = () => stopped.current || paused.current || disposed || !ownedStore.active();
     const persist = () => {
-      if (stopped.current || !ownedStore.active() || !newTopic && !link.current) return;
+      if (cannotWrite() || !newTopic && !link.current) return;
       const current = new FormData(form);
       const title = String(current.get("title") ?? ""), body = String(current.get("body") ?? "");
       // Unchanged loader text must wait for recovery. New edits can be kept
@@ -177,7 +178,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
         form.dispatchEvent(new CustomEvent("tomola:form-saved", { detail: unpack(snapshot) }));
       }
     }
-    const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { void save(); }, DELAY); };
+    const schedule = () => { clearTimeout(timer); if (!cannotWrite()) timer = setTimeout(() => { void save(); }, DELAY); };
     acknowledge.current = (sent, result) => {
       const values = unpack(sent);
       if (result.altRemoved) values.delete("altOf");
@@ -195,7 +196,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     };
     async function save(leaving = false, force = false, round = 0, recovering = false): Promise<AutosavedDraft | null> {
       clearTimeout(timer);
-      if (stopped.current || paused.current || disposed) return null;
+      if (cannotWrite()) return null;
       if (pending) {
         await pending;
         return save(leaving, force, round, recovering);
@@ -208,7 +209,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
         if (!verified && link.current) {
           try {
             const response = await fetch(`/drafts/autosave?draftId=${link.current.id}`, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
-            if (disposed || stopped.current) return null;
+            if (cannotWrite()) return null;
             if (!response.ok) {
               if (response.status === 404 && newTopic) { unlink(); persist(); return save(leaving, true, round); }
               form.dataset.autosaveError = response.status === 401 ? "login_required" : response.status === 404 ? "not_found" : "busy";
@@ -217,7 +218,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
               return null;
             }
             verified = true;
-          } catch { if (!disposed) setStatus("failed"); return null; }
+          } catch { if (!cannotWrite()) setStatus("failed"); return null; }
         }
         if (capture(form) !== captured) { schedule(); return null; }
         persist();
@@ -241,10 +242,10 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
       pending = (async () => {
         try {
           const response = await fetch(`/drafts/autosave${recovering ? "?newdraft=1" : ""}`, { method: "POST", body: new URLSearchParams([...values] as [string, string][]), keepalive: leaving, credentials: "same-origin", redirect: "manual", cache: "no-store" });
-          if (stopped.current || disposed) return null;
+          if (cannotWrite()) return null;
           if (response.status === 401 || response.type === "opaqueredirect") { form.dataset.autosaveError = "login_required"; throw new Error("Sign in required"); }
           const saved = await response.json() as AutosavedDraft & { error?: string; latest?: AutosavedDraft; previousMatches?: boolean };
-          if (stopped.current || disposed) return null;
+          if (cannotWrite()) return null;
           if (saved.error === "draft_conflict" && saved.latest) {
             if (saved.previousMatches) {
               attach(saved.latest);
@@ -279,12 +280,12 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
           setStatus(capture(form) === snapshot ? "saved" : "saving");
           return saved;
         } catch {
-          if (!disposed && !stopped.current) { setStatus("failed"); persist(); }
+          if (!cannotWrite()) { setStatus("failed"); persist(); }
           return null;
         } finally { pending = undefined; }
       })();
       const saved = await pending;
-      if (!disposed && !paused.current && !stopped.current && retryConflict) {
+      if (!cannotWrite() && retryConflict) {
         if (round < 3) return save(leaving, retryForce, round + 1);
         setStatus("failed");
       }
@@ -293,14 +294,14 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
     }
     recoverMissing.current = () => { if (!pending) void save(false, true, 0, true); };
     const changed = () => {
-      if (disposed) return;
+      if (cannotWrite()) return;
       const current = capture(form);
       if (current === observed) return;
       observed = current;
       if (!stopped.current) { if (newTopic) persist(); setStatus("saving"); schedule(); }
     };
     const observer = new MutationObserver(changed);
-    const online = () => { if (!stopped.current && !paused.current) schedule(); };
+    const online = () => schedule();
     const hidden = () => { if (document.visibilityState === "hidden") void save(true); };
     const recoveryReady = () => persist();
     const flush = (event: Event) => {
@@ -309,6 +310,7 @@ export default function DraftAutosave({ owner, scope, startTitle = "", startBody
       detail.pending = detail.leaving ? Promise.race([operation, new Promise<null>(resolve => setTimeout(() => resolve(null), 900))]) : operation;
     };
     const dirtiness = (event: Event) => {
+      if (cannotWrite()) { (event as CustomEvent<{ dirty: boolean }>).detail.dirty = false; return; }
       const values = new FormData(form);
       if (newTopic && !link.current && baseOf(String(values.get("title") ?? ""), String(values.get("body") ?? "")) === base) { (event as CustomEvent<{ dirty: boolean }>).detail.dirty = false; return; }
       (event as CustomEvent<{ dirty: boolean }>).detail.dirty = snapshot || newTopic && !link.current

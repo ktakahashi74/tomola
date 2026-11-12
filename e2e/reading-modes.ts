@@ -50,6 +50,7 @@ const publicOnly = [
   ["screen-trim", "public readers can open"],
 ];
 const bothModes = [
+  ["logout-drafts", ".*"],
   ["web-push", ".*"],
   ["install-guide", ".*"],
   ["wordmark", ".*"],
