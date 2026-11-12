@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { enableSigningAuthenticator } from "./signing-helper";
 import { readPrinciplesSource } from "../tests/helpers/principles-source";
-import { clientHeaders, completeTrialFields, enMessages as en, formatMessage, logSize, requestMagicLink, confirmMagicLink, mailFor, useMember, waitForClientRoute } from "./helpers";
+import { clientHeaders, completeTrialFields, enMessages as en, formatMessage, logSize, requestMagicLink, confirmMagicLink, mailFor, uiMessages, useMember, waitForClientRoute } from "./helpers";
 
 // The first sentence of the Japanese principles, read from the edition itself.
 function japaneseOpening() {
@@ -65,16 +65,18 @@ test("an invitation names who sent it and where you are, and the new member is g
 
     // The greeting shows once on the page the member arrives on, and not again.
     await expect(page).toHaveURL(new URL("/", page.url()).href);
-    const welcome = page.getByRole("complementary", { name: en.welcome_label, exact: true });
-    await expect(welcome).toContainText(formatMessage(en.welcome_hello, { handle: "mari_test" }));
-    await expect(welcome.getByRole("link", { name: en.welcome_write_intro, exact: true })).toHaveAttribute("href", "/u/mari_test");
-    await expect(welcome.getByRole("link", { name: en.connect_keep_using_link, exact: true })).toHaveAttribute("href", "/connect");
+    await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+    const ui = await uiMessages(page);
+    const welcome = page.getByRole("complementary", { name: ui.welcome_label, exact: true });
+    await expect(welcome).toContainText(formatMessage(ui.welcome_hello, { handle: "mari_test" }));
+    await expect(welcome.getByRole("link", { name: ui.welcome_write_intro, exact: true })).toHaveAttribute("href", "/u/mari_test");
+    await expect(welcome.getByRole("link", { name: ui.connect_keep_using_link, exact: true })).toHaveAttribute("href", "/connect");
     // The server drops the greeting's cookie on the page that shows it, so it needs no script to be once.
     expect((await guestContext.cookies()).some(cookie => cookie.name === "tomola.welcome")).toBe(false);
-    await welcome.getByRole("button", { name: en.welcome_close, exact: true }).click();
+    await welcome.getByRole("button", { name: ui.welcome_close, exact: true }).click();
     await expect(welcome).toHaveCount(0);
     await page.goto("/");
-    await expect(page.getByRole("complementary", { name: en.welcome_label, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("complementary", { name: ui.welcome_label, exact: true })).toHaveCount(0);
   } finally { await inviterContext.close(); await guestContext.close(); }
 });
 

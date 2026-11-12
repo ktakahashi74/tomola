@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, chooseEditorMode, enMessages as en, jaMessages as ja, formatMessage, openPlaces, openUserMenu, useMember, waitForHydration } from "./helpers";
+import { captureScreenshot, chooseEditorMode, enMessages as en, jaMessages as ja, formatMessage, openPlaces, openUserMenu, state, useMember, waitForHydration } from "./helpers";
 
 test("display name screen evidence", async ({ page }) => {
   test.skip(!process.env.E2E_EVIDENCE_DIR, "Screenshots need an evidence destination");
@@ -10,6 +10,7 @@ test("display name screen evidence", async ({ page }) => {
       ["dn_single@example.com", "en", "settings-en"],
       ["dn_han_author@example.com", "zh-Hans", "settings-zh"],
     ]) {
+      await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: locale, url: state().baseURL }]);
       await useMember(page, email, `/settings?lang=${locale}#settings-display-name`);
       await waitForHydration(page);
       await page.locator("#settings-display-name").scrollIntoViewIfNeeded();
@@ -41,6 +42,7 @@ test("single display name fields preserve a stored Latin-only name and save one 
   await form.getByRole("button", { name: en.save_changes, exact: true }).click();
   await expect(page.locator("#settings-display-name [role=status]")).toBeVisible();
   for (const locale of ["en", "ja", "zh-Hans"]) {
+    await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: locale, url: state().baseURL }]);
     await page.goto(`/u/dn_single_save?lang=${locale}`);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Taylor Updated @dn_single_save");
   }
@@ -63,11 +65,13 @@ test("two name fields preview language choices as typing changes Han and mixed-s
   await native.fill("山田たろう");
   await expect(preview.locator("p")).toHaveCount(2);
   await expect(preview.locator('bdi[dir="ltr"]')).toHaveCount(0);
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: "en", url: state().baseURL }]);
   await page.goto("/settings?lang=en#settings-display-name");
   await expect(form.getByRole("textbox", { name: formatMessage(en.display_name_language_label, { language: en.language_name_ja }), exact: true })).toBeVisible();
 });
 
 test("Chinese screens show native Han names with Latin supplements only in identity locations", async ({ page }) => {
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: "zh-Hans", url: state().baseURL }]);
   await useMember(page, "dn_reader@example.com", "/u/dn_han_author?lang=zh-Hans");
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toContainText("山田太郎 Taro Yamada @dn_han_author");
@@ -119,6 +123,7 @@ test("settings save optional names and mention choices insert only handles in bo
   await expect(markdownChoice).toContainText("Light Writer");
   await markdownChoice.click();
   await expect(markdown).toHaveValue("@dn_japanese ");
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: state().baseURL }]);
   await page.goto("/t/new?lang=ja");
   await waitForHydration(page);
   await chooseEditorMode(page, ja.editor_mode_markdown);
@@ -172,6 +177,7 @@ test("personal villages use the owner's display name and preserve the My village
   await useMember(page, "dn_places_reader@example.com");
   for (const locale of ["ja", "en"]) for (const width of [1280, 1100, 390]) {
     const messages = locale === "ja" ? ja : en;
+    await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: locale, url: state().baseURL }]);
     const name = locale === "ja" ? "風の書き手" : "Wind Writer";
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/following?lang=${locale}`);

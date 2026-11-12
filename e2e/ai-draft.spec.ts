@@ -426,7 +426,7 @@ test("imported text is reviewed and signed only when the member chooses to publi
   await page.getByRole("button", { name: en.settings_passkeys_add, exact: true }).click();
   await expect(page.getByText(en.settings_passkeys_added, { exact: true })).toBeVisible();
   async function preference(enabled: boolean) {
-    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("summary").filter({ hasText: en.settings_advanced_heading }).click();
+    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("#settings-advanced > summary").click();
     await page.getByRole("checkbox", { name: en.settings_sign_posts_label, exact: true }).setChecked(enabled);
     await page.locator('form', { has: page.locator('input[name="intent"][value="sign-posts"]') }).getByRole("button", { name: en.save_changes, exact: true }).click();
     await acceptSignedWrite(page);

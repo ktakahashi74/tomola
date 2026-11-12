@@ -38,6 +38,7 @@ import { readTranslationWaits } from "~/lib/translation-wait.server";
 import { NORMAL_WAITS, TranslationWaitContext } from "~/lib/translation-wait";
 import { enabledLangs, previewLangs } from "~/lib/enabled-langs.server";
 import { negotiateUiLocale, withLocaleHeaders } from "~/lib/http/locale.server";
+import { prepareUiLocale } from "~/lib/http/member-locale.server";
 import { securityHeadersMiddleware } from "~/lib/http/security-headers.server";
 import { startWorker } from "~/lib/jobs/worker.server";
 import { syncOperatorRolesOnce } from "~/lib/roles.server";
@@ -57,7 +58,7 @@ import { RouteError } from "~/components/route-error";
 import { MarkdownBusyError, withMarkdownScope } from "~/lib/markdown-budget.server";
 
 // securityHeadersMiddleware adds security headers such as CSP with a per-request nonce (app/lib/http/security-headers.server.ts). Keep it outermost to cover every response.
-// paraglide: the interface language (the server decides among the enabled languages: cookie, then ?lang=, then Accept-Language (Chinese by script), then the default; the browser reads <html lang>;
+// paraglide: the display language (cookie, saved member preference, ?lang=, Accept-Language, default; the browser reads <html lang>;
 // app/lib/http/locale.server.ts, locale-strategy.ts). sessionCookieMiddleware: puts the Set-Cookie of a session refresh that getSession returns on the response (so the session of an active member does not expire).
 export const middleware: MiddlewareFunction[] = [
   securityHeadersMiddleware,
@@ -72,8 +73,11 @@ export const middleware: MiddlewareFunction[] = [
       throw error;
     }
   }); },
-  (ctx, next) => paraglideMiddleware(ctx.request, async () => withLocaleHeaders(await next())),
   sessionCookieMiddleware,
+  async (ctx, next) => {
+    await prepareUiLocale(ctx.request);
+    return paraglideMiddleware(ctx.request, async () => withLocaleHeaders(await next()));
+  },
   logoutNoticeMiddleware,
   welcomeMiddleware,
 ];

@@ -481,7 +481,7 @@ test("the operator's pages open, the other member gets 404, and the exports down
   expect(memberExport.headers()["cache-control"]).toBe("private, no-store");
   expect(memberExport.headers()["content-disposition"]).toMatch(/^attachment; filename="tomola-my-data-\d{4}-\d{2}-\d{2}\.json"$/);
   await mika.goto("/settings");
-  await mika.locator("summary").filter({ hasText: messagesOf("en").settings_advanced_heading }).click();
+  await mika.locator("#settings-advanced > summary").click();
   const [download] = await Promise.all([mika.waitForEvent("download"), mika.getByRole("link", { name: messagesOf("en").settings_export_link, exact: true }).click()]);
   expect(download.suggestedFilename()).toMatch(/^tomola-my-data-\d{4}-\d{2}-\d{2}\.json$/);
   const exportedMember = JSON.parse(fs.readFileSync((await download.path())!, "utf8"));

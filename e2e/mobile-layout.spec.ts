@@ -32,6 +32,7 @@ test("390px pages stay within the viewport and timestamps hydrate to Tokyo time"
     return iso!;
   };
   try {
+    await context.addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: state().baseURL }]);
     await useMember(page, "mobile@example.com");
     await localTimestamp(page.locator("li[id^=q-] time[datetime]").first());
     await expect(page.locator("textarea")).toHaveCount(0);

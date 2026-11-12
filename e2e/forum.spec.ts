@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "./helpers";
 import { readTopicTranslation } from "./helpers";
 import { captureListRows } from "./support/list-rows-evidence";
 import { expect, type BrowserContext, type Page } from "@playwright/test";
@@ -36,6 +37,8 @@ const topicArticle = (page: Page) => page.locator("article").first();
 
 test("an invited member logs in with a magic link, sets up a profile and posts a topic", async () => {
   await signUp(hana, state().invite, "hana@example.com", { handle: "hana", mainLang: "ja" });
+  await hanaContext.addCookies([{ name: "PARAGLIDE_LOCALE", value: "en", url: state().baseURL }]);
+  await hana.reload();
   await hana.getByRole("link", { name: enMessages.nav_new_topic }).click();
   await waitForFormReady(hana.locator("form", { has: titleField(hana) }));
   await titleField(hana).fill(TITLE);
@@ -57,12 +60,15 @@ test("the member invites another member in a different home area, who signs up",
   expect(await hana.getByLabel(enMessages.invites_message_label, { exact: true }).inputValue()).toContain(invite);
   await expect(hana.getByRole("button", { name: enMessages.invites_copy_message, exact: true })).toBeVisible();
   await signUp(somchai, invite, "somchai@example.com", { handle: "somchai", mainLang: "th" });
+  await somchaiContext.addCookies([{ name: "PARAGLIDE_LOCALE", value: "en", url: state().baseURL }]);
+  await somchai.reload();
   await expect(async () => {
     await somchai.goto(topicPath);
     await expect(topicArticle(somchai).getByRole("heading", { level: 1 })).toHaveText(`[en] ${TITLE}`, { timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   await somchai.goto("/settings");
   await waitForClientRoute(somchai);
+  await openTranslationSettings(somchai);
   await somchai.getByRole("combobox", { name: enMessages.display_lang_label, exact: true }).selectOption("th");
   await expect(somchai.locator("#settings-display-lang").getByRole("status")).toHaveText(enMessages.settings_saved);
   await expect(somchai.getByText(enMessages.settings_saved, { exact: true }).first()).toBeVisible();
@@ -209,6 +215,7 @@ test("choosing a display language changes what is shown", async () => {
   await expect(topicArticle(somchai).getByRole("heading", { level: 1 })).toHaveText(`[th] ${TITLE}`);
   await somchai.goto("/settings");
   await waitForClientRoute(somchai);
+  await openTranslationSettings(somchai);
   await somchai.getByRole("combobox", { name: enMessages.display_lang_label, exact: true }).selectOption("en");
   await expect(somchai.locator("#settings-display-lang").getByRole("status")).toHaveText(enMessages.settings_saved);
   await expect(somchai.getByText(enMessages.settings_saved, { exact: true }).first()).toBeVisible();
@@ -220,6 +227,7 @@ test("choosing a display language changes what is shown", async () => {
   await expect(somchai.getByRole("link", { name: `[en] ${TITLE}` })).toBeVisible();
   await somchai.goto("/settings");
   await waitForClientRoute(somchai);
+  await openTranslationSettings(somchai);
   await somchai.getByRole("combobox", { name: enMessages.display_lang_label, exact: true }).selectOption("th");
   await expect(somchai.locator("#settings-display-lang").getByRole("status")).toHaveText(enMessages.settings_saved);
   await expect(somchai.getByText(enMessages.settings_saved, { exact: true }).first()).toBeVisible();
@@ -332,7 +340,7 @@ test("the observation page and the data exports: the operator downloads the obse
   expect(JSON.stringify(own)).not.toContain("@example.com");
   // Download through the settings-page link.
   await somchai.goto("/settings");
-  await somchai.locator("summary").filter({ hasText: enMessages.settings_advanced_heading }).click();
+  await somchai.locator("#settings-advanced > summary").click();
   await expect(somchai.getByRole("link", { name: enMessages.settings_export_link })).toHaveAttribute("href", "/settings/export");
 });
 

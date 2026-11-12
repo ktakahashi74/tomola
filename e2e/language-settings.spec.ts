@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "./helpers";
 import { enMessages, openPostSettings } from "./helpers";
 import { LANG_LABELS, type Lang } from "../app/lib/languages";
 import { expect, type Page } from "@playwright/test";
@@ -8,6 +9,7 @@ test("translation defaults follow the interface while original-reading and expli
   const context = await browser.newContext({ locale: "ja-JP", extraHTTPHeaders: clientHeaders("10.20.0.1") });
   const page = await context.newPage();
   try {
+    await context.addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: state().baseURL }]);
     await useMember(page, "language@example.com");
     const post = async (lang: Lang, title: string, body: string) => {
       await page.goto("/t/new");
@@ -32,6 +34,7 @@ test("translation defaults follow the interface while original-reading and expli
     await page.getByRole("region", { name: ja.settings_langs_heading, exact: true }).getByRole("combobox", { name: ja.language_select, exact: true }).click();
     await page.getByRole("listbox").getByRole("option", { name: enMessages.language_name_en, exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await openTranslationSettings(page);
     await expect(languages().getByRole("combobox", { name: en.display_lang_label, exact: true })).toHaveValue("");
     await expect(languages().locator("select[name=displayLang]")).toHaveValue("");
     await expect(languages().getByRole("combobox", { name: en.onboarding_home_area, exact: true })).toHaveValue("ja");
@@ -39,7 +42,7 @@ test("translation defaults follow the interface while original-reading and expli
     await expect(languages().getByRole("group", { name: en.onboarding_read_langs, exact: true }).getByRole("checkbox", { name: "日本語", exact: true })).toBeChecked();
     await expect(page.locator("header").getByRole("combobox", { name: en.display_lang_label, exact: true })).toHaveCount(0);
     const controls = await languages().locator("select, [role=combobox], fieldset").evaluateAll(elements => elements.map(element => element.tagName === "BUTTON" ? element.getAttribute("aria-label")! : element.getAttribute("name") ?? element.tagName));
-    expect(controls).toEqual(["homeArea", "FIELDSET", "displayLang", en.language_select]);
+    expect(controls).toEqual([en.language_select, "FIELDSET", "homeArea", "displayLang"]);
 
     const article = (target: Page = page) => target.locator("article").first();
     await page.goto(english);
@@ -59,6 +62,7 @@ test("translation defaults follow the interface while original-reading and expli
     expect(await md.text()).toContain("[en] Thai source sentinel");
 
     await page.goto("/settings");
+    await openTranslationSettings(page);
     await languages().getByRole("combobox", { name: en.display_lang_label, exact: true }).selectOption("ja");
     await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText(en.settings_saved);
     await page.goto(thai);
@@ -67,6 +71,7 @@ test("translation defaults follow the interface while original-reading and expli
     await page.goto(`${thai}?lang=en`);
     await expect(article().getByRole("heading", { level: 1 })).toHaveText("[en] Language Thai source");
     await page.goto("/settings");
+    await openTranslationSettings(page);
     await expect(languages().getByRole("combobox", { name: en.display_lang_label, exact: true })).toHaveValue("ja");
     await expect(languages().locator("select[name=displayLang]")).toHaveValue("ja");
     await expect(languages().getByRole("combobox", { name: en.language_select, exact: true }).locator('[data-slot="select-value"]')).toHaveText(enMessages.language_name_en);

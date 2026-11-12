@@ -32,6 +32,7 @@ for (const lang of ["en", "ja"] as const) {
   const messages = lang === "ja" ? ja : en;
   for (const width of [1280, 390]) {
     test(`empty panels, selection help and named-reply explanation work in ${lang} at width ${width}`, async ({}, testInfo) => {
+      await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: lang, url: state().baseURL }]);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${emptyPath}?lang=${lang}`);
       const reasons = page.locator("#reasons");

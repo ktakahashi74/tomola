@@ -4,7 +4,7 @@ import { trialParticipationRequired } from "~/lib/notice-sources.server";
 import { trialConsentValues } from "~/lib/trial-consent.server";
 import { validateTrialInput } from "~/lib/trial-consent.server";
 import type { TrialInput, TrialError } from "~/lib/trial-consent";
-import { eq, lte, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { enrollInVillage, languageVillage } from "~/lib/villages.server";
 import { z } from "zod";
@@ -99,7 +99,7 @@ export type Profile = {
   reactionsExcludedActionId: number | null;
   // Notification-mail preference, default daily.
   emailPref: EmailPref;
-  // Last interface locale, used for mail language, or null if absent.
+  // Saved display language, also used for mail, or null if absent.
   uiLocale: string | null;
   signPosts: boolean;
   residenceCountry: string | null;
@@ -157,9 +157,13 @@ export async function setEmailPref(db: Db, userId: string, pref: unknown): Promi
   return rows.length > 0 ? { ok: true } : { ok: false, error: "not_found" };
 }
 
-// Remember interface locale for recipient-language mail; write only if changed.
+// Initialize an absent display language without replacing an explicit choice.
 export async function rememberUiLocale(db: Db, userId: string, current: string | null, locale: string): Promise<void> {
-  if (current === locale) return;
+  if (current !== null) return;
+  await db.update(profiles).set({ uiLocale: locale }).where(and(eq(profiles.userId, userId), isNull(profiles.uiLocale)));
+}
+
+export async function setUiLocale(db: Db, userId: string, locale: Lang): Promise<void> {
   await db.update(profiles).set({ uiLocale: locale }).where(eq(profiles.userId, userId));
 }
 
@@ -181,7 +185,7 @@ export function defaultPostLang(profile: Pick<Profile, "homeArea" | "readLangs">
   return profile.readLangs.find((l) => enabled.includes(l)) ?? defaultLangOf(enabled);
 }
 
-// opts.uiLocale: the default read language when the main language is "other" (the language of the signup screen).
+// opts.uiLocale: the initial saved display language and the default read language for "other".
 export async function createProfile(db: Db, userId: string, input: unknown, opts: { uiLocale?: Lang; now?: Date; trial?: TrialInput } = {}): Promise<CreateProfileResult> {
   const [account] = await db.select({ email: user.email }).from(user).where(eq(user.id, userId));
   if (isDeletedIdentity(userId, account?.email)) return { ok: false, error: "handle_reserved" };
@@ -211,7 +215,7 @@ export async function createProfile(db: Db, userId: string, input: unknown, opts
       if (hold && hold.userId !== userId) return { ok: false as const, error: "handle_taken" as const };
       if (hold) await tx.delete(handleHolds).where(eq(handleHolds.handleKey, key));
       const signupInvitation = await lockSignupInvitationOwner(tx, userId);
-      const [row] = await tx.insert(profiles).values({ ...(trial ? trialConsentValues(trial, now) : {}), userId, handle: data.handle, handleKey: key, homeArea: data.homeArea, readLangs }).returning();
+      const [row] = await tx.insert(profiles).values({ ...(trial ? trialConsentValues(trial, now) : {}), userId, handle: data.handle, handleKey: key, homeArea: data.homeArea, readLangs, uiLocale: opts.uiLocale && isEnabledLang(opts.uiLocale) ? opts.uiLocale : null }).returning();
       const personal = await ensurePersonalVillage(tx, userId);
       await tx.update(profiles).set({ defaultVillageId: personal.id }).where(eq(profiles.userId, userId));
       if (villagesEnabled() && data.homeArea !== "other") {

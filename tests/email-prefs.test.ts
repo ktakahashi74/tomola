@@ -30,7 +30,7 @@ describe("the email preference", () => {
     expect(error?.cause?.constraint).toBe("profiles_email_pref_check");
   });
 
-  it("remembers the UI language only when it changes", async () => {
+  it("initializes the display language only when absent", async () => {
     const db = await createTestDb();
     await addMember(db, "u1", "hana");
     expect((await getProfile(db, "u1"))!.uiLocale).toBeNull();
@@ -72,7 +72,7 @@ describe("the routes", () => {
     expect((await getProfile(h.db, h.ids.hana))!.emailPref).toBe("immediate");
   });
 
-  it("the member layout remembers browser and cookie preferences for email, even when a query is present", async () => {
+  it("the member layout initializes a missing language but preserves it on later cookie and browser visits", async () => {
     const { loader } = await import("~/routes/member-layout");
     setTestLocale("ja");
     await h.outcome(async () => (await loader(h.args(h.request("/", { as: "hana", headers: { "accept-language": "ja" } })))));
@@ -81,7 +81,7 @@ describe("the routes", () => {
     const request = h.request("/?lang=ja", { as: "hana", headers: { "accept-language": "ja" } });
     request.headers.set("cookie", `${request.headers.get("cookie")}; PARAGLIDE_LOCALE=en`);
     await h.outcome(async () => (await loader(h.args(request))));
-    expect((await getProfile(h.db, h.ids.hana))!.uiLocale).toBe("en");
+    expect((await getProfile(h.db, h.ids.hana))!.uiLocale).toBe("ja");
   });
 
   it.each([null, "ja"])("opening a shared language link leaves the stored UI locale %s unchanged", async (stored) => {
@@ -97,13 +97,13 @@ describe("the routes", () => {
     }
   });
 
-  it("ignores a disabled query when remembering a browser preference, and does not remember the default", async () => {
+  it("preserves the saved preference with disabled queries and unmatched browser languages", async () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     const { loader } = await import("~/routes/member-layout");
     await h.db.update(profiles).set({ uiLocale: "ja" }).where(eq(profiles.userId, h.ids.hana));
     setTestLocale("en");
     await h.outcome(async () => (await loader(h.args(h.request("/?lang=fr", { as: "hana", headers: { "accept-language": "en" } })))));
-    expect((await getProfile(h.db, h.ids.hana))!.uiLocale).toBe("en");
+    expect((await getProfile(h.db, h.ids.hana))!.uiLocale).toBe("ja");
     await h.db.update(profiles).set({ uiLocale: "ja" }).where(eq(profiles.userId, h.ids.hana));
     await h.outcome(async () => (await loader(h.args(h.request("/", { as: "hana", headers: { "accept-language": "de" } })))));
     expect((await getProfile(h.db, h.ids.hana))!.uiLocale).toBe("ja");

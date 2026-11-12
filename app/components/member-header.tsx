@@ -106,7 +106,7 @@ function LocaleMenu() {
   return <DropdownMenuSub>
     <DropdownMenuSubTrigger>{labels.nav_language}</DropdownMenuSubTrigger>
     <DropdownMenuSubContent>
-      <DropdownMenuRadioGroup value={getLocale()} onValueChange={value => selectUiLocale(value, langs, { clearReadingLanguage: true })}>
+      <DropdownMenuRadioGroup value={getLocale()} onValueChange={value => { void selectUiLocale(value, langs, { clearReadingLanguage: true }); }}>
         {langs.map(lang => <DropdownMenuRadioItem key={lang} value={lang} lang={lang}>{LANG_LABELS[lang]}</DropdownMenuRadioItem>)}
       </DropdownMenuRadioGroup>
       <DropdownMenuItem render={<Link to="/languages" />}>{labels.languages_other}</DropdownMenuItem>

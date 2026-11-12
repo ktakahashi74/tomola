@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { test, expect } from "@playwright/test";
-import { useMember, clientHeaders, enMessages as en, jaMessages as ja } from "./helpers";
+import { useMember, clientHeaders, enMessages as en, jaMessages as ja, state } from "./helpers";
 
 test("operators can compare evaluation runs and aggregate use signals on desktop and mobile", async ({ browser }) => {
   const evidence = process.env.E2E_EVIDENCE_DIR;
@@ -11,6 +11,7 @@ test("operators can compare evaluation runs and aggregate use signals on desktop
       const page = await context.newPage();
       const errors: string[] = [];
       page.on("pageerror", error => errors.push(error.message));
+      await context.addCookies([{ name: "PARAGLIDE_LOCALE", value: locale === "ja-JP" ? "ja" : "en", url: state().baseURL }]);
       await useMember(page, "mobile@example.com", "/admin/metrics");
       const section = page.getByTestId("quality-evaluations");
       await expect(section.getByRole("heading", { name: messages.quality_eval_title })).toBeVisible();

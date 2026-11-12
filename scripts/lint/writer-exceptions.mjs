@@ -24,6 +24,7 @@ export const WRITER_EXCEPTIONS = {
       "preview.ts": "renders a preview: not a write (has its own per-member limit)",
       "push.ts": "browser-only notification settings: handlePushRequest checks session, exact origin and ownership; no named content is published",
       "settings-save.ts": "own preference autosaves only: delegates to the settings action, which authenticates the member and gates changed destinations with getWriter",
+      "settings-locale.ts": "same-origin display preference: guests save a cookie; members save only their own locale, including during suspension",
       "settings.tsx": "own profile settings (languages, display language, home area, AI links, passkeys): not posting",
       "settings-delete-account.tsx": "deletes only the authenticated member account, including while suspended, after explicit confirmation and optional passkey verification",
       "settings-stances.tsx": "deletes the member's own stance records (requireMember): a suspended member may still delete them (the right to delete comes before append-only); own rows only",

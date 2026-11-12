@@ -29,7 +29,7 @@ test("retains all onboarding inputs after reading both notices in the same tab",
   await startSignup(page, "preserve");
   await page.locator('input[name="handle"]').fill("firstlook_preserve");
   await page.getByRole("combobox", { name: m.onboarding_home_area, exact: true }).click();
-  await page.getByRole("option", { name: "日本語", exact: true }).click();
+  await page.getByRole("option", { name: "English", exact: true }).click();
   await page.locator('select[name="residenceCountry"]').selectOption(ELIGIBLE_COUNTRY);
   await page.locator('input[name="adult"]').check();
   await page.locator('input[name="trialAgree"]').check();
@@ -39,7 +39,7 @@ test("retains all onboarding inputs after reading both notices in the same tab",
     await page.goBack();
     await waitForClientRoute(page);
     await expect(page.locator('input[name="handle"]')).toHaveValue("firstlook_preserve");
-    await expect(page.locator('input[name="homeArea"]')).toHaveValue("ja");
+    await expect(page.locator('input[name="homeArea"]')).toHaveValue("en");
     await expect(page.locator('select[name="residenceCountry"]')).toHaveValue(ELIGIBLE_COUNTRY);
     await expect(page.locator('input[name="adult"]')).toBeChecked();
     await expect(page.locator('input[name="trialAgree"]')).toBeChecked();

@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "./helpers";
 import { LANG_LABELS } from "../app/lib/languages";
 import { routeModule } from "./support/module-route";
 import { expect, type Page } from "@playwright/test";
@@ -10,7 +11,7 @@ async function open(page: Page, scenario: string) {
   await useMember(page, `settings_ai_${scenario}@example.com`, "/settings?returnTo=%2Ffollowing");
   await waitForClientRoute(page);
 }
-const display = (page: Page) => page.getByRole("combobox", { name: en.display_lang_label, exact: true });
+const display = (page: Page) => page.locator('select[name="displayLang"]');
 const area = (page: Page) => page.getByRole("combobox", { name: en.onboarding_home_area, exact: true });
 
 test("selection saves stay local to each field and persist after reload", async ({ page }) => {
@@ -29,6 +30,7 @@ test("selection saves stay local to each field and persist after reload", async 
   const advanced = page.locator("#settings-advanced");
   await expect(advanced.getByRole("link", { name: en.settings_tokens_link, exact: true, includeHidden: true })).toHaveAttribute("href", "/settings/tokens");
 
+  await openTranslationSettings(page);
   await display(page).selectOption("fr");
   await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText(en.settings_saved);
   const read = page.getByRole("group", { name: en.onboarding_read_langs, exact: true });
@@ -73,8 +75,10 @@ test("a delayed save cannot replace the latest choice and a later failure restor
     await route.fulfill({ response });
   });
   try {
+    await openTranslationSettings(page);
     await display(page).selectOption("en");
     await expect.poll(() => count).toBe(1);
+    await openTranslationSettings(page);
     await display(page).selectOption("fr");
     await expect(display(page)).toHaveValue("fr");
     expect(count).toBe(1);
@@ -88,6 +92,7 @@ test("a delayed save cannot replace the latest choice and a later failure restor
       postData: new URLSearchParams({ intent: "preferences", field: "displayLang", autosave: "1", displayLang: "invalid" }).toString(),
       headers: { ...route.request().headers(), "content-type": "application/x-www-form-urlencoded" },
     }));
+    await openTranslationSettings(page);
     await display(page).selectOption("ja");
     await expect(page.locator("#settings-display-lang").getByRole("alert")).toHaveText(en.error_generic);
     await expect(display(page)).toHaveValue("fr");
@@ -99,6 +104,7 @@ test("a delayed save cannot replace the latest choice and a later failure restor
 
 test("network failure restores only the failed field", async ({ page }) => {
   await open(page, "failure");
+  await openTranslationSettings(page);
   await display(page).selectOption("en");
   await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText(en.settings_saved);
   await page.route("**/settings/save", route => route.abort("failed"));
@@ -117,6 +123,7 @@ test("main-language changes wait for explicit confirmation and keep other prefer
   const confirm = section.getByRole("checkbox", { name: formatMessage(en.settings_area_confirm, { days: HOME_AREA_CHANGE_DAYS }), exact: true });
   await expect(confirm).toBeVisible();
   // Saving another field must not submit the pending main-language choice.
+  await openTranslationSettings(page);
   await display(page).selectOption("fr");
   await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText(en.settings_saved);
   const persisted = await page.request.get("/settings");
@@ -173,6 +180,7 @@ test("native save controls remain usable when the settings module fails to load"
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await moduleRoute.assertHit();
   const languages = page.locator("#settings-languages");
+  await openTranslationSettings(page);
   await display(page).selectOption("en");
   await languages.locator('input[name="readLangs"][value="en"]').check();
   await languages.getByRole("button", { name: en.save_changes, exact: true }).click();

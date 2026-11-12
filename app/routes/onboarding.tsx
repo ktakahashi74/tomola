@@ -11,20 +11,20 @@ import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "~/co
 import { HandleInput } from "~/components/handle-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Form, Link, redirect, useLocation } from "react-router";
+import { Form, Link, redirect, redirectDocument, useLocation } from "react-router";
 import type { Route } from "./+types/onboarding";
 import { GuestHeader } from "~/components/guest-header";
 import { EntrySteps } from "~/components/entry-steps";
 import { welcomeCookie } from "~/lib/auth/welcome.server";
 import { isPrinciplesLang, principlesOpening } from "~/lib/principles.server";
-import { requireUser } from "~/lib/auth/session.server";
+import { getSessionProfile, requireUser } from "~/lib/auth/session.server";
 import { clearReadingReturn, readReadingReturn } from "~/lib/auth/reading-return.server";
 import { publicReading } from "~/lib/public-reading.server";
 import { getDb } from "~/lib/db/client.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
-import { defaultMainLang } from "~/lib/http/locale.server";
-import { LANG_LABELS } from "~/lib/languages";
+import { defaultMainLang, uiLocaleCookie } from "~/lib/http/locale.server";
+import { isLang, LANG_LABELS, type Lang } from "~/lib/languages";
 import { useEnabledLangs } from "~/lib/use-enabled-langs";
 import { createProfile, getProfile } from "~/lib/profiles.server";
 import { m } from "~/paraglide/messages.js";
@@ -39,7 +39,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const next = safeLocalPath(new URL(request.url).searchParams.get("next"));
   const user = await requireUser(request);
   const db = await getDb();
-  const profile = await getProfile(db, user.id);
+  const profile = await getSessionProfile(request);
   const trialRequired = trialParticipationRequired();
   if (profile && (!trialRequired || (!needsTrialConsent(profile) && !isExcludedCountry(profile.residenceCountry)))) {
     const headers = new Headers();
@@ -64,21 +64,23 @@ export async function action({ request }: Route.ActionArgs) {
   const next = safeLocalPath(new URL(request.url).searchParams.get("next"));
   let destination = next === "/" ? readReadingReturn(request) ?? "/" : next;
   // A new member gets a one-time greeting (the layout reads the cookie); a repeated submission of an existing profile does not.
-  const completed = async (greet = false) => {
+  const completed = async (greet = false, locale?: Lang) => {
     if (destination === "/") {
       const joined = await joinedSignupVillage(db, user.id);
       if (joined) destination = `/v/${joined.slug}`;
     }
     const headers = new Headers();
+    if (locale) headers.append("Set-Cookie", uiLocaleCookie(request, locale));
     clearReadingReturn(request, headers);
     clearInvitationCookie(request, headers);
     if (greet) headers.append("Set-Cookie", welcomeCookie(request, destination.startsWith("/t/") ? "article" : "home"));
-    return redirect(destination, { headers });
+    // A different locale must replace the client's existing Paraglide state too.
+    return (locale && locale !== getLocale() ? redirectDocument : redirect)(destination, { headers });
   };
   const user = await requireUser(request);
   const db = await getDb();
   // Duplicate submissions retain the same validated return destination.
-  const profile = await getProfile(db, user.id);
+  const profile = await getSessionProfile(request);
   const trialRequired = trialParticipationRequired();
   if (profile && (!trialRequired || (!needsTrialConsent(profile) && !isExcludedCountry(profile.residenceCountry)))) throw await completed();
   const form = await request.formData();
@@ -89,23 +91,25 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: result.error };
   }
   let res: Awaited<ReturnType<typeof createProfile>>;
+  const mainLang = String(form.get("homeArea") ?? "");
+  const signupLocale = isLang(mainLang) && enabledLangs().includes(mainLang) ? mainLang : getLocale();
   try {
     res = await createProfile(
       db,
       user.id,
       {
         handle: String(form.get("handle") ?? ""),
-        homeArea: String(form.get("homeArea") ?? ""),
+        homeArea: mainLang,
       },
       // For "other" the default read language is the language of this screen (an enabled language).
-      { uiLocale: getLocale(), ...(trialRequired ? { trial } : {}) },
+      { uiLocale: signupLocale, ...(trialRequired ? { trial } : {}) },
     );
   } catch (error) {
     // Treat a primary-key conflict from simultaneous submissions as an already-created profile.
     if (await getProfile(db, user.id)) throw await completed();
     throw error;
   }
-  if (res.ok) throw await completed(true);
+  if (res.ok) throw await completed(true, signupLocale);
   // Duplicate-submission race: if the earlier request created the same handle, the later one gets handle_taken. Do not show an error when the profile already exists.
   if (res.error === "handle_taken" && (await getProfile(db, user.id))) throw await completed();
   return { error: res.error };

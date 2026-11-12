@@ -359,9 +359,9 @@ test("Markdown with frontmatter pasted into the new topic form fills in the titl
   await expect(page.getByRole("heading", { level: 1, name: "自分で入れた題" })).toBeVisible();
   await page.goto(`${new URL(page.url()).pathname}?lang=ko`);
   await waitForClientRoute(page);
-  // The reading menu speaks the page language; use its own label, falling back to English like the app.
-  const koMessages = JSON.parse(fs.readFileSync(new URL("../messages/ko.json", import.meta.url), "utf8")) as Partial<typeof enMessages>;
-  await expect(page.locator("[data-reading-byline] details.reading-lang-menu summary")).toHaveText(koMessages.reading_other_languages_read ?? enMessages.reading_other_languages_read);
+  // A reading override preserves the member's saved interface language.
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("[data-reading-byline] details.reading-lang-menu summary")).toHaveText(enMessages.reading_other_languages_read);
   // Automatic translation can finish before the page is read; check the saved original.
   const original = await page.request.get(`${new URL(page.url()).pathname}.md?lang=ko`);
   expect(original.status()).toBe(200);

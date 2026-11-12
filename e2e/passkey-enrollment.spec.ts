@@ -15,7 +15,7 @@ test("a member without passkeys publishes browser drafts and exports unsigned po
     await page.getByRole("button", { name: enMessages.submit_post, exact: true }).click();
     await expect(page).toHaveURL(/\/t\/(\d+)\?posted=\1$/);
     await page.goto("/settings");
-    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("summary").filter({ hasText: enMessages.settings_advanced_heading }).click();
+    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("#settings-advanced > summary").click();
     await expect(page.getByRole("checkbox", { name: enMessages.settings_sign_posts_label, exact: true })).toBeDisabled();
     await expect(page.getByRole("checkbox", { name: enMessages.settings_sign_posts_label, exact: true })).not.toBeChecked();
     await expect(page.getByText(enMessages.settings_sign_posts_need_passkey, { exact: true })).toBeVisible();

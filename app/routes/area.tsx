@@ -7,7 +7,6 @@ import { OriginalLanguageFilter } from "~/components/original-language-filter";
 import { OpenInAi } from "~/components/open-in-ai";
 import { PageHeader } from "~/components/page-header";
 import { OrderSwitch } from "~/components/order-switch";
-import { ReadingLangMenu } from "~/components/reading-lang-menu";
 import { Pagination } from "~/components/pagination";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
@@ -101,7 +100,6 @@ export default function Area({ loaderData }: Route.ComponentProps) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <OrderSwitch order={order} />
         <AsksFilter filter={filter} withLong />
-        {!loaderData.reader && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
       </div>
       <TopicList compactMeta showOriginalLanguage={false} trackNew={tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
       <Pagination page={page} hasNext={hasNext} />

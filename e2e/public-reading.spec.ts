@@ -23,6 +23,7 @@ test("a public reader opens posts and originals and logs in with a return path",
     await signUp(member, JSON.parse(fs.readFileSync(path.join(state().dir, "public-reading-invite.json"), "utf8")), "public_reading_writer@example.com", { handle: "publicwriter", mainLang: "ja" }, async page => {
       await expect(page.getByText(enMessages.public_reading_onboarding, { exact: true })).toBeVisible();
     });
+    await memberContext.addCookies([{ name: "PARAGLIDE_LOCALE", value: "en", url: state().baseURL }]);
     await member.goto("/t/new");
     await waitForFormReady(member.locator("form", { has: titleField(member) }));
     await titleField(member).fill("Public reading question");

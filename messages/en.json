@@ -81,7 +81,7 @@
   "invites_invalid_email": "Please enter a valid email address.",
   "error_unexpected": "An unexpected error occurred.",
   "nav_language": "Language",
-  "language_select": "Interface language",
+  "language_select": "Display language",
   "home_empty": "No posts yet.",
   "home_replies": [
     {
@@ -192,7 +192,7 @@
   "usage_purpose_retry": "Re-translation after a report",
   "usage_purpose_judge": "Divergence judge",
   "usage_purpose_embed": "Embedding",
-  "display_lang_label": "Translate posts into",
+  "display_lang_label": "Translation language",
   "label_machine": "Machine translation ({engine})",
   "label_human": "Human-edited",
   "label_original": "Original",
@@ -484,7 +484,7 @@
   "page_current": "Page {page}",
   "settings_title": "Settings",
   "settings_langs_heading": "Languages",
-  "settings_display_auto": "Same as the interface language (default)",
+  "settings_display_auto": "Same as display language (default)",
   "settings_saved": "Saved.",
   "settings_area_confirm": [
     {
@@ -1518,7 +1518,7 @@
   "signing_accept_publish": "Confirm with passkey and publish",
   "signing_accept_save": "Confirm with passkey and save changes",
   "signing_accept_remove": "Confirm with passkey and remove",
-  "settings_ui_lang_help": "The language of menus and buttons.",
+  "settings_ui_lang_help": "The language of menus, buttons and translations.",
   "nav_menu": "Menu",
   "nav_admin": "Admin",
   "filter_prefix": "Filter:",
@@ -1734,7 +1734,7 @@
   "onboarding_language_help": "Choose the language you usually read and write in. Posts in this language are shown in the original.",
   "onboarding_language_details": "How this choice is used",
   "settings_advanced_heading": "Advanced settings",
-  "settings_area_short_help": "The language you usually read and write in.",
+  "settings_area_short_help": "The default language of your posts. It is also used for per-language counts and moderation.",
   "settings_links_sessions_help": "Signing out other devices does not remove API tokens or connected AIs. Remove them on their own screens.",
   "open_in_ai_provider_login": "Use your own {name} account",
   "open_in_ai_not_read": "Your AI has not read this page yet. If it showed an error, open that AI with your own account and press this button again. You can also copy the text with “{copy}” under ▾ and paste it.",
@@ -2276,7 +2276,7 @@
   "settings_account_heading": "Account",
   "settings_records_heading": "Your records",
   "settings_records_page": "Your page and introduction",
-  "settings_email_intro": "Replies, mentions and other notices always appear on the notifications screen. Choose whether you also want them by email. Emails are written in the language of the screen you used last.",
+  "settings_email_intro": "Replies, mentions and other notices always appear on the notifications screen. Choose whether you also want them by email. Emails use your saved display language.",
   "settings_email_digest_at": "The digest is sent every day around {time}.",
   "settings_display_effect": "Posts written in other languages are shown translated into {lang}.",
   "settings_share_copy": "Copy the bookmark text",
@@ -2730,5 +2730,6 @@
         "n=other": "{count} people in this village can read this chat."
       }
     }
-  ]
+  ],
+  "settings_language_advanced": "Advanced settings"
 }

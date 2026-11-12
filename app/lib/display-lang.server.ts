@@ -40,8 +40,8 @@ export function readingLanguageChoice(request: Request, profile?: Profile | null
   usualUrl.searchParams.delete("lang");
   // The current UI locale can itself come from ?lang=. Resolve the same request
   // without that query to find the language restored by removing the override.
-  const usualLocale = negotiateUiLocale(new Request(usualUrl, { headers: request.headers }), enabled).locale;
-  const ui = negotiateUiLocale(request, enabled);
+  const usualLocale = negotiateUiLocale(new Request(usualUrl, { headers: request.headers }), enabled, profile?.uiLocale).locale;
+  const ui = negotiateUiLocale(request, enabled, profile?.uiLocale);
   return { current: displayLangFor(request, profile), enabled, ui: ui.source === "query" ? ui.locale : null,
     usual: resolveDisplayLang({ profile: profile ?? { displayLang: null, readLangs: [] }, uiLocale: usualLocale, enabled }) };
 }

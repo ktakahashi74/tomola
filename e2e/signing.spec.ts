@@ -17,7 +17,7 @@ test("opted-in writes and both preference changes use real UV assertions; unsign
     await page.goto("/settings");
     await page.getByRole("button", { name: enMessages.settings_passkeys_add, exact: true }).click();
     await expect(page.getByText(enMessages.settings_passkeys_added, { exact: true })).toBeVisible();
-    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("summary").filter({ hasText: enMessages.settings_advanced_heading }).click();
+    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("#settings-advanced > summary").click();
     await page.getByRole("checkbox", { name: enMessages.settings_sign_posts_label, exact: true }).check();
     await page.locator("form", { has: page.locator('input[name="intent"][value="sign-posts"]') }).getByRole("button", { name: enMessages.save_changes, exact: true }).click();
     await acceptSignedWrite(page);
@@ -211,7 +211,7 @@ test("opted-in writes and both preference changes use real UV assertions; unsign
     expect(records).toHaveLength(8);
     expect(JSON.parse(text).profile.sign_posts).toBe(true);
     for (const record of records) expect(Buffer.from(record.challenge, "base64url").toString("utf8")).toMatch(new RegExp(`^tomola:v1:[a-f0-9]{64}:${record.payload_hash}$`));
-    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("summary").filter({ hasText: enMessages.settings_advanced_heading }).click();
+    if (!(await page.locator("#settings-advanced").evaluate(element => (element as HTMLDetailsElement).open))) await page.locator("#settings-advanced > summary").click();
     await page.getByRole("checkbox", { name: enMessages.settings_sign_posts_label, exact: true }).uncheck();
     await page.locator("form", { has: page.locator('input[name="intent"][value="sign-posts"]') }).getByRole("button", { name: enMessages.save_changes, exact: true }).click();
     await acceptSignedWrite(page);

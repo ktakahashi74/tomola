@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "./helpers";
 import { LANG_LABELS } from "../app/lib/languages";
 import { expect, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { test } from "./editor-fixture";
@@ -25,6 +26,8 @@ for (const width of [1280, 390]) {
     const contents = page.getByRole("navigation", { name: en.settings_title, exact: true });
     const advanced = page.locator("#settings-advanced");
     const languages = page.getByRole("region", { name: en.settings_langs_heading, exact: true });
+    await expect(page.locator("#settings-display-lang")).not.toBeVisible();
+    await openTranslationSettings(page);
     await expect(languages.getByRole("combobox", { name: en.display_lang_label, exact: true })).toBeVisible();
     await expect(languages.getByText(formatMessage(en.settings_display_effect, { lang: LANG_LABELS.en }), { exact: true })).toBeVisible();
     const handle = page.getByRole("region", { name: en.settings_handle_heading, exact: true });
@@ -65,7 +68,7 @@ for (const width of [1280, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.goto("/settings");
     await captureScreenshot(page, { path: testInfo.outputPath(`settings-${width}.png`), fullPage: true }, "e2e-settings-order");
-    await page.locator("summary").filter({ hasText: en.settings_advanced_heading }).click();
+    await page.locator("#settings-advanced > summary").click();
     await expect(advanced.getByRole("heading", { level: 2, name: en.settings_advanced_heading, exact: true })).toBeVisible();
     for (const name of [en.settings_sign_posts_label, en.settings_automation_heading, en.settings_share_heading]) await expect(advanced.getByRole("heading", { level: 3, name, exact: true })).toBeVisible();
     const share = page.locator("#settings-share");
@@ -141,7 +144,7 @@ test("AI-link revocation and rejected signature changes preserve their own discl
     expect(errorHtml).toContain('role="alert"');
     await nativePage.goto("/settings#settings-share");
     await waitForClientRoute(nativePage);
-    await expect(nativePage.locator("summary").filter({ hasText: en.settings_advanced_heading })).toBeVisible();
+    await expect(nativePage.locator("#settings-advanced > summary")).toBeVisible();
   } finally {
     await native.close();
   }

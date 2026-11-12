@@ -45,8 +45,8 @@ export async function loader({ request }: { request: Request }) {
   // apiDrafts: number of API drafts awaiting approval, shown in the header's 「下書き」 badge.
   // isOperator: operator status (OPERATOR_EMAILS; roles.server.ts).
   const scopePromise = getMemberScope(request);
-  // Remember a cookie or browser preference for notification emails, without adopting a shared link's language.
-  const ui = negotiateUiLocale(request, enabledLangs());
+  // Initialize a missing display preference without adopting a shared link's language.
+  const ui = negotiateUiLocale(request, enabledLangs(), profile.uiLocale);
   const [scope, keys, apiDrafts, notificationState, joined, followedVillages] = await Promise.all([
     scopePromise,
     db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, user.id)).limit(1),

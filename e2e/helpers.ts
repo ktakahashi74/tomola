@@ -67,6 +67,11 @@ export async function captureScreenshot(page: Page, options: Parameters<Page["sc
   await page.screenshot({ ...options, path: destination });
 }
 
+export async function openTranslationSettings(page: Page) {
+  const details = page.locator("#settings-display-lang").locator("..");
+  if (await details.getAttribute("open") === null) await details.locator(":scope > summary").click();
+}
+
 export async function openVillageManagement(page: Page) {
   const management = page.locator("#village-management");
   if (await management.getAttribute("open") === null) await management.locator(":scope > summary").click();

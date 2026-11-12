@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, enMessages as m, formatMessage, uiMessages, useMember, waitForClientRoute } from "./helpers";
+import { captureScreenshot, enMessages as m, formatMessage, state, uiMessages, useMember, waitForClientRoute } from "./helpers";
 import { CHAT_CONSENT_VERSION } from "../app/lib/village-chat-consent";
 
 test("current chat consent protects version-one readers and must be renewed after leaving and rejoining", async ({ page, browser }) => {
@@ -90,6 +90,7 @@ test("version-two members see only the provider change and can use chat after re
   await useMember(page, "ccn_v2@example.com");
   await page.setViewportSize({ width: 390, height: 900 });
   for (const lang of ["ja", "en"]) {
+    await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: lang, url: state().baseURL }]);
     await page.goto(`/v/chat-consent-v2/chat?lang=${lang}`); await waitForClientRoute(page);
     await expect(page.locator("html")).toHaveAttribute("lang", lang);
     const messages = await uiMessages(page);

@@ -93,6 +93,7 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("terms.md", "routes/terms-md.ts"),
   route("languages", "routes/languages.tsx"),
+  route("settings/locale", "routes/settings-locale.ts"),
   route("languages.md", "routes/languages-md.ts"),
   route("principles", "routes/principles.tsx"),
   route("principles.md", "routes/principles-md.ts", { id: "principles-md" }),

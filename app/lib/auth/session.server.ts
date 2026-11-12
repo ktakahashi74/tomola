@@ -59,7 +59,7 @@ async function getReaderImplementation(request: Request, countPublicRead = true)
 async function requireMemberImplementation(request: Request): Promise<Member> {
   const user = await requireUser(request);
   const db = await getDb();
-  const profile = await getActiveMember(db, user.id);
+  const profile = await getSessionProfile(request);
   if (!profile) throw redirect("/onboarding");
   if (request.method === "GET" && trialParticipationRequired() && needsTrialConsent(profile)) {
     const url = new URL(request.url);
@@ -133,6 +133,11 @@ function perRequest<T>(resolve: (request: Request) => Promise<T>, memberId?: (va
   };
 }
 export const getSessionUser = perRequest(getSessionUserImplementation, user => user?.id);
+// Locale negotiation and route gates share the same profile read.
+export const getSessionProfile = perRequest(async request => {
+  const user = await getSessionUser(request);
+  return user ? getActiveMember(await getDb(), user.id) : null;
+});
 // Whether this request's session is recent enough to add a credential (CREDENTIAL_FRESH_MS).
 export async function getCredentialSessionFresh(request: Request): Promise<boolean> {
   return (await getSessionUser(request)) !== null && isCredentialSessionFresh(sessionCreatedAt.get(request));

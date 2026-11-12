@@ -1,15 +1,16 @@
-import { cookieName, defineCustomServerStrategy } from "~/paraglide/runtime.js";
+import { cookieMaxAge, cookieName, defineCustomServerStrategy } from "~/paraglide/runtime.js";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { HTML_LANG_STRATEGY } from "~/lib/http/locale-strategy";
 import { defaultLangOf, LANGS, type Lang } from "~/lib/languages";
 import { READING_ONLY_PARAM } from "~/lib/reading-lang";
 
 // How the interface language is decided. Only the server decides; the browser reads the server's decision.
-//   1. The language cookie (PARAGLIDE_LOCALE), if it names an enabled language. Only an explicit switcher choice writes it; automatic browser resolution and the server never do.
-//   2. The lang query parameter, if it names an enabled language and the address has no reading-only mark (rl, app/lib/reading-lang.ts); a mark that names an enabled language (rl=fr) sets the screen language itself. It does not write a cookie or change the member's remembered UI language.
-//   3. The first language of Accept-Language (in order of q) that matches an enabled language: the whole tag, or the part before the first "-" ("en-US" is en).
+//   1. The language cookie (PARAGLIDE_LOCALE), if it names an enabled language. Explicit choices, completed registration and login with a saved language write it; automatic browser resolution never does.
+//   2. The member's saved display language (profiles.ui_locale), if enabled. Guests skip this step.
+//   3. The lang query parameter, if it names an enabled language and the address has no reading-only mark (rl, app/lib/reading-lang.ts); a mark that names an enabled language (rl=fr) sets the screen language itself. Neither changes saved preferences.
+//   4. The first language of Accept-Language (in order of q) that matches an enabled language: the whole tag, or the part before the first "-" ("en-US" is en).
 //      Chinese tags are mapped by script first: zh-Hant (zh-Hant, zh-TW, zh-HK, zh-MO) and zh-Hans (zh-Hans, zh-CN, zh-SG, zh, every other zh-*).
-//   4. The default (defaultLangOf): en if it is enabled, otherwise the first enabled language.
+//   5. The default (defaultLangOf): en if it is enabled, otherwise the first enabled language.
 // The browser side is Paraglide's custom strategy "custom-htmlLang" (app/lib/http/locale-strategy.ts): it reads <html lang>, which the server rendered from this
 // decision, so the two cannot disagree and no matching rule is written twice (a second copy of Paraglide's navigator matching would drift and break hydration).
 
@@ -81,13 +82,26 @@ function cookieLocale(request: Request): string | null {
   return found ? found.slice(prefix.length) : null;
 }
 
+const memberLocales = new WeakMap<Request, string | null>();
+
+// Root middleware supplies the already-cached member profile before Paraglide runs.
+export function setRequestUiLocale(request: Request, locale: string | null): void {
+  memberLocales.set(request, locale);
+}
+
+export function uiLocaleCookie(request: Request, locale: Lang): string {
+  return `${cookieName}=${locale}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;
+}
+
 // The source lets callers distinguish a page's language from a preference that can be remembered.
-export function negotiateUiLocale(request: Request, enabled: readonly Lang[]): { locale: Lang; source: "cookie" | "query" | "accept-language" | "default" } {
+export function negotiateUiLocale(request: Request, enabled: readonly Lang[], saved: string | null | undefined = memberLocales.get(request)): { locale: Lang; source: "cookie" | "profile" | "query" | "accept-language" | "default" } {
   const cookie = cookieLocale(request);
   if (cookie !== null) {
     const lang = LANGS.find((l) => l === cookie);
     if (lang && enabled.includes(lang)) return { locale: lang, source: "cookie" };
   }
+  const stored = LANGS.find(l => l === saved);
+  if (stored && enabled.includes(stored)) return { locale: stored, source: "profile" };
   // An address made by pressing a reading language on a page carries the mark: its ?lang= says what to read, not which language the screen speaks. When the mark names an enabled
   // language (rl=fr), the screen was in that language only because of an address, and stays in it.
   const params = new URL(request.url).searchParams;
@@ -106,7 +120,7 @@ export function negotiateUiLocale(request: Request, enabled: readonly Lang[]): {
 // defaultMainLang already checks only the highest-ranked acceptable tag, ignoring the region and normalizing Chinese by script.
 export function shouldSuppressBrowserTranslation(request: Request, enabled: readonly Lang[]): boolean {
   const { locale, source } = negotiateUiLocale(request, enabled);
-  return source === "cookie" || defaultMainLang(request.headers.get("accept-language"), enabled) === locale;
+  return source === "cookie" || source === "profile" || defaultMainLang(request.headers.get("accept-language"), enabled) === locale;
 }
 
 // Adds only the header names that are missing to a Vary value.
@@ -118,7 +132,7 @@ function mergeVary(existing: string | null, add: string[]): string {
 }
 
 // The header for the interface language on HTML responses (not on APIs, data requests or Markdown twins): Vary: Accept-Language, Cookie. HTML changes with the browser language and the
-// cookies (language choice, session), so a shared cache (a CDN) put in front never serves the page of another language. The server sets no language cookie (the server decides,
+// cookies (language choice, session), so a shared cache (a CDN) put in front never serves the page of another language. Automatic negotiation sets no language cookie (the server decides,
 // the browser reads <html lang>).
 export function withLocaleHeaders(response: unknown): unknown {
   if (!(response instanceof Response)) return response;

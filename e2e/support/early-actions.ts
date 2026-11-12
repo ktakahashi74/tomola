@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "../helpers";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { openPostSettings, uiMessages, waitForClientRoute, waitForFormReady } from "../helpers";
 import { beforeHydration } from "./prehydration";
@@ -29,6 +30,7 @@ export async function earlySettings(page: Page) {
   let homeArea = "";
   let disclosures: Awaited<ReturnType<Locator["elementHandles"]>> = [];
   await beforeHydration(page, "/settings", async () => {
+    await openTranslationSettings(page);
     homeArea = await page.locator('select[name="homeArea"]').inputValue();
     readChecked = !await read.isChecked();
     await read.setChecked(readChecked);
@@ -42,7 +44,7 @@ export async function earlySettings(page: Page) {
     await expect(page.locator('#settings-languages button[type="submit"]').last()).toBeVisible();
     await expect(page.locator('#settings-email button[type="submit"]')).toBeVisible();
     disclosures = await page.locator("main details:visible").elementHandles();
-    for (const disclosure of disclosures) await (await disclosure.$("summary"))!.click();
+    for (const disclosure of disclosures) if (!await disclosure.evaluate(element => (element as HTMLDetailsElement).open)) await (await disclosure.$("summary"))!.click();
     await expect(advanced).toHaveAttribute("open");
   });
   await expect(advanced).toHaveAttribute("open");

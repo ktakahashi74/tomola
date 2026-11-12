@@ -112,6 +112,7 @@ for (const locale of ["en", "ja"] as const) {
         await logo.focus();
         await page.keyboard.press("Enter");
         await expect(page).toHaveURL(url => url.pathname === (member || testInfo.config.metadata.publicReading ? "/" : "/login"));
+        await waitForClientRoute(page);
         await expect(page.getByRole("banner").getByRole("link", { name: messages.site_name, exact: true })).toBeVisible();
         for (const width of [1366, 390]) {
           await page.setViewportSize({ width, height: 844 });

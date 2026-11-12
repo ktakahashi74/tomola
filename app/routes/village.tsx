@@ -14,7 +14,6 @@ import { data, Form, Link, redirect, useLocation } from "react-router";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/village";
 import { OrderSwitch } from "~/components/order-switch";
-import { ReadingLangMenu } from "~/components/reading-lang-menu";
 import { Pagination } from "~/components/pagination";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
@@ -216,7 +215,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     {!ended && <VillageInvites invites={incoming} />}
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       <OrderSwitch order={order} />
-      {!loaderData.reader && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
     </div>
     {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
     <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />

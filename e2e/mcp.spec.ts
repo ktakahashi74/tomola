@@ -83,6 +83,7 @@ test("OAuth consent, owned drafts, unsigned confirmation and immediate revocatio
 
   const japanese = await browser.newContext({ locale: "ja-JP", storageState: await page.context().storageState(), extraHTTPHeaders: clientHeaders("127.0.0.32") });
   try {
+    await japanese.addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: state().baseURL }]);
     const ja = await japanese.newPage();
     const second = await register(request, "Fictional second client");
     await start(ja, second);

@@ -1,3 +1,4 @@
+import { openTranslationSettings } from "./helpers";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { LANG_LABELS, type Lang } from "../app/lib/languages";
@@ -85,6 +86,7 @@ test("member screen choices clear page reading overrides, protect writing and pr
 
     // A saved translation language remains independent of subsequent header choices.
     const languages = await expectPreferences(page, "");
+    await openTranslationSettings(page);
     await languages.locator('select[name="displayLang"]').selectOption("fr");
     await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText((await uiMessages(page)).settings_saved);
     await page.goto(overridden);

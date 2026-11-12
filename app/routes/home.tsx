@@ -8,7 +8,6 @@ import { PageHeader } from "~/components/page-header";
 import { HomeInstallGuide } from "~/components/home-install-guide";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { OrderSwitch } from "~/components/order-switch";
-import { ReadingLangMenu } from "~/components/reading-lang-menu";
 import { Pagination } from "~/components/pagination";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
@@ -111,7 +110,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         switches={<div className="relative flex w-full flex-wrap items-center gap-x-3 gap-y-1">
           <OrderSwitch compact order={order} />
           <AsksFilter filter={filter} withLong withFollowing={loaderData.followingAvailable} collapsed />
-          {!loaderData.reader && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
           <div className={loaderData.reader ? "ms-auto" : undefined}><OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} /></div>
         </div>}
       />

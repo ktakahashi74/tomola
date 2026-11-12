@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { LANG_LABELS, LANGS, type Lang } from "../app/lib/languages";
+import { LANG_LABELS, type Lang } from "../app/lib/languages";
 import { captureScreenshot, useMember, visitListRow, clientHeaders, enMessages as en, formatMessage, state, uiMessages, waitForClientRoute } from "./helpers";
 
 type Topic = { id: number; lang: Lang; title: string; body: string };
@@ -40,7 +40,7 @@ async function evidence(page: Page, name: string) {
 test.describe("page reading language", () => {
 
 
-  test("member switches list and article languages without changing preferences, membership or filters", async ({ browser }) => {
+  test("lists omit language menus and carry explicit language links while articles keep their controls", async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.241") });
     try {
@@ -51,31 +51,20 @@ test.describe("page reading language", () => {
       const localeBefore = (await context.cookies()).filter(c => c.name === "PARAGLIDE_LOCALE");
       await assertTitles(page, topics);
       const usualIds = await listIds(page);
-      // Closed: only the name of the language now read (no label); the languages are inside.
-      await expect(menu(page).locator("summary")).toHaveText(LANG_LABELS.en);
-      await expect(menu(page).locator("summary")).toHaveAttribute("aria-label", `${en.reading_lang_label}: ${LANG_LABELS.en}`);
-      await expect(page.getByText(en.reading_lang_label, { exact: true })).toHaveCount(0);
-      const nav = (await openMenu(page)).getByRole("navigation", { name: en.reading_lang_label, exact: true });
-      await expect(nav.locator("a")).toHaveCount(LANGS.length);
-      await expect(nav.locator("[aria-current=page]")).toHaveText(LANG_LABELS.en);
-      for (const link of await nav.locator("a").all()) {
-        const lang = await link.getAttribute("lang");
-        expect(LANGS).toContain(lang);
-        await expect(link).toHaveAttribute("hreflang", lang!);
+      for (const pathname of ["/", "/a/ja", "/v/ja"]) {
+        await page.goto(`${pathname}?lang=fr&rl=1`);
+        await expect(menu(page)).toHaveCount(0);
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
       }
-      await evidence(page, "home-usual");
-      await nav.getByRole("link", { name: LANG_LABELS.fr, exact: true }).click();
-      // The mark (rl) says that the address came from this choice: the screen keeps its own language.
-      await expect(page).toHaveURL(new URL("/?lang=fr&rl=1", state().baseURL).href);
-      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await evidence(page, "village-chosen");
+      await page.goto("/?lang=fr&rl=1");
       await assertTitles(page, topics, "fr");
       expect(await listIds(page)).toEqual(usualIds);
       await evidence(page, "home-chosen");
 
       await page.goto("/?order=activity&long=1");
       const filteredIds = await listIds(page);
-      await page.goto("/?order=activity&long=1&page=2");
-      await chooseReading(page, LANG_LABELS.fr);
+      await page.goto("/?order=activity&long=1&lang=fr&rl=1");
       await expect(page).toHaveURL(url => url.searchParams.get("lang") === "fr" && !url.searchParams.has("page"));
       expect(new URL(page.url()).searchParams.get("page")).toBeNull();
       expect(new URL(page.url()).searchParams.get("order")).toBe("activity");
@@ -121,7 +110,8 @@ test.describe("page reading language", () => {
 
       await page.goto("/a/ja?order=created&long=1");
       const areaIds = await listIds(page);
-      await chooseReading(page, LANG_LABELS.fr);
+      await expect(menu(page)).toHaveCount(0);
+      await page.goto("/a/ja?order=created&long=1&lang=fr&rl=1");
       await expect(page).toHaveURL(url => url.pathname === "/a/ja" && url.searchParams.get("lang") === "fr");
       expect(await listIds(page)).toEqual(areaIds);
       expect(new URL(page.url()).searchParams.get("order")).toBe("created");
@@ -151,8 +141,8 @@ test.describe("page reading language", () => {
     const context = await browser.newContext({ storageState, javaScriptEnabled: false, locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.243") });
     try {
       const page = await context.newPage();
-      await page.goto("/");
-      await chooseReading(page, LANG_LABELS.fr);
+      await page.goto("/?lang=fr&rl=1");
+      await expect(menu(page)).toHaveCount(0);
       await assertTitles(page, topics, "fr");
       const japanese = topics.find(t => t.lang === "ja")!;
       await visitListRow(page, page.url(), row(page, japanese));

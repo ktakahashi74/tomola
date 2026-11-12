@@ -4,9 +4,10 @@ import { largeUpload, uploadResponse } from "./large-upload";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { House, MapPinHouse, UsersRound } from "lucide-react";
-import { captureScreenshot, enMessages as en, uiMessages, useMember, visitListRow, waitForHydration } from "./helpers";
+import { captureScreenshot, enMessages as en, state, uiMessages, useMember, visitListRow, waitForHydration } from "./helpers";
 
 for (const locale of ["ja", "en"] as const) test(`village icons in headers, places, chat and owner controls (${locale})`, async ({ page }) => {
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: locale, url: state().baseURL }]);
   await useMember(page, `vi_view_${locale}@example.com`, `/v/icons-view?lang=${locale}`);
   const icon = page.locator('[data-village-header] h1 img');
   await expect(icon).toHaveAttribute("alt", "");

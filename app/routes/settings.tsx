@@ -252,7 +252,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
       try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
       const target = id ? document.getElementById(id) : null;
       setSelectedSection(target?.closest("main > section, main > details")?.id ?? "");
-      for (const details of [advanced.current, aiLinks.current]) {
+      for (const details of [advanced.current, aiLinks.current, target?.closest("details")]) {
         if (target && details?.contains(target) && !details.open) {
           details.open = true;
           target.scrollIntoView();
@@ -317,10 +317,24 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           actionData.error === "invalid_area" ? m.settings_area_error_invalid() :
           actionData.error === "village_required" ? m.village_required() : m.error_generic()
         }</p>}
+        {/* The interface language changes as soon as it is picked; it is the same switch as in the top row, here for finding it. */}
+        <div className="space-y-2">
+          <Field className="min-w-0 w-auto"><FieldLabel className="block">
+            <span className="me-2">{m.language_select()}</span>
+            <LocaleSwitcher />
+          </FieldLabel></Field>
+          <p className="ui-help text-muted-foreground">{m.settings_ui_lang_help()}</p>
+        </div>
         {/* Ordinary submissions keep the combined no-JavaScript path. Enhanced saves name just the field being changed. */}
         <Form method="post" action={withSettingsReturn("/settings#settings-languages", returnTo)} className="space-y-4">
           <input type="hidden" name="intent" value="preferences" />
           {enhanced && <input type="hidden" name="field" value="homeArea" />}
+          <FieldSet id="settings-read-langs" ref={readControl}>
+            <FieldLegend>{m.onboarding_read_langs()}</FieldLegend>
+            <FieldDescription>{m.settings_read_langs_help()}</FieldDescription>
+            {langs.map(lang => <Field key={lang} orientation="horizontal" className="min-w-0 inline-flex w-auto"><FieldLabel className="flex items-center gap-2 me-3"><input type="checkbox" name="readLangs" value={lang} checked={read.value.includes(lang)} onChange={event => read.change(event.target.checked ? [...read.value.filter(value => langs.some(enabled => enabled === value)), lang] : read.value.filter(value => value !== lang && langs.some(enabled => enabled === value)))} /><span lang={lang}>{LANG_LABELS[lang]}</span></FieldLabel></Field>)}
+            {enhanced && <SettingsSaveStatus {...read} />}
+          </FieldSet>
           <section id="settings-area" aria-labelledby="settings-area-heading" className="scroll-mt-4 space-y-2">
             <Field className="min-w-0 w-auto"><FieldLabel id="settings-area-heading" htmlFor="settings-home-area">{m.onboarding_home_area()}</FieldLabel>
               <NativeSelect id="settings-home-area" name="homeArea" value={displayedArea} disabled={!!nextAreaChange} className="w-full" onChange={event => setAreaChoice(event.target.value)}>
@@ -339,20 +353,17 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
               <p>{m.settings_area_help({ days: HOME_AREA_CHANGE_DAYS })}</p>
             </details>
           </section>
-          <FieldSet id="settings-read-langs" ref={readControl}>
-            <FieldLegend>{m.onboarding_read_langs()}</FieldLegend>
-            <FieldDescription>{m.settings_read_langs_help()}</FieldDescription>
-            {langs.map(lang => <Field key={lang} orientation="horizontal" className="min-w-0 inline-flex w-auto"><FieldLabel className="flex items-center gap-2 me-3"><input type="checkbox" name="readLangs" value={lang} checked={read.value.includes(lang)} onChange={event => read.change(event.target.checked ? [...read.value.filter(value => langs.some(enabled => enabled === value)), lang] : read.value.filter(value => value !== lang && langs.some(enabled => enabled === value)))} /><span lang={lang}>{LANG_LABELS[lang]}</span></FieldLabel></Field>)}
-            {enhanced && <SettingsSaveStatus {...read} />}
-          </FieldSet>
-          <Field id="settings-display-lang" className="min-w-0 w-auto"><FieldLabel htmlFor="settings-display-language">{m.display_lang_label()}</FieldLabel>
-            <NativeSelect ref={displayControl} id="settings-display-language" name="displayLang" value={display.value} onChange={event => display.change(event.target.value)} className="w-full">
-              <NativeSelectOption value="">{m.settings_display_auto()}</NativeSelectOption>
-              {langs.map(lang => <NativeSelectOption key={lang} value={lang} lang={lang}>{LANG_LABELS[lang]}</NativeSelectOption>)}
-            </NativeSelect>
-            <FieldDescription>{m.settings_display_effect({ lang: areaName(translateInto) })}</FieldDescription>
-            {enhanced && <SettingsSaveStatus {...display} />}
-          </Field>
+          <details className="space-y-3">
+            <summary className="cursor-pointer ui-meta">{m.settings_language_advanced()}</summary>
+            <Field id="settings-display-lang" className="min-w-0 w-auto"><FieldLabel htmlFor="settings-display-language">{m.display_lang_label()}</FieldLabel>
+              <NativeSelect ref={displayControl} id="settings-display-language" name="displayLang" value={display.value} onChange={event => display.change(event.target.value)} className="w-full">
+                <NativeSelectOption value="">{m.settings_display_auto()}</NativeSelectOption>
+                {langs.map(lang => <NativeSelectOption key={lang} value={lang} lang={lang}>{LANG_LABELS[lang]}</NativeSelectOption>)}
+              </NativeSelect>
+              <FieldDescription>{m.settings_display_effect({ lang: areaName(translateInto) })}</FieldDescription>
+              {enhanced && <SettingsSaveStatus {...display} />}
+            </Field>
+          </details>
           {loaderData.posting && <section id="settings-village" className="scroll-mt-4 space-y-2">
             <Field><FieldLabel htmlFor="settings-default-village">{m.settings_default_village()}</FieldLabel>
               <NativeSelect ref={destinationControl} id="settings-default-village" name="village" value={destination.value} onChange={event => destination.change(event.target.value)} className="w-full">
@@ -365,14 +376,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </section>}
           {!enhanced && <Button type="submit">{m.save_changes()}</Button>}
         </Form>
-        {/* The interface language changes as soon as it is picked; it is the same switch as in the top row, here for finding it. */}
-        <div className="border-t pt-4">
-          <Field className="min-w-0 w-auto"><FieldLabel className="block">
-            <span className="me-2">{m.language_select()}</span>
-            <LocaleSwitcher />
-          </FieldLabel></Field>
-          <p className="ui-help text-muted-foreground">{m.settings_ui_lang_help()}</p>
-        </div>
+
       </section>
 
       <section id="settings-ai" aria-labelledby="settings-ai-section-heading" className="scroll-mt-4 space-y-4">

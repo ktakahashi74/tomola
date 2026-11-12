@@ -210,6 +210,7 @@ test("in Japanese at a narrow wide-screen width, a village's name and its chat m
   const context = await browser.newContext({ locale: "ja-JP", viewport: { width: 1100, height: 800 }, extraHTTPHeaders: { "Accept-Language": "ja-JP" } });
   try {
     const page = await context.newPage();
+    await context.addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: state().baseURL }]);
     await useMember(page, "uxnav_count@example.com"); await waitForClientRoute(page);
     const side = page.locator("[data-site-navigation]");
     await expect(side).toBeVisible();

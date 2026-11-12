@@ -81,7 +81,6 @@
   "invites_invalid_email": "올바른 이메일 주소를 입력해 주세요.",
   "error_unexpected": "예기치 않은 오류가 발생했습니다.",
   "nav_language": "언어",
-  "language_select": "인터페이스 언어",
   "home_empty": "아직 게시물이 없습니다.",
   "home_replies": [
     {
@@ -190,7 +189,6 @@
   "usage_purpose_retry": "신고 후 재번역",
   "usage_purpose_judge": "불일치 판정",
   "usage_purpose_embed": "임베딩",
-  "display_lang_label": "게시물 번역 언어",
   "label_machine": "기계 번역 ({engine})",
   "label_human": "사람이 수정함",
   "label_original": "원문",
@@ -473,7 +471,6 @@
   "page_current": "{page}페이지",
   "settings_title": "설정",
   "settings_langs_heading": "언어",
-  "settings_display_auto": "인터페이스 언어와 동일(기본값)",
   "settings_saved": "저장되었습니다.",
   "settings_area_confirm": [
     {
@@ -1481,7 +1478,6 @@
   "signing_accept_publish": "패스키로 확인하고 공개하기",
   "signing_accept_save": "패스키로 확인하고 변경사항 저장하기",
   "signing_accept_remove": "패스키로 확인하고 삭제하기",
-  "settings_ui_lang_help": "메뉴와 버튼의 언어입니다.",
   "nav_menu": "메뉴",
   "nav_admin": "관리",
   "filter_prefix": "필터:",
@@ -1693,7 +1689,6 @@
   "onboarding_language_help": "평소에 읽고 쓰는 언어를 선택해 주세요. 이 언어로 작성된 게시물은 원문으로 표시됩니다.",
   "onboarding_language_details": "이 선택의 활용 방식",
   "settings_advanced_heading": "고급 설정",
-  "settings_area_short_help": "평소에 읽고 쓰는 언어입니다.",
   "settings_links_sessions_help": "다른 기기에서 로그아웃해도 API 토큰이나 연결된 AI는 제거되지 않습니다. 해당 화면에서 직접 제거하세요.",
   "open_in_ai_provider_login": "본인의 {name} 계정 사용",
   "open_in_ai_not_read": "AI가 아직 이 페이지를 읽지 않았습니다. 오류가 표시된 경우, 본인의 계정으로 해당 AI를 연 다음 이 버튼을 다시 누르세요. ▾ 아래의 “{copy}”로 본문을 복사하여 붙여넣을 수도 있습니다.",
@@ -2225,7 +2220,6 @@
   "settings_account_heading": "계정",
   "settings_records_heading": "내 기록",
   "settings_records_page": "내 페이지 및 소개",
-  "settings_email_intro": "답글, 멘션 및 기타 알림은 항상 알림 화면에 표시됩니다. 이메일로도 받아볼지 선택해 주세요. 이메일은 마지막으로 사용한 화면의 언어로 작성됩니다.",
   "settings_email_digest_at": "요약본은 매일 {time}경에 발송됩니다.",
   "settings_display_effect": "다른 언어로 작성된 게시물은 {lang}(으)로 번역되어 표시됩니다.",
   "settings_share_copy": "북마크용 문구 복사",

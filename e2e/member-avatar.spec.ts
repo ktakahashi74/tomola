@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
 import { largeUpload, uploadResponse } from "./large-upload";
-import { captureScreenshot, useMember, enMessages as en, jaMessages as ja, waitForHydration } from "./helpers";
+import { captureScreenshot, useMember, enMessages as en, jaMessages as ja, state, waitForHydration } from "./helpers";
 
 const picture = async () => ({ name: "portrait.png", mimeType: "image/png", buffer: await sharp({ create: { width: 72, height: 48, channels: 3, background: "#789" } }).png().toBuffer() });
 
 for (const lang of ["en", "ja"]) test(`avatar presentation on member pages, bylines and chat (${lang})`, async ({ page }) => {
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: lang, url: state().baseURL }]);
   await useMember(page, "av_writer@example.com", `/settings?lang=${lang}`);
   for (const width of [1280, 1100, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -95,6 +96,7 @@ test("avatar report, operator removal and independent appeal restore the image",
   await page.goto("/u/av_subject?lang=en");
   await expect(page.locator("h1 img")).toHaveAttribute("src", uploaded);
   for (const [locale, messages] of [["en", en], ["ja", ja]] as const) {
+    await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: locale, url: state().baseURL }]);
     await page.goto(`/moderation?lang=${locale}`);
     await expect(page.getByText(messages.log_avatar_restored, { exact: true })).toBeVisible();
     if (process.env.E2E_EVIDENCE_DIR) for (const width of [1280, 1100, 390]) {

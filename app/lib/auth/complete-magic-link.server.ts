@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { isAPIError } from "better-auth/api";
 import { inArray, eq } from "drizzle-orm";
-import { redirect } from "react-router";
+import { redirect, redirectDocument } from "react-router";
 import { getDb } from "~/lib/db/client.server";
 import { verification } from "~/lib/db/schema";
 import { getProfile, rememberUiLocale } from "~/lib/profiles.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
-import { negotiateUiLocale } from "~/lib/http/locale.server";
+import { negotiateUiLocale, uiLocaleCookie } from "~/lib/http/locale.server";
 import { getAuth } from "./auth.server";
 import { browserBindingIdentifier, matchesMagicLinkBrowser } from "./magic-link-browser.server";
 import { magicLinkNextIdentifier, readMagicLinkNext } from "./magic-link-next.server";
@@ -72,5 +72,8 @@ async function verifyMagicLink(request: Request, token: string): Promise<Respons
   if (profile && (ui.source === "cookie" || ui.source === "accept-language")) {
     await rememberUiLocale(db, body.user.id, profile.uiLocale, ui.locale);
   }
-  return redirect(profile ? next : next === "/" ? "/onboarding" : `/onboarding?${new URLSearchParams({ next })}`, { status: 303, headers });
+  // Login may introduce an account language unknown to the guest's client runtime.
+  const savedUi = negotiateUiLocale(request, enabledLangs(), profile?.uiLocale);
+  if (savedUi.source === "profile") headers.append("Set-Cookie", uiLocaleCookie(request, savedUi.locale));
+  return (savedUi.locale !== ui.locale ? redirectDocument : redirect)(profile ? next : next === "/" ? "/onboarding" : `/onboarding?${new URLSearchParams({ next })}`, { status: 303, headers });
 }

@@ -310,5 +310,12 @@ try {
   await seedEditHistory(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedFirstLook } = await import("./seed-first-look");
   await seedFirstLook(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
+
+  // Dedicated invitation for the display-language signup journey.
+  {
+    const invitation = await createInvitation(relatedDb, { email: "locale_signup@example.com" });
+    fs.writeFileSync(path.join(path.dirname(process.env.PGLITE_DATA_DIR!), "display-language-signup.json"), JSON.stringify({ invitation: inviteUrl(invitation.token) }));
+  }
+
 } finally { await closeDb(relatedDb); }
 process.exit(0);
