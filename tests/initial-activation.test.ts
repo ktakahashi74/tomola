@@ -56,12 +56,13 @@ it("runs ordinary initialization immediately and defers updates until pointer ac
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it.each(["pointer", "key", "before scripts", "finishing"])("bounds a missing %s release to two seconds without extending the deadline", async kind => {
+it.each(["pointer", "key", "before scripts", "finishing", "input"])("bounds a missing %s release to two seconds without extending the deadline", async kind => {
   active = kind === "before scripts";
   const { trackInitialActivation, afterInitialActivation } = await import("~/lib/initial-activation");
   trackInitialActivation();
   if (kind === "pointer" || kind === "finishing") pointer("pointerdown");
   if (kind === "key") key("keydown", "Enter");
+  if (kind === "input") documentTarget.dispatchEvent(new Event("beforeinput"));
   const update = vi.fn(), later = vi.fn(), cancelled = vi.fn();
   afterInitialActivation(update);
   afterInitialActivation(cancelled)();
@@ -81,6 +82,49 @@ it.each(["pointer", "key", "before scripts", "finishing"])("bounds a missing %s 
   expect(update).toHaveBeenCalledTimes(2);
   frame(); vi.advanceTimersByTime(2000);
   expect(update).toHaveBeenCalledTimes(2);
+});
+
+it.each(["insertText", "insertFromPaste", "insertCompositionText"])("keeps %s separate from writing restored during beforeinput", async inputType => {
+  const { trackInitialActivation, afterInitialActivation } = await import("~/lib/initial-activation");
+  trackInitialActivation();
+  let body = "";
+  documentTarget.addEventListener("beforeinput", () => {
+    afterInitialActivation(() => { if (body === "") body = "Recovered writing."; });
+  });
+  documentTarget.dispatchEvent(Object.assign(new Event("beforeinput"), { inputType }));
+  // The browser's default edit follows beforeinput and precedes input.
+  body += "New writing.";
+  documentTarget.dispatchEvent(new Event("input"));
+  expect(body).toBe("New writing.");
+  frame();
+  expect(body).toBe("New writing.");
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("releases recovery after a cancelled beforeinput without needing an input event", async () => {
+  const { trackInitialActivation, afterInitialActivation } = await import("~/lib/initial-activation");
+  trackInitialActivation();
+  documentTarget.addEventListener("beforeinput", event => event.preventDefault());
+  documentTarget.dispatchEvent(new Event("beforeinput", { cancelable: true }));
+  const restore = vi.fn();
+  afterInitialActivation(restore);
+  expect(restore).not.toHaveBeenCalled();
+  frame();
+  expect(restore).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("keeps a press begun before scripts held while an input event finishes", async () => {
+  active = true;
+  const { trackInitialActivation, afterInitialActivation } = await import("~/lib/initial-activation");
+  trackInitialActivation();
+  documentTarget.dispatchEvent(new Event("beforeinput"));
+  const update = vi.fn();
+  afterInitialActivation(update);
+  frame();
+  expect(update).not.toHaveBeenCalled();
+  pointer("pointerup"); frame();
+  expect(update).toHaveBeenCalledTimes(1);
 });
 
 it.each(["metaKey", "ctrlKey", "altKey"] as const)("does not hold initialization for Enter or Space with %s", async modifier => {

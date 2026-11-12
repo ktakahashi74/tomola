@@ -33,8 +33,7 @@ export function trackInitialActivation() {
   installed = true;
   heldBeforeScripts = document.querySelector(":active") !== null;
   document.addEventListener("pointerdown", event => { pointers.add(event.pointerId); }, true);
-  const release = () => {
-    heldBeforeScripts = false;
+  const settle = () => {
     finishing = true;
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
@@ -43,9 +42,13 @@ export function trackInitialActivation() {
       flush();
     });
   };
+  const release = () => { heldBeforeScripts = false; settle(); };
   const pointerRelease = (event: PointerEvent) => { pointers.delete(event.pointerId); release(); };
   document.addEventListener("pointerup", pointerRelease, true);
   document.addEventListener("pointercancel", pointerRelease, true);
+  // Recovery can mount during beforeinput, before the browser inserts the text.
+  // Wait for the default edit to finish before comparing or restoring fields.
+  document.addEventListener("beforeinput", settle, true);
   document.addEventListener("keydown", event => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === " " || event.key === "Enter") keys.add(event.key);

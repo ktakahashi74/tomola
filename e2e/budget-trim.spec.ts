@@ -27,7 +27,11 @@ for (const locale of ["ja", "en", "fr"] as const) test(`public and member shells
     const current = await uiMessages(page);
     const menu = await openUserMenu(page);
     await menu.getByRole("menuitem", { name: current.nav_language, exact: true }).click();
-    await page.getByRole("menuitemradio", { name: LANG_LABELS[locale], exact: true }).click();
+    await Promise.all([
+      page.waitForEvent("load"),
+      page.getByRole("menuitemradio", { name: LANG_LABELS[locale], exact: true }).click(),
+    ]);
+    await waitForClientRoute(page);
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
     await page.reload();
     await waitForClientRoute(page);

@@ -3,13 +3,13 @@ import { LANG_LABELS } from "../app/lib/languages";
 import { routeModule } from "./support/module-route";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { enMessages as en, escapeRegex, formatMessage, messagePattern, useMember, waitForClientRoute } from "./helpers";
+import { enMessages as en, escapeRegex, formatMessage, messagePattern, useMember, waitForClientRoute, waitForHydration } from "./helpers";
 import { HOME_AREA_CHANGE_DAYS } from "../app/lib/profile-settings";
 import { AI_CHOICE_STORAGE_KEY } from "../app/lib/open-in-ai";
 
 async function open(page: Page, scenario: string) {
   await useMember(page, `settings_ai_${scenario}@example.com`, "/settings?returnTo=%2Ffollowing");
-  await waitForClientRoute(page);
+  await waitForHydration(page);
 }
 const display = (page: Page) => page.locator('select[name="displayLang"]');
 const area = (page: Page) => page.getByRole("combobox", { name: en.onboarding_home_area, exact: true });
@@ -109,7 +109,11 @@ test("network failure restores only the failed field", async ({ page }) => {
   await expect(page.locator("#settings-display-lang").getByRole("status")).toHaveText(en.settings_saved);
   await page.route("**/settings/save", route => route.abort("failed"));
   const email = page.getByRole("region", { name: en.settings_email_heading, exact: true });
-  await email.getByRole("radio", { name: en.settings_email_none, exact: true }).check();
+  await expect(email.getByRole("radio", { name: en.settings_email_auto, exact: true })).toBeChecked();
+  // A failed request can restore the radio before check() verifies its click.
+  const attempted = page.waitForRequest(request => new URL(request.url()).pathname === "/settings/save" && request.method() === "POST");
+  await email.getByRole("radio", { name: en.settings_email_none, exact: true }).click();
+  expect((await attempted).postData()).toContain('name="emailPref"\r\n\r\nnone');
   await expect(email.getByRole("alert")).toHaveText(en.settings_email_error);
   await expect(email.getByRole("radio", { name: en.settings_email_auto, exact: true })).toBeChecked();
   await expect(display(page)).toHaveValue("en");

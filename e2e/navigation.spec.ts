@@ -185,6 +185,8 @@ test("compact member navigation preserves badges, role links, filters, keyboard 
     await expect(filter.getByRole("link", { name: "日本語", exact: true })).toHaveAttribute("aria-current", "page");
     await filter.getByRole("link", { name: enMessages.language_name_en, exact: true }).click();
     await expect(member).toHaveURL(/\/a\/en\?order=activity&asks=1&long=1&lang=en$/);
+    await waitForClientRoute(member);
+    await expect(member.getByRole("heading", { level: 1 })).toHaveText(formatMessage(jaMessages.area_title, { lang: enMessages.language_name_en }));
     await member.locator("summary:has(h1)").click();
     filter = member.getByRole("navigation", { name: jaMessages.home_origlang_label });
     await expect(filter.getByRole("link", { name: enMessages.language_name_en, exact: true })).toHaveAttribute("aria-current", "page");

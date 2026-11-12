@@ -68,13 +68,17 @@ test("village owners upload and reset an image, then report, removal and indepen
   await settings.locator('input[type="file"]').setInputFiles(await largeUpload());
   await uploadedResponse;
   await expect(settings.getByRole("status")).toHaveText(en.settings_saved);
+  await expect(settings.locator("img")).toHaveAttribute("src", /^\/media\//);
   const first = (await settings.locator("img").getAttribute("src"))!;
   await useMember(page, "vi_coowner@example.com", "/v/icons-journey?manage=1&lang=en"); await waitForHydration(page);
   await settings.getByRole("button", { name: en.village_icon_reset, exact: true }).click();
   await expect(settings.locator("img")).toHaveAttribute("src", fallback!);
   expect((await page.request.get(first)).status()).toBe(404);
+  const replacementResponse = uploadResponse(page, "/v/icons-journey/icon");
   await settings.locator('input[type="file"]').setInputFiles(picture);
+  await replacementResponse;
   await expect(settings.getByRole("status")).toHaveText(en.settings_saved);
+  await expect(settings.locator("img")).toHaveAttribute("src", /^\/media\//);
   const uploaded = (await settings.locator("img").getAttribute("src"))!;
   const downloaded = await page.request.get(uploaded);
   const metadata = await sharp(await downloaded.body()).metadata();

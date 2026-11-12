@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { chooseEditorMode, enMessages as en, state, useMember, waitForFormReady } from "./helpers";
+import { chooseEditorMode, enMessages as en, state, useMember, waitForClientRoute, waitForFormReady } from "./helpers";
 
 const body = (page: Page) => page.locator('textarea[name="body"]');
 const title = (page: Page) => page.locator('input[name="title"]');
@@ -99,6 +99,7 @@ test("leaving a published-post editor exposes the earlier saved draft and a path
   const id = await page.locator('input[name="fromDraft"]').inputValue();
   await page.locator("header").getByRole("link", { name: en.site_name, exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
+  await waitForClientRoute(page);
   await create(page).click();
   await expect(page).toHaveURL(/\/t\/new$/);
   await expect(body(page)).toHaveValue("");

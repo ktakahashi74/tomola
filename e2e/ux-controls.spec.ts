@@ -3,7 +3,7 @@ import { expect, type BrowserContext, type Page } from "@playwright/test";
 import { test, richEditorTest } from "./editor-fixture";
 import fs from "node:fs";
 import path from "node:path";
-import { useMember, waitForClientRoute, state, enMessages as m, openReplyMore } from "./helpers";
+import { useMember, waitForClientRoute, waitForFormReady, state, enMessages as m, openReplyMore } from "./helpers";
 import { acceptSignedWrite, enableSigningAuthenticator } from "./signing-helper";
 
 const body = (page: Page) => page.locator('textarea[name="body"]');
@@ -35,7 +35,11 @@ test.describe("signing failure guidance", () => {
       try {
         await page.goto("/t/new");
         await waitForClientRoute(page);
+        // Keep early input covered: recovery must not prepend earlier failed writing.
         await body(page).fill("Keep this text after the signing failure.");
+        await waitForFormReady(page.locator("form", { has: body(page) }));
+        await expect(page.locator('form[data-autosave="ready"]')).toHaveCount(1);
+        await expect(body(page)).toHaveValue("Keep this text after the signing failure.");
         if (lacksPasskeys) await page.evaluate(() => Object.defineProperty(window, "PublicKeyCredential", { configurable: true, value: undefined }));
         if (kind === "network_failed" || kind === "login_required") {
           await page.route("**/signing", route => route.fulfill({ status, contentType: status === 503 ? "text/plain" : "text/html", body: "Temporarily unavailable" }));
@@ -67,6 +71,9 @@ test.describe("signing failure guidance", () => {
       await page.goto("/t/new");
       await waitForClientRoute(page);
       await body(page).fill("Keep this text during maintenance.");
+      await waitForFormReady(page.locator("form", { has: body(page) }));
+      await expect(page.locator('form[data-autosave="ready"]')).toHaveCount(1);
+      await expect(body(page)).toHaveValue("Keep this text during maintenance.");
       await page.route("**/signing", route => route.request().postDataJSON().intent === intent
         ? route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "maintenance_readonly", message: m.maintenance_readonly }) })
         : route.continue());

@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { clientHeaders, enMessages as m, useMember, waitForClientRoute } from "./helpers";
+import { clientHeaders, enMessages as m, useMember, visitListRow, waitForClientRoute } from "./helpers";
 
 // The button's name is its visible word plus the village (the village part is for screen readers).
 const followLabel = (name: string) => new RegExp(`^(${m.village_follow}|${m.village_following}) ${name}$`);
@@ -22,7 +22,7 @@ test("following a village puts its posts on the home's Following list and its na
     const side = page.locator("[data-site-navigation]");
     await expect(side.getByRole("heading", { name: m.village_follow_places, exact: true })).toBeVisible();
     await expect(side.getByRole("link", { name: "Follow fixture village", exact: true })).toBeVisible();
-    // The home's filter has the list; the other village's post is not on it, and the default list still has both.
+    // The home's filter has the list; the other village's post is not on it, and the default list still has both across its pages.
     await page.goto("/");
     await waitForClientRoute(page);
     await page.locator("summary", { hasText: new RegExp(`^\\s*${m.home_filter_all}\\s*$`) }).click();
@@ -30,8 +30,11 @@ test("following a village puts its posts on the home's Following list and its na
     await expect(page).toHaveURL(/follow=1/);
     await expect(page.getByRole("link", { name: "Follow fixture topic" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Follow other topic" })).toHaveCount(0);
-    await page.goto("/");
-    await expect(page.getByRole("link", { name: "Follow other topic" })).toBeVisible();
+    for (const name of ["Follow fixture topic", "Follow other topic"]) {
+      const topic = page.getByRole("link", { name, exact: true });
+      await visitListRow(page, "/", topic);
+      await expect(topic).toBeVisible();
+    }
     // The village's own page is where its follow is managed.
     await page.goto("/v/follow-fixture");
     await waitForClientRoute(page);
