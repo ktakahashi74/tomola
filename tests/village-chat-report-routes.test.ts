@@ -2,7 +2,9 @@ import { consentChatMembers } from "./helpers/chat-consent";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
-import { chatAccessLog, chatMessages, villageMembers, villages } from "~/lib/db/schema";
+import { chatAccessLog, chatMessages, chatMessageTranslations, chatTranslationReports, villageMembers, villages } from "~/lib/db/schema";
+import { action as chatAction } from "~/routes/village-chat";
+import { chatSourceHash } from "~/lib/village-chat-translations.server";
 import { grantModerator } from "~/lib/roles.server";
 import { mutateChat } from "~/lib/village-chat.server";
 import { createChatReport, moderateChatReport } from "~/lib/village-chat-reports.server";
@@ -30,6 +32,19 @@ beforeAll(async () => {
 }, 60000);
 afterAll(() => h.restore());
 afterEach(() => { stopVillageChat(); vi.unstubAllEnvs(); });
+
+it("accepts both report forms posted to a mixed-case chat address", async () => {
+  enable();
+  vi.stubEnv("ENABLED_LANGS", "ja,en");
+  const sent = await mutateChat(h.db, h.ids.crroute_writer, "chat-route-review", "send", { body: "日本語の発言です。" });
+  await h.db.insert(chatMessageTranslations).values({ messageId: sent.id, lang: "en", sourceHash: chatSourceHash("日本語の発言です。"), text: "Translation", state: "ready" });
+  for (const intent of ["flag", "translation-report"]) {
+    const request = h.request("/v/Chat-Route-Review/chat", { as: "crroute_reporter", form: { intent, id: sent.id, reason: "spam", lang: "en" } });
+    const result = await h.outcome(() => chatAction(h.args(request, { slug: "Chat-Route-Review" })));
+    expect(result.status).toBe(intent === "flag" ? 302 : 200);
+  }
+  expect(await h.db.select().from(chatTranslationReports)).toMatchObject([{ messageId: sent.id }]);
+});
 
 it("GET returns metadata only; POST reads are private, recorded each time, scoped and CSRF-protected", async () => {
   enable();

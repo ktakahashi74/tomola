@@ -26,7 +26,7 @@ describe.skipIf(!REAL_PG_URL)("chat report concurrency on PostgreSQL", { tags: [
     await consentChatMembers(db);
     const sent = await mutateChat(db, writer, village.slug!, "send", { body: "Private concurrent message" });
     await db.update(chatMessages).set({ lang: "en" }).where(eq(chatMessages.id, sent.id));
-    const input = { slug: village.slug!, messageId: sent.id, reason: "spam" };
+    const input = { slug: village.slug!.toUpperCase(), messageId: sent.id, reason: "spam" };
     const actor = { id: mod, scope: { operator: false, langs: ["en" as const] } };
     return { db, village, writer, reporter, mod, owner, sent, input, actor };
   }

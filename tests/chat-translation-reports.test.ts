@@ -59,6 +59,11 @@ it("requires membership, consent, a visible foreign translation, and rejects dup
   await expect(w.report()).rejects.toThrow("duplicate");
   expect(await w.db.select().from(jobs)).toMatchObject([{ kind: "retranslate_chat_report" }]);
 });
+it("accepts a translation report from a mixed-case village address", async () => {
+  const w = await world();
+  expect(await createChatTranslationReport(w.db, "qrt_reader", { slug: "Quality-Chat", messageId: w.sent.id, lang: "en" })).toMatchObject({ id: expect.any(Number), retry: true });
+  expect(await w.db.select().from(chatTranslationReports)).toMatchObject([{ messageId: w.sent.id, reporterId: "qrt_reader" }]);
+});
 it("retranslates once with the chat engine and escalates a second report", async () => {
   const w = await world();
   await w.db.update(qualityMetricState).set({ startedAt: new Date(Date.now() - 10_000) });

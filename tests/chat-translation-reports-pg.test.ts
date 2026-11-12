@@ -22,7 +22,7 @@ describe.skipIf(!REAL_PG_URL)("chat translation report PostgreSQL races", { tags
     await db.insert(chatConsents).values(readers.map(userId => ({ villageId: village.id, userId, version: CHAT_CONSENT_VERSION })));
     const [message] = await db.insert(chatMessages).values({ villageId: village.id, authorId: author, body: "原文。", lang: "ja", createdSeq: 1, changedSeq: 1 }).returning();
     await db.insert(chatMessageTranslations).values({ messageId: message.id, lang: "en", sourceHash: chatSourceHash(message.body), text: "Translation", state: "ready" });
-    const input = { slug: village.slug!, messageId: message.id, lang: "en" };
+    const input = { slug: village.slug!.toUpperCase(), messageId: message.id, lang: "en" };
     return { db, village, message, readers, input };
   }
   it("serializes concurrent first reports into exactly one regeneration job", async () => {

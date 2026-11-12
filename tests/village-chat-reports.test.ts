@@ -33,6 +33,12 @@ async function world() {
 }
 const hide = (db: Awaited<ReturnType<typeof createTestDb>>, reportId: number, actor = moderator, now?: Date) => moderateChatReport(db, actor, { reportId, intent: "hide", reason: "harassment", note: secret }, { now });
 
+it("accepts a message report from a mixed-case village address", async () => {
+  const { db, sent } = await world();
+  expect(await createChatReport(db, "cr_reporter", { slug: "Report-Chat", messageId: sent.id, reason: "spam" })).toMatchObject({ id: expect.any(Number) });
+  expect(await db.select().from(chatReportSnapshots)).toMatchObject([{ messageId: sent.id, body: secret }]);
+});
+
 it("requires current consent for this village before reporting any known message ID", async () => {
   const { db, village, sent, report } = await world();
   const [other] = await db.insert(villages).values({ slug: "other-report-consent", kind: "open" }).returning();

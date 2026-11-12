@@ -43,7 +43,7 @@ export async function createChatTranslationReport(db: Db, reporterId: string, in
   if (note === null) throw new ChatTranslationReportError("invalid");
   return safe(() => db.transaction(async tx => {
     await active(tx, reporterId, now);
-    const [village] = await tx.select({ id: villages.id }).from(villages).where(and(eq(villages.slug, input.slug), chatVillageCondition())).for("share");
+    const [village] = await tx.select({ id: villages.id }).from(villages).where(and(eq(villages.slug, input.slug.toLowerCase()), chatVillageCondition())).for("share");
     if (!village) throw new ChatTranslationReportError("not_found");
     const [member] = await tx.select().from(villageMembers).where(and(eq(villageMembers.villageId, village.id), eq(villageMembers.userId, reporterId))).for("share");
     const [consent] = await tx.select().from(chatConsents).where(and(eq(chatConsents.villageId, village.id), eq(chatConsents.userId, reporterId), eq(chatConsents.version, CHAT_CONSENT_VERSION)));

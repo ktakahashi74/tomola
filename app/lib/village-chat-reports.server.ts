@@ -52,7 +52,7 @@ export async function createChatReport(db: Db, reporterId: string, input: { slug
   try {
     return await db.transaction(async tx => {
       await activeActor(tx, reporterId, now);
-      const [village] = await tx.select({ id: villages.id }).from(villages).where(and(eq(villages.slug, input.slug), chatVillageCondition())).for("share");
+      const [village] = await tx.select({ id: villages.id }).from(villages).where(and(eq(villages.slug, input.slug.toLowerCase()), chatVillageCondition())).for("share");
       if (!village) throw new ChatReportError("not_found");
       const [member] = await tx.select({ id: villageMembers.userId }).from(villageMembers).where(and(eq(villageMembers.villageId, village.id), eq(villageMembers.userId, reporterId))).for("share");
       if (!member) throw new ChatReportError("not_found");
