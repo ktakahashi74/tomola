@@ -10,7 +10,13 @@ import { cleanupBrowserRuns, collectBrowserArtifacts, createBrowserWorkspace, re
 import { launchInValidationBudget } from "./check-resources.mjs";
 
 const modes = ["docs", "fast", "focused", "integration", "release"];
-const step = (name, args, env = {}) => ({ name, command: "pnpm", args, env });
+const step = (name, args, env = {}) => {
+  // Focused tests must never turn a verification run into a partial success.
+  if (args[0] === "exec" && args[1] === "vitest") args = [...args.slice(0, 3), "--allowOnly=false", ...args.slice(3)];
+  else if (args[0]?.startsWith("test:e2e")) args = [...args, "--forbid-only"];
+  else if (args[0] === "exec" && args[1] === "playwright") args = [...args.slice(0, 3), "--forbid-only", ...args.slice(3)];
+  return { name, command: "pnpm", args, env };
+};
 const runnerTests = { name: "check runner", command: "node", args: ["--test", "--test-isolation=none", "tests/check-runner.test.mjs"], env: {} };
 const lint = { name: "lint baseline", command: "node", args: ["scripts/check-lint.mjs"], env: {} };
 const disclosure = { name: "disclosure baseline", command: "node", args: ["scripts/check-disclosure.mjs"], env: {} };

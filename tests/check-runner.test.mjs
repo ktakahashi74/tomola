@@ -167,9 +167,9 @@ test("one environment switch preserves separate serial private and public build 
   for (const mode of ["integration", "release"]) {
     const steps = planChecks([mode], root, { ...pgEnv, E2E_SERIAL: "1" }).steps;
     const privateIndex = steps.findIndex(step => step.name === "browser (build)");
-    assert.deepEqual(steps[privateIndex].args, ["test:e2e"]);
+    assert.deepEqual(steps[privateIndex].args, ["test:e2e", "--forbid-only"]);
     assert.equal(steps[privateIndex + 1].name, "browser (public reading)");
-    assert.deepEqual(steps[privateIndex + 1].args, ["exec", "playwright", "test", "-c", "playwright.public.config.ts"]);
+    assert.deepEqual(steps[privateIndex + 1].args, ["exec", "playwright", "test", "--forbid-only", "-c", "playwright.public.config.ts"]);
   }
 });
 
@@ -327,6 +327,33 @@ test("focused requires explicit files and cannot accept traversal or arbitrary V
   assert.ok(plan.steps[0].args.includes("vitest.fast.config.ts"));
 });
 
+test("every planned unit and browser stage rejects exclusive tests independently of CI", t => {
+  const root = fixture(t);
+  for (const file of ["e2e/view.spec.ts", "e2e-prod/live.spec.ts"]) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), "// browser fixture\n");
+  }
+  fs.appendFileSync(path.join(root, "tests/email.test.ts"), "// changed unit fixture\n");
+  const invocations = [
+    ["docs"], ["fast"], ["integration"], ["release"],
+    ["focused", "tests/email.test.ts"], ["focused", "--pg", "tests/email.test.ts"],
+    ["focused", "--changed", "--base=HEAD"], ["focused", "--pg", "--changed", "--base=HEAD"],
+  ];
+  for (const E2E_SERIAL of ["", "1"]) for (const TOMOLA_VALIDATE_MODE of ["serial", "parallel"]) {
+    for (const args of invocations) {
+      const plan = planChecks(args, root, { ...pgEnv, CI: "", E2E_SERIAL, TOMOLA_VALIDATE_MODE });
+      const stages = plan.steps.flatMap(stage => stage.parallel ?? [stage]);
+      const units = stages.filter(stage => stage.command === "pnpm" && stage.args[1] === "vitest");
+      const browsers = stages.filter(stage => stage.command === "pnpm" && (stage.args[0].startsWith("test:e2e") || stage.args[1] === "playwright"));
+      assert.ok(units.length > 0, args.join(" "));
+      if (args.includes("--changed")) assert.equal(browsers.length, 3);
+      if (["integration", "release"].includes(args[0])) assert.ok(browsers.length >= 2);
+      for (const stage of units) assert.equal(stage.args.filter(arg => arg === "--allowOnly=false").length, 1, stage.name);
+      for (const stage of browsers) assert.equal(stage.args.filter(arg => arg === "--forbid-only").length, 1, stage.name);
+    }
+  }
+});
+
 test("PostgreSQL checks fail preflight without a dedicated URL and do not disclose credentials", (t) => {
   const root = fixture(t);
   for (const env of [{}, { TEST_DATABASE_URL: "https://test:secret@example.com" }]) {
@@ -480,8 +507,8 @@ test("release runs all PGlite files and only database files on PostgreSQL", (t) 
   const units = plan.steps.find(step => step.name === "unit (PGlite and PostgreSQL)").parallel;
   const pglite = units.find(step => step.name === "unit (PGlite)");
   const postgres = units.find(step => step.name === "unit (PostgreSQL)");
-  assert.deepEqual(pglite.args, ["exec", "vitest", "run", "--maxWorkers=6"]);
-  assert.deepEqual(postgres.args, ["exec", "vitest", "run", "--config", "vitest.db.config.ts", "--maxWorkers=6"]);
+  assert.deepEqual(pglite.args, ["exec", "vitest", "run", "--allowOnly=false", "--maxWorkers=6"]);
+  assert.deepEqual(postgres.args, ["exec", "vitest", "run", "--allowOnly=false", "--config", "vitest.db.config.ts", "--maxWorkers=6"]);
   assert.equal(postgres.env.TOMOLA_TEST_PG, "1");
   const root = fixture(t);
   fs.writeFileSync(path.join(root, "tests/db-client.test.ts"), "// database fixture\n");
