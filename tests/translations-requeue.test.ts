@@ -1,6 +1,6 @@
 import { quietLogger as quiet } from "./helpers/logger";
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { entries, jobs, translations } from "~/lib/db/schema";
 import { createReply, createTopic, editEntry } from "~/lib/entries.server";
@@ -10,6 +10,10 @@ import { createFakeEngine, createFakeJudge } from "~/lib/llm/engines/fake.server
 import type { EngineSet } from "~/lib/llm/config.server";
 import { requeueTranslations } from "~/lib/translations-requeue.server";
 import { addMember, createTestDb } from "./helpers/db";
+import { runTranslationRequeue } from "../scripts/requeue-translations";
+import { captureCli } from "./helpers/cli";
+
+afterEach(() => vi.unstubAllEnvs());
 
 const t0 = new Date("2026-10-05T00:00:00Z");
 
@@ -34,6 +38,85 @@ const llm = (engines: EngineSet) => ({ engines, env: { DIVERGENCE_SAMPLE_RATE: "
 const queued = (db: Db, kind: string) => db.select().from(jobs).where(and(eq(jobs.kind, kind), eq(jobs.status, "queued")));
 
 describe("requeueTranslations", () => {
+  it("in readers mode recovers only current failures and hidden output, leaving unrequested bodies alone", async () => {
+    const { db, topicId, replyId } = await setup();
+    await db.delete(jobs);
+    const [entry] = await db.select().from(entries).where(eq(entries.id, topicId));
+    const [reply] = await db.select().from(entries).where(eq(entries.id, replyId));
+    await db.insert(jobs).values([
+      { kind: "translate_entry", status: "failed", payload: { entryId: topicId, lang: "fr", sourceHash: entry.sourceHash } },
+      { kind: "translate_title", status: "failed", payload: { entryId: topicId, lang: "de", sourceHash: entry.sourceHash } },
+      { kind: "translate_entry", status: "failed", payload: { entryId: topicId, lang: "vi", sourceHash: "old" } },
+      { kind: "translate_entry", status: "done", payload: { entryId: topicId, lang: "zh-Hans", sourceHash: entry.sourceHash } },
+      { kind: "translate_entry", status: "queued", dedupeKey: `translate:${replyId}:ja:vi:${reply.sourceHash}`, payload: { entryId: replyId, lang: "vi", sourceHash: reply.sourceHash } },
+      { kind: "translate_entry", status: "failed", payload: { entryId: "invalid", lang: "en", sourceHash: entry.sourceHash } },
+    ]);
+    const row = { entryId: topicId, field: "body", kind: "primary", text: "A translation.", sourceHash: entry.sourceHash };
+    await db.insert(translations).values([
+      { ...row, lang: "ko", flags: ["link_mismatch"] },
+      { ...row, lang: "th", sourceHash: "old", flags: ["link_mismatch"] },
+      // A provisional title is normal in readers mode; it must not request the body.
+      { ...row, field: "title", lang: "en", flags: ["provisional_title"] },
+    ]);
+    const env = { TRANSLATION_EAGER_SCOPE: "readers" };
+    const before = await db.select().from(jobs);
+    const dry = await requeueTranslations(db, { env, dryRun: true });
+    expect(dry).toMatchObject({ translate: 0, dryRun: { targets: 3, chars: 3 * ([...entry.body].length + [...entry.title!].length) } });
+    expect(await db.select().from(jobs)).toEqual(before);
+    expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 3 });
+    expect((await queued(db, "translate_entry")).filter(job => (job.payload as { entryId: number }).entryId === topicId)
+      .map(job => (job.payload as { lang: string }).lang).sort()).toEqual(["de", "fr", "ko"]);
+    expect(await requeueTranslations(db, { env })).toMatchObject({ translate: 0 });
+    expect(await requeueTranslations(db, { env, allMissing: true })).toMatchObject({ translate: 12 });
+  });
+
+  it("defaults to recovery when the eager scope is unset and allows an explicit all-missing dry run", async () => {
+    const { db } = await setup();
+    await db.delete(jobs);
+    vi.stubEnv("TRANSLATION_EAGER_SCOPE", "");
+    expect(await requeueTranslations(db)).toMatchObject({ translate: 0 });
+    expect(await requeueTranslations(db, { allMissing: true, langs: ["fr"], dryRun: true })).toMatchObject({ dryRun: { targets: 2 } });
+    expect(await db.select().from(jobs)).toEqual([]);
+  });
+
+  it("exposes all-missing, language selection and dry-run counts through the CLI", async () => {
+    const { db, topicId, replyId } = await setup();
+    await db.delete(jobs);
+    vi.stubEnv("TRANSLATION_EAGER_SCOPE", "readers");
+    const run = (...args: string[]) => captureCli(output => runTranslationRequeue(["--allow-fake", ...args], async () => db, output));
+    expect(await run()).toMatchObject({ status: 0, stdout: expect.stringContaining("queued 0 translate_entry") });
+    const sources = await db.select().from(entries);
+    const chars = sources.reduce((sum, row) => sum + [...row.body].length + [...(row.title ?? "")].length, 0);
+    const dry = await run("--all-missing", "--lang", "fr", "--dry-run");
+    expect(dry.status).toBe(0);
+    expect(dry.stdout).toContain(`2 (post x language) translation(s) would be queued (${chars} source characters)`);
+    expect(await db.select().from(jobs)).toEqual([]);
+    expect((await run("--all-missing", "--lang", "fr")).status).toBe(0);
+    expect((await queued(db, "translate_entry")).map(job => job.payload)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entryId: topicId, lang: "fr" }), expect.objectContaining({ entryId: replyId, lang: "fr" }),
+    ]));
+    expect(await queued(db, "translate_entry")).toHaveLength(2);
+  });
+
+  it("rejects invalid CLI arguments before opening the database", async () => {
+    const openDb = vi.fn(createTestDb);
+    for (const args of [["--lang"], ["--lang", "--dry-run"], ["--lang", "xx"], ["--unknown"], ["fr"]]) {
+      const result = await captureCli(output => runTranslationRequeue(args, openDb, output));
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("usage:");
+    }
+    expect(openDb).not.toHaveBeenCalled();
+  });
+
+  it("rejects a disabled CLI language without queuing work", async () => {
+    const { db } = await setup();
+    await db.delete(jobs);
+    vi.stubEnv("ENABLED_LANGS", "ja,en");
+    const result = await captureCli(output => runTranslationRequeue(["--allow-fake", "--all-missing", "--lang", "fr"], async () => db, output));
+    expect(result).toMatchObject({ status: 1, stderr: expect.stringContaining("not_enabled") });
+    expect(await db.select().from(jobs)).toEqual([]);
+  });
+
   it("queues translate_entry for entries that have no translations at all, once per entry and language", async () => {
     const { db } = await setup();
     await db.delete(jobs); // Entries without translations have no queued jobs.

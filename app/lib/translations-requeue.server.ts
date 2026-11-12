@@ -1,7 +1,7 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
-import { entries, translations } from "~/lib/db/schema";
+import { entries, jobs, translations } from "~/lib/db/schema";
 import { isUsablePrimary } from "~/lib/display";
 import { enqueue } from "~/lib/jobs/queue.server";
 import { FLAG_JUDGED, FLAG_PROVISIONAL_TITLE, NEAR_COPY_FLAGS } from "~/lib/llm/flags";
@@ -9,19 +9,22 @@ import { isDivergenceAvailable, type LlmOptions } from "~/lib/llm/index.server";
 import { currentDivergenceSampleRate, isDivergenceSampled } from "~/lib/llm/divergence-sample.server";
 import { enabledLangs, enabledTargetLangs } from "~/lib/enabled-langs.server";
 import type { Lang } from "~/lib/languages";
+import { translationEagerConfig } from "~/lib/translation-eager-config.server";
 import {
   DIVERGENCE_JOB,
   enqueueTitleTranslation,
   divergenceDedupeKey,
   TRANSLATE_JOB,
+  TITLE_TRANSLATE_JOB,
+  RETRANSLATE_REPORT_JOB,
   TRANSLATE_MAX_ATTEMPTS,
   translateDedupeKey,
   type TranslateJobPayload,
 } from "~/lib/translations.server";
 
-// Requeue translations (`pnpm translations:requeue`) to recover posts without translations, failed jobs, and divergence measurements skipped during budget degradation
+// Requeue translations (`pnpm translations:requeue`) to recover failed current-version jobs and suppressed translations, plus divergence measurements skipped during budget degradation
 // (only sampled translations are measured: DIVERGENCE_SAMPLE_RATE; app/lib/llm/divergence-sample.server.ts).
-// Enqueue translate_entry for (post × language) pairs without a current-version primary translation, or with a suppressed translation. Near-copy flags (untranslated_script, untranslated_similar)
+// With allMissing (or TRANSLATION_EAGER_SCOPE=all), also enqueue pairs never requested. Near-copy flags (untranslated_script, untranslated_similar)
 // remain displayed, so skip them by default; includeFlagged includes them.
 // dedupe_key prevents duplicate unfinished jobs across repeated runs. With divergence: true, also enqueue measure_divergence for topics not yet measured,
 // provided secondary and judge engines are available.
@@ -42,8 +45,6 @@ export type RequeueResult = {
   dryRun?: { targets: number; chars: number };
 };
 
-type Row = typeof translations.$inferSelect;
-
 // opts.langs named a language that is not enabled.
 export class RequeueLangError extends Error {
   readonly code = "not_enabled";
@@ -56,12 +57,13 @@ export class RequeueLangError extends Error {
 // usually give the same result (and bill it again), so they are skipped by default.
 export async function requeueTranslations(
   db: Db,
-  opts: { divergence?: boolean; includeFlagged?: boolean; llm?: LlmOptions; langs?: readonly Lang[]; dryRun?: boolean; env?: Record<string, string | undefined> } = {},
+  opts: { allMissing?: boolean; divergence?: boolean; includeFlagged?: boolean; llm?: LlmOptions; langs?: readonly Lang[]; dryRun?: boolean; env?: Record<string, string | undefined> } = {},
 ): Promise<RequeueResult> {
   const enabled = enabledLangs(opts.env);
   const notEnabled = (opts.langs ?? []).filter((l) => !enabled.includes(l));
   if (notEnabled.length > 0) throw new RequeueLangError(notEnabled);
   const wanted = opts.langs ?? enabled;
+  const allMissing = opts.allMissing ?? translationEagerConfig(opts.env).scope === "all";
   // Replies under a topic that is deleted or hidden are not queued (nobody reads them: the thread is gone or redacted). The text of the posts is not read: only for a dry run, the length
   // of the title and the body is computed in the database for the cost estimate.
   const thread = alias(entries, "thread");
@@ -78,11 +80,17 @@ export async function requeueTranslations(
     .leftJoin(thread, eq(thread.id, entries.threadId))
     .where(and(isNull(entries.deletedAt), isNull(entries.hiddenAt), or(eq(entries.kind, "topic"), and(isNull(thread.deletedAt), isNull(thread.hiddenAt)))))
     .orderBy(desc(sql`${entries.kind} = 'topic'`), desc(entries.lastActivityAt), desc(entries.id));
-  const rows = await db.select().from(translations).where(eq(translations.kind, "primary"));
-  const secondary = opts.divergence ? await db.select().from(translations).where(and(eq(translations.kind, "secondary"), eq(translations.field, "body"))) : [];
-  const byKey = new Map<string, Row>();
+  const columns = { entryId: translations.entryId, field: translations.field, lang: translations.lang, sourceHash: translations.sourceHash, flags: translations.flags };
+  const rows = await db.select(columns).from(translations).where(eq(translations.kind, "primary"));
+  const secondary = opts.divergence ? await db.select(columns).from(translations).where(and(eq(translations.kind, "secondary"), eq(translations.field, "body"))) : [];
+  // Match payload identifiers as text so malformed historical jobs cannot cause a cast error.
+  const failed = allMissing ? [] : await db.select({ entryId: entries.id, lang: sql<string>`${jobs.payload}->>'lang'` }).from(jobs)
+    .innerJoin(entries, and(sql`${jobs.payload}->>'entryId' = ${entries.id}::text`, sql`${jobs.payload}->>'sourceHash' = ${entries.sourceHash}`))
+    .where(and(eq(jobs.status, "failed"), inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, RETRANSLATE_REPORT_JOB])));
+  const failedPairs = new Set(failed.map(row => `${row.entryId}:${row.lang}`));
+  const byKey = new Map<string, typeof rows[number]>();
   for (const r of rows) byKey.set(`${r.entryId}:${r.field}:${r.lang}`, r);
-  const secondaryByKey = new Map<string, Row>();
+  const secondaryByKey = new Map<string, typeof rows[number]>();
   for (const r of secondary) secondaryByKey.set(`${r.entryId}:${r.lang}`, r);
 
   let divergenceSkipped: string | null = null;
@@ -109,6 +117,12 @@ export async function requeueTranslations(
         return !(opts.includeFlagged && row.flags.some((flag) => NEAR_COPY_FLAGS.includes(flag)));
       });
       if (!done) {
+        const recovery = failedPairs.has(`${entry.id}:${lang}`) || fields.some(field => {
+          const row = byKey.get(`${entry.id}:${field}:${lang}`);
+          return row?.sourceHash === entry.sourceHash && (!isUsablePrimary(row, entry.sourceHash) ||
+            (opts.includeFlagged && row.flags.some(flag => NEAR_COPY_FLAGS.includes(flag))));
+        });
+        if (!allMissing && !recovery) continue;
         if (result.dryRun) {
           result.dryRun.targets++;
           result.dryRun.chars += Number(entry.chars);

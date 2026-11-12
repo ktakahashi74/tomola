@@ -252,10 +252,21 @@ describe("langs:open: queueing", () => {
 
   it("requeueTranslations narrowed to a language queues nothing for the others", async () => {
     const { db } = await setup();
-    await requeueTranslations(db, { langs: ["fr"], env: REAL_ENV });
+    await requeueTranslations(db, { allMissing: true, langs: ["fr"], env: REAL_ENV });
     expect((await queued(db, "fr")).length).toBe(3);
     expect((await queued(db, "vi")).length).toBe(0);
     expect((await queued(db, "th")).length).toBe(0);
+  });
+
+  it("opens every missing pair and preserves dry-run counts under the readers policy", async () => {
+    const { db } = await setup();
+    const h = harness(db, { env: { ...REAL_ENV, TRANSLATION_EAGER_SCOPE: "readers" } });
+    const before = await db.select().from(jobs);
+    expect(await h.run("fr", "--dry-run")).toBe(0);
+    expect(h.out.join("\n")).toContain("3 (post x language) translation(s) into fr");
+    expect(await db.select().from(jobs)).toEqual(before);
+    expect(await h.run("fr")).toBe(0);
+    expect(await queued(db, "fr")).toHaveLength(3);
   });
 });
 
@@ -358,7 +369,7 @@ describe("langs:open: which posts are queued, what is read, and a database that 
     // the same when the topic is deleted
     await db.delete(jobs);
     await db.update(entries).set({ hiddenAt: null, deletedAt: new Date() }).where(eq(entries.id, recent));
-    expect((await requeueTranslations(db, { langs: ["fr"], env: REAL_ENV })).entries).toBe(2);
+    expect((await requeueTranslations(db, { allMissing: true, langs: ["fr"], env: REAL_ENV })).entries).toBe(2);
     expect((await queued(db, "fr")).map((j) => (j.payload as { entryId: number }).entryId).sort()).toEqual([older, reply].sort());
   });
 
@@ -373,9 +384,9 @@ describe("langs:open: which posts are queued, what is read, and a database that 
     vi.unstubAllEnvs();
     const [row] = await db.select({ title: entries.title, body: entries.body }).from(entries).where(eq(entries.id, topic.id));
     const expected = [...(row.title ?? "")].length + [...row.body].length + 2;
-    const dry = await requeueTranslations(db, { langs: ["fr"], dryRun: true, env: REAL_ENV });
+    const dry = await requeueTranslations(db, { allMissing: true, langs: ["fr"], dryRun: true, env: REAL_ENV });
     expect(dry.dryRun).toEqual({ targets: 2, chars: expected });
-    const real = await requeueTranslations(db, { langs: ["fr"], env: REAL_ENV });
+    const real = await requeueTranslations(db, { allMissing: true, langs: ["fr"], env: REAL_ENV });
     expect(real).toEqual({ entries: 2, translate: 2, divergence: 0, divergenceSkipped: null });
   });
 

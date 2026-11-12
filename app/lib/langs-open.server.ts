@@ -150,7 +150,7 @@ export async function runOpenLang(argv: readonly string[], deps: OpenLangDeps): 
   }
   let result: Awaited<ReturnType<typeof requeueTranslations>>;
   try {
-    result = await requeueTranslations(db, { langs: [tag], dryRun, env });
+    result = await requeueTranslations(db, { allMissing: true, langs: [tag], dryRun, env });
   } catch (e) {
     if (e instanceof RequeueLangError) {
       error(`langs:open: ${e.message}`);
