@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { sourceHash as hashPost } from "./source-hash.server";
-import { and, count, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, nushiAnswers, nushiRequests, nushiReservations, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "./visibility.server";
@@ -10,7 +10,7 @@ import { closeResults, findSimilar } from "./search.server";
 import { resolveEmbeddingEngine } from "./llm/config.server";
 import { isUsableEmbedding } from "./llm/index.server";
 import { embeddingEstimate, meteredCall } from "./llm/metering.server";
-import { boundQuestionMaterials, type AiQuestionMaterials, type AiQuestionSource } from "./ai-question-materials.server";
+import { boundQuestionMaterials, projectQuestionSource, type AiQuestionMaterials, type AiQuestionSource } from "./ai-question-materials.server";
 import { loadMdTranslations } from "./md/translations.server";
 import { loadReplyLocations } from "./reply-locations.server";
 import { authorLabel } from "./deleted-member";
@@ -72,15 +72,17 @@ export async function reconstructNushiMaterials(db: Db, index: NushiMaterialInde
     const row = rows.find(({ entry }) => entry.id === Number(parsed[1]));
     if (!row) return null;
     const { entry, author } = row, field = parsed[2] as "title" | "body";
-    const original = clipQuestionText(entry[field] ?? "", item.chars);
     const picked = translations.shown.get(entry.id)?.[0];
     const translated = field === "title" ? picked?.title : picked?.text;
-    const translation = item.translation && picked && translated ? { text: clipQuestionText(translated, item.translation.chars), lang: language, stale: picked.stale } : undefined;
-    if (item.translation && (!translation || translationHash(translation) !== item.translation.hash)) return null;
     const location = locations.get(entry.id);
     const href = entry.kind === "topic" ? `/t/${entry.id}` : location?.state === "visible" ? location.href : null;
     if (!href) return null;
-    sources.push({ id: item.id, kind: entry.kind === "topic" ? "post" : "reply", field, author: authorLabel(author), lang: entry.langCode ?? entry.lang, original, sourceHash: entry.sourceHash, href, ...(translation ? { translation } : {}) });
+    const source = await projectQuestionSource<AiQuestionSource>({ id: item.id, kind: entry.kind === "topic" ? "post" : "reply", field, author: authorLabel(author), lang: entry.langCode ?? entry.lang, original: entry[field] ?? "", sourceHash: entry.sourceHash, href,
+      ...(item.translation && picked && translated ? { translation: { text: translated, lang: language, stale: picked.stale } } : {}) });
+    source.original = clipQuestionText(source.original, item.chars);
+    if (source.translation && item.translation) source.translation.text = clipQuestionText(source.translation.text, item.translation.chars);
+    if (item.translation && (!source.translation || translationHash(source.translation) !== item.translation.hash)) return null;
+    sources.push(source);
   }
   return sources;
 }
@@ -89,14 +91,16 @@ export async function reconstructNushiMaterials(db: Db, index: NushiMaterialInde
 export async function nushiMaterials(db: Db, request: typeof nushiRequests.$inferSelect, options: { env: LlmEnv; now: Date; clock: () => Date; signal?: AbortSignal; embedding?: EmbeddingEngine }): Promise<NushiMaterials | null> {
   const caller = await nushiCaller(db, request, options.env);
   if (!caller) return null;
+  const contextText = async (original: string, field: "title" | "body" = "body") => (await projectQuestionSource({ kind: "post", field, author: "", original })).original;
+  const callingPost = await contextText(caller.entry.body);
   const language = isLang(caller.entry.lang) ? caller.entry.lang : "en";
   const exhausted = await db.select({ key: nushiReservations.key }).from(nushiReservations)
-    .where(eq(nushiReservations.day, options.now.toISOString().slice(0, 10)))
+    .where(and(eq(nushiReservations.day, options.now.toISOString().slice(0, 10)), like(nushiReservations.key, "author:%")))
     .groupBy(nushiReservations.key).having(sql`${count()} >= ${nushiLimits(options.env).author}`);
-  const excludedAuthors = exhausted.filter(row => row.key.startsWith("author:")).map(row => row.key.slice(7));
-  const query = clipQuestionText(caller.entry.body.replace(/[@＠](?:nushi|village-ai)\b/giu, "").trim(), 200);
+  const excludedAuthors = exhausted.map(row => row.key.slice(7)).filter(id => id !== request.callerId);
+  const query = clipQuestionText(callingPost.replace(/[@＠](?:nushi|village-ai)\b/giu, "").trim(), 200);
   const found = new Map<number, unknown>();
-  const opts = { readLangs: [] as Lang[], displayLang: language, limit: 20, villageId: request.villageId };
+  const opts = { readLangs: [] as Lang[], displayLang: language, limit: 20, villageId: request.villageId, excludedAuthorIds: excludedAuthors };
   if (query) {
     // Keep literal matches ahead of semantic matches, using the same search SQL.
     for (const term of [query, ...query.split(/\s+/u).filter(word => word.length >= 3).slice(0, 3)]) {
@@ -109,7 +113,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
       estimateMicro: embeddingEstimate(engine.id, engine.model, req, options.env),
       now: options.now, clock: options.clock, env: options.env, signal: options.signal,
     }, () => engine.embed(req), value => ({ inputTokens: value.inputTokens, outputTokens: 0 }));
-    if (isUsableEmbedding(result.vector)) for (const row of closeResults(await findSimilar(db, result.vector, engine.model, 20, request.villageId), query)) if (row.id !== request.entryId && !found.has(row.id)) found.set(row.id, row);
+    if (isUsableEmbedding(result.vector)) for (const row of closeResults(await findSimilar(db, result.vector, engine.model, 20, request.villageId, excludedAuthors), query)) if (row.id !== request.entryId && !found.has(row.id)) found.set(row.id, row);
   }
   const ids = [...found.keys()].slice(0, 20);
   const rows = ids.length ? await db.select({ entry: entries, author: retainedAuthorColumn(entries.authorId, profiles.handle, "handle") }).from(entries)
@@ -144,7 +148,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
   }
   const snapshots = [...dependencies.values()].map(({ entry, author }) => ({ id: entry.id, revision: entry.mentionRevision, sourceHash: snapshotHash(entry), authorId: entry.authorId, author: authorLabel(author), createdAt: entry.createdAt }));
   const dates = rows.filter(({ entry }) => used.has(entry.id)).map(({ entry }) => entry.createdAt.toISOString()).sort();
-  return { materials, snapshots, language, answerLanguage: caller.entry.lang as SourceLang, answerLangCode: caller.entry.langCode, query, dates: { from: dates[0] ?? null, to: dates.at(-1) ?? null }, context: { callingPost: clipQuestionText(caller.entry.body, 2000), parentPost: caller.parent ? clipQuestionText(caller.parent.body, 2000) : null, topic: { title: caller.topic.title, body: clipQuestionText(caller.topic.body, 2000) }, previousAiReply: caller.previous ? clipQuestionText(JSON.stringify(caller.previous.answer), 4000) : null } };
+  return { materials, snapshots, language, answerLanguage: caller.entry.lang as SourceLang, answerLangCode: caller.entry.langCode, query, dates: { from: dates[0] ?? null, to: dates.at(-1) ?? null }, context: { callingPost: clipQuestionText(callingPost, 2000), parentPost: caller.parent ? clipQuestionText(await contextText(caller.parent.body), 2000) : null, topic: { title: caller.topic.title === null ? null : await contextText(caller.topic.title, "title"), body: clipQuestionText(await contextText(caller.topic.body), 2000) }, previousAiReply: caller.previous ? clipQuestionText(JSON.stringify(caller.previous.answer), 4000) : null } };
 }
 
 export async function snapshotsCurrent(db: Db, snapshots: readonly NushiSnapshot[], villageId: string): Promise<boolean> {

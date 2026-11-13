@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, expect, it, vi } from "vitest";
 import { addMember, createTestDb } from "./helpers/db";
 import { createReply, createTopic } from "~/lib/entries.server";
-import { entries, entryEmbeddings, jobs, llmUsage, notifications, nushiAnswers, nushiReports, nushiRequests, nushiReservations, nushiSources, nushiTranslations, profiles, villageMembers, villages } from "~/lib/db/schema";
+import { EMBEDDING_DIM, entries, entryEmbeddings, jobs, llmUsage, moderationActions, notifications, nushiAnswers, nushiReports, nushiRequests, nushiReservations, nushiSources, nushiTranslations, profiles, translations, villageMembers, villages } from "~/lib/db/schema";
 import { callsNushi } from "~/lib/nushi-call.server";
 import { nushiEnabled, nushiInVillage, nushiLimits, nushiMonthlyBudgetMicro } from "~/lib/nushi-config.server";
 import { expireNushiRequests, processNushiRequest, readNushiAnswer, threadNushi, requestNushi, resolveNushiCompleter } from "~/lib/nushi.server";
@@ -82,6 +82,43 @@ it("keeps all evidence in the same publicly readable village", async () => {
   await f.db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, hidden.id));
   const materials = await nushiMaterials(f.db, f.request, { env: process.env, now: new Date(), clock: () => new Date() });
   expect(JSON.stringify(materials)).not.toMatch(/FOREIGN_SECRET_MARKER|HIDDEN_SECRET_MARKER/);
+});
+it("publishes translated Markdown evidence and saves exactly the projected model materials", async () => {
+  const f = await nushiFixture();
+  await f.db.update(entries).set({ body: "Orchard **bold** and [link](https://example.org/URL_SECRET). $a + \\phantom{MATH_SECRET}$ <!-- BODY_SECRET -->" }).where(eq(entries.id, f.source));
+  const [source] = await f.db.select().from(entries).where(eq(entries.id, f.source));
+  await f.db.insert(translations).values({ entryId: f.source, field: "body", lang: "ja", kind: "primary", text: "果樹園の**強調**と[リンク](https://example.org/TRANSLATED_URL_SECRET)。 <!-- TRANSLATION_SECRET -->", sourceHash: source.sourceHash });
+  const topic = await createTopic(f.db, "nushi-caller", { title: "1. # <T> 果樹園\u200b", body: "話題の**文** [リンク](https://example.org/TOPIC_SECRET) <!-- TOPIC_COMMENT_SECRET -->", lang: "ja", village: f.village.slug });
+  if (!topic.ok) throw new Error(topic.error);
+  const parent = await createReply(f.db, "nushi-caller", topic.id, { body: "親の**文** <!-- PARENT_SECRET -->", lang: "ja" });
+  if (!parent.ok) throw new Error(parent.error);
+  const call = await createReply(f.db, "nushi-caller", topic.id, { body: "@nushi orchard **問い** [リンク](https://example.org/CALL_SECRET) <!-- CALL_COMMENT_SECRET -->", lang: "ja", parentId: parent.id });
+  if (!call.ok) throw new Error(call.error);
+  const [request] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, call.id));
+  let modelMaterials: unknown, modelQuestion: string | undefined;
+  const fake = resolveNushiCompleter();
+  const { resolveEmbeddingEngine } = await import("~/lib/llm/config.server");
+  const embedding = resolveEmbeddingEngine({ EMBEDDING_ENGINE: "fake" });
+  await processNushiRequest(f.db, request.id, { embedding: { ...embedding, async embed(req) {
+    expect(req.text).toBe("orchard 問い リンク");
+    return embedding.embed(req);
+  } }, completer: { ...fake, async complete(req) {
+    const input = JSON.parse(req.user);
+    modelMaterials = input.materials; modelQuestion = input.context.callingPost;
+    expect(req.user).not.toContain("SECRET");
+    expect(input.context).toMatchObject({ callingPost: "@nushi orchard 問い リンク", parentPost: "親の文", topic: { title: "1. # <T> 果樹園", body: "話題の文 リンク" } });
+    const material = input.materials.find((s: { id: string }) => s.id === `e-${f.source}-body`);
+    expect(material).toMatchObject({ original: expect.stringContaining("Orchard bold and link."), translation: { text: "果樹園の強調とリンク。", lang: "ja" } });
+    return { text: JSON.stringify({ status: "answered", readings: [{ text: "果樹園の出典。", citations: [{ sourceId: material.id, quote: "Orchard bold and link.", translatedQuote: "果樹園の強調とリンク。" }] }] }), inputTokens: 1, outputTokens: 1 };
+  } } });
+  expect((await f.db.select().from(nushiRequests).where(eq(nushiRequests.id, request.id)))[0]).toMatchObject({ state: "answered" });
+  const [answer] = await f.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, request.id));
+  expect(await reportNushi(f.db, "nushi-follower", { answerId: answer.id, kind: "error", reason: "wrong_post", note: "Check the translated source.", consent: true })).toBe(true);
+  const [report] = await f.db.select().from(nushiReports);
+  const evidence = report.evidence as { materials: Array<Record<string, unknown>>; question: string };
+  expect(evidence.materials.map(({ href: _href, sourceHash: _hash, ...material }) => material)).toEqual(modelMaterials);
+  expect(evidence.question).toBe(modelQuestion);
+  expect(JSON.stringify(evidence)).not.toContain("SECRET");
 });
 it("rejects invented quotes and untrusted output fields without publishing", async () => {
   const f = await nushiFixture();
@@ -160,6 +197,20 @@ it("separates ordinary reports from error reports requiring explicit evidence co
   const reports = await listNushiReports(f.db, { reporterId: "nushi-owner" }); expect(reports).toHaveLength(2); expect(reports[0]).not.toHaveProperty("reporterId");
   await resolveNushiReport(f.db, "nushi-owner", reports[0].id, true, "Hidden after review.");
   expect(await readNushiAnswer(f.db, answer.id)).toMatchObject({ hidden: true });
+});
+it.each(["moderation", "source_change"])("preserves an existing %s hide when resolving another report", async reason => {
+  const f = await nushiFixture(), answer = await published(f);
+  for (const reporter of ["nushi-owner", "nushi-follower"]) expect(await reportNushi(f.db, reporter, { answerId: answer.id, kind: "moderation", reason: "other", note: "Review this answer.", consent: false })).toBe(true);
+  const reports = await f.db.select().from(nushiReports).orderBy(nushiReports.id);
+  if (reason === "moderation") await resolveNushiReport(f.db, "nushi-owner", reports[0].id, true, "First review.");
+  else await f.db.update(entries).set({ body: "A corrected source." }).where(eq(entries.id, f.source));
+  const [before] = await f.db.select().from(nushiAnswers).where(eq(nushiAnswers.id, answer.id));
+  const actions = await f.db.select().from(moderationActions);
+  expect(before.hiddenAt).not.toBeNull();
+  expect(await resolveNushiReport(f.db, "nushi-owner", reports[1].id, true, "Second review.")).toBe(true);
+  expect((await f.db.select().from(nushiAnswers).where(eq(nushiAnswers.id, answer.id)))[0]).toMatchObject({ hiddenAt: before.hiddenAt, hiddenReason: before.hiddenReason });
+  expect(await f.db.select().from(moderationActions)).toEqual(actions);
+  expect((await f.db.select().from(nushiReports).where(eq(nushiReports.id, reports[1].id)))[0].status).toBe("resolved");
 });
 
 it("translates generated readings and removes saved translations with a withdrawn source", async () => {
@@ -279,6 +330,24 @@ it("does not consume author allowances for a published answer without citations"
   await published(f, { ...fake, async complete() { return { text: JSON.stringify({ status: "not_confirmed", readings: [] }), inputTokens: 1, outputTokens: 1 }; } });
   expect((await f.db.select().from(nushiReservations)).filter(row => row.key.startsWith("author:"))).toHaveLength(0);
 });
+it("excludes exhausted authors before the search limit and keeps the caller's own sources", async () => {
+  const f = await nushiFixture();
+  const own = await createTopic(f.db, "nushi-caller", { body: "An older orchard source by the caller.", lang: "en", village: f.village.slug });
+  const other = await createTopic(f.db, "nushi-follower", { body: "An older orchard source by another writer.", lang: "en", village: f.village.slug });
+  if (!own.ok || !other.ok) throw new Error("Missing sources");
+  for (let n = 0; n < 21; n++) await createTopic(f.db, "nushi-owner", { body: `A newer orchard source ${n}.`, lang: "en", village: f.village.slug });
+  await f.db.insert(nushiReservations).values(["nushi-owner", "nushi-caller"].map(author => ({ requestId: f.request.id, key: `author:${author}`, day: new Date().toISOString().slice(0, 10) })));
+  const result = await nushiMaterials(f.db, f.request, { env: { ...process.env, VILLAGE_NUSHI_AUTHOR_DAILY_LIMIT: "1" }, now: new Date(), clock: () => new Date() });
+  expect(result?.materials.sources.map(s => s.id)).toEqual(expect.arrayContaining([`e-${own.id}-body`, `e-${other.id}-body`]));
+  expect(result?.materials.sources.some(s => s.author === "@znushi_owner")).toBe(false);
+  const vector = Array.from({ length: EMBEDDING_DIM }, (_, i) => i === 0 ? 1 : 0);
+  const sources = await f.db.select().from(entries);
+  await f.db.insert(entryEmbeddings).values(sources.map(entry => ({ entryId: entry.id, model: "quota-test", dim: EMBEDDING_DIM, embedding: vector, sourceHash: entry.sourceHash! })));
+  const { findSimilar } = await import("~/lib/search.server");
+  const similar = await findSimilar(f.db, vector, "quota-test", 20, f.village.id, ["nushi-owner"]);
+  expect(similar.map(s => s.id)).toEqual(expect.arrayContaining([own.id, other.id]));
+  expect(similar.some(s => s.authorHandle === "znushi_owner")).toBe(false);
+});
 it("rejects a known caller limit before the embedding API", async () => {
   const f = await nushiFixture();
   await f.db.insert(nushiReservations).values({ requestId: f.request.id, key: "member:nushi-caller", day: new Date().toISOString().slice(0, 10) });
@@ -342,6 +411,9 @@ it("loads eligible places once for all AI counts", async () => {
 });
 it("exports only the member's source snapshots and anonymizes them on withdrawal", async () => {
   const f = await nushiFixture(), answer = await published(f);
+  await reportNushi(f.db, "nushi-follower", { answerId: answer.id, kind: "error", reason: "wrong_post", note: "Review the attribution.", consent: true });
+  const [beforeReport] = await f.db.select().from(nushiReports);
+  expect(JSON.stringify(beforeReport.evidence)).toContain("@znushi_owner");
   const { buildMemberExport } = await import("~/lib/exports.server");
   const own = await buildMemberExport(f.db, "nushi-owner");
   expect(own.nushi_sources).toEqual([expect.objectContaining({ answer_id: answer.id, entry_id: f.source, author: "@znushi_owner" })]);
@@ -351,4 +423,10 @@ it("exports only the member's source snapshots and anonymizes them on withdrawal
   await deleteAccount(f.db, "nushi-owner", { confirmation: "znushi_owner", villages: { [f.village.id]: "end" } });
   const rows = await f.db.select().from(nushiSources).where(eq(nushiSources.entryId, f.source));
   expect(rows).toHaveLength(1); expect(rows[0]).toMatchObject({ author: "[deleted]", authorId: null });
+  const [afterReport] = await f.db.select().from(nushiReports);
+  const before = beforeReport.evidence as { materials: Array<{ id: string; author: string }>; answer: { citations: Array<{ sourceId: string; author: string }> } };
+  const expected = structuredClone(before);
+  for (const material of expected.materials) if (material.id.startsWith(`e-${f.source}-`)) material.author = "[deleted]";
+  for (const citation of expected.answer.citations) if (citation.sourceId.startsWith(`e-${f.source}-`)) citation.author = "[deleted]";
+  expect(afterReport.evidence).toEqual(expected);
 });

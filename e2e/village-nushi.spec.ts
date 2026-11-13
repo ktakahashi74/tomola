@@ -90,7 +90,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
 test("Nushi moderation reports appear in the operator queue and public action log", async ({ page, browser }) => {
   test.setTimeout(180_000);
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.221"));
-  await useMember(page, "znushi_flow_owner@example.com", "/settings?lang=en#settings-nushi");
+  await useMember(page, "znushi_mod_owner@example.com", "/settings?lang=en#settings-nushi");
   await waitForClientRoute(page);
   const settings = page.locator("#settings-nushi");
   await settings.getByLabel(en.nushi_enable, { exact: true }).check();
@@ -114,14 +114,14 @@ test("Nushi moderation reports appear in the operator queue and public action lo
     const operator = await operatorContext.newPage();
     await useMember(operator, "olga@example.com", "/mod?lang=en");
     const queue = operator.getByRole("region", { name: en.nushi_reports, exact: true });
-    await expect(queue).toContainText(`${en.nushi_reports} (1)`);
-    await expect(queue).toContainText("A public AI source needs operator review.");
-    await queue.locator("article").getByRole("link", { name: en.nushi_reports, exact: true }).click();
+    const queuedReport = queue.locator("article").filter({ has: operator.locator(`a[href="/nushi/${answerId}"]`) }).filter({ hasText: "A public AI source needs operator review." });
+    await expect(queuedReport).toHaveCount(1);
+    await queuedReport.getByRole("link", { name: en.nushi_reports, exact: true }).click();
     const report = operator.locator('li:has(input[name="reportId"])').filter({ hasText: "A public AI source needs operator review." });
     await report.locator('textarea[name="note"]').fill("Hidden after checking the AI source.");
     await report.getByRole("button", { name: en.nushi_resolve, exact: true }).click();
     await operator.goto("/mod?lang=en");
-    await expect(operator.getByRole("region", { name: en.nushi_reports, exact: true })).toContainText(`${en.nushi_reports} (0)`);
+    await expect(queuedReport).toHaveCount(0);
     await operator.goto("/moderation?lang=en");
     const row = operator.getByRole("row").filter({ hasText: `${en.nushi_name} #${answerId}` });
     await expect(row).toContainText(en.log_action_hide);

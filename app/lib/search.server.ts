@@ -2,7 +2,7 @@ import { loadDisplayNames, selectDisplayName } from "./display-names.server";
 import { publicTopicPlace } from "~/lib/visibility.server";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import { replyPagesOf } from "~/lib/reply-pages.server";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { entries, entryEmbeddings, profiles, villages } from "~/lib/db/schema";
@@ -72,7 +72,7 @@ export type SearchFound = {
 };
 
 // Top limit visible, undeleted posts by similarity.
-export async function findSimilar(db: Db, vector: readonly number[], model: string, limit: number = SEARCH_LIMIT, villageId?: string): Promise<SearchFound[]> {
+export async function findSimilar(db: Db, vector: readonly number[], model: string, limit: number = SEARCH_LIMIT, villageId?: string, excludedAuthorIds: readonly string[] = []): Promise<SearchFound[]> {
   const topic = alias(entries, "topic");
   const literal = JSON.stringify(vector);
   // HNSW first retrieves ef_search candidates (default 40), then filters models/deletions. Old-model or
@@ -105,7 +105,7 @@ export async function findSimilar(db: Db, vector: readonly number[], model: stri
       .innerJoin(entries, eq(entries.id, entryEmbeddings.entryId))
       .innerJoin(topic, eq(topic.id, sql`coalesce(${entries.threadId}, ${entries.id})`))
       .leftJoin(profiles, eq(profiles.userId, entries.authorId))
-      .where(and(eq(entryEmbeddings.model, model), isNull(entries.deletedAt), isNull(entries.hiddenAt), isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic), villageId ? eq(topic.villageId, villageId) : undefined))
+      .where(and(eq(entryEmbeddings.model, model), isNull(entries.deletedAt), isNull(entries.hiddenAt), isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic), villageId ? eq(topic.villageId, villageId) : undefined, excludedAuthorIds.length ? notInArray(entries.authorId, [...excludedAuthorIds]) : undefined))
       .orderBy(distance)
       .limit(limit)
       .as("nearest");

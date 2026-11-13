@@ -1,8 +1,11 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, moderationActions, nushiAnswers, nushiReports, nushiRequests } from "./db/schema";
 import { readNushiAnswer } from "./nushi.server";
 import { reconstructNushiMaterials } from "./nushi-materials.server";
+import { projectQuestionSource } from "./ai-question-materials.server";
+import { clipQuestionText } from "./ai-questions";
+import { nushiEnabled } from "./nushi-config.server";
 import { isReason } from "./moderation";
 import type { Lang } from "./languages";
 
@@ -17,7 +20,7 @@ export async function reportNushi(db: Db, reporterId: string, input: { answerId:
     const [stored] = await db.select({ scope: nushiAnswers.scope }).from(nushiAnswers).where(eq(nushiAnswers.id, input.answerId));
     const materials = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage) : null;
     if (input.kind === "error" && !materials) return false;
-    const evidence = input.kind === "error" ? { question: question?.body ?? "", answer: answer.answer,
+    const evidence = input.kind === "error" ? { question: clipQuestionText((await projectQuestionSource({ kind: "post", field: "body", author: "", original: question?.body ?? "" })).original, 2000), answer: answer.answer,
       materials, scope: answer.scope } : undefined;
     const [saved] = await db.insert(nushiReports).values({ answerId: input.answerId, reporterId, kind: input.kind, reason: input.reason, note: input.note.trim(), evidence }).onConflictDoNothing().returning({ id: nushiReports.id });
     return !!saved;
@@ -35,8 +38,8 @@ export async function resolveNushiReport(db: Db, operatorId: string, reportId: n
     const [report] = await tx.select().from(nushiReports).where(and(eq(nushiReports.id, reportId), eq(nushiReports.status, "open"))).for("update");
     if (!report) return false;
     if (hide) {
-      await tx.update(nushiAnswers).set({ hiddenAt: new Date(), hiddenReason: "moderation" }).where(eq(nushiAnswers.id, report.answerId));
-      await tx.insert(moderationActions).values({ action: "hide", targetNushiAnswerId: report.answerId, actorId: operatorId, reason: isReason(report.reason) ? report.reason : "other", note: note.trim() });
+      const hidden = await tx.update(nushiAnswers).set({ hiddenAt: new Date(), hiddenReason: "moderation" }).where(and(eq(nushiAnswers.id, report.answerId), isNull(nushiAnswers.hiddenAt))).returning({ id: nushiAnswers.id });
+      if (hidden.length) await tx.insert(moderationActions).values({ action: "hide", targetNushiAnswerId: report.answerId, actorId: operatorId, reason: isReason(report.reason) ? report.reason : "other", note: note.trim() });
     }
     await tx.update(nushiReports).set({ status: hide ? "resolved" : "dismissed", resolution: note.trim(), resolvedBy: operatorId }).where(eq(nushiReports.id, reportId));
     return true;
@@ -46,6 +49,13 @@ export async function resolveNushiReport(db: Db, operatorId: string, reportId: n
 export async function nushiReportEvidence(db: Db, id: number) {
   const [row] = await db.select({ content: nushiReports.evidence }).from(nushiReports).where(and(eq(nushiReports.id, id), eq(nushiReports.kind, "error")));
   return row?.content ? JSON.stringify(row.content, null, 2) : null;
+}
+
+export async function nushiReportsAvailable(db: Db, operator: boolean) {
+  if (nushiEnabled()) return true;
+  if (!operator) return false;
+  const [pending] = await db.select({ id: nushiReports.id }).from(nushiReports).where(eq(nushiReports.status, "open")).limit(1);
+  return !!pending;
 }
 
 // Ordinary moderation reports appear at the existing operator entry point.

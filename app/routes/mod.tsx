@@ -1,4 +1,4 @@
-import { pendingNushiReports } from "~/lib/nushi-reports.server";
+import { nushiReportsAvailable, pendingNushiReports } from "~/lib/nushi-reports.server";
 import { DisplayNameEvidence } from "~/components/display-name-evidence";
 import { AvatarModerationCard } from "~/components/avatar-moderation-card";
 import { moderateAvatar } from "~/lib/avatar-moderation.server";
@@ -52,7 +52,7 @@ export function shouldRevalidate({ actionResult, defaultShouldRevalidate }: Shou
 async function loaderImplementation({ request }: Route.LoaderArgs) {
   const { user, db, scope } = await requireModerator(request);
   await enforceMemberLimit(db, "mod", user.id);
-  const nushi = scope.operator ? await pendingNushiReports(db) : null;
+  const nushi = scope.operator && await nushiReportsAvailable(db, true) ? await pendingNushiReports(db) : null;
   const params = new URL(request.url).searchParams;
   const tab = params.get("tab") === "handled" ? "handled" : params.get("tab") === "review" ? "review" : "open";
   // Posts with format characters to check: a read-only list that is not saved. It stands apart from the report cards.

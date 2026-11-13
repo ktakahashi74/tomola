@@ -44,7 +44,7 @@ const HTML_COMMENT = "<!--[\\s\\S]*?-->";
 const HTML_TAG = "</?[A-Za-z][A-Za-z0-9:_-]*(?:\\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\\s*=\\s*(?:[^\\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*\\s*/?>";
 const searchableBody = (text: SQLWrapper) => sql<string>`regexp_replace(regexp_replace(${text}, ${HTML_COMMENT}, ' ', 'g'), ${HTML_TAG}, ' ', 'g')`;
 
-export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string }) {
+export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string; excludedAuthorIds?: readonly string[] }) {
   const topic = alias(entries, "literal_topic");
   const rank = translationRank();
   const picked = (field: "title" | "body") => db.select({
@@ -85,13 +85,14 @@ export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptio
     .where(and(
       isNull(entries.deletedAt), isNull(entries.hiddenAt), eq(topic.kind, "topic"),
       isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic), opts.villageId ? eq(topic.villageId, opts.villageId) : undefined,
+      opts.excludedAuthorIds?.length ? notInArray(entries.authorId, [...opts.excludedAuthorIds]) : undefined,
       or(ownTitle, translatedTitle, ownBody, translatedBody),
     ))
     .orderBy(sql`case when ${ownTitle} or ${translatedTitle} then 0 else 1 end`, desc(entries.createdAt), desc(entries.id))
     .limit(Math.min(opts.limit ?? SEARCH_LIMIT, SEARCH_LIMIT));
 }
 
-export async function findLiteral(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string }): Promise<CombinedFound[]> {
+export async function findLiteral(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string; excludedAuthorIds?: readonly string[] }): Promise<CombinedFound[]> {
   return (await literalSearchQuery(db, query, opts)).map(({ matchField, matchOriginal, matchText, titleTranslation, bodyTranslation, ...row }) => {
     const tr = matchOriginal ? null : matchField === "title" ? titleTranslation : bodyTranslation;
     return {

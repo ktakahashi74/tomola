@@ -42,6 +42,20 @@ it("requires member authorization and same-origin requests before accepting a re
   expect((await h.outcome(() => action(h.args(foreign)))).status).toBe(403);
   expect(await h.db.select().from(nushiReports)).toHaveLength(0);
 });
+it("hides report entry points when disabled without outstanding reports", async () => {
+  const { loader: mod } = await import("~/routes/mod");
+  const { loader: moderation } = await import("~/routes/moderation");
+  vi.stubEnv("OPERATOR_EMAILS", "znushi_route_operator@example.com");
+  vi.stubEnv("VILLAGE_NUSHI", "");
+  try {
+    expect((await mod(h.args(h.request("/mod", { as: "znushi_route_operator" })))).nushi).toBeNull();
+    for (const member of ["znushi_route_operator", "znushi_route_reader"]) expect((await moderation(h.args(h.request("/moderation", { as: member })))).nushi).toBe(false);
+    const { nushiReportsAvailable } = await import("~/lib/nushi-reports.server");
+    const select = vi.fn(() => { throw new Error("Disabled member links must not query reports"); });
+    expect(await nushiReportsAvailable({ select } as unknown as typeof h.db, false)).toBe(false);
+    expect(select).not.toHaveBeenCalled();
+  } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
+});
 it("saves no error evidence without consent, and keeps moderation behind the operator boundary", async () => {
   const form = { intent: "report", answerId: String(answerId), kind: "error", reason: "wrong_post", returnTo: "/nushi/reports" };
   expect((await h.outcome(() => action(h.args(h.request("/nushi/action", { as: "znushi_route_reader", form }))))).status).toBe(400);
@@ -55,6 +69,14 @@ it("saves no error evidence without consent, and keeps moderation behind the ope
   const operator = await reports(h.args(h.request(`/nushi/reports?evidence=${report.id}`, { as: "znushi_route_operator" })));
   expect(operator.evidence).toContain("Orchard public source");
   expect(operator.reports[0]).not.toHaveProperty("reporterId");
+  const { loader: mod } = await import("~/routes/mod");
+  const { loader: moderation } = await import("~/routes/moderation");
+  vi.stubEnv("VILLAGE_NUSHI", "");
+  try {
+    expect((await mod(h.args(h.request("/mod", { as: "znushi_route_operator" })))).nushi).not.toBeNull();
+    expect((await moderation(h.args(h.request("/moderation", { as: "znushi_route_operator" })))).nushi).toBe(true);
+    expect((await moderation(h.args(h.request("/moderation", { as: "znushi_route_reader" })))).nushi).toBe(false);
+  } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
 });
 it("keeps visitor hiding on the device and member hiding in the account", async () => {
   const visitor = await h.outcome(() => action(h.args(h.request("/nushi/action", { form: { intent: "visitor-hide", hide: "1", returnTo: `/nushi/${answerId}` } }))));

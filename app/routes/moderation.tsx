@@ -1,5 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
+import { nushiReportsAvailable } from "~/lib/nushi-reports.server";
+import { isOperatorEmail } from "~/lib/operators.server";
 import { Link } from "react-router";
 import type { Route } from "./+types/moderation";
 import { Pagination } from "~/components/pagination";
@@ -18,9 +20,9 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { db } = await requireMember(request);
+  const { db, user } = await requireMember(request);
   const result = await listPublicLog(db, { page: parsePage(request) });
-  return { ...(result.entries.some(e => "village" in e) ? { villageLinks: villagesEnabled() } : {}), entries: result.entries, page: result.page, hasNext: result.hasNext };
+  return { nushi: await nushiReportsAvailable(db, isOperatorEmail(user.email)), ...(result.entries.some(e => "village" in e) ? { villageLinks: villagesEnabled() } : {}), entries: result.entries, page: result.page, hasNext: result.hasNext };
 }
 
 function actionLabel(action: ModerationAction): string {
@@ -76,7 +78,7 @@ export default function ModerationLog({ loaderData }: Route.ComponentProps) {
   const { entries, page, hasNext } = loaderData;
   return (
     <main className="space-y-4">
-      <Link to="/nushi/reports" className="underline">{m.nushi_reports()}</Link>
+      {loaderData.nushi && <Link to="/nushi/reports" className="underline">{m.nushi_reports()}</Link>}
       <h1 className="text-2xl font-bold">{m.moderation_log_title()}</h1>
       <p className="ui-help text-muted-foreground">{m.moderation_log_intro()}</p>
       {entries.length === 0 ? (

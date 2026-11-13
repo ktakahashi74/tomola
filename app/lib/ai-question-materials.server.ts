@@ -25,6 +25,11 @@ export type AiQuestionSource = {
 };
 export type AiQuestionMaterials = { sources: AiQuestionSource[]; scope: AiQuestionScope };
 
+export async function projectQuestionSource<T extends Pick<AiQuestionSource, "kind" | "field" | "author" | "original" | "translation">>(raw: T): Promise<T> {
+  const project = async (text: string) => raw.field === "title" ? visibleUnicode(text) : (await aiVisibleMarkdown(text, raw.kind !== "material")).text;
+  return { ...raw, author: visibleUnicode(raw.author), original: await project(raw.original), ...(raw.translation ? { translation: { ...raw.translation, text: await project(raw.translation.text) } } : {}) };
+}
+
 const columns = {
   id: entries.id, kind: entries.kind, lang: entries.lang, langCode: entries.langCode,
   title: entries.title, body: entries.body, sourceHash: entries.sourceHash,
@@ -46,8 +51,7 @@ export async function boundQuestionMaterials(inputs: readonly AiQuestionSource[]
   let truncated = moreReplies;
   const sources: AiQuestionSource[] = [];
   for (const raw of inputs) {
-    const project = async (text: string) => raw.field === "title" ? visibleUnicode(text) : (await aiVisibleMarkdown(text, raw.kind !== "material")).text;
-    const input = { ...raw, author: visibleUnicode(raw.author), original: await project(raw.original), ...(raw.translation ? { translation: { ...raw.translation, text: await project(raw.translation.text) } } : {}) };
+    const input = await projectQuestionSource(raw);
     const translation = input.translation?.text.trim() ? input.translation : undefined;
     const translated = translation?.text;
     const originalCap = translated
