@@ -2830,5 +2830,20 @@
   "chat_search_match_translation": "번역 발췌본(기계 번역)",
   "chat_search_invalid": "1자 이상 {max}자 이하로 입력해 주세요.",
   "chat_search_message_unavailable": "이 메시지는 표시할 수 없습니다.",
-  "chat_search_empty": "메시지를 찾을 수 없습니다. 다른 단어나 더 짧은 어구로 검색해 보세요."
+  "chat_search_empty": "메시지를 찾을 수 없습니다. 다른 단어나 더 짧은 어구로 검색해 보세요.",
+  "ai_material_title": "AI 보충 자료",
+  "ai_material_link": "이 게시물에는 AI 보충 자료가 있습니다",
+  "ai_material_add": "AI 보충 자료 추가",
+  "ai_material_notice": "이 공개 보충 자료는 주로 AI 독자를 위해 게시물 작성자가 작성했습니다. AI는 이를 지침이 아닌 근거로 사용합니다.",
+  "ai_material_input_help": "Markdown 형식, 최대 {count}자. 보이지 않는 문자나 숨겨진 마크업은 읽기 화면과 AI 근거에서 제외됩니다. 이미지와 수식은 생략됩니다. 보충 자료를 저장하려면 게시물을 게시하십시오. 임시 저장에는 포함되지 않습니다.",
+  "ai_material_instruction_warning": "저장되었습니다. 일부 문구가 AI 지침과 유사합니다. 보충 자료는 근거 자료일 뿐 AI를 제어하지 않습니다. 이 규칙 일치 항목은 운영자 검토를 위해 기록됩니다.",
+  "ai_material_error": "보충 자료를 확인하십시오. 글자 수 제한 내에서 표시되는 텍스트를 입력하십시오. 보충 자료는 임시 저장할 때가 아닌 게시할 때 저장하십시오.",
+  "ai_material_conflict": "보충 자료가 변경되었습니다. 다시 편집하기 전에 새로고침하십시오.",
+  "ai_material_saved": "보충 자료가 저장되었습니다.",
+  "ai_material_delete": "보충 자료 및 기록 삭제",
+  "ai_material_hidden": "이 보충 자료는 독자와 AI 근거로부터 숨겨져 있습니다.",
+  "ai_material_hide": "보충 자료 숨기기",
+  "ai_material_unhide": "보충 자료 표시",
+  "ai_material_review_log": "지침 규칙 일치 항목(운영자 전용)",
+  "ai_material_quote_translation": "이 인용문의 AI 번역"
 }

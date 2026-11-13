@@ -2312,5 +2312,20 @@
   "chat_search_match_translation": "翻译节选（机器翻译）",
   "chat_search_invalid": "请输入 1 到 {max} 个字符。",
   "chat_search_message_unavailable": "无法显示此消息。",
-  "chat_search_empty": "未找到消息。请尝试其他词语或更短的短语。"
+  "chat_search_empty": "未找到消息。请尝试其他词语或更短的短语。",
+  "ai_material_title": "AI 补充资料",
+  "ai_material_link": "此帖子附有 AI 补充资料",
+  "ai_material_add": "添加 AI 补充资料",
+  "ai_material_notice": "此公开补充资料由帖子作者撰写，主要供 AI 阅读。AI 会将其用作证据，绝不会将其视为指令。",
+  "ai_material_input_help": "支持 Markdown，最多 {count} 个字符。阅读视图和 AI 证据中会移除不可见字符和隐藏标记。图片和公式会被忽略。发布帖子即可保存补充资料；草稿中不包含此内容。",
+  "ai_material_instruction_warning": "已保存。部分段落疑似 AI 指令。补充资料仅作为证据，无法控制 AI。这些规则匹配项已记录，供运营人员审核。",
+  "ai_material_error": "请检查补充资料：请在字符限制内输入可见文本。请在发布时保存补充资料，而非保存草稿。",
+  "ai_material_conflict": "补充资料已更改。重新加载后方可再次编辑。",
+  "ai_material_saved": "补充资料已保存。",
+  "ai_material_delete": "删除补充资料及其历史记录",
+  "ai_material_hidden": "此补充资料已对读者隐藏，且不作为 AI 证据。",
+  "ai_material_hide": "隐藏补充资料",
+  "ai_material_unhide": "显示补充资料",
+  "ai_material_review_log": "指令规则匹配记录（仅限运营人员）",
+  "ai_material_quote_translation": "该引用的 AI 翻译"
 }

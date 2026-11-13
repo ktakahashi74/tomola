@@ -2937,5 +2937,20 @@
   "chat_search_match_translation": "Extrait traduit (traduction automatique)",
   "chat_search_invalid": "Saisissez entre 1 et {max} caractères.",
   "chat_search_message_unavailable": "Ce message ne peut pas être affiché.",
-  "chat_search_empty": "Aucun message trouvé. Essayez d’autres mots ou une expression plus courte."
+  "chat_search_empty": "Aucun message trouvé. Essayez d’autres mots ou une expression plus courte.",
+  "ai_material_title": "Complément pour l’IA",
+  "ai_material_link": "Cette publication comporte un complément pour l’IA",
+  "ai_material_add": "Ajouter un complément pour l’IA",
+  "ai_material_notice": "Ce complément public est rédigé par l’auteur de la publication, principalement à l’intention de l’IA. L’IA l’utilise comme référence, jamais comme instruction.",
+  "ai_material_input_help": "Markdown, jusqu’à {count} caractères. Les caractères invisibles et le balisage masqué sont retirés de l’affichage de lecture et des références de l’IA. Les images et les formules sont ignorées. Publiez la publication pour enregistrer le complément ; les brouillons ne l’incluent pas.",
+  "ai_material_instruction_warning": "Enregistré. Certains passages ressemblent à des instructions pour l’IA. Le complément sert de référence et ne commande pas l’IA. Ces correspondances aux règles sont consignées pour examen par les opérateurs.",
+  "ai_material_error": "Vérifiez le complément : saisissez du texte visible dans la limite de caractères. Enregistrez les compléments lors de la publication, plutôt qu’en enregistrant un brouillon.",
+  "ai_material_conflict": "Le complément a été modifié. Rechargez la page avant de le modifier à nouveau.",
+  "ai_material_saved": "Complément enregistré.",
+  "ai_material_delete": "Supprimer le complément et son historique",
+  "ai_material_hidden": "Ce complément est masqué aux lecteurs et exclu des références de l’IA.",
+  "ai_material_hide": "Masquer le complément",
+  "ai_material_unhide": "Afficher le complément",
+  "ai_material_review_log": "Correspondances aux règles d’instruction (opérateurs uniquement)",
+  "ai_material_quote_translation": "Traduction par l’IA de cette citation"
 }

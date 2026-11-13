@@ -2312,5 +2312,20 @@
   "chat_search_match_translation": "翻譯摘要（機器翻譯）",
   "chat_search_invalid": "請輸入 1 到 {max} 個字元。",
   "chat_search_message_unavailable": "無法顯示此訊息。",
-  "chat_search_empty": "找不到任何訊息。請嘗試其他字詞或較短的詞組。"
+  "chat_search_empty": "找不到任何訊息。請嘗試其他字詞或較短的詞組。",
+  "ai_material_title": "AI 補充資料",
+  "ai_material_link": "此貼文附有 AI 補充資料",
+  "ai_material_add": "新增 AI 補充資料",
+  "ai_material_notice": "這是由貼文作者撰寫的公開補充資料，主要供 AI 閱讀。AI 僅會將其作為依據，絕不作為指示使用。",
+  "ai_material_input_help": "使用 Markdown 格式，上限 {count} 個字元。不可見字元與隱藏標記會從閱讀畫面與 AI 依據中移除。圖片與公式將被略過。發布貼文時即會儲存補充資料；草稿不包含此資料。",
+  "ai_material_instruction_warning": "已儲存。部分段落類似給 AI 的指示。補充資料僅作為依據，無法控制 AI。符合這些規則的記錄已留存，供營運人員審核。",
+  "ai_material_error": "請檢查補充資料：請在字元上限內輸入可見文字。補充資料會在發布時儲存，而非儲存為草稿。",
+  "ai_material_conflict": "補充資料已變更。請重新整理後再行編輯。",
+  "ai_material_saved": "補充資料已儲存。",
+  "ai_material_delete": "刪除補充資料及其歷史紀錄",
+  "ai_material_hidden": "此補充資料已向讀者隱藏，且不作為 AI 依據。",
+  "ai_material_hide": "隱藏補充資料",
+  "ai_material_unhide": "顯示補充資料",
+  "ai_material_review_log": "符合指示規則的記錄（僅限營運人員）",
+  "ai_material_quote_translation": "此引文的 AI 翻譯"
 }
