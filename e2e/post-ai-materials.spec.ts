@@ -17,10 +17,11 @@ test("authors attach, read, edit and remove a public AI supplement on a narrow s
   await expect(page).toHaveURL(/\/t\/\d+\?posted=\d+/);
   const topic = new URL(page.url()).pathname;
   await expect(page.getByRole("link", { name: messages.posted_fix_lang, exact: true })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText(messages.ai_material_instruction_warning);
+  const postedNotice = page.getByRole("status").filter({ has: page.getByRole("link", { name: messages.posted_fix_lang, exact: true }) });
+  await expect(postedNotice).toContainText(messages.ai_material_instruction_warning);
   await waitForClientRoute(page);
   await expect(page.locator('article[id^="p-"]')).not.toContainText("MATERIAL_ONLY_MARKER");
-  await page.getByRole("status").getByRole("link", { name: messages.ai_material_link, exact: true }).click();
+  await postedNotice.getByRole("link", { name: messages.ai_material_link, exact: true }).click();
   await expect(page.locator("#material")).toContainText("MATERIAL_ONLY_MARKER");
   await expect(page.getByRole("status")).toContainText(messages.ai_material_instruction_warning);
   await expect(page.locator("#material")).not.toContainText("HIDDEN_PAYLOAD");
