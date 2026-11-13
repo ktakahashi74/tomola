@@ -90,7 +90,13 @@ it("searches only ready translations of the current source in the display langua
 
 it("pages by creation sequence without duplication or gaps during arrivals, deletion and hiding", async () => {
   const w = await world(); const messages = [];
-  for (let i = 0; i < 45; i++) messages.push(await w.message(`pageword ${i}`));
+  for (let i = 0; i < 45; i++) {
+    const message = await w.message(i % 3 === 0 ? `原文 ${i}` : `pageword ${i}`);
+    messages.push(message);
+    if (i % 3 !== 1) await h.db.insert(chatMessageTranslations).values({ messageId: message.id, lang: "en", state: "ready", sourceHash: chatSourceHash(message.body), text: `pageword translated ${i}` });
+  }
+  for (let i = 0; i < 250; i++) await w.message(`Filler without a match ${i}`);
+  for (let i = 0; i < 2; i++) messages.push(await w.message(`pageword recent ${i}`));
   let result = await w.find("pageword");
   expect(result.hits).toHaveLength(search.CHAT_SEARCH_LIMIT);
   const found = result.hits.map(hit => hit.id);

@@ -76,8 +76,10 @@ describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags
     }
     const plans = [];
     for (const scenario of classes) {
-      const plan = await h.db.execute(sql`explain (analyze, buffers, format json) ${chatSearchQuery(h.db, villageId, scenario.query, "en").getSQL()}`);
-      plans.push({ scenario: scenario.name, plan: (plan as unknown as { rows: Array<{ "QUERY PLAN": unknown }> }).rows[0]["QUERY PLAN"] });
+      for (const searchPath of ["recent", "original", "translation"] as const) {
+        const plan = await h.db.execute(sql`explain (analyze, buffers, format json) ${chatSearchQuery(h.db, villageId, scenario.query, "en", searchPath === "recent" ? { from: 49801 } : { before: 49801, source: searchPath }).getSQL()}`);
+        plans.push({ scenario: scenario.name, searchPath, plan: (plan as unknown as { rows: Array<{ "QUERY PLAN": unknown }> }).rows[0]["QUERY PLAN"] });
+      }
     }
     console.log("chat search synthetic measurement", JSON.stringify({ ...totals, lengthDistribution, poolMax: 4, scope: "authenticated action; excludes HTTP and browser rendering", measurements, plans }));
   }, 180_000);
