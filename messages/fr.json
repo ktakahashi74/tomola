@@ -1560,6 +1560,7 @@
   "settings_color_scheme_device": "Identique à l’appareil",
   "settings_color_scheme_light": "Clair",
   "settings_color_scheme_dark": "Sombre",
+  "settings_color_scheme_save": "Enregistrer l’apparence",
   "settings_ui_lang_help": "La langue des menus, des boutons et des traductions.",
   "nav_menu": "Menu",
   "nav_admin": "Admin",

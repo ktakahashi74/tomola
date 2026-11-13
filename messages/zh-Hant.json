@@ -1111,6 +1111,7 @@
   "settings_color_scheme_device": "配合裝置",
   "settings_color_scheme_light": "淺色",
   "settings_color_scheme_dark": "深色",
+  "settings_color_scheme_save": "儲存外觀",
   "settings_ui_lang_help": "選單、按鈕與翻譯所使用的語言。",
   "nav_menu": "選單",
   "nav_admin": "管理",
