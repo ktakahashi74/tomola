@@ -1,10 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { setFollow } from "~/lib/follows.server";
 import { createDraft } from "~/lib/drafts.server";
+import { entries } from "~/lib/db/schema";
 import { postedLocation, readPostedId } from "~/lib/posted-ui";
 import Home, { loader as homeLoader, meta as homeMeta } from "~/routes/home";
 import Topic, { loader as topicLoader, meta as topicMeta } from "~/routes/topic";
@@ -33,6 +35,20 @@ function render(Component: unknown, path: string, loaderData: unknown) {
 const article = (html: string, id: string) => html.split(`<article id="${id}"`)[1]?.split("</article>")[0] ?? "";
 
 describe("publication feedback", () => {
+  it.each([["detected", ""], ["explicit", "other"]])("retains source code and %s provenance through the reply form", async (langSource, lang) => {
+    const who = lang ? "source_reply_explicit" : "source_reply_automatic";
+    await h.signIn(who);
+    const { action } = await import("~/routes/topic");
+    const body = "Αυτή είναι μια συζήτηση για τη γλώσσα και την επικοινωνία μεταξύ των ανθρώπων.";
+    const out = await h.outcome(async () => action(await h.signedArgs(h.request(`/t/${topicId}`, { as: who, form: { body, lang } }), { id: String(topicId) })));
+    expect(out.status).toBe(302);
+    const url = new URL(out.location!, "http://localhost");
+    const id = readPostedId(url)!;
+    expect(await h.db.select().from(entries).where(eq(entries.id, id))).toMatchObject([{ lang: "other", langCode: "el", langSource }]);
+    const loaded = await topicLoader(h.args(h.request(url.pathname + url.search, { as: who }), { id: String(topicId) }));
+    expect(loaded.replies.find(reply => reply.id === id)).toMatchObject({ posted: true, lang: "other", langCode: "el" });
+  });
+
   it("preserves reply position and rejects invalid feedback ids", () => {
     expect(postedLocation("/t/1?page=2&lang=en#c-105", 105)).toBe("/t/1?page=2&lang=en&posted=105#c-105");
     expect(postedLocation("/t/1?page=2&lang=en#c-105", 105, true)).toBe("/t/1?page=2&lang=en&posted=105&followed=1#c-105");

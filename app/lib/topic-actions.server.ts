@@ -115,10 +115,10 @@ export async function postTopicReply(context: TopicAction) {
   if (!pasted.ok) return pasted.response;
   const rate = await hitMemberLimit(db, "reply", user.id);
   if (!rate.allowed) return replyError(form, "rate_limited", 429, rateLimitHeaders(rate));
-  const { body, lang, aiAssistance, stanceTag } = pasted.input;
+  const { body, lang, langCode, langSource, aiAssistance, stanceTag } = pasted.input;
   // The draft that "Write with AI" made is removed in the same transaction, so that a failure here cannot leave a reply made and the form still sendable.
   const res = await withSignedWrite(db, user.id, request, form, async tx => {
-    const created = await createReply(tx, user.id, threadId, { body, lang, aiAssistance, parentId: pasted.parentId, stanceTag });
+    const created = await createReply(tx, user.id, threadId, { body, lang, langCode, langSource, aiAssistance, parentId: pasted.parentId, stanceTag });
     if (created.ok) await deleteLinkedDraft(tx, user.id, form);
     return created;
   });
