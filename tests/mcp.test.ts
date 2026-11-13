@@ -377,6 +377,28 @@ describe("MCP ownership and output security", () => {
     expect(blocks[3].fm).toMatchObject({ translation_id: translated.id, source_version: source.sourceHash, lang: "ja" });
     expect(blocks[3].body).toBe("Japanese translation fixture");
   });
+  it("exposes unopened source languages and codes in drafts and original frames", async () => {
+    const body = "Αυτή είναι μια συζήτηση για τη γλώσσα και την επικοινωνία μεταξύ των ανθρώπων.";
+    const draftCall = async (name: string, args: object) => {
+      const response = await modern("tools/call", draftToken, { name, arguments: args });
+      expect(response.status).toBe(200);
+      const output = await response.json();
+      expect(output.result.isError).not.toBe(true);
+      return JSON.parse(parseBlocks(output.result.content[0].text)[0].body);
+    };
+    const draft = await draftCall("tomola_draft_create", { kind: "topic", lang: "other", body });
+    try {
+      expect(draft).toMatchObject({ lang: "other", langCode: "el", language: { source: "explicit", detected: "other" } });
+      expect(await draftCall("tomola_draft_get", { id: draft.id })).toMatchObject({ lang: "other", langCode: "el", body });
+    } finally { await db.delete(drafts).where(eq(drafts.id, draft.id)); }
+    const topic = await createTopic(db, "member", { lang: "other", langCode: "el", body });
+    if (!topic.ok) throw new Error(topic.error);
+    try {
+      const output = await (await modern("tools/call", readToken, { name: "tomola_thread", arguments: { id: topic.id } })).json();
+      const original = parseBlocks(output.result.content[0].text).find(block => block.fm.type === "post");
+      expect(original).toMatchObject({ fm: { lang: "other", lang_code: "el" }, body });
+    } finally { await softDeleteEntry(db, topic.id); }
+  });
   it("accepts all only for thread reads and preserves the single-language and default selection", async () => {
     const topic = await createTopic(db, "member", { lang: "ja", body: "French original" });
     if (!topic.ok) throw new Error(topic.error);
