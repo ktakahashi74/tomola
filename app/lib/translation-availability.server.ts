@@ -5,8 +5,9 @@ import { pickTranslation, SHOWN_KINDS } from "./display";
 import { HIDDEN_PRIMARY_FLAGS } from "./llm/flags";
 import type { Lang, SourceLang } from "./languages";
 import { TRANSLATE_JOB, translateDedupeKey } from "./translations.server";
+import { budgetReservationWaitCondition } from "./jobs/budget-wait.server";
 
-export type TranslationAvailability = "available" | "pending" | "unavailable" | "unrequested";
+export type TranslationAvailability = "available" | "pending" | "paused" | "unavailable" | "unrequested";
 export const availabilityKey = (entryId: number, lang: string) => `${entryId}:${lang}`;
 
 // Read terminal failures and hidden current output in batches. A requeued job takes
@@ -35,7 +36,7 @@ export async function loadTranslationAvailability(
       currentRevision: entries.mentionRevision }).from(translations)
       .innerJoin(entries, eq(entries.id, translations.entryId))
       .where(and(missing, eq(translations.field, "body"), inArray(translations.kind, [...SHOWN_KINDS]))),
-    db.select({ payload: jobs.payload, status: jobs.status, dedupeKey: jobs.dedupeKey }).from(jobs)
+    db.select({ payload: jobs.payload, status: jobs.status, dedupeKey: jobs.dedupeKey, budgetWaiting: budgetReservationWaitCondition() }).from(jobs)
       .where(and(eq(jobs.kind, TRANSLATE_JOB), inArray(jobs.status, ["queued", "running", "failed"]),
         inArray(jobs.dedupeKey, keys))),
   ]);
@@ -51,7 +52,8 @@ export async function loadTranslationAvailability(
         (job.dedupeKey === translateDedupeKey({ entryId: entry.id, lang, sourceHash: entry.sourceHash! }, entry.lang) ||
           job.dedupeKey === `translate:${entry.id}:${lang}:${entry.sourceHash}`);
     });
-    if (relevant.some(job => job.status === "queued" || job.status === "running")) { out.set(key, "pending"); continue; }
+    if (relevant.some(job => job.status === "running" || job.status === "queued" && !job.budgetWaiting)) { out.set(key, "pending"); continue; }
+    if (relevant.some(job => job.budgetWaiting)) { out.set(key, "paused"); continue; }
     const hidden = mine.some(r => r.kind === "primary" && r.sourceHash === entry.sourceHash &&
       (r.mentionRevision === null || r.mentionRevision === r.currentRevision) && r.flags.some(f => HIDDEN_PRIMARY_FLAGS.includes(f)));
     const current = mine.some(r => r.sourceHash === entry.sourceHash && (r.mentionRevision === null || r.mentionRevision === r.currentRevision));

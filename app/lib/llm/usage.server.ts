@@ -1,11 +1,11 @@
-import { and, count, desc, eq, like, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { llmUsage, jobs } from "~/lib/db/schema";
 import { costMicro } from "./pricing.server";
 import type { BudgetState, EngineId, LlmEnv } from "./types";
 import { BudgetPausedError } from "./errors.server";
-import { BUDGET_RESERVATION_WAIT } from "../jobs/defer-reasons";
 import { postAskMonthlyBudgetMicro } from "../ai-question-config.server";
+import { budgetReservationWaitCondition } from "../jobs/budget-wait.server";
 
 export type { BudgetState };
 
@@ -238,8 +238,6 @@ export async function getMonthlyBreakdown(db: Db, now: Date = new Date()): Promi
 
 // Estimate admission can defer work even when settled spending is still normal.
 export async function countBudgetReservationWaits(db: Db): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(jobs).where(and(
-    eq(jobs.status, "queued"), like(jobs.lastError, `deferred: [${BUDGET_RESERVATION_WAIT}] %`),
-  ));
+  const [row] = await db.select({ n: count() }).from(jobs).where(budgetReservationWaitCondition());
   return Number(row?.n ?? 0);
 }

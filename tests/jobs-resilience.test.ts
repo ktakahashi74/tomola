@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { jobs, llmUsage } from "~/lib/db/schema";
 import * as queueRunner from "~/lib/jobs/queue.server";
+import * as budgetWaits from "~/lib/jobs/budget-wait.server";
 import { enqueue, runDueJobs, type JobHandlers, type RunOptions, type RunStats } from "~/lib/jobs/queue.server";
 import { startWorker, type Worker } from "~/lib/jobs/worker.server";
 import { createTestDb } from "./helpers/db";
@@ -167,6 +168,7 @@ it.each([
   const notification = await import("~/lib/jobs/notification-jobs.server");
   const maintenance = await import("~/lib/jobs/maintenance-jobs.server");
   const recovery = await import("~/lib/jobs/translation-recovery.server");
+  vi.spyOn(budgetWaits, "resumeBudgetWaits").mockResolvedValue();
   vi.spyOn(metering, "flushUsageSettlements").mockRejectedValue(error);
   vi.spyOn(render, "queueRenderRebuildIfStale").mockResolvedValue(false);
   vi.spyOn(notification, "ensureDigestScheduledThrottled").mockResolvedValue(undefined);

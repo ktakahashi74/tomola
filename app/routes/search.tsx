@@ -130,7 +130,7 @@ function HitList({ hits }: { hits: CombinedHit[] }) {
             </TooltipTrigger><TooltipContent role="tooltip">{m.search_original_lang()}</TooltipContent></Tooltip> },
             !!hit.authorHandle && { key: "author", content: <AuthorLink handle={hit.authorHandle} name={hit.authorName} /> },
             !!translation && { key: "translation", badge: true, content: <TranslationLabel kind={translation.kind} engine={translation.engine} model={translation.model} fallback={translation.fallback} stale={translation.stale} structureMismatch={translation.structureMismatch || hit.title.translation?.structureMismatch} /> },
-            (hit.title.pending || hit.excerpt.pending) && { key: "pending", content: <span className="ui-meta"><PendingText short /></span> },
+            (hit.title.pending || hit.excerpt.pending) && { key: "pending", content: <span className="ui-meta"><PendingText short wait={hit.wait} /></span> },
             hit.excerpt.unavailable && { key: "unavailable", content: <span role="status" className="ui-meta">{m.translation_unavailable()}</span> },
           ]} />
           {hit.match ? <div className="space-y-1">

@@ -9,6 +9,7 @@ import { queueRenderRebuildIfStale } from "~/lib/render-cache.server";
 import { jobHandlers } from "./handlers.server";
 import { chatJobHandlers } from "./chat-translation-jobs.server";
 import { villageChatEnabled } from "../village-chat-enabled.server";
+import { resumeBudgetWaits } from "./budget-wait.server";
 import { chatTranslationConcurrency } from "../llm/config.server";
 import { ensureCleanupScheduledThrottled } from "./maintenance-jobs.server";
 import { ensureDigestScheduledThrottled } from "./notification-jobs.server";
@@ -95,6 +96,7 @@ export function startWorker(opts: WorkerOptions = {}): Worker | null {
   // Once per process, before the first run: if some saved render is at another version than RENDER_VERSION (a deploy raised it), queue the rebuild (render-cache.server.ts).
   // It is checked again at the next start only (a failure is tried again on the next tick, until it works once).
   let renderCacheChecked = false;
+  let budgetWaitsResumed = false;
   const flushSettlements = async (db: Db) => {
     try { await flushUsageSettlements(db); }
     catch (error) { console.error(`[worker] usage settlement failed; continuing this tick: ${safeErrorText(error, { name: true }).slice(0, 300)}`); }
@@ -103,6 +105,10 @@ export function startWorker(opts: WorkerOptions = {}): Worker | null {
     opts.run ??
     (async (db: Db, h: JobHandlers, o?: RunOptions) => {
       await flushSettlements(db);
+      if (!budgetWaitsResumed) {
+        await resumeBudgetWaits(db);
+        budgetWaitsResumed = true;
+      }
       if (!renderCacheChecked) {
         await queueRenderRebuildIfStale(db);
         renderCacheChecked = true;

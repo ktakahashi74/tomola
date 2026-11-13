@@ -75,7 +75,7 @@ export function TopicList({
             t.asksStance && { key: "question", badge: true, content: <Badge variant="secondary" className="bg-info text-info-foreground">{m.question_badge()}</Badge> },
             t.hidden && { key: "hidden", badge: true, content: <Badge variant="secondary" title={m.entry_hidden_mark()} className="bg-notice text-notice-foreground">{m.entry_hidden_mark_short()}</Badge> },
             t.title.kind && { key: "translation", badge: !compactMeta, content: <TranslationLabel kind={t.title.kind} engine={t.title.engine} fallback={t.title.fallback} stale={t.title.stale} structureMismatch={t.title.structureMismatch} concise={compactMeta} fromLang={compactMeta && showOriginalLanguage ? languageLabel(t.lang, t.langCode) : undefined} plain={compactMeta && !showOriginalLanguage} /> },
-            t.title.pending && { key: "pending", content: <span className="ui-meta"><PendingText short /></span> },
+            t.title.pending && { key: "pending", content: <span className="ui-meta"><PendingText short wait={t.title.wait} /></span> },
             t.title.unavailable && { key: "unavailable", content: <span role="status" className="ui-meta">{m.translation_unavailable()}</span> },
             t.insightful.total > 0 && { key: "insightful", content: <CountWithLanguages count={t.insightful} kind="insightful" /> },
           ]} />

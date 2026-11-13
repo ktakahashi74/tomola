@@ -13,6 +13,7 @@ import type { Lang, SourceLang } from "~/lib/languages";
 import { embed, resolveEmbeddingEngine, type LlmOptions } from "~/lib/llm/index.server";
 import { plainExcerpt } from "~/lib/plain-text.server";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
+import { NORMAL_WAIT, translationWaitForAvailability, type TranslationWait } from "./translation-wait";
 import { FLAG_STRUCTURE_MISMATCH } from "~/lib/llm/flags";
 
 // Multilingual semantic search: embed query with the posting model (task=query), then return cosine-nearest entry_embeddings,
@@ -33,6 +34,7 @@ const EXCERPT_CHARS = 200;
 export type SearchTranslation = { kind: ShownKind; engine: string | null; model: string | null; fallback: boolean; stale: boolean; structureMismatch?: boolean };
 
 export type SearchHit = {
+  wait?: TranslationWait;
   id: number;
   createdAt: Date;
   kind: "topic" | "reply";
@@ -186,7 +188,10 @@ export async function toHits(db: Db, found: readonly SearchFound[], opts: Pick<S
       const bodyRow = bodies.get(f.id)?.body ?? null;
       const showBody = bodyWants && bodyRow !== null;
       const line = (await topicLine({ id: f.threadId, lang: f.topicLang as Lang, title: f.topicTitle, body: f.topicBody ?? undefined }, lines.get(f.threadId), wantsTranslation(f.topicLang, opts.readLangs, opts.displayLang), opts.displayLang, typeset));
+      const titleWait = translationWaitForAvailability(NORMAL_WAIT, availability.get(availabilityKey(f.threadId, opts.displayLang)));
+      const bodyWait = translationWaitForAvailability(NORMAL_WAIT, availability.get(availabilityKey(f.id, opts.displayLang)));
       return {
+        ...(line.pending && titleWait.kind === "stopped" ? { wait: titleWait } : bodyWants && !showBody && bodyWait.kind === "stopped" ? { wait: bodyWait } : {}),
         id: f.id,
         createdAt: f.createdAt,
         kind: f.kind as "topic" | "reply",

@@ -15,6 +15,7 @@ import { saveRenderedTranslation } from "~/lib/render-cache.server";
 import { loadReportNotices, reportNoticeKey, type ReportNotice } from "~/lib/translation-reports.server";
 import { typesetText } from "~/lib/typeset-text";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
+import { NORMAL_WAIT, translationWaitForAvailability, type TranslationWait } from "./translation-wait";
 import { FLAG_STRUCTURE_MISMATCH } from "~/lib/llm/flags";
 import { localizeResponseBodies } from "./response-line.server";
 
@@ -62,6 +63,7 @@ export type TranslationView = {
 };
 export type EntryDisplay = {
   needsCurrent?: boolean;
+  wait?: TranslationWait;
   // Default displayed revision after applying ?orig=<id>, ?tr=<id>, and ?old=<id> overrides.
   shown: Shown;
   // A translation is preferred but unavailable yet.
@@ -259,7 +261,9 @@ export async function loadEntryDisplays(db: Db, inputs: readonly DisplayInput[],
           ? "translation"
           : null;
     const current = rows?.body && rows.body.sourceHash === entry.sourceHash && !isStale(rows.body.flags);
+    const wait = translationWaitForAvailability(NORMAL_WAIT, availability.get(availabilityKey(entry.id, opts.displayLang)));
     out.set(entry.id, {
+      ...(wait.kind === "stopped" ? { wait } : {}),
       ...(browser(entry.id) && !card && wants && !current && force !== "original" && availability.get(availabilityKey(entry.id, opts.displayLang)) !== "unavailable" ? { needsCurrent: true } : {}),
       shown: decideShown({ wants, hasTranslation: translation !== null, hasOlder: translation?.older != null, force }),
       pending: wants && translation === null && availability.get(availabilityKey(entry.id, opts.displayLang)) !== "unavailable",
@@ -274,6 +278,7 @@ export async function loadEntryDisplays(db: Db, inputs: readonly DisplayInput[],
 // otherwise the translation of the title in the display language; if there is none, the original). The pending state reflects the availability of the body translation.
 // A topic without a title (a short remark) gets the same rule applied to its body, and shows the beginning of the body (headlineFromBody; fromBody: true). text is an empty string for a body with no text (an image without alt text, for example).
 export type TitleDisplay = {
+  wait?: TranslationWait;
   text: string;
   lang: SourceLang;
   // Translation kind when showing a translation; null for the source.
@@ -398,7 +403,9 @@ export async function loadTitleDisplays(
   const out = new Map<number, TitleDisplay>();
   for (const topic of topics) {
     const line = (await topicLine({ ...topic, body: bodies.get(topic.id) }, picked.get(topic.id), wantsTranslation(topic.lang, opts.readLangs, opts.displayLang), opts.displayLang, typeset));
+    const wait = translationWaitForAvailability(NORMAL_WAIT, availability.get(availabilityKey(topic.id, opts.displayLang)));
     out.set(topic.id, {
+      ...(wait.kind === "stopped" ? { wait } : {}),
       text: line.text,
       lang: line.lang,
       kind: line.row?.kind ?? null,

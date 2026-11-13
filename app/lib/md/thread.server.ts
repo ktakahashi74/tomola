@@ -27,6 +27,7 @@ import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { loadThreadOverviewCounts } from "~/lib/thread-overview.server";
 import { readPostTranslationWait } from "~/lib/translation-wait.server";
+import { translationWaitForAvailability } from "~/lib/translation-wait";
 import { unicodeReviewCounts, unicodeReviewReasons } from "~/lib/unicode-review";
 
 // Thread Markdown twin /t/:id.md: per-post frontmatter/body blocks separated by blank lines.
@@ -279,9 +280,8 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       version: version ?? undefined,
       translations: tr.langs.get(e.id) ?? [],
       translations_pending: pendingLangs,
-      // Set while translating is stopped altogether (the same general word for any cause, no date): the pending languages are not being worked on now.
-      // Omitted while they are just waiting their turn.
-      translations_pending_reason: pendingLangs.length && wait.kind !== "normal" ? "unavailable" : undefined,
+      // A language can be paused independently of the scope's budget. No cause or date is disclosed.
+      translations_pending_reason: pendingLangs.some(lang => translationWaitForAvailability(wait, availability.get(availabilityKey(e.id, lang))).kind === "stopped") ? "unavailable" : undefined,
       translations_unavailable: enabledTargetLangs(e.lang).filter((lang) => !tr.langs.get(e.id)?.includes(lang) && availability.get(availabilityKey(e.id, lang)) === "unavailable"),
       // "Insightful": the total, and from how many languages (nothing per language). Both 0 when nobody pressed it.
       insightful: reactions.get(e.id)?.insightful.total ?? 0,

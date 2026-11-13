@@ -22,7 +22,7 @@ export function AlternativeList({ items, langParam, reader = false }: { items: A
             <AuthorLink handle={a.authorHandle} name={a.authorName} reader={reader} />{" "}<span>{languageLabel(a.lang)}</span>
           </span>
           {a.title.kind && <TranslationLabel kind={a.title.kind} engine={a.title.engine} fallback={a.title.fallback} stale={a.title.stale} structureMismatch={a.title.structureMismatch} />}
-          {a.title.pending && <span className="ui-meta"> <PendingText short /></span>}
+          {a.title.pending && <span className="ui-meta"> <PendingText short wait={a.title.wait} /></span>}
         </li>
       ))}
     </ul>

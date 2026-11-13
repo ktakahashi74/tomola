@@ -5,7 +5,7 @@ import { LANG_LABELS, type Lang, type SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 import { useEnabledLangs } from "~/lib/use-enabled-langs";
 
-export type PostedLang = { lang: Lang; state: "available" | "pending" | "unavailable" };
+export type PostedLang = { lang: Lang; state: "available" | "pending" | "paused" | "unavailable" };
 
 // Said on the window after each read of the status, so that the language menu of the same page does not ask for it again.
 export const POSTED_STATUS_EVENT = "tomola:posted-status";
@@ -45,7 +45,7 @@ export default function PostedTopicNoticeContent({ topicId, lang, place, firstPo
   return <div role="status" className="space-y-1">
     <p className="text-success">{reply ? m.posted_reply_language({ lang: languageLabel(status.lang, status.langCode) }) : place ? m.posted_topic_public({ place, lang: languageLabel(status.lang, status.langCode) }) : m.posted_topic_public_no_place({ lang: languageLabel(status.lang, status.langCode) })} <Link to={editHref} className="ui-meta underline">{m.posted_fix_lang()}</Link></p>
     {hasTargets && (!reply || langs.length > 0) && <p className="ui-help text-muted-foreground">
-      {reached ? (reply ? m.posted_initial_reached() : m.posted_all_reached()) : <>{m.posted_translating()}{" "}
+      {reached ? (reply ? m.posted_initial_reached() : m.posted_all_reached()) : <>{langs.some(item => item.state === "pending") ? m.posted_translating() : m.label_no_translation()}{" "}
         {langs.map(item => <span key={item.lang} lang={item.lang} className={`me-2 transition-colors ${item.state === "available" ? "text-foreground" : ""}`}>{LANG_LABELS[item.lang]}{item.state === "available" && <span aria-hidden="true"> ✓</span>}</span>)}</>}
     </p>}
     {followed && <p className="text-success">{m.posted_reply_followed()}</p>}

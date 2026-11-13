@@ -32,8 +32,12 @@ function join(entryId: number, listener: Listener): () => void {
         const response = await fetch(`${location.pathname}/translations${location.search}`, { method: "POST", credentials: "same-origin", redirect: "error", signal: current.controller.signal,
           headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent, ids: fresh.length ? fresh : ids }) });
         if (!response.ok) { finish("finished"); return; }
-        const result = await response.json() as { stopped?: boolean; ready: number[]; unavailable: number[] };
+        const result = await response.json() as { stopped?: boolean; paused?: number[]; ready: number[]; unavailable: number[] };
         fresh.forEach(id => current.requested.add(id));
+        for (const id of result.paused ?? []) {
+          current.listeners.get(id)?.state("stopped");
+          current.listeners.delete(id);
+        }
         const settled = [...result.ready, ...result.unavailable];
         if (settled.length) {
           // Revalidation preserves navigation, drafts and scroll. Anchor the first
@@ -57,7 +61,12 @@ function join(entryId: number, listener: Listener): () => void {
             }
           }
         }
-        if (result.stopped) { finish("stopped"); return; }
+        if (result.stopped) { finish("stopped"); clearTimeout(current.deadline); return; }
+        if (!current.listeners.size) {
+          clearTimeout(current.deadline);
+          current.controller.abort();
+          if (batch === current) batch = undefined;
+        }
       } catch { if (current.controller.signal.aborted) return; }
     }
     if (current.listeners.size) current.timer = setTimeout(tick, Math.min(BODY_TRANSLATION_POLL_MS, Math.max(0, current.until - Date.now())));

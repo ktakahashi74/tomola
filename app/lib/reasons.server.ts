@@ -1,4 +1,5 @@
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
+import { NORMAL_WAIT, translationWaitForAvailability, type TranslationWait } from "./translation-wait";
 import { FLAG_STRUCTURE_MISMATCH } from "~/lib/llm/flags";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
@@ -102,6 +103,7 @@ export async function loadReasonsPanel(db: Db, questionId: number, opts: { viewe
 export const REASON_EXCERPT_CHARS = 240;
 
 export type ReasonExcerpt = {
+  wait?: TranslationWait;
   text: string;
   // The language of `text`: the display language when it is the translation, otherwise the original language of the reply.
   lang: SourceLang;
@@ -132,7 +134,9 @@ export async function loadReasonExcerpts(db: Db, views: readonly Pick<EntryView,
     const text = (await plainExcerpt(source, REASON_EXCERPT_CHARS));
     // The text is cut by plainExcerpt (graphemes) or, for a very long post, by the parser's limit before that.
     const truncated = text !== (await markdownToPlainText(source)) || source.length > MAX_SOURCE_CHARS;
+    const wait = translationWaitForAvailability(NORMAL_WAIT, availability.get(availabilityKey(v.id, opts.displayLang)));
     out.set(v.id, {
+      ...(wait.kind === "stopped" ? { wait } : {}),
       text,
       lang: body ? opts.displayLang : v.lang,
       truncated,

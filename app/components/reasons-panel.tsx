@@ -107,7 +107,7 @@ export function ReasonsPanel({
                             structureMismatch={r.excerpt.translation.structureMismatch}
                           />
                         ) : (
-                          <span className="ui-meta text-muted-foreground">{r.excerpt.unavailable ? m.translation_unavailable() : <PendingText />}</span>
+                          <span className="ui-meta text-muted-foreground">{r.excerpt.unavailable ? m.translation_unavailable() : <PendingText wait={r.excerpt.wait} />}</span>
                         )}
                       </div>
                     )}

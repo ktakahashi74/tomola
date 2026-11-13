@@ -8,6 +8,7 @@ import { getBudgetStatus } from "./llm/usage.server";
 import { translationEstimate } from "./llm/metering.server";
 import { primaryEngineId, primaryModelOf } from "./llm/config.server";
 import { readPostTranslationWait } from "./translation-wait.server";
+import { translationWaitForAvailability } from "./translation-wait";
 import { enqueue } from "./jobs/queue.server";
 import { TRANSLATE_JOB, TRANSLATE_MAX_ATTEMPTS, translateDedupeKey } from "./translations.server";
 import type { Lang } from "./languages";
@@ -49,9 +50,12 @@ export async function requestBodyTranslations(db: Db, inputs: readonly DisplayIn
   const missing = inputs.filter(e => !ready.includes(e.id));
   const availability = await loadTranslationAvailability(db, missing, [lang], undefined, { currentOnly: true });
   const unavailable = missing.filter(e => availability.get(availabilityKey(e.id, lang)) === "unavailable").map(e => e.id);
-  let stopped = missing.length > 0 && (await readPostTranslationWait(async () => db)).kind === "stopped";
+  const wait = await readPostTranslationWait(async () => db);
+  let stopped = missing.length > 0 && wait.kind === "stopped";
+  const paused = missing.filter(e => availability.get(availabilityKey(e.id, lang)) !== "unavailable" &&
+    translationWaitForAvailability(wait, availability.get(availabilityKey(e.id, lang))).kind === "stopped").map(e => e.id);
   if (requestWork && !stopped) {
-    for (const entry of missing.filter(e => !unavailable.includes(e.id)).sort((a, b) => a.id - b.id)) {
+    for (const entry of missing.filter(e => !unavailable.includes(e.id) && !paused.includes(e.id)).sort((a, b) => a.id - b.id)) {
       await db.transaction(async tx => {
         const [current] = await tx.select({ sourceHash: entries.sourceHash, lang: entries.lang, body: entries.body, mentionRevision: entries.mentionRevision }).from(entries)
           .where(and(eq(entries.id, entry.id), isNull(entries.deletedAt), isNull(entries.hiddenAt))).for("no key update");
@@ -60,7 +64,8 @@ export async function requestBodyTranslations(db: Db, inputs: readonly DisplayIn
         if (found && found.sourceHash === entry.sourceHash && !isStale(found.flags)) return;
         const budget = await getBudgetStatus(tx);
         const estimate = translationEstimate(primaryEngineId(), primaryModelOf(), { text: current.body, from: entry.lang, to: lang, field: "body" });
-        if (budget.state === "stopped" || budget.usedMicro + estimate > budget.budgetMicro) { stopped = true; return; }
+        if (budget.state === "stopped") { stopped = true; return; }
+        if (budget.usedMicro + estimate > budget.budgetMicro) { paused.push(entry.id); return; }
         const payload = { entryId: entry.id, lang, sourceHash: entry.sourceHash!, readRevision: current.mentionRevision };
         const dedupeKey = translateDedupeKey(payload, entry.lang);
         const [existing] = await tx.select({ status: jobs.status, payload: jobs.payload }).from(jobs)
@@ -77,7 +82,7 @@ export async function requestBodyTranslations(db: Db, inputs: readonly DisplayIn
       });
     }
   }
-  return { ready, unavailable, stopped };
+  return { ready, unavailable, paused, stopped };
 }
 
 // Only rows actually selectable on this page may be marked. Updating nulls in

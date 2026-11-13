@@ -14,6 +14,8 @@ import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { action, loader } from "~/routes/topic-translations";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { translationPageInputs } from "~/lib/translation-on-read.server";
+import { BUDGET_RESERVATION_WAIT } from "~/lib/jobs/defer-reasons";
+import { translateDedupeKey } from "~/lib/translations.server";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); setTestLocale("en"); });
 async function setup() {
@@ -212,6 +214,20 @@ describe("browser-only route", () => {
     Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}?lang=fr`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
     return action(h.args(new Request(base.url, { method: "POST", headers, body: JSON.stringify({ intent: opts.intent ?? "request", ids: opts.ids ?? [id] }) }), { id: String(id) }));
   }
+  it.each(["hana", undefined])("serves the same reservation wait to member and anonymous readers (viewer=%s)", async as => {
+    const id = await seed();
+    vi.stubEnv("PUBLIC_READING", "1");
+    const [source] = await h.db.select().from(entries).where(eq(entries.id, id));
+    const payload = { entryId: id, lang: "fr" as const, sourceHash: source.sourceHash! };
+    await h.db.insert(jobs).values({ kind: TRANSLATE_JOB, payload, dedupeKey: translateDedupeKey(payload, "ja"),
+      lastError: `deferred: [${BUDGET_RESERVATION_WAIT}] waiting`, runAt: new Date(Date.now() + 900_000) });
+    const page = await import("~/routes/topic");
+    const loaded = await page.loader(h.args(h.request(`/t/${id}?lang=fr`, { as }), { id: String(id) }));
+    if (loaded.topic.placeholder !== null) throw new Error("Expected a readable topic");
+    expect(loaded.topic.display).toMatchObject({ wait: { kind: "stopped" }, needsCurrent: true });
+    const response = await post(id, { as, intent: "status" });
+    expect(response.data).toMatchObject({ paused: [id], ready: [], stopped: false });
+  });
   it("retains hidden and deleted reply slots in ordinary pages and removes them before paging by stance", async () => {
     const id = await seed();
     const stamp = new Date();

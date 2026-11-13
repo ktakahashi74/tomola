@@ -112,6 +112,26 @@ test("a status limit ends the wait and leaves the original without further polli
   expect(calls).toBe(finished);
 });
 
+test("a reservation wait stops body polling for members and public readers", async ({ page }, testInfo) => {
+  const { id } = fixtures().limited;
+  let calls = 0;
+  await page.route(`**/t/${id}/translations*`, route => {
+    const intent = route.request().postDataJSON()?.intent;
+    if (intent !== "request" && intent !== "status") return route.fulfill({ json: { ok: true } });
+    calls++;
+    return route.fulfill({ json: { ready: [], unavailable: [], paused: [id], stopped: false } });
+  });
+  await page.clock.install();
+  if (testInfo.config.metadata.publicReading) await page.goto(`/t/${id}?lang=fr`);
+  else await useMember(page, "ondemand_limited@example.com", `/t/${id}?lang=fr`);
+  const m = await uiMessages(page);
+  await expect(page.getByText(m.label_no_translation, { exact: true })).toBeVisible();
+  await expect(page.getByText(m.translation_working, { exact: true })).toHaveCount(0);
+  await expect(page.locator(`#p-${id} .longread`)).toHaveAttribute("lang", "ja");
+  await page.clock.fastForward(30_000);
+  expect(calls).toBe(1);
+});
+
 test("a browser requests one missing body and replaces it in place with no navigation", async ({ page }) => {
   const { id, body } = fixtures().member;
   const hold = path.join(state().dir, "fake-body-translation-hold");

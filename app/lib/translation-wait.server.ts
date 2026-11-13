@@ -12,7 +12,7 @@ import { NORMAL_WAIT, NORMAL_WAITS, type TranslationWait, type TranslationWaits 
 // Every call is admitted through a reservation (reserveUsage), which refuses when the settled spending plus the call's estimate would pass the budget. The
 // settled spending therefore never reaches the budget: the work stops while some budget is left. So "stopped" is read from what is left: when it cannot cover the
 // smallest call the current engine makes, nothing can be admitted any more. A larger job may be refused while a smaller one still
-// fits; that middle state stays "normal" (it is only waiting).
+// fits; the scope stays "normal", while that job's availability supplies its own stopped state.
 const STOPPED: TranslationWait = { kind: "stopped" };
 
 export function translationWaitFor(status: BudgetStatus, smallestEstimateMicro = 0): TranslationWait {

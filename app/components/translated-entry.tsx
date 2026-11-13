@@ -167,7 +167,7 @@ export function TranslatedEntry({
     else if (showingOlder) parts.push(<Fragment key="label"><TranslationLabel fromLang={label} kind={showingOlder.kind} engine={showingOlder.engine} model={showingOlder.model} /> <span className="text-notice-muted">{m.label_older()}</span></Fragment>);
     else {
       parts.push(<span key="label">{m.reading_lang_original({ name: label })}</span>);
-      if (display.pending && !display.needsCurrent) parts.push(<span key="pending"><PendingText short /></span>);
+      if (display.pending && !display.needsCurrent) parts.push(<span key="pending"><PendingText short wait={display.wait} /></span>);
       if (display.unavailable) parts.push(<span key="unavailable" role="status">{m.translation_unavailable()}</span>);
     }
     if (showing?.reportNotice) parts.push(<span key="notice" role="note" className="text-notice-emphasis">{showing.reportNotice === "open" ? m.report_notice_open() : m.report_notice_retried()}</span>);
@@ -193,7 +193,7 @@ export function TranslatedEntry({
     <div className="contents">
       {showing && <TranslationLabel notesOnly kind={showing.kind} engine={showing.engine} fallback={showing.fallback} stale={showing.stale} structureMismatch={showing.structureMismatch} />}
       {showingOlder && <span className="ui-meta text-notice-muted">{m.label_older()}</span>}
-      {!showing && !showingOlder && display.pending && !display.needsCurrent && <span className="ui-meta text-muted-foreground"><PendingText /></span>}
+      {!showing && !showingOlder && display.pending && !display.needsCurrent && <span className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span>}
       {!showing && !showingOlder && display.unavailable && <span role="status" className="ui-meta text-muted-foreground">{m.translation_unavailable()}</span>}
       {showing?.reportNotice && (
         <span role="note" className="ui-meta text-notice-emphasis">
@@ -215,7 +215,7 @@ export function TranslatedEntry({
       ) : (
         <>
           <Badge variant="secondary" className="text-muted-foreground">{m.label_original()}</Badge>
-          {display.pending && !display.needsCurrent && <span className="ui-meta text-muted-foreground"><PendingText /></span>}
+          {display.pending && !display.needsCurrent && <span className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span>}
           {display.unavailable && <span role="status" className="ui-meta text-muted-foreground">{m.translation_unavailable()}</span>}
         </>
       )}
@@ -243,7 +243,7 @@ export function TranslatedEntry({
           {toolsAfter}
         </div>
       ) : translationControls}
-      {display.needsCurrent && <Suspense fallback={<PendingText short />}><BodyTranslationWait entryId={id} /></Suspense>}
+      {display.needsCurrent && (display.wait?.kind === "stopped" ? <span role="status" className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span> : <Suspense fallback={<PendingText short />}><BodyTranslationWait entryId={id} /></Suspense>)}
       {(info || readingActions) && <ReadingToc headings={info?.headings ?? []} lang={bodyLang} bodyRef={bodyRef} {...readingActions?.(bodyLang)} />}
       <div ref={bodyRef} dir="auto" lang={bodyLang} className={reading ? "longread" : "longread longread-compact"} data-reading-body={reading ? "" : undefined} data-quote-entry={quotable ? id : undefined} data-quote-kind={quotable ? kind : undefined} data-quote-handle={quotable ? quoteHandle : undefined} data-quote-translated={quotable && (showing || showingOlder) ? "1" : undefined} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       {footer?.(showing ?? (showingOlder ? (tr as NonNullable<typeof tr>) : null))}
