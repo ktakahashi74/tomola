@@ -179,7 +179,7 @@ export function TranslatedEntry({
     ? { text: translationFromText(showing.kind, showing.engine, languageLabel(lang, langCode)), title: showing.model ?? undefined }
     : showingOlder
       ? { text: translationFromText(showingOlder.kind, showingOlder.engine, languageLabel(lang, langCode)), title: showingOlder.model ?? undefined }
-      : { text: languageLabel(lang, langCode) };
+      : { text: lang === "other" ? languageLabel(lang, langCode) : LANG_LABELS[lang] };
   const languageMenu = reading && readingLanguage && <ReadingLangMenu {...readingLanguage} text={m.reading_other_languages_read()} originalLang={lang} entryId={id} align="start" plain className="inline-block align-baseline"
     onSelectLanguage={target => {
       // Ordinary language choices navigate; only returning from the source switch stays in place.
