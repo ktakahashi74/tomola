@@ -145,7 +145,7 @@ it("never reads reply targets beyond the audited moderation context", async () =
   const distant = await w.send();
   const near = await w.send(distant.id, "Nearby reply");
   const report = await createChatReport(w.db, "qry_reader", { slug: w.slug, messageId: distant.id, reason: "spam" });
-  const actor = { id: "qry_mod", scope: { operator: false, langs: ["en"] } };
+  const actor = { id: "qry_mod", scope: { operator: false, langs: ["en" as const] } };
   const opened = await readChatEvidence(w.db, actor, { kind: "report", id: report.id }, { intent: "open" });
   expect(opened.snapshot!.reply).toEqual({ outside: true });
   const evidence = await readChatEvidence(w.db, actor, { kind: "report", id: report.id }, { intent: "context" });

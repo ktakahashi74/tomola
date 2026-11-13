@@ -156,6 +156,7 @@ it("uses the village membership count in chat, linking only non-language audienc
     const page = await chatLoader(h.args(h.request(`/v/${slug}/chat`, { as: "vr_owner" }), { slug }));
     const village = (await villageBySlug(h.db, slug))!;
     const members = await h.db.select().from(villageMembers).where(eq(villageMembers.villageId, village.id));
+    if ("data" in page) throw new Error("Chat fixture is unavailable");
     expect(page.readers).toBe(members.length);
     const rendered = await renderInRouter(() => createElement(VillageChat, { loaderData: page } as never));
     expect(rendered).toContain(m.village_chat_readers({ count: members.length }));

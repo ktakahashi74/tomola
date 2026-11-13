@@ -30,5 +30,5 @@ export async function chatRepliesFor(db: Db, villageId: string, userId: string, 
 }
 
 export function withChatReply(message: ChatMessage, replyToId: string | null, replies: ReadonlyMap<string, ChatReply>): ChatMessage {
-  return message.deleted || message.hidden || !replyToId ? message : { ...message, reply: replies.get(replyToId) ?? { id: replyToId, changedSeq: 0, unavailable: true } };
+  return message.deleted || message.hidden || !replyToId ? message : { ...message, reply: replies.get(replyToId) ?? { id: replyToId, changedSeq: 0, unavailable: true as const } };
 }

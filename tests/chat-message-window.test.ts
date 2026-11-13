@@ -32,7 +32,7 @@ it("refreshes loaded reply previews from parents outside the window and resists 
   expect(mergeChatMessages(beforeReplyLoaded, [reply]).messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
   const hiddenBeforeReplyLoaded = mergeChatMessages(emptyChatWindow(), [{ ...parent, hidden: true, parts: [], changedSeq: 52 }], { onlyExisting: true });
   expect(mergeChatMessages(hiddenBeforeReplyLoaded, [reply]).messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
-  const loadedCurrentParent = mergeChatMessages(emptyChatWindow(), [{ ...parent, changedSeq: 53, parts: [{ type: "text", text: "Already current" }] }]);
+  const loadedCurrentParent = mergeChatMessages(emptyChatWindow(), [{ ...parent, changedSeq: 53, parts: [{ type: "text" as const, text: "Already current" }] }]);
   expect(mergeChatMessages(loadedCurrentParent, [reply]).messages[1].reply).toMatchObject({ text: "Already current", changedSeq: 53 });
 });
 it("bounds a live window around its visible anchor and permits travel in both directions", () => {

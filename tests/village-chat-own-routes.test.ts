@@ -92,7 +92,7 @@ it("returns localized topic cards in the initial page and change response with t
   const [topic] = await h.db.insert(entries).values({ authorId: h.ids.co_author, kind: "topic", lang: "en", title: "Public linked route", body: "Public body" }).returning();
   await mutateChat(h.db, h.ids.co_author, "own-route", "send", { body: `http://localhost:5173/t/${topic.id}#reply` });
   const page = await chatPage(h.args(h.request("/v/own-route/chat?lang=ja", { as: "co_reader" }), { slug: "own-route" }));
-  if (page.consentRequired) throw new Error("Chat fixture requires consent");
+  if ("data" in page || page.consentRequired) throw new Error("Chat fixture requires consent");
   const result = await changes(h.args(h.request("/v/own-route/chat/changes?since=0&lang=ja", { as: "co_reader" }), { slug: "own-route" }));
   const polled = await result.json();
   expect(page.linkLang).toBe("ja");
