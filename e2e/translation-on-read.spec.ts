@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, state, uiMessages, useMember, waitForClientRoute } from "./helpers";
+import { localizedLanguageLabel } from "../app/lib/language-label";
+import { captureScreenshot, formatMessage, state, uiMessages, useMember, waitForClientRoute } from "./helpers";
 const fixtures = () => JSON.parse(fs.readFileSync(path.join(state().dir, "translation-on-read.json"), "utf8")) as Record<string, { id: number; body: string }>;
 
 test("the author's language watch keeps its polling limit through loader revalidation", async ({ page }) => {
@@ -43,7 +44,7 @@ test("the author's language watch keeps its polling limit through loader revalid
   } finally { if (fs.existsSync(hold)) fs.unlinkSync(hold); }
 });
 
-test("the author's notice finishes without polling for unrequested languages, which remain selectable", async ({ page }) => {
+test("the author's notice finishes after source confirmation without polling for unrequested languages, which remain selectable", async ({ page }) => {
   const { id, body } = fixtures().notice;
   const hold = path.join(state().dir, "fake-body-translation-hold");
   let statusCalls = 0;
@@ -67,6 +68,25 @@ test("the author's notice finishes without polling for unrequested languages, wh
     fs.unlinkSync(hold);
     await expect(page.locator(`#p-${id} .longread`)).toHaveAttribute("lang", "fr", { timeout: 45_000 });
   } finally { if (fs.existsSync(hold)) fs.unlinkSync(hold); }
+});
+
+test("the author's notice polls for source confirmation alone and stops when it finishes", async ({ page }) => {
+  const { id } = fixtures().sourceNotice;
+  let statusCalls = 0;
+  await page.route(`**/t/${id}/posted-status`, route => {
+    statusCalls++;
+    return route.fulfill({ json: { lang: "ja", langCode: null, checking: false, mismatch: true, untranslatable: false, langs: [{ lang: "en", state: "available" }] } });
+  });
+  await page.clock.install();
+  await useMember(page, "ondemand_notice@example.com", `/t/${id}?lang=en&posted=${id}`);
+  const m = await uiMessages(page);
+  await expect(page.getByText(m.posted_all_reached, { exact: true })).toBeVisible();
+  await expect(page.getByText(m.posted_translating, { exact: false })).toHaveCount(0);
+  await page.clock.fastForward(12_000);
+  await expect(page.getByText(formatMessage(m.posted_language_mismatch, { lang: localizedLanguageLabel("ja", "en") }), { exact: false })).toBeVisible();
+  expect(statusCalls).toBe(1);
+  await page.clock.fastForward(12_000);
+  expect(statusCalls).toBe(1);
 });
 
 test("a status limit ends the wait and leaves the original without further polling", async ({ page }) => {
