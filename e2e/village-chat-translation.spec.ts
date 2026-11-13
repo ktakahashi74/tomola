@@ -46,6 +46,14 @@ test("chat delivers original text before translating, toggles each message, and 
     await message.getByRole("button", { name: m.village_chat_translation_show, exact: true }).click();
     await expect(message).toHaveAttribute("lang", "en");
     await expect(message.getByText(m.village_chat_translation_machine, { exact: true })).toBeVisible();
+    await expect(message.locator('a[href="/ai-use"]')).toHaveAccessibleName(m.village_chat_translation_machine);
+    const [disclosure] = await Promise.all([
+      context.waitForEvent("page"),
+      message.locator('a[href="/ai-use"]').click({ button: "middle" }),
+    ]);
+    try {
+      await expect(disclosure.getByRole("heading", { level: 1, name: m.ai_use_title, exact: true })).toBeVisible();
+    } finally { await disclosure.close(); }
     const operatorContext = await browser.newContext({ locale: "en-US" });
     try {
       const operator = await operatorContext.newPage(); await useMember(operator, "olga@example.com");

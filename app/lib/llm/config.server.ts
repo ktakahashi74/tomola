@@ -138,6 +138,12 @@ export function primaryEngineId(env: LlmEnv = process.env): EngineId {
   return choose<EngineId>(env, "TRANSLATION_PRIMARY", ["gemini", "claude", "fake"], value(env, "GEMINI_API_KEY") !== undefined ? "gemini" : "fake");
 }
 
+// Language identification uses the provider's lightweight default independently of the post translator.
+export function sourceLanguageConfig(env: LlmEnv = process.env) {
+  const engine = primaryEngineId(env);
+  return { engine, model: engine === "claude" ? DEFAULT_CLAUDE_MODEL : engine === "fake" ? "fake-source-language" : DEFAULT_GEMINI_MODEL };
+}
+
 // Retry engine: TRANSLATION_RETRY_MODEL from the primary provider, using the same key. Reject a model from another provider as a configuration error.
 function buildRetryEngine(primaryId: EngineId, env: LlmEnv, deps: EngineDeps): TranslationEngine | null {
   const model = retryModelOf(env);

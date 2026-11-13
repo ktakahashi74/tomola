@@ -845,7 +845,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                     <noscript className="reading-mobile-fallback"><a href={aiOpen.mdPath} className="link-ui underline">{m.open_in_ai_noscript()}</a></noscript>
                   </div>
                   {controls && <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 ui-meta text-muted-foreground" data-reading-language="">
-                    {view.lang !== topic.lang && <span title={view.title}>{view.text}</span>}
+                    {view.lang !== topic.lang && (view.aiUse ? <a href="/ai-use" title={view.title} className="link-ui underline">{view.text}</a> : <span title={view.title}>{view.text}</span>)}
                     {controls}
                   </div>}
                 </div>

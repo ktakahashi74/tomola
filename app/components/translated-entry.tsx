@@ -65,7 +65,7 @@ export function TranslatedEntry({
   // Content between the title and body, such as the author line. A function gets the reading info and, for a reply, the one-line translation status and switch (null when the reply has none), so that
   // the reply can draw it alongside the author and time. A reading header receives its translation switches and notes in the same slot, and its language menu separately.
   // `view` (the reading layout only) says what the reader is reading, in one phrase for the byline: the language of the original, or "AI-translated from English (Gemini)", with the model for a tooltip.
-  meta: ReactNode | ((info: ReadingInfo | null, controls: ReactNode, view: { text: string; title?: string; lang: SourceLang }, languageMenu: ReactNode) => ReactNode);
+  meta: ReactNode | ((info: ReadingInfo | null, controls: ReactNode, view: { text: string; title?: string; lang: SourceLang; aiUse?: boolean }, languageMenu: ReactNode) => ReactNode);
   // Content below the body, such as a mistranslation report while a translation is shown; receives whether a translation is being displayed.
   footer?: (shownTranslation: EntryDisplay["translation"]) => ReactNode;
   showHeading?: boolean;
@@ -176,9 +176,9 @@ export function TranslatedEntry({
   })() : null;
   // The reading layout: what is read is said once, in the byline (view). This row holds only what is left: the switch between the translation and the original, and the notes.
   const view = showing
-    ? { text: translationFromText(showing.kind, showing.engine, languageLabel(lang, langCode)), title: showing.model ?? undefined }
+    ? { text: translationFromText(showing.kind, showing.engine, languageLabel(lang, langCode)), title: showing.model ?? undefined, aiUse: showing.kind !== "human" }
     : showingOlder
-      ? { text: translationFromText(showingOlder.kind, showingOlder.engine, languageLabel(lang, langCode)), title: showingOlder.model ?? undefined }
+      ? { text: translationFromText(showingOlder.kind, showingOlder.engine, languageLabel(lang, langCode)), title: showingOlder.model ?? undefined, aiUse: showingOlder.kind !== "human" }
       : { text: lang === "other" ? languageLabel(lang, langCode) : LANG_LABELS[lang] };
   const languageMenu = reading && readingLanguage && <ReadingLangMenu {...readingLanguage} text={m.reading_other_languages_read()} originalLang={lang} entryId={id} align="start" plain className="inline-block align-baseline"
     onSelectLanguage={target => {

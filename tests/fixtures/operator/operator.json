@@ -61,5 +61,25 @@
       "reviewHelp": null,
       "testSiteNotice": null
     }
+  },
+  "aiUse": {
+    "history": [
+      {
+        "date": "2026-01-02",
+        "purpose": "translation-primary",
+        "fromModel": "fake-before",
+        "toModel": "fake-1",
+        "reason": {
+          "en": "Fictional model change for this test community.",
+          "ja": "この試験用コミュニティの架空の型の変更です。"
+        },
+        "evidenceUrl": "/stats"
+      }
+    ],
+    "humanReview": {
+      "en": "Fictional review scope: synthetic English and Japanese examples only.",
+      "ja": "架空の確認範囲：英語と日本語の試験用の文章だけです。"
+    },
+    "objectionsUrl": "/t/new"
   }
 }

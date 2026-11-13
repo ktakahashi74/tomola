@@ -38,6 +38,8 @@ All fields in `operator.json` are required. Unknown fields are rejected:
 - `status`: exactly `configured`; the example's `example` status cannot start.
 - `name`: nonempty localized display names, with both `en` and `ja` required.
 - `contactEmail`, `privacyEmail`: valid addresses used by screens, links and mail.
+- `aiUse`: public model history, human translation review scope and the posting
+  destination for objections. See [Maintaining the AI-use page](#maintaining-the-ai-use-page).
 - `participation.minimumAge`: an integer from 0 to 150. Zero explicitly disables
   age confirmation; other values use the existing age-confirmation record.
 - `participation.excludedResidenceCountries`: an explicit array of uppercase
@@ -106,6 +108,63 @@ directory to inspect another operator locally; do not use real API keys or mail
 recipients for that check.
 
 This guide describes a single-server setup with Docker Compose. It has three parts: PostgreSQL with pgvector, the app (which runs both the web server and the worker), and Caddy for HTTPS and the reverse proxy.
+
+### Maintaining the AI-use page
+
+`/ai-use`, `/ai-use.md` and `/ai-use.txt` are public even when reading posts
+requires membership. The current uses, providers, models and selected settings
+come from the same resolvers as the calls. The page publishes no API keys,
+credentials, service endpoints or prices. It describes configured availability;
+individual calls still depend on need and budget, and saved translations can
+come from earlier models. Comparison requires a secondary translator, a judge
+and a positive comparison sample rate. A secondary translator remains available
+as a fallback even when the sample rate is zero.
+
+Every operator directory must include `aiUse`, including when nothing has been
+recorded. The complete deployment example contains this empty form:
+
+```json
+"aiUse": {
+  "history": [],
+  "humanReview": null,
+  "objectionsUrl": null
+}
+```
+
+When changing a model, append a `history` entry with:
+
+- `date`: a calendar date in `YYYY-MM-DD` form.
+- `purpose`: a stable use ID from the [AI-use registry](../app/lib/ai-use-registry.server.ts),
+  such as `translation-primary`. The same registry validates these IDs and
+  supplies the page rows.
+- `fromModel`, `toModel`: exact model names, copied from the current settings;
+  use `null` for a use that was or is disabled. Initial entries can have
+  `fromModel: null`.
+- `reason`: plain-text localized reasons, with `en` and `ja` required.
+- `evidenceUrl`: a public comparison record, or `null` when none is available.
+
+The latest date for each purpose supplies its recorded current model. For
+multiple changes on one date, the last entry wins. The page flags an enabled
+model without a record, a different model, or a use disabled since its last
+record. This warning does not change engine selection or prevent operation.
+
+Set `humanReview` to localized plain text describing the actual language pairs
+and scope people checked, with both `en` and `ja`, or leave it `null` when no
+scope has been recorded. Automated tests or model agreement are not human
+translation review. Set `objectionsUrl` to a posting destination, such as a
+village or the new-post page, or leave it `null` for the general instruction to
+raise an objection in a post. The operator responds publicly with reasons.
+Other editions of reasons and review scope fall back to English. Links accept
+site-relative paths or HTTPS URLs without credentials. Keep secrets and private
+records out of all these public fields.
+
+Before upgrading an existing server, prepare a complete operator directory with
+the new field. Switch to that directory and restart with the matching app
+version; settings are cached for a server's lifetime. After changing a model,
+review the live page and both representations for missing-history warnings.
+Review provider and data-handling changes under the site's participation and
+privacy process separately; recording model history does not update consent
+versions.
 
 The guide explains the setup and the procedures. It does not replace the acceptance checks of each deployment. Before inviting members, complete the content and operational checks in section 15, and confirm HTTPS, mail delivery and restoring a backup.
 

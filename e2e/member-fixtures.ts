@@ -54,6 +54,8 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "villages_suspended@example.com", handle: "villages_suspended", homeArea: "en", uiLocale: "en" },
 ];
 export const MEMBER_FIXTURES: readonly SeedMember[] = [
+  { email: "zai_use_author@example.com", handle: "zai_use_author", homeArea: "ja", readLangs: ["ja"], uiLocale: "en" },
+  { email: "zai_use_reader@example.com", handle: "zai_use_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   { email: "scribe_other_public@example.com", handle: "scribe_other_public", homeArea: "en", uiLocale: "en" },
   { email: "scribe_other_check@example.com", handle: "scribe_other_check", homeArea: "en", uiLocale: "en" },
   { email: "scribe_other_mismatch@example.com", handle: "scribe_other_mismatch", homeArea: "en", uiLocale: "en" },

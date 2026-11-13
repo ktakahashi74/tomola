@@ -71,6 +71,7 @@ Each page has a Markdown twin at the same URL plus \`.md\` (or \`.txt\`; identic
 - Change feed: ${o}/changes.md?since=<ISO 8601 time>
 - Manifest: ${o}/manifest.json
 - Community numbers (aggregate counts with small numbers withheld; ${publicReading() ? "readable without credentials" : "member credentials required"}): ${o}/stats.md
+- AI used by tomola, current models and operator-written model history (public, no credentials): ${o}/ai-use.md
 ${publicReading() ? `- RSS feed of the newest topics (RSS 2.0, no credentials; 30 items, titles and the beginning of each post; \`?lang=<tag>\` gives titles and descriptions in that language): ${o}/feed.xml
 ${villagesEnabled() ? `- RSS feed of one village: ${o}/v/<slug>/feed.xml
 ` : ""}` : ""}- The principles of the site (public, no token needed; Japanese is the original. Add \`?lang=<tag>\` to choose an edition. Available editions (${principlesLangs().length}): ${principlesLangs().join(", ")}, independently of the posting and interface languages in ENABLED_LANGS. The frontmatter \`status\` gives each edition's review state; current states: ${principlesStatuses}): ${o}/principles.md
@@ -173,7 +174,7 @@ A member can call another member by writing \`@handle\` in the body of a topic o
 
 ## Authentication
 
-${publicReading() ? "Thread, home, latest and language-list Markdown twins can be read without credentials. Stance distributions, search, change feeds, the manifest, following and glossary require one of:" : `When public reading is disabled, every Markdown twin and read API above except this guide, ${o}/ai.txt, ${o}/help/ai.md, ${o}/api/openapi.json, ${o}/principles.md, ${o}/languages.md and ${o}/connect.md needs one of:`}
+${publicReading() ? "Thread, home, latest and language-list Markdown twins can be read without credentials. Stance distributions, search, change feeds, the manifest, following and glossary require one of:" : `When public reading is disabled, every Markdown twin and read API above except this guide, ${o}/ai.txt, ${o}/help/ai.md, ${o}/api/openapi.json, ${o}/principles.md, ${o}/languages.md, ${o}/ai-use.md and ${o}/connect.md needs one of:`}
 
 1. The browser session cookie.
 2. \`Authorization: Bearer tml_read_…\`: a read token (members create tokens at ${o}/settings/tokens).

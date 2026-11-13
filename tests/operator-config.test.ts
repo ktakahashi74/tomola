@@ -27,6 +27,31 @@ it("requires an explicit directory and readable valid JSON", () => {
   expect(fixture.load).toThrow("valid JSON");
 });
 
+it("requires strict AI-use settings, validates history references and accepts an empty public example", () => {
+  const fixture = copy();
+  const original = structuredClone(fixture.settings.aiUse);
+  delete fixture.settings.aiUse; fixture.save();
+  expect(fixture.load).toThrow("aiUse");
+  fixture.settings.aiUse = JSON.parse(fs.readFileSync("deploy/operator/tomola.org/ai-use.example.json", "utf8")).aiUse;
+  fixture.save();
+  expect(fixture.load().aiUse).toEqual({ history: [], humanReview: null, objectionsUrl: null });
+  for (const invalid of [
+    { ...original, apiKey: "fictional-key" },
+    { ...original, history: [{ ...original.history[0], purpose: "unknown-use" }] },
+    { ...original, history: [{ ...original.history[0], date: "2026-02-30" }] },
+    { ...original, history: [{ ...original.history[0], toModel: "https://example.net/model" }] },
+    { ...original, history: [{ ...original.history[0], reason: { en: "Missing Japanese" } }] },
+    { ...original, history: [{ ...original.history[0], price: 10 }] },
+    { ...original, objectionsUrl: "javascript:alert(1)" },
+    { ...original, objectionsUrl: "//example.net/post" },
+    { ...original, objectionsUrl: "https://fictional:password@example.net/post" },
+    { ...original, history: [{ ...original.history[0], evidenceUrl: "https://fictional:password@example.net/compare" }] },
+  ]) {
+    fixture.settings.aiUse = invalid; fixture.save();
+    expect(fixture.load).toThrow();
+  }
+});
+
 it.each(["minimumAge", "excludedResidenceCountries", "requireTrialConsent", "trialConsentVersion", "stanceConsentVersion"])("rejects a missing participation.%s instead of relaxing eligibility", field => {
   const fixture = copy();
   delete fixture.settings.participation[field]; fixture.save();

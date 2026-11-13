@@ -285,6 +285,8 @@ try {
   await seedTranslationOnRead(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedReadLanguagesAuthor } = await import("./seed-read-languages-author");
   await seedReadLanguagesAuthor(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
+  const { seedAiUse } = await import("./seed-ai-use");
+  await seedAiUse(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedLiteralSearch } = await import("./seed-literal-search");
   await seedLiteralSearch(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   // Authentication scenarios keep their invitations and perform the UI flow.

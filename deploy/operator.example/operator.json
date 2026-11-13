@@ -58,5 +58,10 @@
       "reviewHelp": "REPLACE_ME: サイトの方針や案内をここに記載してください。",
       "testSiteNotice": "REPLACE_ME: サイトの方針や案内をここに記載してください。"
     }
+  },
+  "aiUse": {
+    "history": [],
+    "humanReview": null,
+    "objectionsUrl": null
   }
 }

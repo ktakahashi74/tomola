@@ -9,10 +9,7 @@ import { purgeEmbeddings } from "./embeddings.server";
 import { touchAltOriginal } from "./questions.server";
 import { touchReferenceTopics } from "./related-discussions.server";
 import { createModerationNotification } from "./notifications.server";
-
-export const spamEnabled = () => process.env.MODERATION_SPAM_ENABLED === "1";
-export const aiSpamEnabled = () => spamEnabled() && process.env.MODERATION_AI_SPAM_ENABLED === "1";
-export const triageEnabled = () => process.env.MODERATION_AI_TRIAGE_ENABLED === "1";
+import { spamEnabled, aiSpamEnabled, triageEnabled } from "./moderation-ai-config.server";
 
 // Serialize the history check with writes by this author, across topics and chat villages.
 export async function lockAbuseWriter(db: Db, authorId: string) {

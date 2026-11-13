@@ -41,10 +41,10 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {!grouped && message.avatarUrl && <img src={message.avatarUrl} alt="" className="member-avatar self-center rounded" />}
       <span className="min-w-0 truncate" title={`@${message.author}`}>{message.authorName && <><bdi>{message.authorName}</bdi>{" "}</>}@{message.author}</span><time className="shrink-0 whitespace-nowrap" dateTime={message.createdAt} title={clock.full}>{clock.time}</time>
       {message.edited && <span>{m.village_chat_edited()}</span>}
-      {!grouped && translated && <TranslationMark />}
+      {!grouped && translated && <TranslationMark tabIndex={interactionTabIndex} />}
     </p>
     {message.hidden ? <p>{m.village_chat_hidden()}</p> : <>
-      {grouped && translated && <span className="float-end"><TranslationMark /></span>}
+      {grouped && translated && <span className="float-end"><TranslationMark tabIndex={interactionTabIndex} /></span>}
       {!onlyPostCard && <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>}
       {message.translation?.state === "pending" && (waiting || wait.kind !== "normal") && <p className="mt-1 ui-help text-muted-foreground">{wait.kind === "normal" ? m.village_chat_translation_pending() : waitText(wait, false)}</p>}
       {message.translation?.state === "failed" && !NEAR_COPY_FLAGS.includes(message.translation.errorCode ?? "") && <p className="mt-1 ui-help text-muted-foreground">{m.village_chat_translation_failed()}</p>}
@@ -77,6 +77,6 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
 });
 
 // The small mark of a message shown by its machine translation. "Unverified machine translation" stays as its name (read out, and on hover); the page says it once in words.
-function TranslationMark() {
-  return <span title={m.village_chat_translation_machine()} className="shrink-0 rounded border px-1 text-[0.7rem] leading-4"><span aria-hidden="true">{m.village_chat_translation_badge()}</span><span className="sr-only">{m.village_chat_translation_machine()}</span></span>;
+function TranslationMark({ tabIndex }: { tabIndex?: number }) {
+  return <a href="/ai-use" tabIndex={tabIndex} title={m.village_chat_translation_machine()} className="shrink-0 rounded border px-1 text-[0.7rem] leading-4"><span aria-hidden="true">{m.village_chat_translation_badge()}</span><span className="sr-only">{m.village_chat_translation_machine()}</span></a>;
 }

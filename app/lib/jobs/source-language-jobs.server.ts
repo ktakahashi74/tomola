@@ -8,9 +8,7 @@ import { detectSourceLanguage } from "../lang-detect";
 import { sourceHash } from "../source-hash.server";
 import { enqueueTranslations, replaceSegments, TRANSLATE_JOB, TRANSLATE_MAX_ATTEMPTS } from "../translations.server";
 import { createJsonCompleter, type JsonCompleter } from "../llm/completion.server";
-import { primaryEngineId } from "../llm/config.server";
-import { DEFAULT_CLAUDE_MODEL } from "../llm/engines/claude.server";
-import { DEFAULT_GEMINI_MODEL } from "../llm/engines/gemini.server";
+import { sourceLanguageConfig } from "../llm/config.server";
 import { completionEstimate, meteredCall } from "../llm/metering.server";
 import { budgetResumeAt, getBudgetState } from "../llm/usage.server";
 import { FLAG_UNTRANSLATED, FLAG_QUALITY_MISMATCH, FLAG_LINK_MISMATCH, FLAG_MARKDOWN_BUDGET } from "../llm/flags";
@@ -48,8 +46,7 @@ export async function enqueueSourceLanguageCheck(db: Db, entry: { id: number; so
 }
 
 function completerFor(): JsonCompleter {
-  const engine = primaryEngineId();
-  const model = engine === "claude" ? DEFAULT_CLAUDE_MODEL : engine === "fake" ? "fake-source-language" : DEFAULT_GEMINI_MODEL;
+  const { engine, model } = sourceLanguageConfig();
   if (engine !== "fake") return createJsonCompleter(engine, model, process.env);
   return { engine, model, async complete(req) {
     const detected = await detectSourceLanguage(JSON.parse(req.user).text);

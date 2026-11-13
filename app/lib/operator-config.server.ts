@@ -3,10 +3,31 @@ import path from "node:path";
 import { z } from "zod";
 import { isCountryCode } from "./trial-consent";
 import { operatorCopy, participationCopy, type PublicOperatorSettings } from "./operator-settings";
+import { AI_USE_PURPOSES, PUBLIC_MODEL_NAME } from "./ai-use-registry.server";
 
 type Env = Record<string, string | undefined>;
 const text = z.string().trim().min(1);
 const localized = <T extends z.ZodType>(value: T) => z.object({ en: value, ja: value }).catchall(value);
+const publicLink = text.refine(value => {
+  if (/[\s\\\u0000-\u001f\u007f]/.test(value)) return false;
+  if (value.startsWith("/")) return !value.startsWith("//");
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch { return false; }
+}, "Use a site-relative path or a credential-free HTTPS URL");
+const aiUseSchema = z.object({
+  history: z.array(z.object({
+    date: z.iso.date(),
+    purpose: z.enum(AI_USE_PURPOSES),
+    fromModel: text.regex(PUBLIC_MODEL_NAME).nullable(),
+    toModel: text.regex(PUBLIC_MODEL_NAME).nullable(),
+    reason: localized(text),
+    evidenceUrl: publicLink.nullable(),
+  }).strict()),
+  humanReview: localized(text).nullable(),
+  objectionsUrl: publicLink.nullable(),
+}).strict();
 const copyText = (allowed: string[] = [], required: string[] = []) => text.refine(value => {
   const tokens = [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]);
   return tokens.every(token => allowed.includes(token)) && required.every(token => tokens.filter(found => found === token).length === 1)
@@ -17,6 +38,7 @@ const schema = z.object({
   name: localized(text),
   contactEmail: z.email(),
   privacyEmail: z.email(),
+  aiUse: aiUseSchema,
   copy: localized(z.object({
     aiRecipient: copyText(),
     stanceDisclosure: copyText(),
@@ -43,7 +65,8 @@ const schema = z.object({
   }).strict(),
 }).strict();
 
-export type OperatorConfig = PublicOperatorSettings & { documents: Record<string, Record<string, string>> };
+export type AiUseSettings = z.infer<typeof aiUseSchema>;
+export type OperatorConfig = PublicOperatorSettings & { aiUse: AiUseSettings; documents: Record<string, Record<string, string>> };
 const placeholders = /【[^】]*】|\{\{[^}]*\}\}|REPLACE_ME|Example Operator|(?:contact|privacy)@example\.org/i;
 const documentKinds = ["terms", "privacy", "ai-policy", "principles-footer", "principles-rules-status", "principles-objections-contact"] as const;
 

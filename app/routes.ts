@@ -110,6 +110,9 @@ export default [
   route("connect.md", "routes/connect-md.ts", { id: "connect-md" }),
   route("connect.txt", "routes/connect-md.ts", { id: "connect-txt" }),
   route("stats", "routes/stats.tsx"),
+  route("ai-use", "routes/ai-use.tsx"),
+  route("ai-use.md", "routes/ai-use-md.ts", { id: "ai-use-md" }),
+  route("ai-use.txt", "routes/ai-use-md.ts", { id: "ai-use-txt" }),
   route("stats.md", "routes/stats-md.ts", { id: "stats-md" }),
   route("stats.txt", "routes/stats-md.ts", { id: "stats-txt" }),
   // Data export as a JSON download with no UI.

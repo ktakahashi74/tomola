@@ -95,6 +95,12 @@ describe("TranslatedEntry (server render)", () => {
     expectBody(html, "th", "ข้อความแปล");
     expect(html).not.toContain("原文の本文");
     expect(html).toContain('href="?orig=5#p-5"');
+    expect(html).toContain('href="/ai-use"');
+  });
+
+  it("keeps human-edited labels distinct from machine-translation disclosure links", () => {
+    const html = render({ display: { shown: "translation", pending: false, translation: { ...translation!, kind: "human" } } });
+    expect(html).not.toContain('href="/ai-use"');
   });
 
   it("renders the original with lang=ja and a link to the translation when the original is shown by default", () => {

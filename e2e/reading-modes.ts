@@ -55,6 +55,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["ai-use", ".*"],
   ["color-scheme", "member appearance|failed appearance"],
   ["other-languages", "unopened language replies|background source check|explicit source choice"],
   ["list-seen-sync", "account list boundaries|failed account exchange"],

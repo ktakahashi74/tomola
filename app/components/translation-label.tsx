@@ -50,9 +50,10 @@ export function TranslationLabel({
   notesOnly?: boolean;
 }) {
   const label = fromLang ? <span>{kind === "human" ? m.label_from_lang_human({ lang: fromLang }) : m.label_from_lang_machine({ lang: fromLang })}</span> : plain ? <span>{kind === "human" ? m.label_human() : m.label_machine_plain()}</span> : <Badge variant="secondary" className="text-muted-foreground">{concise && kind !== "human" ? m.label_machine_short() : translationLabelText(kind, engine)}</Badge>;
+  const linkedLabel = model && kind !== "human" ? <a href="/ai-use" className="underline">{label}</a> : label;
   return (
     <>
-      {notesOnly ? null : model ? <><Tooltip><TooltipTrigger render={label} /><TooltipContent role="tooltip">{model}</TooltipContent></Tooltip><span className="sr-only"> {model}</span></> : label}
+      {notesOnly ? null : model ? <><Tooltip><TooltipTrigger render={linkedLabel} /><TooltipContent role="tooltip">{model}</TooltipContent></Tooltip><span className="sr-only"> {model}</span></> : linkedLabel}
       {fallback && (
         <Tooltip><TooltipTrigger render={<Badge variant="secondary" className="bg-notice text-notice-foreground" />}>
           {m.label_fallback()}
