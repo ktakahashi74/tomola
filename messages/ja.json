@@ -2082,5 +2082,18 @@
   "post_ask_error_expired": "この答えの確認情報は期限切れか、この会員・投稿には使えません。報告や下書きの作成には、もう一度尋ねてください。",
   "post_ask_error_unavailable": "いまは AI の答えを得られませんでした。後で試すか、「AI で開く」を使ってください。",
   "ai_use_post_ask": "投稿についての非公開の問い",
-  "ai_use_sent_post_ask": "会員の問いと、選ばれた閲覧できる投稿・返信の原文と訳"
+  "ai_use_sent_post_ask": "会員の問いと、選ばれた閲覧できる投稿・返信の原文と訳",
+  "village_chat_reply": "返信",
+  "village_chat_replying": "@{handle} への返信：{text}",
+  "village_chat_reply_cancel": "返信を取り消す",
+  "village_chat_reply_unavailable": "表示できない発言",
+  "village_chat_reply_destination_unavailable": "表示できない発言です",
+  "village_chat_reply_invalid": "返信先の発言を表示できません。返信を取り消すか、別の発言を選んでください。",
+  "village_chat_reply_outside_context": "（前後の範囲の外の発言への返信）",
+  "notification_chat_activity_authors": "{handles} が「{name}」のチャットであなたに返信またはメンションしました。",
+  "notification_chat_activity_anonymous": "「{name}」のチャットであなたへの返信またはメンションがあります。",
+  "mail_subject_chat_reply": "チャットであなたへの返信があります",
+  "mail_item_chat_reply": "チャットであなたへの返信があります。\n\n{url}",
+  "mail_item_chat_reply_named": "「{name}」のチャットであなたへの返信があります。\n\n{url}",
+  "village_chat_addressed": "返信・メンション {count}件"
 }

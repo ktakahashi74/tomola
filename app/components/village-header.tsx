@@ -17,7 +17,7 @@ type ChatTab = { joined: boolean; unread: number; member?: boolean };
 function VillageTabs({ village, current, chat }: { village: VillageHead; current: "posts" | "chat"; chat: ChatTab }) {
   const data = useNavigationData();
   const mentions = data?.villages.find(item => item.slug === village.slug)?.mentions ?? 0;
-  const mentionLabel = m.village_chat_mentions({ count: mentions >= 100 ? "99+" : mentions });
+  const mentionLabel = m.village_chat_addressed({ count: mentions >= 100 ? "99+" : mentions });
   return <nav aria-label={villageName(village)} className="flex flex-wrap items-center gap-x-4 gap-y-1 ui-help">
     <Link to={`/v/${village.slug}`} aria-current={current === "posts" ? "page" : undefined} className="choice">{m.village_posts_tab()}</Link>
     {chat.joined

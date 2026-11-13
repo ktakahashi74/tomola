@@ -36,6 +36,7 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["co_author", "co_reader"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["crflow_writer", "crflow_reporter", "crflow_mod", "crflow_review", "crflow_op"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "other" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["vr_owner", "vr_reporter", "vr_operator", "vr_reviewer"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
+  ...["qry_reply_writer", "qry_reply_reader"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["vcm_author", "vcm_reader", "vcm_stranger"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["live_a", "live_b", "access_a", "access_b", "access_out", "nojs_a", "nojs_b", "ime_a", "fallback_a", "fallback_b", "history_a", "history_b"].map(name => ({ email: `vchat_${name}@example.com`, handle: `vchat_${name}`, homeArea: "other" as const, uiLocale: "en" as const })),
   ...["vc_creator", "vc_joiner", "vc_open_creator", "vc_outsider"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),

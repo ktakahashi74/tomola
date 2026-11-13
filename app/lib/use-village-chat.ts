@@ -240,5 +240,5 @@ export function useVillageChat(slug: string, initial: Snapshot, langParam: strin
   const visibleMessages = messages;
   const readLimit = chatReadThrough(initial.readSeq, readRanges);
   const gaps = useMemo(() => chatReadGaps(visibleMessages, readRanges), [visibleMessages, readRanges]);
-  return { noteSend, reconnecting, messages: visibleMessages, readLimit, gaps, loadGap, loadingGap, gapError, ended, hasNewer, before, loadOlder, loadingOlder, historyError, unreadAfter, loadNewer, loadingNewer, unreadCounts, updateUnreadCounts, refresh };
+  return { noteSend, reconnecting, messages: visibleMessages, deleted: messageWindow.deleted, readLimit, gaps, loadGap, loadingGap, gapError, ended, hasNewer, before, loadOlder, loadingOlder, historyError, unreadAfter, loadNewer, loadingNewer, unreadCounts, updateUnreadCounts, refresh };
 }

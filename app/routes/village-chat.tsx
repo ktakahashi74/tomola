@@ -11,7 +11,7 @@ import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
 import { CHAT_PRIVATE_HEADERS } from "~/lib/village-chat-auth.server";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
-import { CHAT_BODY_MAX, chatSequence } from "~/lib/village-chat";
+import { CHAT_BODY_MAX, chatSequence, chatReplyExcerpt, chatReplyFromMessage, type ChatReply, type ActiveChatMessage } from "~/lib/village-chat";
 import { acceptChatConsent, ChatError, chatPage, markChatRead, mutateChat } from "~/lib/village-chat.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { useVillageChat } from "~/lib/use-village-chat";
@@ -21,6 +21,7 @@ import { MentionTextarea } from "~/components/mention-autocomplete";
 import { m } from "~/paraglide/messages.js";
 import { displayLangFor, langQueryParam, screenReadLangsFor, villageReaderFor } from "~/lib/display-lang.server";
 import { localizeVillage } from "~/lib/village-translations.server";
+import { ChatReplyLine } from "~/components/chat-reply";
 import { ChatMessageView } from "~/components/chat-message";
 import { VillageHeader } from "~/components/village-header";
 import { useChatPosition } from "~/lib/use-chat-position";
@@ -47,7 +48,7 @@ export function headers({ actionHeaders }: Route.HeadersArgs) {
   return headers;
 }
 export const handle = { chat: true };
-export function meta({ loaderData: page }: Route.MetaArgs) { return [{ title: page ? `${villageName(page.village)} · ${m.village_chat_title()}` : m.village_chat_title() }, { name: "robots", content: "noindex" }]; }
+export function meta({ loaderData: page }: Route.MetaArgs) { return [{ title: page && !("unavailable" in page) ? `${villageName(page.village)} · ${m.village_chat_title()}` : m.village_chat_title() }, { name: "robots", content: "noindex" }]; }
 export async function loader({ request, params }: Route.LoaderArgs) {
   if (!villageChatEnabled()) throw data("Not found", { status: 404 });
   const { db, user, profile } = await requireMember(request);
@@ -57,11 +58,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (after === null || before !== undefined && after !== undefined || before === null) throw data("Bad request", { status: 400 });
   const linkLang = langQueryParam(request);
   const page = await chatPage(db, user.id, params.slug, { before, after, at: search.get("report") ?? search.get("at") ?? undefined, unread: !search.has("latest"), topics: { displayLang: displayLangFor(request, profile), readLangs: screenReadLangsFor(request, profile), langParam: linkLang } });
-  if (!page) throw redirect(`/v/${params.slug}`);
+  if (!page) {
+    if (search.has("at")) return data({ unavailable: true as const }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
+    throw redirect(`/v/${params.slug}`);
+  }
   const report = search.get("report");
   if (report && (page.consentRequired || !page.messages.some(message => !message.deleted && !message.hidden && !message.own && message.id === report))) throw data("Not found", { status: 404 });
   // The name in the reader's language when the village was named in another (its original stays in the tooltip of the head).
-  return { ...page, privacyAvailable: page.consentRequired && noticesAvailable().privacy, village: (await withVillageIcons(db, [await localizeVillage(db, page.village, villageReaderFor(request, profile))]))[0], linkLang, report, reported: search.get("reported"), now: Date.now(), latest: search.has("latest"), window: `${search.get("before") ?? ""}:${search.get("at") ?? ""}:${search.get("after") ?? ""}` };
+  return { ...page, targetUnavailable: page.consentRequired ? search.has("at") : page.targetUnavailable, privacyAvailable: page.consentRequired && noticesAvailable().privacy, village: (await withVillageIcons(db, [await localizeVillage(db, page.village, villageReaderFor(request, profile))]))[0], linkLang, report, reported: search.get("reported"), now: Date.now(), latest: search.has("latest"), window: `${search.get("before") ?? ""}:${search.get("at") ?? ""}:${search.get("after") ?? ""}` };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -103,7 +107,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         } });
       }
     } else {
-      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id") });
+      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId") });
       if (intent === "send") return redirect(`/v/${params.slug}/chat?latest=1#chat-${result.id}`);
     }
   } catch (error) {
@@ -114,7 +118,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
     if (!(error instanceof ChatError)) throw error;
     if (error.code === "not_found") throw data("Not found", { status: 404 });
-    return data({ error: error.code }, { status: error.code === "invalid" ? 400 : 403 });
+    return data({ error: error.code }, { status: ["invalid", "invalid_reply"].includes(error.code) ? 400 : 403 });
   }
   const url = new URL(request.url);
   url.searchParams.delete("_routes");
@@ -122,10 +126,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function VillageChat({ loaderData, actionData }: Route.ComponentProps) {
+  if ("unavailable" in loaderData) return <main><p role="status">{m.village_chat_reply_destination_unavailable()}</p></main>;
   if (loaderData.consentRequired) {
     return <main className="mx-auto max-w-3xl space-y-4 [overflow-wrap:anywhere]">
       <VillageHeader village={loaderData.village} current="chat" chat={{ joined: true, unread: 0 }} />
       <ChatReaders village={loaderData.village} count={loaderData.readers} />
+      {loaderData.targetUnavailable && <p role="status">{m.village_chat_reply_destination_unavailable()}</p>}
       <ChatConsentNotice privacyAvailable={loaderData.privacyAvailable} previousVersion={loaderData.previousConsentVersion} />
       {actionData && "error" in actionData && <p role="alert">{actionData.error === "limit" ? m.village_chat_limit() : actionData.error === "invalid" ? m.village_chat_consent_changed() : m.village_chat_read_only()}</p>}
       <Form method="post"><input type="hidden" name="version" value={loaderData.consentVersion} /><Button type="submit" name="intent" value="consent">{m.village_chat_consent_accept()}</Button></Form>
@@ -143,7 +149,7 @@ function ConsentedChat({ loaderData, actionData }: {
   const self = member && !member.reader ? member.handle : "";
   const initialUnread = Object.fromEntries(member && !member.reader && "villages" in member ? member.villages.map(v => [v.slug!, v.unread ?? 0]) : []);
   const snapshot = useMemo(() => ({ ...loaderData, unreadCounts: initialUnread }), [loaderData, member]);
-  const { noteSend, reconnecting, messages, readLimit, gaps, loadGap, loadingGap, gapError, ended, hasNewer, before, loadOlder, loadingOlder, historyError, unreadAfter, loadNewer, loadingNewer, unreadCounts, updateUnreadCounts, refresh } = useVillageChat(slug, snapshot, loaderData.linkLang);
+  const { noteSend, reconnecting, messages, deleted, readLimit, gaps, loadGap, loadingGap, gapError, ended, hasNewer, before, loadOlder, loadingOlder, historyError, unreadAfter, loadNewer, loadingNewer, unreadCounts, updateUnreadCounts, refresh } = useVillageChat(slug, snapshot, loaderData.linkLang);
   const [boundary] = useState(() => loaderData.messages.filter(message => !message.deleted).find(message => !message.own && !message.hidden && message.createdSeq > loaderData.readSeq)?.createdSeq);
   const lastSeq = messages.at(-1)?.createdSeq ?? 0;
   const windowHref = (key: "before" | "after" | "latest", seq: number) => `?${new URLSearchParams({ [key]: String(seq), ...(loaderData.linkLang ? { lang: loaderData.linkLang } : {}) })}`;
@@ -204,12 +210,19 @@ function ConsentedChat({ loaderData, actionData }: {
     };
   }, [ended]);
   const sendForm = useRef<HTMLFormElement>(null);
+  const [reply, setReply] = useState<ActiveChatMessage | null>(null);
+  const replyTarget = messages.find(message => message.id === reply?.id) ?? reply;
+  const pendingReply = useRef<ActiveChatMessage | null>(null);
+  const chooseReply = useCallback((message: ActiveChatMessage) => {
+    setReply(message);
+    sendForm.current?.querySelector("textarea")?.focus();
+  }, []);
   const navigation = useNavigation();
   const submission = useRef<{ intent: string; id: string } | null>(null);
   const sendingGuard = useRef(false);
   const [sending, setSending] = useState(false);
   // The message just sent is shown at once, in a lighter ink, until the server has taken it (then the real one takes its place) or has refused it.
-  const [pending, setPending] = useState<{ body: string } | null>(null);
+  const [pending, setPending] = useState<{ body: string; reply: ChatReply | null } | null>(null);
   // A message that did not get through goes back into the box (in front of anything typed since), so that nothing written is lost: "failed" when the server refused it,
   // "unconfirmed" when another navigation cut the send short and the list does not show it afterwards.
   const [restored, setRestored] = useState<null | "failed" | "unconfirmed">(null);
@@ -217,13 +230,14 @@ function ConsentedChat({ loaderData, actionData }: {
   // The newest message the screen had when the message was sent, how far the send had got when it was cut short, and what is waiting to be checked against the list.
   const sentAfter = useRef(0);
   const sendPhase = useRef<"submitting" | "loading" | null>(null);
-  const unconfirmed = useRef<{ body: string; after: number } | null>(null);
+  const unconfirmed = useRef<{ body: string; after: number; reply: ActiveChatMessage | null } | null>(null);
   const latestMessages = useRef(messages);
   latestMessages.current = messages;
   // Puts the message that was just sent back into the box, in front of anything typed since, and drops the "sending" line.
   const restoreSent = (kind: "failed" | "unconfirmed" = "failed") => {
     const field = sendForm.current?.querySelector("textarea");
     if (field && pendingBody.current) { field.value = field.value.trim() ? `${pendingBody.current}\n${field.value}` : pendingBody.current; grow(field); }
+    setReply(old => old ?? pendingReply.current);
     pendingBody.current = "";
     setPending(null); setRestored(kind);
   };
@@ -234,7 +248,7 @@ function ConsentedChat({ loaderData, actionData }: {
       // all the same, so nothing is put back at once: once the screen is settled, the list is looked at, and the message goes back into the box only if it is not there.
       // A send already at the stage of going to the newest messages has been saved, and needs no check.
       if (submission.current?.intent === "send" && intent !== "send") {
-        if (sendPhase.current !== "loading") unconfirmed.current = { body: pendingBody.current, after: sentAfter.current };
+        if (sendPhase.current !== "loading") unconfirmed.current = { body: pendingBody.current, after: sentAfter.current, reply: pendingReply.current };
         pendingBody.current = ""; setPending(null);
         submission.current = null; sendingGuard.current = false; setSending(false);
       }
@@ -265,7 +279,8 @@ function ConsentedChat({ loaderData, actionData }: {
       if (!waiting || !waiting.body.trim()) return;
       const text = waiting.body.trim();
       // The same words from this member, newer than what the screen had when it was sent: the server took it.
-      if (latestMessages.current.some(message => message.own && message.createdSeq > waiting.after && message.parts.map(part => part.text).join("").trim() === text)) return;
+      if (latestMessages.current.some(message => message.own && message.createdSeq > waiting.after && message.parts.map(part => part.text).join("").trim() === text && (message.reply?.id ?? null) === (waiting.reply?.id ?? null))) return;
+      pendingReply.current = waiting.reply;
       pendingBody.current = waiting.body;
       restoreLater.current("unconfirmed");
     }, 1500);
@@ -289,7 +304,8 @@ function ConsentedChat({ loaderData, actionData }: {
       {hasTranslations && <button type="button" className="ui-meta underline" onClick={() => setOriginals(value => !value)}>{originals ? m.village_chat_translations() : m.village_chat_originals()}</button>}
     </VillageHeader>
     <ChatReaders village={loaderData.village} count={loaderData.readers} />
-    {actionData && "error" in actionData && <p role="alert">{actionData.error === "duplicate" ? m.chat_reports_duplicate() : actionData.error === "unavailable" ? m.chat_reports_unavailable() : actionData.error === "invalid" ? m.village_chat_invalid() : actionData.error === "limit" ? m.village_chat_limit() : m.village_chat_read_only()}</p>}
+    {actionData && "error" in actionData && <p role="alert">{actionData.error === "duplicate" ? m.chat_reports_duplicate() : actionData.error === "unavailable" ? m.chat_reports_unavailable() : actionData.error === "invalid_reply" ? m.village_chat_reply_invalid() : actionData.error === "invalid" ? m.village_chat_invalid() : actionData.error === "limit" ? m.village_chat_limit() : m.village_chat_read_only()}</p>}
+    {loaderData.targetUnavailable && <p role="status">{m.village_chat_reply_destination_unavailable()} <Link className="underline" to={`/v/${slug}/chat?latest=1#chat-bottom`}>{m.village_chat_latest()}</Link></p>}
     {loaderData.reported && <p role="status">{m.chat_reports_flagged()}</p>}
     {!interactive && report && <section role="dialog" aria-label={m.chat_reports_flag()} className="fixed inset-x-4 top-20 z-50 mx-auto max-h-[calc(100dvh-6rem)] max-w-xl overflow-auto rounded border bg-background p-3 shadow">
       <ChatReportForm id={report} /><Link className="underline ui-meta" to={`/v/${slug}/chat?at=${report}#chat-${report}`}>{m.cancel()}</Link>
@@ -323,14 +339,15 @@ function ConsentedChat({ loaderData, actionData }: {
           {gap && renderGap(gap)}
           {newDay && <p role="separator" className="my-3 border-t pt-2 ui-meta text-muted-foreground">{chatDayLabel(message.createdAt, calendar, m.village_chat_today(), m.village_chat_yesterday(), day)}</p>}
           {boundary === message.createdSeq && <p id="chat-unread" className="my-3 flex scroll-mt-24 items-center gap-2 ui-meta font-medium" role="separator"><span aria-hidden="true" className="h-0.5 flex-1 bg-unread" />{m.village_chat_unread_start()}</p>}
-          <ChatMessageView message={message} ended={ended} slug={slug} originals={originals} calendar={calendar} self={self} grouped={!gap && boundary !== message.createdSeq && groupChatMessage(previous, message, calendar, previousDay, day)} onReport={openReport} tabIndex={!interactive || focusedMessage === message.id ? 0 : -1} onActivate={activateMessage} />
+          <ChatMessageView message={message} ended={ended} slug={slug} originals={originals} calendar={calendar} self={self} grouped={!gap && boundary !== message.createdSeq && groupChatMessage(previous, message, calendar, previousDay, day)} onReport={openReport} onReply={chooseReply} tabIndex={!interactive || focusedMessage === message.id ? 0 : -1} onActivate={activateMessage} />
         </div>;
       })}
       {gaps.filter(gap => gap.before === null).map(renderGap)}
-      {!messages.length && <p>{m.village_chat_empty()}</p>}
+      {!messages.length && !loaderData.targetUnavailable && <p>{m.village_chat_empty()}</p>}
     </div>
     {pending && <div data-chat-pending className="space-y-0.5 border-s-2 ps-2 text-muted-foreground">
       <p className="ui-meta">@{self}</p>
+      <ChatReplyLine reply={pending.reply} slug={slug} createdAt={new Date().toISOString()} />
       <p dir="auto" className="whitespace-pre-wrap">{pending.body}</p>
       <p className="ui-meta" role="status">{m.village_chat_sending()}</p>
     </div>}
@@ -340,22 +357,28 @@ function ConsentedChat({ loaderData, actionData }: {
     {!!lastSeq && <noscript><Form method="post"><input type="hidden" name="seq" value={lastSeq} /><Button name="intent" value="read" type="submit" variant="outline">{m.village_chat_mark_read()}</Button></Form></noscript>}
     <div ref={composer} data-chat-composer className="sticky bottom-0 z-20 border-t bg-background py-2 [&_[role=listbox]]:top-auto [&_[role=listbox]]:bottom-full [&_[role=listbox]]:mt-0 [&_[role=listbox]]:mb-1" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
       {(!position.atBottom || hasNewer) && <Link to={`/v/${slug}/chat${windowHref("latest", 1)}#chat-bottom`} className="absolute bottom-full end-3 mb-2 inline-flex items-center gap-1 rounded-full border bg-background px-3 py-1 ui-meta shadow-sm" onClick={event => { if (!hasNewer) { event.preventDefault(); position.latest(); } }}>{newMessageCount ? m.village_chat_new_messages({ count: newMessageCount >= 100 ? "99+" : String(newMessageCount) }) : m.village_chat_latest()}<ArrowDown aria-hidden="true" className="size-3.5" /></Link>}
+      {!ended && replyTarget && <div data-chat-replying className="mb-2 flex min-w-0 items-center gap-2 ui-meta">
+        <p className="min-w-0 flex-1 truncate">{deleted[replyTarget.id] || replyTarget.hidden ? m.village_chat_reply_unavailable() : m.village_chat_replying({ handle: replyTarget.author, text: chatReplyExcerpt(replyTarget.translation?.state === "ready" && replyTarget.translation.text !== null ? replyTarget.translation.text : replyTarget.parts.map(part => part.text).join("")) })}</p>
+        <button type="button" className="shrink-0 underline" onClick={() => { setReply(null); sendForm.current?.querySelector("textarea")?.focus(); }}>{m.village_chat_reply_cancel()}</button>
+      </div>}
       {ended ? <p role="status">{m.village_chat_read_only()}</p> : <Form ref={sendForm} method="post" preventScrollReset className="flex items-end gap-2" onSubmit={event => {
         if (sendingGuard.current) { event.preventDefault(); return; }
         noteSend(); sendingGuard.current = true; setSending(true);
         const field = event.currentTarget.querySelector("textarea");
         setRestored(null);
+        pendingReply.current = reply;
         sentAfter.current = lastSeq;
         // Known from the press itself, so that a navigation that comes before the screen has drawn the submission is still seen as cutting it short.
         submission.current = { intent: "send", id: "" }; sendPhase.current = "submitting";
         if (field) {
           pendingBody.current = field.value;
-          setPending({ body: field.value });
+          setPending({ body: field.value, reply: replyTarget ? chatReplyFromMessage(replyTarget) : null });
           // The form data is read right after this handler; the box is emptied once that is done.
-          setTimeout(() => { field.value = ""; grow(field); }, 0);
+          setTimeout(() => { field.value = ""; grow(field); setReply(null); }, 0);
         }
       }}>
         <input type="hidden" name="intent" value="send" />
+        <input type="hidden" name="replyToId" value={reply?.id ?? ""} />
         <div className="min-w-0 flex-1"><label htmlFor="chat-send-body" className="sr-only">{m.village_chat_body()}</label><MentionTextarea id="chat-send-body" village={slug} name="body" required placeholder={m.village_chat_placeholder({ name: villageName(loaderData.village) })} maxLength={CHAT_BODY_MAX} rows={1} className="max-h-48 w-full resize-none rounded-md border p-2" onInput={event => grow(event.currentTarget)} onKeyDown={event => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && window.matchMedia("(min-width: 640px)").matches) { event.preventDefault(); sendForm.current?.requestSubmit(); }
         }} /></div>

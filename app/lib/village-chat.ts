@@ -3,26 +3,41 @@ import { mentionCandidates } from "./mention-syntax";
 export const CHAT_BODY_MAX = 2000;
 export const CHAT_TRANSLATION_CONTEXT_COUNT = 2;
 export class ChatError extends Error {
-  constructor(public code: "not_found" | "forbidden" | "ended" | "invalid") { super(code); }
+  constructor(public code: "not_found" | "forbidden" | "ended" | "invalid" | "invalid_reply") { super(code); }
 }
 export type ChatPart = { type: "text"; text: string } | { type: "link"; text: string; href: string } | { type: "mention"; text: string; href: string };
 export type ChatMentionTarget = { prefix: string; href: string };
 export type ChatTopicCard = { id: number; title: string; lang: string; fromBody: boolean; replyCount: number; href: string; replyHref: string };
 export type ChatTranslation = { text: string | null; lang: string; state: "pending" | "ready" | "failed" | "paused"; errorCode?: string | null };
+export type ChatReply = { id: string; changedSeq: number } & ({ unavailable: true } | {
+  unavailable: false; author: string; authorName?: string | null; text: string; lang: string; editedAt: string | null;
+});
+export const chatReplyExcerpt = (body: string) => Array.from(body.replace(/\s+/gu, " ").trim()).slice(0, 120).join("");
 export type ActiveChatMessage = {
   id: string; author: string; authorName?: string | null; avatarUrl?: string | null; own: boolean; lang: string; parts: ChatPart[];
   createdSeq: number; changedSeq: number; createdAt: string;
   edited: boolean; deleted: false; hidden: boolean;
+  editedAt?: string | null;
   topics?: ChatTopicCard[];
+  reply?: ChatReply | null;
   translation: ChatTranslation | null;
 };
 export type DeletedChatMessage = {
   id: string; createdSeq: number; changedSeq: number; deleted: true;
   author?: never; own?: never; lang?: never; parts?: never; createdAt?: never; edited?: never; hidden?: never;
   topics?: never;
+  reply?: never;
   translation?: never;
 };
 export type ChatMessage = ActiveChatMessage | DeletedChatMessage;
+
+export function chatReplyFromMessage(message: ChatMessage): ChatReply {
+  if (message.deleted || message.hidden) return { id: message.id, changedSeq: message.changedSeq, unavailable: true };
+  const translated = message.translation?.state === "ready" && message.translation.text !== null;
+  return { id: message.id, changedSeq: message.changedSeq, unavailable: false, author: message.author, authorName: message.authorName,
+    text: chatReplyExcerpt(translated ? message.translation!.text! : message.parts.map(part => part.text).join("")),
+    lang: translated ? message.translation!.lang : message.lang, editedAt: message.editedAt ?? null };
+}
 
 function trimLink(raw: string): string {
   let href = raw.replace(/[.,;:!?\[\]}'\\]+$/, "");

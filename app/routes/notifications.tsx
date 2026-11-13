@@ -1,3 +1,4 @@
+import { isChatNotification } from "~/lib/notifications";
 import { pushOpeningIds } from "~/lib/push/opening.server";
 import { translationReportResultText } from "~/lib/translation-report-result-text";
 import { namedAuthorLabel } from "~/lib/deleted-member";
@@ -131,11 +132,11 @@ function OpenNotification({ id, target, group, children }: { id: number; target?
 
 type Item = Route.ComponentProps["loaderData"]["items"][number];
 
-function NotificationText({ n, homeArea, handles, count }: { n: Item; homeArea: string; handles: string[]; count: number }) {
+function NotificationText({ n, homeArea, handles, count }: { n: Item & { chatHasReply?: boolean }; homeArea: string; handles: string[]; count: number }) {
   if (n.kind === "source_language_mismatch") return <>{n.unavailable ? m.notification_content_unavailable() : <>{m.posted_language_mismatch({ lang: localizedLanguageLabel(n.entryLang ?? "other", getLocale(), n.entryLangCode) })} {m.posted_fix_lang()}</>}</>;
   if (n.kind === "entry_translation_unavailable") return <>{n.unavailable ? m.notification_content_unavailable() : m.posted_untranslatable()}</>;
   if (n.kind === "translation_report_result") return <>{n.unavailable || !n.translationResult ? m.notification_content_unavailable() : translationReportResultText(n.translationResult, n.topicTitle, getLocale())}</>;
-  if (n.kind === "chat_mention" && n.chat) return <span title={n.chat.originalName}>{handles.length ? m.notification_chat_authors({ handles: handles.map(handle => `@${handle}`).join(", "), name: villageName(n.chat) }) : m.notification_chat_anonymous({ name: villageName(n.chat) })}{count > 1 && <> {m.notification_chat_count({ count })}</>}</span>;
+  if (isChatNotification(n.kind) && n.chat) return <span title={n.chat.originalName}>{n.chatHasReply ? (handles.length ? m.notification_chat_activity_authors({ handles: handles.map(handle => `@${handle}`).join(", "), name: villageName(n.chat) }) : m.notification_chat_activity_anonymous({ name: villageName(n.chat) })) : handles.length ? m.notification_chat_authors({ handles: handles.map(handle => `@${handle}`).join(", "), name: villageName(n.chat) }) : m.notification_chat_anonymous({ name: villageName(n.chat) })}{count > 1 && <> {m.notification_chat_count({ count })}</>}</span>;
   if (n.kind === "village_invite" || n.kind === "village_removed" || n.kind === "village_owner_changed" || n.kind === "village_added") {
     if (!n.village) return <>{m.village_error_unavailable()}</>;
     const name = villageName(n.village);

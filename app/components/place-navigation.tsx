@@ -19,7 +19,7 @@ export function ChatEntry({ slug, name, unread = 0, mentions = 0, current = fals
 }) {
   const labels = useShellLabels();
   const pending = unread > 0 || mentions > 0;
-  const mentionLabel = m.village_chat_mentions({ count: mentions >= 100 ? "99+" : mentions });
+  const mentionLabel = m.village_chat_addressed({ count: mentions >= 100 ? "99+" : mentions });
   return <Link to={`/v/${slug}/chat`} aria-current={current ? "page" : undefined}
     aria-label={`${name} · ${labels.village_chat_title}${mentions > 0 ? ` · ${mentionLabel}` : unread > 0 ? ` · ${labels.notification_unread}` : ""}`}
     className={cn("choice shrink-0 gap-1 px-1 ui-meta", quiet && !pending && !current && "opacity-70", className)}>
@@ -34,7 +34,7 @@ export function ChatEntry({ slug, name, unread = 0, mentions = 0, current = fals
 function ChatMark({ slug, name, unread, mentions }: { slug: string; name: string; unread: number; mentions: number }) {
   const labels = useShellLabels();
   if (unread <= 0 && mentions <= 0) return null;
-  const mentionLabel = m.village_chat_mentions({ count: mentions >= 100 ? "99+" : mentions });
+  const mentionLabel = m.village_chat_addressed({ count: mentions >= 100 ? "99+" : mentions });
   return <Link to={`/v/${slug}/chat`} aria-label={`${name} · ${labels.village_chat_title} · ${mentions > 0 ? mentionLabel : labels.notification_unread}`}
     className="-my-1 inline-flex min-h-8 min-w-8 shrink-0 items-center justify-center whitespace-nowrap">
     {mentions > 0 ? <CountBadge count={mentions} label={mentionLabel} tone="strong" cap={99} /> : <UnreadDot />}

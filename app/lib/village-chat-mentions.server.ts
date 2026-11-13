@@ -41,28 +41,43 @@ export async function resolveChatMentions(tx: Db, villageId: string, body: strin
 
 // Current bindings are replaced, while told recipients survive edits and notification cleanup.
 // A NULL notification timestamp is an active binding only; obsolete untold bindings can be removed.
-export async function saveChatMentions(tx: Db, input: { messageId: string; villageId: string; authorId: string; targets: Target[]; now: Date; isNew: boolean }) {
-  const { messageId, villageId, authorId, targets, now } = input;
+export async function saveChatMentions(tx: Db, input: { messageId: string; villageId: string; authorId: string; targets: Target[]; replyAuthorId?: string | null; now: Date; isNew: boolean }) {
+  const { messageId, villageId, authorId, now } = input;
+  const targets = [...input.targets];
+  // The reply recipient goes first and shares the durable once-per-message ledger with mentions.
+  if (input.isNew && input.replyAuthorId) {
+    const [member] = await tx.select({ userId: villageMembers.userId }).from(villageMembers)
+      .where(and(eq(villageMembers.villageId, villageId), eq(villageMembers.userId, input.replyAuthorId))).for("share");
+    const [profile] = member ? await tx.select({ publicId: profiles.publicId }).from(profiles).where(eq(profiles.userId, member.userId)) : [];
+    if (member && profile) {
+      const existing = targets.find(target => target.userId === member.userId);
+      if (existing) targets.splice(targets.indexOf(existing), 1);
+      targets.unshift(existing ?? { userId: member.userId, publicId: profile.publicId, tokens: [] });
+    }
+  }
   const old = input.isNew ? [] : await tx.select({ userId: chatMentions.userId, notifiedAt: chatMentions.notifiedAt }).from(chatMentions).where(eq(chatMentions.messageId, messageId));
   const told = new Set(old.filter(row => row.notifiedAt !== null).map(row => row.userId));
   if (!input.isNew) {
     await tx.delete(chatMentions).where(and(eq(chatMentions.messageId, messageId), isNull(chatMentions.notifiedAt)));
     await tx.update(chatMentions).set({ tokens: [] }).where(eq(chatMentions.messageId, messageId));
   }
-  const created: Array<{ id: number; userId: string; kind: "chat_mention" }> = [];
+  const created: Array<{ id: number; userId: string; kind: "chat_mention" | "chat_reply" }> = [];
   const [suspended] = targets.length ? await tx.select({ id: profiles.userId }).from(profiles).where(and(eq(profiles.userId, authorId), gt(profiles.suspendedUntil, now))) : [];
   const consented = new Set(targets.length ? (await tx.select({ userId: chatConsents.userId }).from(chatConsents)
     .where(and(eq(chatConsents.villageId, villageId), inArray(chatConsents.userId, targets.map(target => target.userId)), eq(chatConsents.version, CHAT_CONSENT_VERSION)))).map(row => row.userId) : []);
   for (const target of [...targets].sort((a, b) => a.userId.localeCompare(b.userId))) {
     await tx.insert(chatMentions).values({ messageId, userId: target.userId, publicId: target.publicId, tokens: target.tokens }).onConflictDoUpdate({ target: [chatMentions.messageId, chatMentions.userId], set: { tokens: target.tokens } });
   }
-  // Quota follows source order, matching posting mentions; writes already hold recipients' membership locks.
+  // The reply recipient takes the first slot; remaining quota follows mention source order. Membership locks are held.
+  const stopped = new Set(targets.length ? (await tx.select({ id: profiles.userId }).from(profiles)
+    .where(and(inArray(profiles.userId, targets.map(target => target.userId)), gt(profiles.suspendedUntil, now)))).map(row => row.id) : []);
   for (const target of targets) {
-    if (suspended || !consented.has(target.userId) || target.userId === authorId || told.has(target.userId) || told.size >= MENTION_NOTIFY_LIMIT) continue;
+    if (stopped.has(target.userId) || suspended || !consented.has(target.userId) || target.userId === authorId || told.has(target.userId) || told.size >= MENTION_NOTIFY_LIMIT) continue;
     await tx.update(chatMentions).set({ notifiedAt: now }).where(and(eq(chatMentions.messageId, messageId), eq(chatMentions.userId, target.userId)));
     told.add(target.userId);
-    const [row] = await tx.insert(notifications).values({ userId: target.userId, kind: "chat_mention", villageId, chatMessageId: messageId, createdAt: now }).returning({ id: notifications.id });
-    created.push({ id: row.id, userId: target.userId, kind: "chat_mention" });
+    const kind = input.isNew && target.userId === input.replyAuthorId ? "chat_reply" : "chat_mention";
+    const [row] = await tx.insert(notifications).values({ userId: target.userId, kind, villageId, chatMessageId: messageId, createdAt: now }).returning({ id: notifications.id });
+    created.push({ id: row.id, userId: target.userId, kind });
   }
   await enqueueImmediateEmails(tx, created, { now });
 }

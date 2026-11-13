@@ -1,3 +1,4 @@
+import { isChatNotification } from "~/lib/notifications";
 import { webPushEnabled } from "../push/config.server";
 import { immediateNotifications } from "../notification-access.server";
 import { notificationHref } from "../notification-opening.server";
@@ -132,12 +133,12 @@ async function buildItems(db: Db, rows: readonly NotificationRow[], recipient: R
   const appealRows = appealIds.length === 0 ? [] : await db.select({ id: appeals.id, status: appeals.status, reversed: appeals.reversed }).from(appeals).where(inArray(appeals.id, appealIds));
   const actionById = new Map(actions.map((a) => [a.id, a]));
   const appealById = new Map(appealRows.map((a) => [a.id, a]));
-  const chatRows = rows.filter(row => row.kind === "chat_mention");
+  const chatRows = rows.filter(row => isChatNotification(row.kind));
 
   for (const row of rows) {
     const kind = row.kind as NotificationKind;
     if (isInAppOnlyKind(kind)) { suppressed.add(row.id); continue; }
-    if (kind === "chat_mention" || kind === "village_invite" || kind === "translation_report_result") continue;
+    if (isChatNotification(kind) || kind === "village_invite" || kind === "translation_report_result") continue;
     if (kind === "village_added" || kind === "village_removed" || kind === "village_owner_changed") {
       if (!villagesEnabled()) { suppressed.add(row.id); continue; }
       // The detailed reason and invitation remain on the authenticated screen.
@@ -220,7 +221,7 @@ async function buildItems(db: Db, rows: readonly NotificationRow[], recipient: R
   for (const row of chatRows) {
     const location = chatLocations.get(row.id);
     if (!location) { suppressed.add(row.id); continue; }
-    items.set(row.id, { kind: "chat_mention", url: siteUrl(`/v/${location.slug}/chat?at=${location.id}#chat-${location.id}`), villageName: chatMailVillageName(await localizeVillage(db, location, mailReader), localeOf(profile)) });
+    items.set(row.id, { kind: row.kind as "chat_mention" | "chat_reply", url: siteUrl(`/v/${location.slug}/chat?at=${location.id}#chat-${location.id}`), villageName: chatMailVillageName(await localizeVillage(db, location, mailReader), localeOf(profile)) });
   }
   // Recheck invitations after asynchronous content work, immediately before delivery.
   const inviteRows = rows.filter(row => row.kind === "village_invite");
@@ -311,7 +312,7 @@ export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobH
   const pendingConditions = (date: string, now: Date) => {
     const before = new Date(`${date}T00:00:00Z`);
     const since = new Date(now.getTime() - DIGEST_WINDOW_DAYS * DAY_MS);
-    const autoImmediateKinds = villageChatEnabled() ? [...AUTO_IMMEDIATE_KINDS] : AUTO_IMMEDIATE_KINDS.filter(kind => kind !== "chat_mention");
+    const autoImmediateKinds = villageChatEnabled() ? [...AUTO_IMMEDIATE_KINDS] : AUTO_IMMEDIATE_KINDS.filter(kind => !isChatNotification(kind));
     return and(
       notInArray(notifications.kind, [...IN_APP_ONLY_KINDS]),
       or(eq(profiles.emailPref, "daily"), and(eq(profiles.emailPref, "auto"), notInArray(notifications.kind, autoImmediateKinds))),

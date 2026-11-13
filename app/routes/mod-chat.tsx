@@ -112,15 +112,17 @@ export default function ModChat({ loaderData, actionData }: Route.ComponentProps
     {!loaderData.closed && opened?.snapshot && <section className="space-y-2 rounded border p-3" aria-label={m.chat_reports_snapshot()}>
       <h2 className="font-semibold">{m.chat_reports_snapshot()}</h2>
       <p>@{opened.snapshot.author} · {opened.snapshot.createdAt}</p>
+      <EvidenceReply reply={opened.snapshot.reply} />
       {opened.snapshot.body === null ? <p>{m.chat_reports_pruned()}</p> : <pre lang={opened.snapshot.lang} className="whitespace-pre-wrap font-sans">{opened.snapshot.body}</pre>}
       {opened.deleted && <p>{m.chat_reports_deleted()}</p>}
-      {opened.current && <><h3>{m.chat_reports_current()}</h3><pre lang={opened.current.lang} className="whitespace-pre-wrap font-sans">{opened.current.body}</pre></>}
+      {opened.current && <><h3>{m.chat_reports_current()}</h3><EvidenceReply reply={opened.current.reply} /><pre lang={opened.current.lang} className="whitespace-pre-wrap font-sans">{opened.current.body}</pre></>}
     </section>}
     {!loaderData.closed && opened?.statement && <section><h2>{m.mod_appeals_text()}</h2><pre className="whitespace-pre-wrap font-sans">{opened.statement}</pre>{opened.explanation && <p>{opened.explanation}</p>}</section>}
     {!loaderData.closed && opened?.assessments.map(report => <AiReportAssessment key={report.id} report={report} />)}
     {!loaderData.closed && <fetcher.Form method="post"><Button type="submit" name="intent" value="context" disabled={busy}>{m.chat_reports_context()}</Button></fetcher.Form>}
     {!loaderData.closed && !!context.length && <section className="space-y-3" aria-label={m.chat_reports_context()}>{context.map(message => <article key={message.id} className="rounded border p-3">
       <p className="ui-meta">@{message.author} · {message.createdAt} {message.hidden && m.village_chat_hidden()}</p>
+      <EvidenceReply reply={message.reply} />
       <pre lang={message.lang} className="whitespace-pre-wrap font-sans">{message.body}</pre>
     </article>)}</section>}
     {!loaderData.closed && previous !== undefined && <fetcher.Form method="post" className="space-y-2">
@@ -143,4 +145,9 @@ export default function ModChat({ loaderData, actionData }: Route.ComponentProps
     </Form>}
     <p className="flex gap-4"><Link to="/mod" className="underline">{m.mod_title()}</Link>{loaderData.operator && <Link to="/admin/chat-access" className="underline">{m.chat_access_title()}</Link>}</p>
   </main>;
+}
+
+function EvidenceReply({ reply }: { reply: ChatEvidenceMessage["reply"] }) {
+  if (!reply) return null;
+  return <p data-chat-reply className="truncate border-s-2 ps-2 ui-meta text-muted-foreground">{"outside" in reply ? m.village_chat_reply_outside_context() : reply.unavailable ? m.village_chat_reply_unavailable() : <span lang={reply.lang}>@{reply.author}: {reply.text}</span>}</p>;
 }

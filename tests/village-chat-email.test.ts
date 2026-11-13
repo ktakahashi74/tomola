@@ -17,7 +17,7 @@ import { m } from "~/paraglide/messages.js";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
-async function world(pref = "auto", kind = "open") {
+async function world(pref = "auto", kind = "open", reply = false) {
   vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
   const db = await createTestDb();
   await addMember(db, "writer", "vcm_writer"); await addMember(db, "target", "vcm_target");
@@ -25,7 +25,8 @@ async function world(pref = "auto", kind = "open") {
   const [village] = await db.insert(villages).values({ slug: "mail-village", name: "Public village name", kind }).returning();
   await db.insert(villageMembers).values(["writer", "target"].map(userId => ({ villageId: village.id, userId })));
   await consentChatMembers(db);
-  const sent = await mutateChat(db, "writer", village.slug!, "send", { body: "sensitive-body-marker @vcm_target" });
+  const parent = reply ? await mutateChat(db, "target", village.slug!, "send", { body: "sensitive-reply-parent" }) : null;
+  const sent = await mutateChat(db, "writer", village.slug!, "send", { body: "sensitive-body-marker @vcm_target", replyToId: parent?.id });
   const [notice] = await db.select().from(notifications);
   const box = createMemoryMailbox(); const mailer = createMailer(box.transport, "tomola <no-reply@example.org>");
   const handlers = createNotificationHandlers({ mailer: () => mailer });
@@ -143,4 +144,21 @@ it.each([["", ""], ["1", ""], ["1", "1"]])("preserves digest query parameters wh
   expect(pending!.sql.includes('"chat_message_id"')).toBe(chatFlag === "1");
   expect([...seen.tables]).not.toContain("chat_messages"); expect([...seen.tables]).not.toContain("villages");
   seen.restore();
+});
+
+it.each(["auto", "daily"])("delivers chat replies without source, reply, or author text (%s)", async pref => {
+  const { db, sent, notice, box, run } = await world(pref, "open", true);
+  expect(notice.kind).toBe("chat_reply");
+  if (pref === "daily") { const next = await ensureDigestScheduled(db); await run(next.runAt); }
+  else await run();
+  expect(box.sent).toHaveLength(1);
+  expect(box.sent[0].text).toContain(`/chat?at=${sent.id}`);
+  for (const marker of ["sensitive-body-marker", "sensitive-reply-parent", "vcm_writer", "vcm_target"]) expect(JSON.stringify(box.sent)).not.toContain(marker);
+});
+
+it("suppresses queued reply mail after the recipient leaves", async () => {
+  const { db, box, run } = await world("auto", "open", true);
+  await db.delete(villageMembers).where(eq(villageMembers.userId, "target"));
+  await run();
+  expect(box.sent).toEqual([]);
 });

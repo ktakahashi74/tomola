@@ -28,6 +28,30 @@ afterEach(() => { stopVillageChat(); vi.unstubAllEnvs(); });
 const args = (as?: string, query = "") => h.args(h.request(`/v/route-chat/chat${query}`, as ? { as } : {}), { slug: "route-chat" });
 const enabled = () => { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1"); };
 
+it("accepts an immutable reply parent and rejects forged parents with one public error", async () => {
+  enabled();
+  for (const handle of ["qry_route_writer", "qry_route_reader"]) await h.signIn(handle);
+  const slug = "route-chat-replies";
+  const [village] = await h.db.insert(villages).values({ slug, kind: "open" }).returning();
+  await h.db.insert(villageMembers).values(["qry_route_writer", "qry_route_reader"].map(handle => ({ villageId: village.id, userId: h.ids[handle] })));
+  await consentChatMembers(h.db);
+  const parent = await mutateChat(h.db, h.ids.qry_route_reader, slug, "send", { body: "Route reply target" });
+  const post = (replyToId: string, extra = {}) => action(h.args(h.request(`/v/${slug}/chat`, { as: "qry_route_writer", form: { intent: "send", body: "Route reply", replyToId, ...extra } }), { slug }));
+  for (const replyToId of ["bad-id", "f".repeat(32)]) expect(await post(replyToId)).toMatchObject({ data: { error: "invalid_reply" }, init: { status: 400 } });
+  const sent = await post(parent.id);
+  expect(sent).toMatchObject({ status: 302 });
+  const [reply] = await h.db.select().from(chatMessages).where(eq(chatMessages.authorId, h.ids.qry_route_writer));
+  expect(reply.replyToId).toBe(parent.id);
+  await post("f".repeat(32), { intent: "edit", id: reply.id, body: "Changed body" });
+  expect((await h.db.select().from(chatMessages).where(eq(chatMessages.id, reply.id)))[0].replyToId).toBe(parent.id);
+  await h.db.update(chatMessages).set({ hiddenAt: new Date() }).where(eq(chatMessages.id, parent.id));
+  expect(await post(parent.id)).toMatchObject({ data: { error: "invalid_reply" }, init: { status: 400 } });
+  const unavailable = await page(h.args(h.request(`/v/${slug}/chat?at=${parent.id}`, { as: "qry_route_writer" }), { slug }));
+  expect(unavailable).toMatchObject({ targetUnavailable: true, messages: [] });
+  const outside = await page(h.args(h.request(`/v/${slug}/chat?at=${parent.id}`, { as: "chatoutsider" }), { slug }));
+  expect(outside).toMatchObject({ data: { unavailable: true }, init: { status: 404 } });
+});
+
 it("acknowledges a translation report without exposing its case sequence number", async () => {
   enabled(); vi.stubEnv("ENABLED_LANGS", "ja,en");
   for (const handle of ["qrack_writer", "qrack_reader"]) await h.signIn(handle);

@@ -59,6 +59,8 @@ export function itemText(item: MailItem, locale: Locale): string {
   switch (item.kind) {
     case "translation_report_result":
       return `${item.translationResult ? translationReportResultText(item.translationResult, item.title, locale) : m.notification_content_unavailable({}, o)}\n${item.url}`;
+    case "chat_reply":
+      return item.villageName === undefined ? m.mail_item_chat_reply({ url: item.url }, o) : m.mail_item_chat_reply_named({ name: item.villageName, url: item.url }, o);
     case "chat_mention":
       return item.villageName === undefined ? m.mail_item_chat_mention({ url: item.url }, o) : m.mail_item_chat_mention_named({ name: item.villageName, url: item.url }, o);
     case "village_added":
@@ -115,6 +117,8 @@ function subjectFor(item: MailItem, locale: Locale): string {
   const o = { locale };
   switch (item.kind) {
     case "translation_report_result": return m.mail_subject_translation_report_result({}, o);
+    case "chat_reply":
+      return m.mail_subject_chat_reply({}, o);
     case "chat_mention":
       return m.mail_subject_chat_mention({}, o);
     case "village_added":

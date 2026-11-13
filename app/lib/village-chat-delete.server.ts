@@ -19,7 +19,7 @@ export async function deleteChatRows(db: Db, villageId: string, userId: string, 
   const ids = active.map(row => row.id);
   await clearChatTranslations(db, ids);
   await db.delete(chatMentions).where(inArray(chatMentions.messageId, ids));
-  await db.delete(notifications).where(and(eq(notifications.kind, "chat_mention"), inArray(notifications.chatMessageId, ids)));
+  await db.delete(notifications).where(and(inArray(notifications.kind, ["chat_mention", "chat_reply"]), inArray(notifications.chatMessageId, ids)));
   const now = new Date();
   // A translation-quality report is not evidence for a decision about the author, so a deleted message must not stay readable in a reviewer's queue or in the handled
   // reports: close the open or queued ones, and erase the copies (original, translation, reporter's note) of every report about the message. The report rows and the

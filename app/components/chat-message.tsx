@@ -1,4 +1,5 @@
 import { ChatTranslationReport } from "~/components/chat-translation-report";
+import { ChatReplyLine } from "~/components/chat-reply";
 import { memo, useEffect, useState } from "react";
 import { Form, Link } from "react-router";
 import { CHAT_BODY_MAX, chatParts, type ActiveChatMessage } from "~/lib/village-chat";
@@ -10,8 +11,8 @@ import { m } from "~/paraglide/messages.js";
 import { chatClock, type ChatCalendar } from "~/lib/chat-calendar";
 import { useTranslationWait, waitText } from "~/lib/translation-wait";
 
-export const ChatMessageView = memo(function ChatMessageView({ message, ended, slug, originals, grouped, calendar, self, onReport, tabIndex = 0, onActivate }: {
-  message: ActiveChatMessage; ended: boolean; slug: string; originals: boolean; grouped: boolean; calendar: ChatCalendar; self: string; onReport: (id: string) => void; tabIndex?: number; onActivate?: (id: string) => void;
+export const ChatMessageView = memo(function ChatMessageView({ message, ended, slug, originals, grouped, calendar, self, onReport, onReply, tabIndex = 0, onActivate }: {
+  message: ActiveChatMessage; ended: boolean; slug: string; originals: boolean; grouped: boolean; calendar: ChatCalendar; self: string; onReport: (id: string) => void; onReply?: (message: ActiveChatMessage) => void; tabIndex?: number; onActivate?: (id: string) => void;
 }) {
   const [actionsShown, setActionsShown] = useState(false);
   const [selection, setSelection] = useState<{ basis: boolean; override: boolean | null }>({ basis: originals, override: null });
@@ -44,6 +45,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {!grouped && translated && <TranslationMark tabIndex={interactionTabIndex} />}
     </p>
     {message.hidden ? <p>{m.village_chat_hidden()}</p> : <>
+      <ChatReplyLine reply={message.reply} slug={slug} createdAt={message.createdAt} tabIndex={interactionTabIndex} />
       {grouped && translated && <span className="float-end"><TranslationMark tabIndex={interactionTabIndex} /></span>}
       {!onlyPostCard && <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>}
       {message.translation?.state === "pending" && (waiting || wait.kind !== "normal") && <p className="mt-1 ui-help text-muted-foreground">{wait.kind === "normal" ? m.village_chat_translation_pending() : waitText(wait, false)}</p>}
@@ -55,6 +57,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       focus-within:pointer-events-auto focus-within:opacity-100 sm:group-hover/chat:pointer-events-auto sm:group-hover/chat:opacity-100
       max-sm:flex-wrap pointer-coarse:flex-wrap data-[shown=true]:pointer-events-auto data-[shown=true]:opacity-100 max-sm:data-[shown=true]:static max-sm:data-[shown=true]:mt-1 pointer-coarse:data-[shown=true]:static pointer-coarse:data-[shown=true]:mt-1
       has-[details[open]]:pointer-events-auto has-[details[open]]:static has-[details[open]]:mt-1 has-[details[open]]:flex-wrap has-[details[open]]:opacity-100`}>
+      {!ended && !message.hidden && onReply && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => onReply(message)}>{m.village_chat_reply()}</button>}
       {!message.hidden && message.translation?.state === "ready" && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => setSelection({ basis: originals, override: !original })}>{original ? m.village_chat_translation_show() : m.village_chat_translation_original()}</button>}
       {!message.own && !message.hidden && translated && <ChatTranslationReport key={message.translation!.text} id={message.id} lang={message.translation!.lang} tabIndex={interactionTabIndex} />}
       {!message.own && !message.hidden && <Link tabIndex={interactionTabIndex} className="underline" to={`/v/${slug}/chat?report=${message.id}`} onClick={event => { event.preventDefault(); onReport(message.id); }}>{m.chat_reports_flag()}</Link>}

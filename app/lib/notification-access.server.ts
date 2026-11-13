@@ -1,3 +1,4 @@
+import { isChatNotification } from "./notifications";
 import { chatNotificationLocations } from "./village-chat-notifications.server";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import type { Db } from "./db/client.server";
@@ -14,7 +15,7 @@ export async function immediateNotifications(db: Db, userId: string, ids: number
   if (!rows.length) return new Map();
   const actors = rows.flatMap(row => row.kind === "mention" && row.actorId ? [row.actorId] : []);
   const suspended = new Set(actors.length ? (await db.select({ id: profiles.userId }).from(profiles).where(and(inArray(profiles.userId, actors), gt(profiles.suspendedUntil, now)))).map(row => row.id) : []);
-  const chat = rows.filter(row => row.kind === "chat_mention");
+  const chat = rows.filter(row => isChatNotification(row.kind));
   const chatLocations = chat.length ? await chatNotificationLocations(db, chat, userId, now) : new Map();
   const { items } = await listNotifications(db, userId, { ids: rows.map(row => row.id), limit: rows.length });
   const hrefs = await notificationHrefs(db, items);
@@ -22,7 +23,7 @@ export async function immediateNotifications(db: Db, userId: string, ids: number
   return new Map(items.flatMap(item => {
     const row = byId.get(item.id)!;
     const href = hrefs.get(item.id);
-    return item.unavailable || !href || row.kind === "mention" && row.actorId && suspended.has(row.actorId) || row.kind === "chat_mention" && !chatLocations.has(row.id)
+    return item.unavailable || !href || row.kind === "mention" && row.actorId && suspended.has(row.actorId) || isChatNotification(row.kind) && !chatLocations.has(row.id)
       ? [] : [[row.id, { row, item, href }] as const];
   }));
 }

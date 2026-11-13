@@ -16,6 +16,25 @@ it("keeps unchanged messages and counts referentially stable", () => {
   expect(mergeChatUnreadCounts(counts, { a: 1 })).toBe(counts);
   expect(mergeChatUnreadCounts(counts, { a: 0 })).toEqual({ a: 0, b: 2 });
 });
+it("refreshes loaded reply previews from parents outside the window and resists delayed stale previews", () => {
+  const parent = message(1);
+  const reply = { ...message(50), reply: { id: "1", changedSeq: 1, unavailable: false as const, author: "writer", text: "Message 1", lang: "en", editedAt: null } };
+  const initial = mergeChatMessages(emptyChatWindow(), [reply]);
+  const edited = mergeChatMessages(initial, [{ ...parent, changedSeq: 51, parts: [{ type: "text", text: "Current parent" }], edited: true, editedAt: new Date(51_000).toISOString() }], { onlyExisting: true });
+  expect(edited.messages.map(m => m.id)).toEqual(["50"]);
+  expect(edited.messages[0].reply).toMatchObject({ text: "Current parent", changedSeq: 51 });
+  expect(mergeChatMessages(edited, [reply]).messages[0].reply).toMatchObject({ text: "Current parent" });
+  const removed = mergeChatMessages(edited, [{ id: "1", createdSeq: 1, changedSeq: 52, deleted: true }]);
+  expect(removed.messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
+  expect(mergeChatMessages(removed, [reply, parent]).messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
+  expect(JSON.stringify(removed)).not.toContain("Current parent");
+  const beforeReplyLoaded = mergeChatMessages(emptyChatWindow(), [{ id: "1", createdSeq: 1, changedSeq: 52, deleted: true }]);
+  expect(mergeChatMessages(beforeReplyLoaded, [reply]).messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
+  const hiddenBeforeReplyLoaded = mergeChatMessages(emptyChatWindow(), [{ ...parent, hidden: true, parts: [], changedSeq: 52 }], { onlyExisting: true });
+  expect(mergeChatMessages(hiddenBeforeReplyLoaded, [reply]).messages[0].reply).toEqual({ id: "1", changedSeq: 52, unavailable: true });
+  const loadedCurrentParent = mergeChatMessages(emptyChatWindow(), [{ ...parent, changedSeq: 53, parts: [{ type: "text", text: "Already current" }] }]);
+  expect(mergeChatMessages(loadedCurrentParent, [reply]).messages[1].reply).toMatchObject({ text: "Already current", changedSeq: 53 });
+});
 it("bounds a live window around its visible anchor and permits travel in both directions", () => {
   const all = Array.from({ length: CHAT_MESSAGE_LIMIT + 60 }, (_, i) => message(i + 1));
   const recent = mergeChatMessages(emptyChatWindow(), all, { edge: "newer" });

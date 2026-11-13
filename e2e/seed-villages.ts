@@ -158,6 +158,10 @@ export async function seedVillages(db: Db, dir: string) {
   const historyMessages = await db.insert(chatMessages).values(Array.from({ length: 125 }, (_, i) => ({ villageId: history.id, authorId: historyAuthor.id, lang: "en", body: `History message ${i + 1}`, createdSeq: i + 1, changedSeq: i + 1 }))).returning({ id: chatMessages.id });
   await db.insert(chatSequences).values({ villageId: history.id, seq: 125 });
   fs.writeFileSync(path.join(dir, "chat-history.json"), JSON.stringify({ at: historyMessages[54].id }));
+  const [replyVillage] = await db.insert(villages).values({ slug: "chat-replies", name: "Chat replies", kind: "open" }).returning();
+  await db.insert(villageMembers).values(["qry_reply_writer", "qry_reply_reader"].map(handle => ({ villageId: replyVillage.id, userId: byHandle.get(handle)! })));
+  await db.insert(chatMessages).values(Array.from({ length: 70 }, (_, i) => ({ villageId: replyVillage.id, authorId: byHandle.get("qry_reply_reader")!, lang: "en", body: `Reply history ${i + 1}`, createdSeq: i + 1, changedSeq: i + 1 })));
+  await db.insert(chatSequences).values({ villageId: replyVillage.id, seq: 70 });
   const [mentionVillage] = await db.select().from(villages).where(eq(villages.slug, "chat-mentions"));
   const [mentionAuthor] = await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.handle, "vcm_author"));
   await db.insert(chatMessages).values(Array.from({ length: 60 }, (_, i) => ({ villageId: mentionVillage.id, authorId: mentionAuthor.id, lang: "en", body: `Mention history ${i + 1}`, createdSeq: i + 1, changedSeq: i + 1 })));

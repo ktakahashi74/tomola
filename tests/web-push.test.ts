@@ -152,6 +152,25 @@ it.each(["membership", "consent", "author", "hidden", "unaddressable"])("recheck
 });
 
 
+it("delivers generic chat reply push without either message body or a private village name", async () => {
+  const f = await fixture();
+  await f.db.delete(pushDeliveries);
+  vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
+  const [village] = await f.db.insert(villages).values({ slug: "push-chat-reply", name: "Private village marker", kind: "open" }).returning();
+  await f.db.insert(villageMembers).values(["push_reader", "push_author"].map(userId => ({ userId, villageId: village.id })));
+  await (await import("./helpers/chat-consent")).consentChatMembers(f.db);
+  const { mutateChat } = await import("~/lib/village-chat.server");
+  const parent = await mutateChat(f.db, "push_reader", village.slug!, "send", { body: "Private parent marker" });
+  await mutateChat(f.db, "push_author", village.slug!, "send", { body: "Private chat reply marker @push_reader", replyToId: parent.id });
+  expect(await f.db.select().from(pushDeliveries)).toHaveLength(1);
+  const send = vi.fn(async () => ({ kind: "accepted" as const }));
+  await runDueJobs(f.db, createPushHandlers({ send }), { now: f.now });
+  expect(send).toHaveBeenCalledTimes(1);
+  const payload = JSON.stringify(send.mock.calls[0]);
+  for (const marker of ["Private parent marker", "Private chat reply marker", "Private village marker", "push_author"]) expect(payload).not.toContain(marker);
+  expect(payload).toContain(pushMessage("chat_reply", "en"));
+});
+
 it("does not fold an older deferred notice into a new delivery window", async () => {
   const f = await fixture();
   await f.db.update(pushDeliveries).set({ createdAt: new Date(Date.now() - 120000) }).where(eq(pushDeliveries.id, f.delivery.id));

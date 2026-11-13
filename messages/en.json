@@ -2860,5 +2860,18 @@
   "post_ask_error_expired": "This answer’s confirmation has expired or is not valid for this member and post. Ask again before reporting it or making a draft.",
   "post_ask_error_unavailable": "The AI could not answer now. Try later, or use Open in AI.",
   "ai_use_post_ask": "Private questions about posts",
-  "ai_use_sent_post_ask": "The member’s question and selected readable post and reply originals and translations"
+  "ai_use_sent_post_ask": "The member’s question and selected readable post and reply originals and translations",
+  "village_chat_reply": "Reply",
+  "village_chat_replying": "Replying to @{handle}: {text}",
+  "village_chat_reply_cancel": "Cancel reply",
+  "village_chat_reply_unavailable": "Unavailable message",
+  "village_chat_reply_destination_unavailable": "This message cannot be shown.",
+  "village_chat_reply_invalid": "The message you are replying to is unavailable. Cancel the reply or choose another message.",
+  "village_chat_reply_outside_context": "(Reply to a message outside this context)",
+  "notification_chat_activity_authors": "{handles} replied to you or mentioned you in the chat for “{name}”.",
+  "notification_chat_activity_anonymous": "There are replies or mentions for you in the {name} chat.",
+  "mail_subject_chat_reply": "Someone replied to you in chat",
+  "mail_item_chat_reply": "Someone replied to you in chat.\n\n{url}",
+  "mail_item_chat_reply_named": "Someone replied to you in the chat for “{name}”.\n\n{url}",
+  "village_chat_addressed": "Replies and mentions: {count}"
 }

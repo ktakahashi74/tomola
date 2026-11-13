@@ -1,3 +1,4 @@
+import { chatReplyExcerpt, type ChatReply } from "./village-chat";
 import { RETENTION, RETENTION_BATCH_SIZE, daysBefore } from "./retention";
 import { recordRetentionResult, drainRetentionBatches, updateRetentionRows, type RetentionResults } from "./retention-batch.server";
 import { enqueueReportTriage } from "./moderation-automation.server";
@@ -23,7 +24,7 @@ export class ChatReportError extends Error {
 }
 export type ChatCase = { kind: "report" | "appeal"; id: number };
 export type ChatReportCard = { kind: "chat"; entryId?: never; hidden?: never; reportId: number; lang: Lang; village: { name: string; language: string | null } | null; canUnhide: boolean; reports: ReportSummary[] };
-export type ChatEvidenceMessage = { id: string; body: string; lang: string; author: string; createdAt: string; createdSeq: number; changedSeq: number; hidden: boolean };
+export type ChatEvidenceMessage = { id: string; body: string; lang: string; author: string; createdAt: string; createdSeq: number; changedSeq: number; hidden: boolean; reply?: ChatReply | { outside: true } | null };
 export type ChatVisibilityChange = { id: string; villageId: string; hidden: boolean; reversed?: boolean };
 
 async function activeActor(db: Db, id: string, now: Date) {
@@ -146,7 +147,7 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
       const caseFilter = target.kind === "report" ? eq(chatAccessLog.reportId, target.id) : eq(chatAccessLog.appealId, target.id);
       let from = metadata.anchor, to = metadata.anchor;
       const versions: typeof chatAccessLog.$inferInsert.versions = [];
-      let snapshot: { body: string | null; lang: string; author: string; createdAt: string; changedSeq: number } | null = null;
+      let snapshot: { body: string | null; lang: string; author: string; createdAt: string; changedSeq: number; reply: { outside: true } | null } | null = null;
       let current: ChatEvidenceMessage | null = null, deleted = false;
       let context: ChatEvidenceMessage[] = [];
       let statement: string | null = null, explanation: string | null = null;
@@ -157,7 +158,7 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
         }
         const [saved] = await tx.select().from(chatReportSnapshots).where(eq(chatReportSnapshots.messageId, metadata.messageId));
         const [live] = await tx.select({ message: chatMessages, handle: profiles.handle }).from(chatMessages).leftJoin(profiles, eq(profiles.userId, chatMessages.authorId)).where(eq(chatMessages.id, metadata.messageId));
-        snapshot = { body: saved.body, lang: saved.lang, author: saved.authorHandle, createdAt: saved.messageCreatedAt.toISOString(), changedSeq: saved.changedSeq };
+        snapshot = { body: saved.body, lang: saved.lang, author: saved.authorHandle, createdAt: saved.messageCreatedAt.toISOString(), changedSeq: saved.changedSeq, reply: live?.message.replyToId ? { outside: true } : null };
         if (saved.body !== null) versions.push({ id: saved.messageId, createdSeq: saved.createdSeq, changedSeq: saved.changedSeq, snapshot: true });
         deleted = !!live?.message.deletedAt;
         if (live && !deleted && (live.message.body !== saved.body || live.message.lang !== saved.lang)) {
@@ -177,7 +178,17 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
         const older = await select().where(and(visible, lt(chatMessages.createdSeq, from))).orderBy(desc(chatMessages.createdSeq)).limit(CHAT_CASE_CONTEXT_COUNT);
         const newer = await select().where(and(visible, sql`${chatMessages.createdSeq} > ${to}`)).orderBy(asc(chatMessages.createdSeq)).limit(CHAT_CASE_CONTEXT_COUNT);
         const anchor = input.intent === "context" ? await select().where(and(visible, eq(chatMessages.id, metadata.messageId))) : [];
-        context = [...older.reverse(), ...anchor, ...newer].map(row => evidenceMessage(row.message, row.handle));
+        const bounded = [...older.reverse(), ...anchor, ...newer];
+        context = bounded.map(row => {
+          const shown = evidenceMessage(row.message, row.handle);
+          if (!row.message.replyToId) return shown;
+          const parent = bounded.find(candidate => candidate.message.id === row.message.replyToId);
+          // Never fetch a parent outside the audited context, even for an operator.
+          const reply: ChatEvidenceMessage["reply"] = !parent ? { outside: true }
+            : parent.message.hiddenAt ? { id: parent.message.id, changedSeq: parent.message.changedSeq, unavailable: true }
+            : { id: parent.message.id, changedSeq: parent.message.changedSeq, unavailable: false, author: parent.handle ?? "", text: chatReplyExcerpt(parent.message.body), lang: parent.message.lang, editedAt: parent.message.editedAt?.toISOString() ?? null };
+          return { ...shown, reply };
+        });
         from = Math.min(from, context.at(0)?.createdSeq ?? from); to = Math.max(to, context.at(-1)?.createdSeq ?? to);
         versions.push(...context.map(message => ({ id: message.id, createdSeq: message.createdSeq, changedSeq: message.changedSeq })));
       }
@@ -197,7 +208,7 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
 }
 
 function evidenceMessage(message: typeof chatMessages.$inferSelect, handle: string | null): ChatEvidenceMessage {
-  return { id: message.id, body: message.body, lang: message.lang, author: handle ?? "", createdAt: message.createdAt.toISOString(), createdSeq: message.createdSeq, changedSeq: message.changedSeq, hidden: message.hiddenAt !== null };
+  return { id: message.id, body: message.body, lang: message.lang, author: handle ?? "", createdAt: message.createdAt.toISOString(), createdSeq: message.createdSeq, changedSeq: message.changedSeq, hidden: message.hiddenAt !== null, ...(message.replyToId ? { reply: { outside: true as const } } : {}) };
 }
 
 export async function finishChatVisibility(db: Db, change: ChatVisibilityChange, now = new Date()) {
@@ -222,7 +233,7 @@ export async function moderateChatReport(db: Db, actor: Actor, input: { reportId
       } else if (!open || input.intent === "hide" && message.hiddenAt) throw new ChatReportError("invalid_state");
       const [action] = await tx.insert(moderationActions).values({ action: input.intent === "hide" ? "hide_chat" : input.intent === "unhide" ? "unhide_chat" : "dismiss_chat_report", targetChatMessageId: message.id, actorId: actor.id, reportId: input.reportId, ...checked, createdAt: now }).returning({ id: moderationActions.id });
       if (input.intent !== "unhide") await tx.update(reports).set({ status: input.intent === "dismiss" ? "dismissed" : "resolved", handledBy: actor.id, handledAt: now }).where(and(eq(reports.chatMessageId, message.id), eq(reports.status, "open")));
-      if (input.intent === "hide") await tx.delete(notifications).where(and(eq(notifications.kind, "chat_mention"), eq(notifications.chatMessageId, message.id)));
+      if (input.intent === "hide") await tx.delete(notifications).where(and(inArray(notifications.kind, ["chat_mention", "chat_reply"]), eq(notifications.chatMessageId, message.id)));
       if (input.intent !== "dismiss" && target.authorId) await createModerationNotification(tx, { userId: target.authorId, entryId: null, villageId: message.villageId, actionId: action.id, now });
       const seq = input.intent === "dismiss" ? null : await finishChatVisibility(tx, { id: message.id, villageId: message.villageId, hidden: input.intent === "hide" }, now);
       return { actionId: action.id, seq, villageId: message.villageId };

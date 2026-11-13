@@ -1,3 +1,4 @@
+import { chatRepliesFor, withChatReply } from "./village-chat-replies.server";
 import { memberAvatarUrl } from "./member-avatar.server";
 import { selectDisplayName } from "./display-names.server";
 import { inspectChatSpam, lockAbuseWriter } from "./moderation-automation.server";
@@ -5,7 +6,7 @@ import { chatVillageCondition } from "./village-chat-villages.server";
 import { randomBytes } from "node:crypto";
 import { chatMentionTargets, resolveChatMentions, saveChatMentions } from "./village-chat-mentions.server";
 import { normalizeNewlines } from "./text";
-import { and, asc, desc, eq, gt, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client.server";
 import { chatConsents, chatMessages, chatReads, chatSequences, notifications, profiles, villageMembers, villages } from "./db/schema";
@@ -69,16 +70,16 @@ async function lockRead(db: Db, villageId: string, userId: string) {
 }
 async function advanceRead(db: Db, villageId: string, userId: string, seq: number) {
   await db.update(chatReads).set({ seq: sql`greatest(${chatReads.seq}, ${seq})` }).where(and(eq(chatReads.villageId, villageId), eq(chatReads.userId, userId)));
-  // Read cursors and mention notices describe the same member's progress in this village.
+  // Read cursors and addressed chat notices describe the same member's progress in this village.
   const cleared = await db.update(notifications).set({ readAt: new Date() }).where(and(
-    eq(notifications.userId, userId), eq(notifications.kind, "chat_mention"), eq(notifications.villageId, villageId), isNull(notifications.readAt),
+    eq(notifications.userId, userId), inArray(notifications.kind, ["chat_mention", "chat_reply"]), eq(notifications.villageId, villageId), isNull(notifications.readAt),
     sql`exists (select 1 from ${chatMessages} where ${chatMessages.id} = ${notifications.chatMessageId}
       and ${chatMessages.villageId} = ${villageId} and ${chatMessages.createdSeq} <= ${seq})`,
   )).returning({ id: notifications.id });
   return cleared.length;
 }
 
-export async function mutateChat(db: Db, userId: string, slug: string, intent: "send" | "edit" | "delete", input: { body?: unknown; id?: unknown }) {
+export async function mutateChat(db: Db, userId: string, slug: string, intent: "send" | "edit" | "delete", input: { body?: unknown; id?: unknown; replyToId?: unknown }) {
   const body = intent === "delete" ? null : bodySchema.safeParse(input.body);
   if (body && !body.success) throw new ChatError("invalid");
   const result = await db.transaction(async tx => {
@@ -87,6 +88,12 @@ export async function mutateChat(db: Db, userId: string, slug: string, intent: "
     const writer = await getWriter(tx, userId);
     if (!writer.ok && (intent !== "delete" || writer.reason === "not_a_member")) throw new ChatError("forbidden");
     if (intent !== "delete" && village.endedAt) throw new ChatError("ended");
+    let reply: typeof chatMessages.$inferSelect | undefined;
+    if (intent === "send" && input.replyToId !== undefined && input.replyToId !== null && input.replyToId !== "") {
+      if (typeof input.replyToId !== "string" || !/^[a-f0-9]{32}$/.test(input.replyToId)) throw new ChatError("invalid_reply");
+      [reply] = await tx.select().from(chatMessages).where(and(eq(chatMessages.villageId, village.id), eq(chatMessages.id, input.replyToId), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt))).for("share");
+      if (!reply) throw new ChatError("invalid_reply");
+    }
     let message: typeof chatMessages.$inferSelect | undefined;
     if (intent !== "send") {
       if (typeof input.id !== "string") throw new ChatError("invalid");
@@ -105,14 +112,14 @@ export async function mutateChat(db: Db, userId: string, slug: string, intent: "
     const id = message?.id ?? randomBytes(16).toString("hex");
     const now = new Date();
     const targets = await resolveChatMentions(tx, village.id, text);
-    await saveChatMentions(tx, { messageId: id, villageId: village.id, authorId: userId, targets, now, isNew: intent === "send" });
+    await saveChatMentions(tx, { messageId: id, villageId: village.id, authorId: userId, targets, replyAuthorId: reply?.authorId, now, isNew: intent === "send" });
     if (message && (message.body !== text || message.lang !== lang)) {
       await clearChatTranslations(tx, [id]);
       await enqueueChatTranslations(tx, { ...message, body: text, lang: lang! });
     }
     const seq = await nextChatSequence(tx, village.id);
     if (intent === "send") {
-      const [sent] = await tx.insert(chatMessages).values({ id, villageId: village.id, authorId: userId, lang: lang!, body: text, createdSeq: seq, changedSeq: seq }).returning();
+      const [sent] = await tx.insert(chatMessages).values({ id, villageId: village.id, authorId: userId, lang: lang!, body: text, replyToId: reply?.id ?? null, createdSeq: seq, changedSeq: seq }).returning();
       const hidden = await inspectChatSpam(tx, sent, now);
       if (!hidden) await enqueueChatTranslations(tx, sent);
       return { villageId: village.id, seq, id };
@@ -151,7 +158,7 @@ function present(row: { message: typeof chatMessages.$inferSelect; author: strin
   const name = selectDisplayName(row), handle = row.author ?? "";
   return { id: m.id, author: handle, authorName: name, avatarUrl: memberAvatarUrl(row), own: m.authorId === userId, lang: m.lang,
     parts: m.hiddenAt ? [] : chatParts(m.body, targets), createdSeq: m.createdSeq, changedSeq: m.changedSeq,
-    createdAt: m.createdAt.toISOString(), edited: !!m.editedAt, deleted: false, hidden: !!m.hiddenAt, translation: null };
+    createdAt: m.createdAt.toISOString(), edited: !!m.editedAt, editedAt: m.editedAt?.toISOString() ?? null, deleted: false, hidden: !!m.hiddenAt, translation: null };
 }
 
 async function hasLaterMessages(db: Db, villageId: string, after: number): Promise<boolean> {
@@ -182,7 +189,8 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
   const firstUnread = async () => (await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(visible,
     isNull(chatMessages.hiddenAt), sql`${chatMessages.authorId} <> ${userId}`, gt(chatMessages.createdSeq, read?.seq ?? 0),
   )).orderBy(asc(chatMessages.createdSeq)).limit(1))[0];
-  let target: { seq: number } | undefined = opts.at ? (await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(visible, eq(chatMessages.id, opts.at))))[0] : undefined;
+  let target: { seq: number } | undefined = opts.at ? (await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(visible, isNull(chatMessages.hiddenAt), eq(chatMessages.id, opts.at))))[0] : undefined;
+  const targetUnavailable = !!opts.at && !target;
   let readFrom: number | null = null;
   const unreadOpening = !target && opts.unread && opts.before === undefined && opts.after === undefined && !opts.at;
   if (unreadOpening) {
@@ -191,7 +199,7 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
     const newest = await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(visible).orderBy(desc(chatMessages.createdSeq)).limit(50);
     if (target && target.seq >= (newest.at(-1)?.seq ?? 0)) target = undefined;
   }
-  let rows;
+  let rows: Awaited<ReturnType<typeof messagesQuery>>;
   if (opts.after !== undefined) {
     rows = await messagesQuery(db).where(and(visible, gt(chatMessages.createdSeq, opts.after))).orderBy(asc(chatMessages.createdSeq)).limit(50);
   } else if (target) {
@@ -201,6 +209,7 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
   } else {
     rows = (await messagesQuery(db).where(and(visible, opts.before === undefined ? undefined : lt(chatMessages.createdSeq, opts.before))).orderBy(desc(chatMessages.createdSeq)).limit(50)).reverse();
   }
+  if (targetUnavailable) rows = [];
   if (unreadOpening) {
     // Recheck after fetching: an arrival or restored message may have moved outside the window.
     const unread = await firstUnread();
@@ -212,12 +221,13 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
   const hasNewer = historical ? await hasLaterMessages(db, village.id, rows.at(-1)?.message.createdSeq ?? opts.after ?? 0) : false;
   const targets = await chatMentionTargets(db, rows.filter(row => !row.message.hiddenAt).map(row => row.message.id));
   const translations = await chatTranslationsFor(db, village.id, userId, rows.map(row => row.message));
+  const replies = await chatRepliesFor(db, village.id, userId, rows.map(row => row.message));
   const messages = await addChatTopicCards(db, rows.map(row => {
     const message = present(row, userId, targets.get(row.message.id));
-    return message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null };
+    return withChatReply(message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null }, row.message.replyToId, replies);
   }), opts.topics);
   const { unreadAfter } = await windowUnread(db, village.id, userId, rows.at(-1)?.message.createdSeq ?? opts.after ?? 0);
-  return { readers, consentRequired: false as const, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
+  return { readers, consentRequired: false as const, targetUnavailable, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
 }
 
 export async function chatChanges(db: Db, userId: string, slug: string, opts: { since: number; before?: number; after?: number; forward?: number; counts?: boolean; topics?: ChatTopicOptions }) {
@@ -242,9 +252,10 @@ export async function chatChanges(db: Db, userId: string, slug: string, opts: { 
   const hasNewer = end === undefined ? {} : { hasNewer: await hasLaterMessages(db, village.id, end) };
   const counts = await windowUnread(db, village.id, userId, end ?? horizon);
   const allCounts = opts.counts ? { unreadCounts: Object.fromEntries(await chatUnreadCounts(db, userId, { excludeEnded: true })) } : {};
+  const replies = await chatRepliesFor(db, village.id, userId, selected.map(row => row.message));
   const messages = await addChatTopicCards(db, (older ? [...selected].reverse() : selected).map(row => {
     const message = present(row, userId, targets.get(row.message.id));
-    return message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null };
+    return withChatReply(message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null }, row.message.replyToId, replies);
   }), opts.topics);
   return { ...hasNewer, messages, ...counts, ...allCounts,
     next: older || forward ? opts.since : more ? selected.at(-1)!.message.changedSeq : Math.max(opts.since, horizon),
