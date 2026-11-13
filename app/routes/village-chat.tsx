@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { ChatReportError, createChatReport } from "~/lib/village-chat-reports.server";
 import { ChatReportForm } from "~/components/chat-report-form";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { data, Form, isRouteErrorResponse, Link, redirect, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
+import { data, Form, isRouteErrorResponse, Link, redirect, replace, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
 import type { Route } from "./+types/village-chat";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
@@ -51,8 +51,8 @@ export function headers({ actionHeaders }: Route.HeadersArgs) {
 }
 export const handle = { chat: true };
 export function meta({ loaderData: page }: Route.MetaArgs) { return [{ title: page && !("unavailable" in page) ? `${villageName(page.village)} · ${m.village_chat_title()}` : m.village_chat_title() }, { name: "robots", content: "noindex" }]; }
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  if (isRouteErrorResponse(error) && error.status === 404 && error.data?.error === "chat_message_unavailable") return <main><p role="status">{m.chat_search_message_unavailable()}</p></main>;
+export function ErrorBoundary({ error, params }: Route.ErrorBoundaryProps) {
+  if (isRouteErrorResponse(error) && error.status === 404 && error.data?.error === "chat_message_unavailable") return <main><p role="status">{m.chat_search_message_unavailable()}</p><Link className="underline" to={`/v/${params.slug}/chat`}>{m.chat_search_back()}</Link></main>;
   return <RouteError error={error} showSite={false} />;
 }
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -69,6 +69,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const page = await chatPage(db, user.id, params.slug, { before, after, at: search.get("report") ?? search.get("at") ?? undefined, unread: !search.has("latest"), topics: { displayLang: displayLangFor(request, profile), readLangs: screenReadLangsFor(request, profile), langParam: linkLang } });
   if (search.get("from") === "search" && (!page || page.consentRequired || !page.messages.some(message => message.id === search.get("at") && !message.deleted && !message.hidden))) {
     throw data({ error: "chat_message_unavailable" }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
+  }
+  if (search.get("from") === "search") {
+    const destination = new URL(request.url);
+    destination.searchParams.delete("from");
+    destination.searchParams.delete("_routes");
+    destination.hash = `chat-${search.get("at")}`;
+    throw replace(`${destination.pathname}${destination.search}${destination.hash}`, { headers: CHAT_PRIVATE_HEADERS });
   }
   if (!page) {
     if (search.has("at")) return data({ unavailable: true as const }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
@@ -121,6 +128,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     } else {
       const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId") });
       if (intent === "send") return redirect(`/v/${params.slug}/chat?latest=1#chat-${result.id}`);
+      if (intent === "delete" && new URL(request.url).searchParams.get("at") === result.id) {
+        const linkLang = langQueryParam(request);
+        return replace(`/v/${params.slug}/chat?latest=1${linkLang ? `&lang=${linkLang}` : ""}#chat-bottom`, { headers: CHAT_PRIVATE_HEADERS });
+      }
     }
   } catch (error) {
     if (error instanceof ChatTranslationReportError) return data({ error: error.code }, { status: error.code === "unavailable" ? 503 : error.code === "not_found" ? 404 : error.code === "limit" ? 429 : error.code === "duplicate" ? 409 : 400, headers: CHAT_PRIVATE_HEADERS });

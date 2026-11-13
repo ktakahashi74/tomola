@@ -5,6 +5,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { ChatSearchResults } from "~/components/chat-search-results";
 import { chatSearchExcerpt } from "~/lib/village-chat-search.server";
 import VillageChat, { ErrorBoundary } from "~/routes/village-chat";
+import ChatSearch from "~/routes/village-chat-search";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CONSENT_VERSION } from "~/lib/village-chat-consent";
 
@@ -37,6 +38,12 @@ it("hides the search entrance until consent and displays unavailable destination
     village: { slug: "safe-chat", name: "Safe chat" }, readers: 1, consentRequired: true, consentVersion: CHAT_CONSENT_VERSION, previousConsentVersion: null, privacyAvailable: false,
   } } as never), "/v/safe-chat/chat");
   expect(consent).not.toContain("/chat/search");
-  const unavailable = await renderInRouter(() => createElement(ErrorBoundary, { error: new ErrorResponseImpl(404, "Not found", { error: "chat_message_unavailable" }) } as never), "/v/safe-chat/chat");
+  const unavailable = await renderInRouter(() => createElement(ErrorBoundary, { error: new ErrorResponseImpl(404, "Not found", { error: "chat_message_unavailable" }), params: { slug: "safe-chat" } } as never), "/v/safe-chat/chat");
   expect(unavailable).toContain(m.chat_search_message_unavailable()); expect(unavailable).not.toContain('role="log"');
+  expect(unavailable).toContain('href="/v/safe-chat/chat"'); expect(unavailable).toContain(m.chat_search_back());
+  for (const props of [{ loaderData: { unavailable: true } }, { loaderData: { unavailable: false, slug: "safe-chat" }, actionData: { error: "not_found" } }]) {
+    const denied = await renderInRouter(() => createElement(ChatSearch, { ...props, params: { slug: "safe-chat" } } as never), "/v/safe-chat/chat/search");
+    expect(denied).toContain(m.chat_search_message_unavailable()); expect(denied).not.toContain('role="search"');
+    expect(denied).toContain('href="/v/safe-chat/chat"'); expect(denied).toContain(m.chat_search_back());
+  }
 });

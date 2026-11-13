@@ -59,9 +59,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 }
 
-export default function ChatSearch({ loaderData, actionData }: Route.ComponentProps) {
+export default function ChatSearch({ loaderData, actionData, params }: Route.ComponentProps) {
   const navigation = useNavigation();
-  if (loaderData.unavailable || actionData && "error" in actionData && actionData.error === "not_found") return <main><p role="status">{m.chat_search_message_unavailable()}</p></main>;
+  if (loaderData.unavailable || actionData && "error" in actionData && actionData.error === "not_found") return <main><p role="status">{m.chat_search_message_unavailable()}</p><Link className="underline" to={`/v/${params.slug}/chat`}>{m.chat_search_back()}</Link></main>;
   const result = actionData && "hits" in actionData ? actionData : null;
   const error = actionData && "error" in actionData ? actionData.error : null;
   const busy = navigation.state !== "idle";

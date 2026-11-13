@@ -50,8 +50,43 @@ test("searches original and translated words with safe excerpts and jumps to an 
     await results.getByRole("link").click();
     await expect(page.getByText(m.chat_search_message_unavailable, { exact: true })).toBeVisible();
     await expect(page.locator('[data-chat-message]')).toHaveCount(0);
+    await page.getByRole("link", { name: m.chat_search_back, exact: true }).click();
+    await expect(page.getByRole("log")).toBeVisible();
   } finally { await context.close(); }
 });
+
+for (const javaScriptEnabled of [true, false]) {
+  test(`keeps the chat after editing and deleting an own message opened from search${javaScriptEnabled ? "" : " without JavaScript"}`, async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled, locale: "en-US" });
+    try {
+      const page = await context.newPage();
+      await useMember(page, "cs_native_author@example.com", "/v/chat-search-native/chat"); if (javaScriptEnabled) await waitForClientRoute(page);
+      const body = "search-action-regression original";
+      await page.getByLabel(m.village_chat_body, { exact: true }).fill(body);
+      await page.getByRole("button", { name: m.village_chat_send, exact: true }).click();
+      await expect(page.getByLabel(m.village_chat_body, { exact: true })).toHaveValue("");
+      await page.getByRole("link", { name: m.chat_search_title, exact: true }).click(); if (javaScriptEnabled) await waitForClientRoute(page);
+      await search(page, body);
+      await page.getByRole("list", { name: m.chat_search_results, exact: true }).getByRole("link").click(); if (javaScriptEnabled) await waitForClientRoute(page);
+      const target = page.locator("[data-chat-message]").filter({ hasText: body });
+      await target.click();
+      await target.locator("summary").filter({ hasText: m.village_chat_edit }).click();
+      await target.getByLabel(m.village_chat_edit, { exact: true }).fill("search-action-regression edited");
+      await target.getByRole("button", { name: m.save_changes, exact: true }).click();
+      const edited = page.locator("[data-chat-message]").filter({ hasText: "search-action-regression edited" });
+      await expect(edited).toBeVisible();
+      await expect(page.getByRole("log")).toBeVisible();
+      await expect(page.getByText(m.chat_search_message_unavailable, { exact: true })).toHaveCount(0);
+      await edited.click();
+      await edited.locator("summary").filter({ hasText: m.village_chat_delete }).click();
+      await edited.getByRole("button", { name: m.delete_confirm, exact: true }).click();
+      await expect(page.getByRole("log")).toBeVisible();
+      await expect(edited).toHaveCount(0);
+      await expect(page.getByText(m.chat_search_message_unavailable, { exact: true })).toHaveCount(0);
+      expect(new URL(page.url()).searchParams.has("from")).toBe(false);
+    } finally { await context.close(); }
+  });
+}
 
 test("continues older matches during arrivals and deletion and rechecks membership before the next page", async ({ page, browser }) => {
   const fixture = fixtures().paging;
@@ -106,5 +141,6 @@ test("supports native POST search and jumping without JavaScript", async ({ brow
     await page.getByRole("list", { name: m.chat_search_results, exact: true }).getByRole("link").click();
     await expect(page.locator(`#chat-${fixtures().native.first}`)).toBeVisible();
     expect(page.url()).not.toContain("native-search-phrase");
+    expect(new URL(page.url()).searchParams.has("from")).toBe(false);
   } finally { await context.close(); }
 });

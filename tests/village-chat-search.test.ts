@@ -9,7 +9,7 @@ import { chatSourceHash } from "~/lib/village-chat-translations.server";
 import { MEMBER_RATE_LIMITS } from "~/lib/rate-limit.server";
 import * as search from "~/lib/village-chat-search.server";
 import { action, headers, loader } from "~/routes/village-chat-search";
-import { loader as chatPage } from "~/routes/village-chat";
+import { action as chatAction, loader as chatPage } from "~/routes/village-chat";
 
 let h: RouteHarness, counter = 0;
 beforeAll(async () => {
@@ -139,8 +139,15 @@ it("opens an older matching message with a fresh access check and returns only u
   for (let i = 0; i < 80; i++) await w.message(`Later message ${i}`, { lang: "en" });
   await w.message("最新版の未訳の発言", { lang: "ja" });
   await h.db.insert(chatSequences).values({ villageId: w.village.id, seq: 82 });
-  const jump = () => chatPage(h.args(h.request(`/v/${w.village.slug}/chat?at=${old.id}&from=search`, { as: "cs_reader" }), { slug: w.village.slug! }));
-  const page = await jump();
+  const jump = () => chatPage(h.args(h.request(`/v/${w.village.slug}/chat?at=${old.id}&from=search&lang=en&_routes=routes%2Fvillage-chat`, { as: "cs_reader" }), { slug: w.village.slug! }));
+  const response = await jump().then(() => { throw new Error("Expected a search jump redirect"); }, error => error as Response);
+  expect(response.status).toBe(302);
+  const destination = response.headers.get("Location");
+  expect(destination).toBe(`/v/${w.village.slug}/chat?at=${old.id}&lang=en#chat-${old.id}`);
+  expect(response.headers.get("X-Remix-Replace")).toBe("true");
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
+  const page = await chatPage(h.args(h.request(destination!, { as: "cs_reader" }), { slug: w.village.slug! }));
   expect(page).toHaveProperty("messages", expect.arrayContaining([expect.objectContaining({ id: old.id })]));
   const pendingBeforeRefusal = await h.db.select().from(jobs);
   await h.db.update(chatMessages).set({ hiddenAt: new Date() }).where(eq(chatMessages.id, old.id));
@@ -152,6 +159,20 @@ it("opens an older matching message with a fresh access check and returns only u
   await expect(jump()).rejects.toMatchObject({ data: { error: "chat_message_unavailable" }, init: { status: 404 } });
   await h.db.delete(villageMembers).where(and(eq(villageMembers.villageId, w.village.id), eq(villageMembers.userId, h.ids.cs_reader)));
   await expect(jump()).rejects.toMatchObject({ data: { error: "chat_message_unavailable" }, init: { status: 404 } });
+});
+
+it("returns to the chat list after deleting the anchored message in a document POST", async () => {
+  const w = await world(), target = await w.message("An own search destination"), remaining = await w.message("Another visible message");
+  await h.db.insert(chatSequences).values({ villageId: w.village.id, seq: 2 });
+  const deletion = await chatAction(h.args(h.request(`/v/${w.village.slug}/chat?at=${target.id}&lang=en`, { as: "cs_author", form: { intent: "delete", id: target.id } }), { slug: w.village.slug! }));
+  expect(deletion).toBeInstanceOf(Response);
+  if (!(deletion instanceof Response)) throw new Error("Expected a deletion redirect");
+  expect(deletion.headers.get("Location")).toBe(`/v/${w.village.slug}/chat?latest=1&lang=en#chat-bottom`);
+  expect(deletion.headers.get("X-Remix-Replace")).toBe("true");
+  expect(deletion.headers.get("Cache-Control")).toBe("private, no-store");
+  const page = await chatPage(h.args(h.request(deletion.headers.get("Location")!, { as: "cs_author" }), { slug: w.village.slug! }));
+  expect(page).toHaveProperty("targetUnavailable", false);
+  expect(page).toHaveProperty("messages", [expect.objectContaining({ id: remaining.id })]);
 });
 
 it("rejects invalid input and cross-origin requests and keeps successful and rate-limited responses private", async () => {

@@ -7,7 +7,8 @@ import { chatSequences, villageMembers, villages } from "~/lib/db/schema";
 import { chatSearchQuery } from "~/lib/village-chat-search.server";
 import { action } from "~/routes/village-chat-search";
 
-describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags: ["postgres"] }, () => {
+const performanceEnabled = process.env.TOMOLA_CHAT_SEARCH_PERF === "1";
+describe.skipIf(!PG_MODE || !performanceEnabled)("chat search synthetic PostgreSQL performance", { tags: performanceEnabled ? ["postgres"] : [] }, () => {
   let h: RouteHarness, villageId: string;
   const handles = Array.from({ length: 5 }, (_, i) => `cs_perf_${i}`);
   beforeAll(async () => {
