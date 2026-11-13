@@ -61,6 +61,12 @@ test("quote reply aligns with the beginning of right-to-left text", async ({ pag
   await form.getByRole("button", { name: en.submit_post, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
   const body = page.locator("[data-reading-body]").first();
+  // Let the initial translation replace the posted source, then select the
+  // original deliberately before testing either direction of the selection.
+  await expect(body).toHaveAttribute("lang", "en");
+  await waitForClientRoute(page);
+  await page.getByRole("link", { name: en.show_original, exact: true }).click();
+  await expect(body).toHaveAttribute("lang", "other");
   await body.evaluate(element => { element.setAttribute("dir", "rtl"); });
   for (const backwards of [false, true]) {
     const bounds = await body.locator("p").first().evaluate((paragraph, backwards) => {

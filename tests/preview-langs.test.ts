@@ -1,5 +1,6 @@
 import { shellLabels } from "~/lib/shell-labels.server";
 import { SHELL_LABEL_KEYS } from "~/lib/shell-labels";
+import { AI_USE_DEFINITIONS } from "~/lib/ai-use-registry.server";
 import { footerNotices } from "~/lib/notices.server";
 import fs from "node:fs";
 import path from "node:path";
@@ -44,7 +45,7 @@ describe("preview configuration and release gate", () => {
 });
 
 it("the operator-only set matches actual screen uses and excludes shared or moderator messages", () => {
-  const routes = new Set(["usage", "metrics", "observation", "invitations", "roles"].map(name => `app/routes/admin-${name}.tsx`));
+  const routes = new Set(["usage", "metrics", "observation", "invitations", "roles", "ai-question-reports"].map(name => `app/routes/admin-${name}.tsx`));
   routes.add("app/components/quality-metrics.tsx");
   routes.add("app/components/reading-metrics.tsx");
   const links = new Set(["nav_usage", "nav_metrics", "nav_observation", "nav_invitations", "nav_roles"]);
@@ -57,8 +58,14 @@ it("the operator-only set matches actual screen uses and excludes shared or mode
     const visit = (node: ts.Node) => {
       if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "m") (routes.has(name) ? admin : other).add(node.name.text);
       if (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "m") {
-        if (name !== "app/lib/shell-labels.server.ts") throw new Error(`Computed message key requires an explicit use analysis: ${name}`);
-        for (const key of SHELL_LABEL_KEYS) other.add(key);
+        if (name === "app/lib/shell-labels.server.ts") {
+          for (const key of SHELL_LABEL_KEYS) other.add(key);
+        } else if (name === "app/lib/ai-use-page.server.ts") {
+          for (const definition of Object.values(AI_USE_DEFINITIONS)) {
+            other.add(definition.label);
+            other.add(definition.sent);
+          }
+        } else throw new Error(`Computed message key requires an explicit use analysis: ${name}`);
       }
       ts.forEachChild(node, visit);
     };
@@ -72,6 +79,8 @@ it("the operator-only set matches actual screen uses and excludes shared or mode
   expect(OPERATOR_ONLY_KEYS.has("quality_eval_config_changed")).toBe(true);
   expect(OPERATOR_ONLY_KEYS.has("metrics_col_rate")).toBe(false);
   expect(OPERATOR_ONLY_KEYS.has("metrics_unobserved")).toBe(true);
+  expect(OPERATOR_ONLY_KEYS.has("ai_use_post_ask")).toBe(false);
+  expect(OPERATOR_ONLY_KEYS.has("post_ask_reports_title")).toBe(true);
 });
 
 it("counts both review totals and lets the CLI pass when only operator strings are unchecked", () => {

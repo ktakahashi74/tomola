@@ -18,6 +18,11 @@ test("chat delivers original text before translating, toggles each message, and 
     await expect(reader.getByRole("log", { name: m.village_chat_title, exact: true })).toBeVisible();
     await reader.locator('a[href$="?latest=1#chat-bottom"]').click();
     await waitForClientRoute(reader);
+    // A different author prevents grouping with the seeded history, so the
+    // next message exposes its byline and translation mark even in a short run.
+    await reader.getByLabel(m.village_chat_body, { exact: true }).fill("Ready for the next translation.");
+    await reader.getByRole("button", { name: m.village_chat_send, exact: true }).click();
+    await expect(reader.getByLabel(m.village_chat_body, { exact: true })).toHaveValue("");
     // Keep translation pending until the real client observes the original,
     // including the signal's coalescing window and the client's refresh jitter.
     let receivedOriginal = false;
@@ -45,15 +50,20 @@ test("chat delivers original text before translating, toggles each message, and 
     await message.hover();
     await message.getByRole("button", { name: m.village_chat_translation_show, exact: true }).click();
     await expect(message).toHaveAttribute("lang", "en");
-    await expect(message.getByText(m.village_chat_translation_machine, { exact: true })).toBeVisible();
-    await expect(message.locator('a[href="/ai-use"]')).toHaveAccessibleName(m.village_chat_translation_machine);
-    const [disclosure] = await Promise.all([
-      context.waitForEvent("page"),
-      message.locator('a[href="/ai-use"]').click({ button: "middle" }),
-    ]);
-    try {
-      await expect(disclosure.getByRole("heading", { level: 1, name: m.ai_use_title, exact: true })).toBeVisible();
-    } finally { await disclosure.close(); }
+    for (const width of [800, 390, 1280]) {
+      await reader.setViewportSize({ width, height: 900 });
+      await message.hover();
+      await expect(message.getByText(m.village_chat_translation_machine, { exact: true })).toBeVisible();
+      const mark = message.locator('a[href="/ai-use"]');
+      await expect(mark).toHaveAccessibleName(m.village_chat_translation_machine);
+      const [disclosure] = await Promise.all([
+        context.waitForEvent("page", { timeout: 10_000 }),
+        mark.click({ button: "middle", timeout: 10_000 }),
+      ]);
+      try {
+        await expect(disclosure.getByRole("heading", { level: 1, name: m.ai_use_title, exact: true })).toBeVisible();
+      } finally { await disclosure.close(); }
+    }
     const operatorContext = await browser.newContext({ locale: "en-US" });
     try {
       const operator = await operatorContext.newPage(); await useMember(operator, "olga@example.com");

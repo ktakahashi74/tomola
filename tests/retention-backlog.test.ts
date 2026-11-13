@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { expect, it } from "vitest";
-import { appeals, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, invitationNoteTranslations, invitations, jobs, llmUsage, media, moderationActions, notifications, pushDeliveries, pushSubscriptions, oauthClient, oauthRefreshToken, rateLimits, reports, session, signingChallenges, suspendedEmailHashes, user, verification, villageReportSnapshots, villages } from "~/lib/db/schema";
+import { aiQuestionReports, appeals, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, invitationNoteTranslations, invitations, jobs, llmUsage, media, moderationActions, notifications, pushDeliveries, pushSubscriptions, oauthClient, oauthRefreshToken, rateLimits, reports, session, signingChallenges, suspendedEmailHashes, user, verification, villageReportSnapshots, villages } from "~/lib/db/schema";
 import { runMaintenanceCleanup } from "~/lib/jobs/maintenance-jobs.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { auditRetentionTransactions, expectBoundedTransactions } from "./helpers/retention";
@@ -17,6 +17,14 @@ it("drains every maintenance category's 350-row backlog within one invocation", 
   const db = await createTestDb();
   await addMember(db, "a", "alice");
   const [village] = await db.insert(villages).values({ kind: "invite_public", name: "Retention fixture", slug: "retention-fixture" }).returning();
+  await db.insert(aiQuestionReports).values(each(() => ({
+    reporterId: "a", villageId: village.id, question: "Private question", createdAt: OLD,
+    answer: {
+      answer: { status: "answered" as const, readings: [{ text: "Private answer", citations: [] }], citations: [] },
+      scope: { replies: 0, sources: 0, truncated: false }, language: "en" as const,
+      engine: "fake", model: "fake-1", expiresAt: OLD.getTime() / 1000,
+    },
+  })));
   const villageReports = await db.insert(reports).values(each(() => ({ villageId: village.id, reporterId: "a", reason: "other", status: "resolved", handledAt: OLD }))).returning();
   await db.insert(villageReportSnapshots).values(villageReports.map(r => ({ reportId: r.id, name: "Private name", description: "Private description", slug: "old-name" })));
   const messageId = (i: number) => i.toString(16).padStart(32, "0");
@@ -55,7 +63,7 @@ it("drains every maintenance category's 350-row backlog within one invocation", 
   await db.insert(media).values(each(i => ({ id: villageImageId(i), avatar: true, villageId: village.id, bytes: Buffer.from("image"), mime: "image/webp", width: 256, height: 256, byteSize: 5, uploadedBy: "a", uploadedAt: OLD })));
   for (const [i, report] of villageReports.entries()) await db.update(reports).set({ iconMediaId: villageImageId(i) }).where(eq(reports.id, report.id));
   await db.insert(moderationActions).values(each(i => ({ action: "clear_village_icon", targetVillageId: village.id, iconMediaIdBefore: villageImageId(i), actorId: "a", reason: "other", createdAt: OLD })));
-  const tables = [suspendedEmailHashes, rateLimits, verification, session, chatAccessLog, notifications, pushDeliveries, llmUsage, signingChallenges, jobs, villageReportSnapshots, chatReportSnapshots, chatTranslationReports, invitations, invitationNoteTranslations, oauthClient, oauthRefreshToken, moderationActions, reports, media];
+  const tables = [aiQuestionReports, suspendedEmailHashes, rateLimits, verification, session, chatAccessLog, notifications, pushDeliveries, llmUsage, signingChallenges, jobs, villageReportSnapshots, chatReportSnapshots, chatTranslationReports, invitations, invitationNoteTranslations, oauthClient, oauthRefreshToken, moderationActions, reports, media];
   await auditRetentionTransactions(db, tables);
 
   const results = await runMaintenanceCleanup(db, NOW);

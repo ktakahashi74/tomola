@@ -106,7 +106,7 @@ test("a translated title row opens the thread, where originals and translations 
   const article = topicArticle(somchai);
   await expect(article.getByRole("heading", { level: 1 })).toHaveText(`[th] ${TITLE}`);
   // The byline says once what is read ("AI-translated from Japanese (test engine)"); the model is its tooltip.
-  const reading = article.locator("[data-reading-language] > span[title]");
+  const reading = article.locator('[data-reading-language] > a[href="/ai-use"]');
   await expect(reading).toContainText(formatMessage(enMessages.label_from_lang_machine_engine, { lang: enMessages.language_name_ja, engine: enMessages.engine_fake }));
   await expect(reading).toHaveAttribute("title", "fake-1");
   await expect(article.locator("details.reading-lang-menu summary")).toHaveText(enMessages.reading_other_languages_read);

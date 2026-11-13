@@ -53,9 +53,10 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {message.translation?.state === "paused" && <p className="mt-1 ui-help text-muted-foreground">{waitText({ kind: "stopped" }, false)}</p>}
     </>}
     {!message.hidden && <ChatTopicCards topics={message.topics} tabIndex={interactionTabIndex} />}
-    <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-nowrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : "top-0"}
-      focus-within:pointer-events-auto focus-within:opacity-100 sm:group-hover/chat:pointer-events-auto sm:group-hover/chat:opacity-100
-      max-sm:flex-wrap pointer-coarse:flex-wrap data-[shown=true]:pointer-events-auto data-[shown=true]:opacity-100 max-sm:data-[shown=true]:static max-sm:data-[shown=true]:mt-1 pointer-coarse:data-[shown=true]:static pointer-coarse:data-[shown=true]:mt-1
+    {/* Keep visible actions below the message so its byline links remain reachable. */}
+    <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-wrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : "top-0"}
+      focus-within:pointer-events-auto focus-within:opacity-100 focus-within:static focus-within:mt-1 sm:group-hover/chat:pointer-events-auto sm:group-hover/chat:opacity-100 sm:group-hover/chat:static sm:group-hover/chat:mt-1
+      data-[shown=true]:pointer-events-auto data-[shown=true]:opacity-100 data-[shown=true]:static data-[shown=true]:mt-1
       has-[details[open]]:pointer-events-auto has-[details[open]]:static has-[details[open]]:mt-1 has-[details[open]]:flex-wrap has-[details[open]]:opacity-100`}>
       {!ended && !message.hidden && onReply && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => onReply(message)}>{m.village_chat_reply()}</button>}
       {!message.hidden && message.translation?.state === "ready" && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => setSelection({ basis: originals, override: !original })}>{original ? m.village_chat_translation_show() : m.village_chat_translation_original()}</button>}
