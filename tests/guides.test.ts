@@ -171,12 +171,12 @@ describe("public guides", () => {
     }
   });
 
-  it("/llms.txt says ai_assistance is optional and omitted when absent, names the public principles twin, and has the confirmed-posts wording", async () => {
+  it("/llms.txt says ai_assistance is optional and omitted when absent, names the public principles and AI-use twins, and has the confirmed-posts wording", async () => {
     const text = await (await get("/llms.txt")).text();
     expect(text).toContain("optional; omitted when absent");
     expect(text).not.toContain("declared by the author");
     expect(text).toContain(`${BASE}/principles.md`);
-    expect(text).toContain("${BASE}/ai.txt, ${BASE}/help/ai.md, ${BASE}/api/openapi.json, ${BASE}/principles.md, ${BASE}/languages.md and ${BASE}/connect.md needs one of".replaceAll("${BASE}", BASE));
+    expect(text).toContain("${BASE}/ai.txt, ${BASE}/help/ai.md, ${BASE}/api/openapi.json, ${BASE}/principles.md, ${BASE}/languages.md, ${BASE}/ai-use.md and ${BASE}/connect.md needs one of".replaceAll("${BASE}", BASE));
     expect(text).toContain("Publishing happens only in the member's browser");
     expect(text).toContain("API and MCP credentials cannot publish");
     expect(text).toContain("does not prove that AI cannot use the passkey");
