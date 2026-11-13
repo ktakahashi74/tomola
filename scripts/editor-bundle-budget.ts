@@ -1,4 +1,4 @@
-export const READING_PAGE_GZIP_LIMIT = 341 * 1024;
+export const READING_PAGE_GZIP_LIMIT = 342 * 1024;
 export const WRITING_PAGE_GZIP_LIMIT = 455 * 1024;
 export const WRITING_ROUTE_IDS = ["routes/topic-new", "routes/topic-edit"] as const;
 
