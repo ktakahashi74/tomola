@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import Notice from "~/components/posted-topic-notice-content";
 import { languageLabel } from "~/lib/language-label";
@@ -25,6 +26,6 @@ it.each(["en", "ja"] as const)("names the destination and publication language i
 
 it.each([false, true])("renders completed source notices immediately with checking=%s", async checking => {
   const html = await renderInRouter(() => createElement(Notice, { topicId: 1, lang: "en", firstPost: false, initial: [], sourceStatus: { checking, mismatch: true, untranslatable: true }, editHref: "/t/1/edit" }));
-  expect(html).toContain(m.posted_language_mismatch({ lang: languageLabel("en") }));
-  expect(html).toContain(m.posted_untranslatable());
+  expect(html).toContain(renderToStaticMarkup(m.posted_language_mismatch({ lang: languageLabel("en") })));
+  expect(html).toContain(renderToStaticMarkup(m.posted_untranslatable()));
 });
