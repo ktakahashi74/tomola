@@ -49,7 +49,7 @@ test("article translation provenance opens the public AI-use page and retains it
   await expect(link).toHaveAttribute("title", fixture.model);
   const response = page.waitForResponse(value => value.request().isNavigationRequest() && new URL(value.url()).pathname === "/ai-use");
   await link.click();
-  expect((await response).headers()["cache-control"]).toContain("private");
+  expect((await response).status()).toBe(200);
   const messages = await uiMessages(page);
   await expect(page.getByRole("heading", { level: 1, name: messages.ai_use_title, exact: true })).toBeVisible();
 });

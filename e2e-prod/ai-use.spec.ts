@@ -13,6 +13,7 @@ test("production AI-use disclosure is anonymous, localized and works under the C
       const response = await page.goto("/ai-use");
       expect(response!.status()).toBe(200);
       expect(response!.headers()["content-security-policy"]).toContain("nonce-");
+      expect(response!.headers()["cache-control"]).toContain("private");
       await waitForClientRoute(page);
       const messages = await uiMessages(page);
       await expect(page.getByRole("heading", { level: 1, name: messages.ai_use_title, exact: true })).toBeVisible();
