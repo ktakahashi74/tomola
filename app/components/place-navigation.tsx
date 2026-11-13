@@ -50,7 +50,7 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
   const home = path === "/" || path.startsWith("/a/");
   const following = path === "/following";
   const slug = /^\/v\/([^/]+?)(?:\/chat)?$/i.exec(path)?.[1]?.toLowerCase();
-  const inChat = /\/chat$/.test(path);
+  const inChat = /^\/v\/[^/]+\/chat$/.test(path);
   // A followed village is a plain link to its posts (the chat is for those who joined); it has no mark of its own, and no count of anything is shown.
   const followedRow = (village: FollowedVillageNavigation) => <li key={village.slug}>
     <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={villagePath(village.slug) === path ? "page" : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <img src={village.iconUrl} alt="" className="size-5 shrink-0 rounded" />}<span className="min-w-0">{villageName(village)}</span></Link>

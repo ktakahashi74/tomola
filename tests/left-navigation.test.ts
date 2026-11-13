@@ -36,6 +36,8 @@ it("renders navigation from layout data before JavaScript: a village row shows a
   const following = await render("/following/");
   const side = following.match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(side).toMatch(/<a(?=[^>]*href="\/following")(?=[^>]*aria-current="page")[^>]*>/);
+  const personal = await render("/u/chat", { ...data, handle: "chat", villages: [{ slug: "@chat", name: "", kind: "personal", language: null }] });
+  expect(personal).toMatch(/<a(?=[^>]*href="\/u\/chat")(?=[^>]*aria-current="page")[^>]*>/);
 });
 it("shows only the village name when nothing is new, and omits the chat mark when chat is unavailable", async () => {
   const quiet = (await render("/", { ...data, villages: [{ ...joined, unread: 0 }] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
