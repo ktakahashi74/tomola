@@ -170,14 +170,14 @@ it("paginates snapshots and changes without moving creation order on edits", asy
   expect(previous.messages[0].createdSeq).toBe(21); expect(previous.messages.at(-1)!.createdSeq).toBe(70);
   const around = (await chatPage(db, "reader", slug, { at: rows[59].id }))!;
   expect(around.messages.map(m => m.createdSeq)).toEqual(Array.from({ length: 51 }, (_, i) => i + 35));
-  expect((await chatPage(db, "reader", slug, { at: "missing" }))!.messages).toEqual(latest.messages);
+  expect(await chatPage(db, "reader", slug, { at: "missing" })).toMatchObject({ targetUnavailable: true, messages: [] });
   const chunk = await chatChanges(db, "reader", slug, { since: 0 }); expect(chunk.next).toBe(100); expect(chunk.more).toBe(true); expect(chunk.messages).toHaveLength(100);
   const rest = await chatChanges(db, "reader", slug, { since: chunk.next }); expect(rest.next).toBe(120); expect(rest.more).toBe(false); expect(rest.messages).toHaveLength(20);
   const older = await chatChanges(db, "reader", slug, { since: 120, before: 110 }); expect(older.more).toBe(true); expect(older.messages).toHaveLength(50); expect(older.messages[0].createdSeq).toBe(60); expect(older.before).toBe(60);
   await mutateChat(db, "author", slug, "edit", { id: rows[0].id, body: "Edited first" });
   expect((await chatChanges(db, "reader", slug, { since: 120 })).messages[0]).toMatchObject({ createdSeq: 1, changedSeq: 121 });
   await mutateChat(db, "author", slug, "delete", { id: rows[59].id });
-  expect((await chatPage(db, "reader", slug, { at: rows[59].id }))!.messages[0].createdSeq).toBe(71);
+  expect(await chatPage(db, "reader", slug, { at: rows[59].id })).toMatchObject({ targetUnavailable: true, messages: [] });
 });
 
 it("closes signals after leave, removal, and village end, and never carries text", async () => {
