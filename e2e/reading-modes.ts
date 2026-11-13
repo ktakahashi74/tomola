@@ -2,6 +2,7 @@
 // Media delivery and deleted-parent visibility exercise both authority modes.
 export const publicOnly = [
   ["post-ask-ai", "anonymous readers"],
+  ["chat-search", ".*"],
   ["color-scheme", "signed-out readers"],
   ["other-languages", "public readers"],
   ["reading-counts", ".*"],
@@ -59,7 +60,6 @@ export const publicOnly = [
 export const bothModes = [
   ["post-ask-ai", "member questions|unverified answers"],
   ["ai-use", ".*"],
-  ["chat-search", ".*"],
   ["color-scheme", "member appearance|failed appearance"],
   ["other-languages", "unopened language replies|background source check|explicit source choice"],
   ["list-seen-sync", "account list boundaries|failed account exchange"],

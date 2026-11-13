@@ -13,6 +13,7 @@ async function search(page: Page, phrase: string) {
   expect(new URLSearchParams(sent.postData()!).get("q")).toBe(phrase);
   expect((await sent.response())!.headers()["cache-control"]).toBe("private, no-store");
   await expect(page.getByRole("heading", { name: m.chat_search_results, exact: true })).toBeVisible();
+  await expect(page.getByRole("search", { name: m.chat_search_title, exact: true }).getByRole("button", { name: m.search_button, exact: true })).toBeEnabled();
 }
 
 test("searches original and translated words with safe excerpts and jumps to an older highlighted message", async ({ page, browser }) => {
@@ -77,6 +78,7 @@ test("continues older matches during arrivals and deletion and rechecks membersh
     await expect(results.getByRole("link")).toHaveCount(4);
     await expect(page.getByRole("button", { name: m.chat_search_more, exact: true })).toHaveCount(0);
     await search(page, "paging-search-phrase");
+    await expect(results.getByRole("link")).toHaveCount(20);
     const departure = await page.request.post("/v/chat-search-paging", { form: { intent: "leave" }, headers: { Origin: new URL(page.url()).origin } });
     expect(departure.ok()).toBe(true);
     await page.getByRole("button", { name: m.chat_search_more, exact: true }).click();

@@ -19,13 +19,13 @@ describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags
     await h.db.insert(villageMembers).values(handles.map(handle => ({ villageId, userId: h.ids[handle] })));
     await consentChatMembers(h.db);
     await h.db.execute(sql`insert into chat_messages (village_id, author_id, lang, body, created_seq, changed_seq)
-      select ${villageId}, ${h.ids[handles[0]]}, (array['ja', 'en', 'zh-Hans', 'ko'])[1 + i % 4],
+      select ${villageId}, ${h.ids[handles[0]]}, (array['ja', 'en', 'zh-Hans', 'ko'])[1 + (i / 4) % 4],
         left(repeat('commonneedle 日本語 中文 한국어 %_ https://example.org/path ', 60), (array[40, 200, 800, 2000])[1 + i % 4]), i, i
       from generate_series(1, 50000) i`);
     await h.db.execute(sql`insert into chat_message_translations (message_id, lang, state, source_hash, text)
       select id, 'en', 'ready', encode(sha256(convert_to(body, 'UTF8')), 'hex'),
         left(repeat('translatedneedle A synthetic translated message. ', 60), (array[40, 200, 800, 2000])[1 + created_seq % 4])
-      from chat_messages where village_id = ${villageId} and created_seq % 2 = 0`);
+      from chat_messages where village_id = ${villageId} and created_seq % 16 in (0, 1, 2, 3, 8, 9, 14, 15)`);
     await h.db.insert(chatSequences).values({ villageId, seq: 50000 });
     await h.db.execute(sql`analyze chat_messages`);
     await h.db.execute(sql`analyze chat_message_translations`);
@@ -38,6 +38,11 @@ describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags
       (select count(*)::int from chat_message_translations t join chat_messages m on m.id = t.message_id where m.village_id = ${villageId}) as translations`);
     const totals = (counted as unknown as { rows: Array<{ messages: number; translations: number }> }).rows[0];
     expect(totals).toEqual({ messages: 50000, translations: 25000 });
+    const distribution = await h.db.execute(sql`select length(m.body) as characters, count(*)::int as originals, count(t.message_id)::int as translations
+      from chat_messages m left join chat_message_translations t on t.message_id = m.id and t.lang = 'en'
+      where m.village_id = ${villageId} group by length(m.body) order by characters`);
+    const lengthDistribution = (distribution as unknown as { rows: Array<{ characters: number; originals: number; translations: number }> }).rows;
+    expect(lengthDistribution).toEqual([40, 200, 800, 2000].map(characters => ({ characters, originals: 12500, translations: 6250 })));
     const classes = [
       { name: "no-match", query: "missingneedle", count: 0 },
       { name: "many-original", query: "commonneedle", count: 20 },
@@ -74,6 +79,6 @@ describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags
       const plan = await h.db.execute(sql`explain (analyze, buffers, format json) ${chatSearchQuery(h.db, villageId, scenario.query, "en").getSQL()}`);
       plans.push({ scenario: scenario.name, plan: (plan as unknown as { rows: Array<{ "QUERY PLAN": unknown }> }).rows[0]["QUERY PLAN"] });
     }
-    console.log("chat search synthetic measurement", JSON.stringify({ ...totals, originalLengths: [40, 200, 800, 2000], poolMax: 4, scope: "authenticated action; excludes HTTP and browser rendering", measurements, plans }));
+    console.log("chat search synthetic measurement", JSON.stringify({ ...totals, lengthDistribution, poolMax: 4, scope: "authenticated action; excludes HTTP and browser rendering", measurements, plans }));
   }, 180_000);
 });
