@@ -37,7 +37,9 @@ export function aiVisibleMarkdown(input: string, preserveMath = false): { text: 
 // ordinary formulas retain their TeX source, without phantom payloads.
 function visibleMathSource(source: string): string {
   source = source.replace(/(\\[\s\S])|%[^\n]*(?:\n|$)/g, (_, escaped: string | undefined) => escaped ?? "");
-  if (/\\(?:[a-z]*def|let|futurelet|newcommand|renewcommand|providecommand|csname|mathchoice|@\w*|color|textcolor|colorbox|fcolorbox|html\w*|href|url|includegraphics|raisebox|kern|mkern|[hv]skip|[hv]space|rule)\b/i.test(source)) return "";
+  if (/\\(?:[a-z]*def|let|futurelet|newcommand|renewcommand|providecommand|csname|mathchoice|TextOrMath|@\w*|color|textcolor|colorbox|fcolorbox|html\w*|href|url|includegraphics|raisebox|kern|mkern|[hvm]skip|[hvm]space|tmspace|(?:math)?[lrc]lap|smash|rule)\b/i.test(source)) return "";
+  // KaTeX's named palette macros also expand to textcolor.
+  if (/\\(?:(?:blue|green|red|purple)[A-E]?|gray[A-I]?|(?:teal|gold|maroon)[A-E]|mint[A-C]|orange|pink|kaBlue|kaGreen)\b/i.test(source)) return "";
   let result = "", cursor = 0;
   const commands = /\\[hv]?phantom\s*\{/g;
   for (let match; (match = commands.exec(source));) {

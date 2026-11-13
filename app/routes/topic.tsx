@@ -1,4 +1,4 @@
-import { hasPostAiMaterial } from "~/lib/post-ai-materials.server";
+import { hasPostAiMaterial, hasPostAiMaterialInstructionWarning } from "~/lib/post-ai-materials.server";
 import { loadMemberAvatars } from "~/lib/member-avatar.server";
 import { loadDisplayNames, selectDisplayName, selectDisplayNamePresentation } from "~/lib/display-names.server";
 import { TitledMessage } from "~/components/titled-message";
@@ -338,7 +338,9 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   // Right after posting a topic, its author is told in which language it was published and into which it is being translated (and welcomed, once, for the first).
   const ownPostedTopic = !!user && topic.visibility === "visible" && topic.authorId === user.id && readPostedId(url) === topic.id;
   const ownPostedEntry = !!user ? shown.find(entry => entry.visibility === "visible" && entry.authorId === user.id && readPostedId(url) === entry.id) : null;
-  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry), sourceStatus: await postedSourceLanguageStatus(db, ownPostedEntry) } : null;
+  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry), sourceStatus: await postedSourceLanguageStatus(db, ownPostedEntry),
+    materialWarning: ownPostedTopic && await hasPostAiMaterialInstructionWarning(db, topic.id)
+      ? { text: m.ai_material_instruction_warning(), label: m.ai_material_link(), href: `/t/${topic.id}/ai-materials` } : null } : null;
   const showVillage = villagesEnabled() && topic.visibility !== "hidden-redacted";
   const showContinuation = showVillage && topic.visibility === "visible";
   const continuation = showContinuation ? loadedContinuation : null;
@@ -790,7 +792,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           <PlaceholderEntry entry={topic} />
         ) : (
           <>
-            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? postingVillageName(loaderData.village, topic.authorHandle) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} editHref={`/t/${topic.id}/edit`} />}
+            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? postingVillageName(loaderData.village, topic.authorHandle) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} materialWarning={loaderData.postedNotice.materialWarning} editHref={`/t/${topic.id}/edit`} />}
             {loaderData.edited === topic.id && topic.own && <PostedLine kind="edited" />}
             {topic.hidden && <HiddenMark action={topic.hiddenAction} />}
             {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={langs => setSettled(previous => ({ id: topic.id, langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])] }))} /></Suspense>}

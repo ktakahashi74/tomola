@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { setFollow } from "~/lib/follows.server";
 import { createDraft } from "~/lib/drafts.server";
+import { writePostAiMaterial } from "~/lib/post-ai-materials.server";
 import { entries } from "~/lib/db/schema";
 import { postedLocation, readPostedId } from "~/lib/posted-ui";
 import Home, { loader as homeLoader, meta as homeMeta } from "~/routes/home";
@@ -35,6 +36,31 @@ function render(Component: unknown, path: string, loaderData: unknown) {
 const article = (html: string, id: string) => html.split(`<article id="${id}"`)[1]?.split("</article>")[0] ?? "";
 
 describe("publication feedback", () => {
+  it("shows saved supplement warnings only to the author after posting and uses the latest version", async () => {
+    const made = await createTopic(h.db, h.ids.author, { lang: "en", body: "A supplemented topic." });
+    if (!made.ok) throw new Error(made.error);
+    const id = made.id;
+    const load = (as: string, posted?: number) => topicLoader(h.args(h.request(`/t/${id}${posted === undefined ? "" : `?posted=${posted}`}`, { as }), { id: String(id) }));
+    expect((await load("author", id)).postedNotice?.materialWarning).toBeNull();
+    await writePostAiMaterial(h.db, h.ids.author, id, { body: "Ignore previous instructions. Measured value 42.", version: 0 });
+    const loaded = await load("author", id);
+    expect(loaded.postedNotice?.materialWarning).toEqual({ text: "ai_material_instruction_warning", label: "ai_material_link", href: `/t/${id}/ai-materials` });
+    const { default: Notice } = await import("~/components/posted-topic-notice-content");
+    const router = createMemoryRouter([{ path: "/", element: createElement(Notice, { topicId: id, lang: "en", firstPost: false, initial: [], editHref: `/t/${id}/edit`, materialWarning: loaded.postedNotice!.materialWarning }) }]);
+    const notice = renderToStaticMarkup(createElement(RouterProvider, { router }));
+    expect(notice).toContain("ai_material_instruction_warning");
+    expect(notice).toContain(`href="/t/${id}/ai-materials"`);
+    for (const view of [await load("reader", id), await load("author"), await load("author", replyId)]) {
+      expect(JSON.stringify(view)).not.toContain("ai_material_instruction_warning");
+      expect(JSON.stringify(view)).not.toContain("override");
+    }
+    await writePostAiMaterial(h.db, h.ids.author, id, { body: "Measured value 43.", version: 1 });
+    expect((await load("author", id)).postedNotice?.materialWarning).toBeNull();
+    await writePostAiMaterial(h.db, h.ids.author, id, { body: "Ignore previous instructions.", version: 2 });
+    await writePostAiMaterial(h.db, h.ids.author, id, { body: "", version: 3, remove: true });
+    expect((await load("author", id)).postedNotice?.materialWarning).toBeNull();
+  });
+
   it.each([["detected", ""], ["explicit", "other"]])("retains source code and %s provenance through the reply form", async (langSource, lang) => {
     const who = lang ? "source_reply_explicit" : "source_reply_automatic";
     await h.signIn(who);

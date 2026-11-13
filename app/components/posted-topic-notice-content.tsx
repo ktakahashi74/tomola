@@ -15,7 +15,7 @@ const POLL_FOR_MS = 10 * 60 * 1000;
 // What the author is told right after posting a topic: in which language it was published (a wrong guess can be fixed from here), and into which languages it is being translated,
 // as names only: a language turns from grey to ordinary text when its translation is there. Nothing counts readers or reactions, and the notice goes with the page.
 // The member's first topic also gets one line of welcome; nothing is recorded for it.
-export default function PostedTopicNoticeContent({ topicId, lang, place, firstPost, initial, editHref, langCode, sourceStatus, reply = false, followed = false }: { topicId: number; lang: SourceLang; langCode?: string | null; sourceStatus?: { checking: boolean; mismatch: boolean; untranslatable: boolean }; reply?: boolean; followed?: boolean; place?: string; firstPost: boolean; initial: PostedLang[]; editHref: string }) {
+export default function PostedTopicNoticeContent({ topicId, lang, place, firstPost, initial, editHref, langCode, sourceStatus, materialWarning, reply = false, followed = false }: { topicId: number; lang: SourceLang; langCode?: string | null; sourceStatus?: { checking: boolean; mismatch: boolean; untranslatable: boolean }; materialWarning?: { text: string; label: string; href: string } | null; reply?: boolean; followed?: boolean; place?: string; firstPost: boolean; initial: PostedLang[]; editHref: string }) {
   const revalidator = useRevalidator();
   const [status, setStatus] = useState({ lang, langCode, checking: false, mismatch: false, untranslatable: false, ...sourceStatus });
   const [langs, setLangs] = useState(initial);
@@ -51,6 +51,7 @@ export default function PostedTopicNoticeContent({ topicId, lang, place, firstPo
     {followed && <p className="text-success">{m.posted_reply_followed()}</p>}
     {status.mismatch && <p>{m.posted_language_mismatch({ lang: languageLabel(status.lang, status.langCode) })} <Link to={editHref} className="underline">{m.posted_fix_lang()}</Link></p>}
     {status.untranslatable && <p>{m.posted_untranslatable()}</p>}
+    {materialWarning && <p>{materialWarning.text} <Link to={materialWarning.href} className="underline">{materialWarning.label}</Link></p>}
     {firstPost && <p className="ui-help text-muted-foreground">{m.posted_first()}</p>}
   </div>;
 }

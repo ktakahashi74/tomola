@@ -92,6 +92,14 @@ export async function hasPostAiMaterial(db: Db, topicId: number) {
   return !!row;
 }
 
+// Read the saved result for the current version without interpreting Markdown.
+export async function hasPostAiMaterialInstructionWarning(db: Db, topicId: number) {
+  const [row] = await db.select({ warnings: postAiMaterialVersions.instructionWarnings }).from(postAiMaterials)
+    .innerJoin(postAiMaterialVersions, and(eq(postAiMaterialVersions.topicId, postAiMaterials.topicId), eq(postAiMaterialVersions.version, postAiMaterials.version)))
+    .where(and(eq(postAiMaterials.topicId, topicId), ne(postAiMaterials.body, ""))).limit(1);
+  return !!row?.warnings.length;
+}
+
 export const POST_AI_HISTORY_PAGE_SIZE = 20;
 // Caller first establishes page visibility. Operator-only warnings never enter public data.
 export async function postAiMaterialHistory(db: Db, topicId: number, before?: number) {

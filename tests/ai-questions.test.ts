@@ -357,7 +357,7 @@ it("expires consented reports after ninety days, respects preservation holds and
 it("keeps literal titles and visible formula sources in post, reply and translated AI evidence", async () => {
   const f = await fixture();
   const title = "1. # <T> Study";
-  const body = "Price $5 and $10. Formula $x^2 + y^2$ and $a + \\phantom{MATH_SECRET}$ <!-- BODY_SECRET -->\n\n$$\nb % COMMENT_SECRET\n+ c\n$$";
+  const body = "Price $5 and $10. Formula $x^2 + y^2$ and $a + \\phantom{MATH_SECRET}$ <!-- BODY_SECRET -->\n\n$$\nb % COMMENT_SECRET\n+ c\n$$\n\n$\\color{white}{COLOR_SECRET}$ $\\def\\x{MACRO_SECRET}\\x$ $\\mskip-100mu SKIP_SECRET$";
   await f.db.update(entries).set({ title, body }).where(eq(entries.id, f.id));
   await createReply(f.db, "question-author", f.id, { body: "Reply $$E=mc^2$$", lang: "en" });
   const [post] = await f.db.select().from(entries).where(eq(entries.id, f.id));
