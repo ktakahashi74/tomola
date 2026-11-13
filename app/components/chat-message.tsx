@@ -35,7 +35,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
   // A message that is only the address of a post shows the post's card alone.
   const onlyPostCard = !!message.topics?.length && parts.every(part => part.type === "link" || part.type === "text" && !part.text.trim());
   const cancel = (element: HTMLElement) => { const details = element.closest("details"); if (details) { details.querySelector("form")?.reset(); details.open = false; } };
-  return <article id={`chat-${message.id}`} data-chat-message={message.id} data-chat-seq={message.createdSeq} lang={translated ? message.translation!.lang : message.lang} tabIndex={tabIndex} onFocus={() => onActivate?.(message.id)} aria-labelledby={`chat-byline-${message.id}`} data-mentions-me={mentionsMe || undefined} className={`group/chat relative scroll-mt-28 py-1 outline-offset-2 ${mentionsMe ? "border-s-2 border-unread bg-unread/10 ps-2" : ""}`} onClick={() => setActionsShown(true)} onBlur={event => {
+  return <article id={`chat-${message.id}`} data-chat-message={message.id} data-chat-seq={message.createdSeq} lang={translated ? message.translation!.lang : message.lang} tabIndex={tabIndex} onFocus={() => onActivate?.(message.id)} aria-labelledby={`chat-byline-${message.id}`} data-mentions-me={mentionsMe || undefined} className={`group/chat relative scroll-mt-28 py-1 outline-offset-2 ${grouped ? "" : "grid grid-cols-1"} ${mentionsMe ? "border-s-2 border-unread bg-unread/10 ps-2" : ""}`} onClick={() => setActionsShown(true)} onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) setActionsShown(false);
   }}>
     <p id={`chat-byline-${message.id}`} className={grouped ? "sr-only" : "flex flex-wrap items-baseline gap-2 ui-meta text-muted-foreground"}>
@@ -53,11 +53,11 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {message.translation?.state === "paused" && <p className="mt-1 ui-help text-muted-foreground">{waitText({ kind: "stopped" }, false)}</p>}
     </>}
     {!message.hidden && <ChatTopicCards topics={message.topics} tabIndex={interactionTabIndex} />}
-    {/* Keep visible actions below the message so its byline links remain reachable. */}
-    <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-wrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : "top-0"}
-      focus-within:pointer-events-auto focus-within:opacity-100 focus-within:static focus-within:mt-1 sm:group-hover/chat:pointer-events-auto sm:group-hover/chat:opacity-100 sm:group-hover/chat:static sm:group-hover/chat:mt-1
-      data-[shown=true]:pointer-events-auto data-[shown=true]:opacity-100 data-[shown=true]:static data-[shown=true]:mt-1
-      has-[details[open]]:pointer-events-auto has-[details[open]]:static has-[details[open]]:mt-1 has-[details[open]]:flex-wrap has-[details[open]]:opacity-100`}>
+    {/* Anchor overlays below the visible byline and reply link, without moving later messages. */}
+    <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-nowrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : message.reply && !message.hidden ? "top-0 row-start-3" : "top-0 row-start-2"}
+      focus-within:pointer-events-auto focus-within:opacity-100 sm:group-hover/chat:pointer-events-auto sm:group-hover/chat:opacity-100
+      max-sm:flex-wrap pointer-coarse:flex-wrap data-[shown=true]:pointer-events-auto data-[shown=true]:opacity-100 max-sm:data-[shown=true]:static max-sm:data-[shown=true]:row-auto max-sm:data-[shown=true]:mt-1 pointer-coarse:data-[shown=true]:static pointer-coarse:data-[shown=true]:row-auto pointer-coarse:data-[shown=true]:mt-1
+      has-[details[open]]:pointer-events-auto has-[details[open]]:static has-[details[open]]:row-auto has-[details[open]]:mt-1 has-[details[open]]:flex-wrap has-[details[open]]:opacity-100`}>
       {!ended && !message.hidden && onReply && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => onReply(message)}>{m.village_chat_reply()}</button>}
       {!message.hidden && message.translation?.state === "ready" && <button tabIndex={interactionTabIndex} type="button" className="underline" onClick={() => setSelection({ basis: originals, override: !original })}>{original ? m.village_chat_translation_show() : m.village_chat_translation_original()}</button>}
       {!message.own && !message.hidden && translated && <ChatTranslationReport key={message.translation!.text} id={message.id} lang={message.translation!.lang} tabIndex={interactionTabIndex} />}
