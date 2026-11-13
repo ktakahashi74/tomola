@@ -99,7 +99,7 @@ describe("public AI use", () => {
     expect(await response.text()).not.toContain("invalid-provider-credential-sentinel");
   });
 
-  it("compares the latest dated change per use, handles same-day order and records disabling as null", () => {
+  it("compares the latest dated change per use, handles same-day order and records disabling as null", async () => {
     const config = settings();
     const first = config.history[0];
     config.history = [
@@ -107,10 +107,14 @@ describe("public AI use", () => {
       { ...first, date: "2026-01-01", toModel: "fake-older" },
       { ...first, date: "2026-02-01", toModel: "fake-middle" },
     ];
-    expect(row(aiUsePage("en", fake, config), "translation-primary").unrecorded).toBe(false);
+    const matched = aiUsePage("en", fake, config);
+    const primaryOnly = (page: typeof matched) => ({ ...page, rows: [row(page, "translation-primary")] });
+    expect(row(matched, "translation-primary").unrecorded).toBe(false);
+    for (const output of [await render(primaryOnly(matched)), aiUseMarkdown(primaryOnly(matched))]) expect(output).not.toContain(matched.unrecorded);
     config.history.push({ ...first, date: "2026-03-01", toModel: "fake-unrecorded" });
     const changed = aiUsePage("en", fake, config);
     expect(row(changed, "translation-primary").unrecorded).toBe(true);
+    for (const output of [await render(primaryOnly(changed)), aiUseMarkdown(primaryOnly(changed))]) expect(output).toContain(changed.unrecorded);
     expect(changed.history[0].toModel).toBe("fake-unrecorded");
     config.history.push({ ...first, purpose: "translation-retry", toModel: "fake-retired" });
     expect(row(aiUsePage("en", fake, config), "translation-retry").unrecorded).toBe(true);
@@ -125,6 +129,8 @@ describe("public AI use", () => {
     expect(html).toContain(page.reviewText);
     expect(html).toContain(page.objectionsText);
     expect(aiUseMarkdown(page)).toContain(page.noHistory);
+    expect(html).toContain(page.unrecorded);
+    expect(aiUseMarkdown(page)).toContain(page.unrecorded);
     expect(row(page, "translation-primary").unrecorded).toBe(true);
     expect(page.objectionsUrl).toBeNull();
     expect(publicOperatorSettings(locale)).not.toHaveProperty("aiUse");
