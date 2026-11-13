@@ -23,9 +23,9 @@ test("a background source check updates the posted language", async ({ page }) =
   await expect(page).toHaveURL(url => /^\/t\/\d+$/.test(url.pathname));
   await expect(page.getByRole("status").filter({ hasText: "Greek" }).getByRole("link", { name: enMessages.posted_fix_lang, exact: true })).toBeVisible({ timeout: 60_000 });
   await page.goto("/latest?order=created");
-  await expect(page.getByRole("link", { name: "Source check scenario", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Source check scenario/ })).toBeVisible();
   await page.goto("/a/en?order=created");
-  await expect(page.getByRole("link", { name: "Source check scenario", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Source check scenario/ })).toHaveCount(0);
 });
 
 test("an explicit source choice stays unchanged and offers an in-app repair link", async ({ page }) => {
