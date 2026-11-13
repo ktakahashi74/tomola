@@ -160,6 +160,8 @@ test("message actions support keyboard and touch while the composer follows the 
     await own.focus(); await expect(actions).toHaveCSS("opacity", "0");
     await desktop.keyboard.press("Tab");
     await expect(actions).toHaveCSS("opacity", "1");
+    await expect(own.getByRole("button", { name: m.village_chat_reply, exact: true })).toBeFocused();
+    await desktop.keyboard.press("Tab");
     await expect(own.locator("summary").filter({ hasText: m.village_chat_edit })).toHaveText(m.village_chat_edit);
     await expect(own.locator("summary").filter({ hasText: m.village_chat_edit })).toBeFocused();
     await desktop.keyboard.press("Enter");
