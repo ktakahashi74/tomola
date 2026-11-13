@@ -7,6 +7,7 @@ import { aiVisibleMarkdown, visibleUnicode } from "~/lib/ai-visible-text.server"
 import { exportPostAiMaterials, moderatePostAiMaterial, postAiMaterialHistory, preparePostAiMaterial, readPostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
 import { postQuestionMaterials } from "~/lib/ai-question-materials.server";
 import { questionPrompt, verifyQuestionAnswer } from "~/lib/ai-question-answer.server";
+import { questionResponseSchema } from "~/lib/ai-question-reports.server";
 import { askPostQuestion } from "~/lib/post-ask-ai.server";
 import { buildThreadMarkdown } from "~/lib/md/thread.server";
 import { buildMemberExport } from "~/lib/exports.server";
@@ -106,13 +107,33 @@ it("withdraws hidden or deleted supplements from Markdown, evidence and every hi
   expect(await db.select().from(postAiMaterialVersions)).toEqual([]);
 });
 
-it("rejects an in-flight answer when its supplement is removed before generation finishes", async () => {
+it("returns separately labelled supplement citations and generated translations through a fake engine", async () => {
+  const { db, id, save } = await fixture();
+  await save("Measured value 42.");
+  const completer: JsonCompleter = { engine: "fake", model: "fake", async complete(request) {
+    const source = JSON.parse(request.user).materials.find((s: { kind: string }) => s.kind === "material");
+    return { text: output(source.id, "Measured value 42.", "測定値は42です。"), inputTokens: 20, outputTokens: 20 };
+  } };
+  const result = await askPostQuestion(db, { topicId: id, userId: "supplement-reader", language: "ja", question: "何が測定されましたか。",
+    request: new Request("http://localhost/t/1/ask/action", { method: "POST" }), env: { POST_ASK_AI: "1", TRANSLATION_PRIMARY: "fake" }, completer });
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.response.answer.citations).toMatchObject([{ kind: "material", translation: { generated: true, lang: "ja" } }]);
+    expect(questionResponseSchema.safeParse(result.response).success).toBe(true);
+  }
+});
+
+it.each(["delete", "hide", "recreate"])("rejects an in-flight answer after a supplement change: %s", async change => {
   const { db, id, save } = await fixture();
   await save("A measured value.");
   const completer: JsonCompleter = { engine: "fake", model: "fake", async complete(request) {
     const envelope = JSON.parse(request.user);
     const source = envelope.materials.find((s: { kind: string }) => s.kind === "material");
-    await writePostAiMaterial(db, "supplement-writer", id, { body: "", version: 1, remove: true });
+    if (change === "hide") await moderatePostAiMaterial(db, { userId: "supplement-reader", scope: { operator: true, langs: [] } }, id, true, "Review", 1);
+    else {
+      await writePostAiMaterial(db, "supplement-writer", id, { body: "", version: 1, remove: true });
+      if (change === "recreate") await save("A measured value.");
+    }
     return { text: output(source.id, "A measured value."), inputTokens: 20, outputTokens: 20 };
   } };
   const result = await askPostQuestion(db, { topicId: id, userId: "supplement-reader", language: "en", question: "What is measured?",
