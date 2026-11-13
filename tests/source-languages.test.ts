@@ -75,7 +75,7 @@ describe("source language evidence", () => {
   });
 });
 
-async function fixture(langSource: "detected" | "default" | "explicit" | null = "default", code: string | null = "el", confident = true) {
+async function fixture(langSource: "detected" | "default" | "checked" | "explicit" | null = "default", code: string | null = "el", confident = true) {
   vi.stubEnv("ENABLED_LANGS", "ja,en");
   const db = await createTestDb();
   await addMember(db, "source_writer", "source_writer");
@@ -268,25 +268,34 @@ it("keeps unopened originals in all lists and out of a different original-langua
 });
 
 it.each([
-  ["zh", "zh-Hans", null, "detected", "zh-Hans", null],
-  ["ZH", "zh-Hant", null, "explicit", "zh-Hant", null],
-  ["zh", "en", null, "default", "en", null],
-  ["zh", "en", null, "explicit", "en", null],
-  ["zh-hans", "en", null, "default", "zh-Hans", null],
-  ["ZH-hANT", "en", null, "default", "zh-Hant", null],
-  ["zh-CN", "en", null, "default", "zh-Hans", null],
-  ["zh-TW", "zh-Hant", null, "explicit", "zh-Hant", null],
-  ["zh-hans", "zh-Hant", null, "explicit", "zh-Hant", null],
-  ["zh-hans", "other", "zh", "explicit", "other", "zh"],
-  ["IT-it", "other", "it", "explicit", "other", "it"],
-  ["ita", "other", "it", "explicit", "other", "it"],
-  ["ita", "en", null, "default", "other", "it"],
-  ["zzz", "en", null, "explicit", "en", null],
-  ["und", "en", null, "default", "en", null],
-  ["mul", "en", null, "explicit", "en", null],
-  ["zxx", "en", null, "default", "en", null],
-  ["EN-us", "en", null, "explicit", "en", null],
-] as const)("normalizes checker code %s against %s/%s (%s) without false notices", async (code, lang, langCode, langSource, expectedLang, expectedCode) => {
+  ["zh", "zh-Hans", null, "detected", "zh-Hans", null, 0],
+  ["ZH", "zh-Hant", null, "explicit", "zh-Hant", null, 0],
+  ["zh", "en", null, "default", "en", null, 0],
+  ["zh", "en", null, "explicit", "en", null, 0],
+  ["zh-hans", "en", null, "default", "zh-Hans", null, 0],
+  ["ZH-hANT", "en", null, "default", "zh-Hant", null, 0],
+  ["zh-CN", "en", null, "default", "zh-Hans", null, 0],
+  ["zh-TW", "zh-Hant", null, "explicit", "zh-Hant", null, 0],
+  ["zh-hans", "zh-Hant", null, "detected", "zh-Hans", null, 0],
+  ["zh-hans", "zh-Hant", null, "default", "zh-Hans", null, 0],
+  ["zh-hans", "zh-Hant", null, "checked", "zh-Hans", null, 0],
+  ["ZH-hANT", "zh-Hans", null, "detected", "zh-Hant", null, 0],
+  ["ZH-hANT", "zh-Hans", null, "default", "zh-Hant", null, 0],
+  ["ZH-hANT", "zh-Hans", null, "checked", "zh-Hant", null, 0],
+  ["zh-hans", "zh-Hant", null, "explicit", "zh-Hant", null, 1],
+  ["ZH-hANT", "zh-Hans", null, "explicit", "zh-Hans", null, 1],
+  ["zh-hans", "zh-Hant", null, null, "zh-Hant", null, 1],
+  ["ZH-hANT", "zh-Hans", null, null, "zh-Hans", null, 1],
+  ["zh-hans", "other", "zh", "explicit", "other", "zh", 1],
+  ["IT-it", "other", "it", "explicit", "other", "it", 0],
+  ["ita", "other", "it", "explicit", "other", "it", 0],
+  ["ita", "en", null, "default", "other", "it", 0],
+  ["zzz", "en", null, "explicit", "en", null, 0],
+  ["und", "en", null, "default", "en", null, 0],
+  ["mul", "en", null, "explicit", "en", null, 0],
+  ["zxx", "en", null, "default", "en", null, 0],
+  ["EN-us", "en", null, "explicit", "en", null, 0],
+] as const)("normalizes checker code %s against %s/%s (%s)", async (code, lang, langCode, langSource, expectedLang, expectedCode, expectedNotices) => {
   const { db, id, check, complete } = await fixture(langSource, code);
   const [before] = await db.update(entries).set({ lang, langCode }).where(eq(entries.id, id)).returning();
   await check(); await check();
@@ -295,7 +304,9 @@ it.each([
     lang: expectedLang, langCode: expectedCode,
     langSource: expectedLang === lang && expectedCode === langCode ? langSource : "checked",
   });
-  expect(await db.select().from(notifications)).toHaveLength(0);
+  const notices = await db.select().from(notifications);
+  expect(notices).toHaveLength(expectedNotices);
+  if (expectedNotices) expect(notices[0]).toMatchObject({ kind: "source_language_mismatch", entryId: id });
   expect((await db.select().from(jobs)).filter(j => j.kind === "source_language_receipt").some(j =>
     (j.payload as { promptVersion?: string }).promptVersion === SOURCE_LANGUAGE_PROMPT_VERSION)).toBe(true);
   if (expectedLang === lang && expectedCode === langCode) {
@@ -339,6 +350,47 @@ it("does not report requested-target failure when another requested target has a
   const work = await db.insert(jobs).values(["ja", "en"].map(lang => ({ kind: "translate_entry", payload: { entryId: id, sourceHash: entry.sourceHash, lang }, status: "running" }))).returning();
   await db.insert(translations).values({ entryId: id, lang: "en", field: "body", kind: "primary", text: "A usable translation", sourceHash: entry.sourceHash, mentionRevision: entry.mentionRevision });
   for (const job of work) await recordUntranslatable(job, { db, now: new Date() }, true, entry.mentionRevision);
+  expect(await db.select().from(reports)).toHaveLength(0);
+  expect(await db.select().from(notifications)).toHaveLength(0);
+});
+
+it.each([
+  ["primary", [], 0],
+  ["human", ["untranslated"], 0],
+  ["primary", ["untranslated"], 1],
+  ["secondary", [], 1],
+] as const)("checks a retained %s translation after its finished job expires (%j)", async (kind, flags, expectedNotices) => {
+  const { db, id } = await fixture();
+  const [entry] = await db.update(entries).set({ lang: "other", langCode: "el" }).where(eq(entries.id, id)).returning();
+  await db.insert(translations).values({ entryId: id, lang: "ja", field: "body", kind, flags: [...flags], text: "A retained translation", sourceHash: entry.sourceHash, mentionRevision: entry.mentionRevision });
+  await db.update(jobs).set({ status: "done" }).where(eq(jobs.kind, "translate_entry"));
+  const now = new Date(Date.now() + 31 * 86400_000);
+  await deleteFinishedJobs(db, now);
+  expect(await db.select().from(jobs).where(eq(jobs.kind, "translate_entry"))).toHaveLength(0);
+  const [job] = await db.insert(jobs).values({ kind: "translate_entry", payload: { entryId: id, sourceHash: entry.sourceHash, lang: "en" }, status: "running" }).returning();
+  await recordUntranslatable(job, { db, now }, true, entry.mentionRevision);
+  await recordUntranslatable(job, { db, now }, true, entry.mentionRevision);
+  expect(await db.select().from(reports)).toHaveLength(expectedNotices);
+  expect(await db.select().from(notifications)).toHaveLength(expectedNotices);
+});
+
+it.each(["primary", "human"] as const)("keeps a carried %s translation usable without a job for its corrected source hash", async kind => {
+  const { db, id, check } = await fixture("detected", "ja");
+  vi.stubEnv("ENABLED_LANGS", "ja,en,fr");
+  vi.stubEnv("TRANSLATION_EAGER_SCOPE", "readers");
+  await addMember(db, "carried_reader", "carried_reader", { readLangs: ["en"] });
+  const [before] = await db.select().from(entries).where(eq(entries.id, id));
+  await db.insert(translations).values({ entryId: id, lang: "fr", field: "body", kind, text: "Une traduction lisible.", sourceHash: before.sourceHash, mentionRevision: before.mentionRevision });
+  await db.insert(jobs).values({ kind: "translate_entry", payload: { entryId: id, sourceHash: before.sourceHash, lang: "fr" }, status: "done" });
+  await check();
+  const [entry] = await db.select().from(entries).where(eq(entries.id, id));
+  expect(entry).toMatchObject({ lang: "ja", langSource: "checked", mentionRevision: before.mentionRevision + 1 });
+  expect(entry.sourceHash).not.toBe(before.sourceHash);
+  expect(await db.select().from(translations)).toMatchObject([{ lang: "fr", kind, sourceHash: entry.sourceHash, mentionRevision: entry.mentionRevision }]);
+  const work = (await db.select().from(jobs).where(eq(jobs.kind, "translate_entry"))).filter(j => (j.payload as { sourceHash: string }).sourceHash === entry.sourceHash);
+  expect(work.map(j => (j.payload as { lang: string }).lang)).toEqual(["en"]);
+  await db.update(jobs).set({ status: "running" }).where(eq(jobs.id, work[0].id));
+  await recordUntranslatable(work[0], { db, now: new Date() }, true, entry.mentionRevision);
   expect(await db.select().from(reports)).toHaveLength(0);
   expect(await db.select().from(notifications)).toHaveLength(0);
 });

@@ -87,8 +87,7 @@ export function createSourceLanguageHandlers(deps: { completer?: JsonCompleter }
       const langCode = lang === "other" ? checked.code : null;
       const automatic = current.langSource === "detected" || current.langSource === "default" || current.langSource === "checked";
       const currentCode = normalizeCode(current.lang === "other" ? current.langCode : current.lang);
-      const samePrimary = currentCode !== null && currentCode.split("-")[0] === checked.code?.split("-")[0];
-      const differs = checked.confident && checked.code !== null && !samePrimary && (lang !== current.lang || (lang === "other" && langCode !== current.langCode && (current.langCode !== null || automatic)));
+      const differs = checked.confident && checked.code !== null && currentCode !== checked.code && (lang !== current.lang || (lang === "other" && langCode !== current.langCode && (current.langCode !== null || automatic)));
       const mismatch = differs && (current.langSource === null || current.langSource === "explicit");
       if (mismatch) await tx.insert(notifications).values({ userId: current.authorId, entryId: current.id, threadId: current.kind === "topic" ? current.id : current.threadId, kind: "source_language_mismatch", emailedAt: ctx.now, createdAt: ctx.now });
       if (differs && automatic) {
@@ -127,9 +126,9 @@ export async function recordUntranslatable(job: JobRow, ctx: JobContext, content
     if (work.some(w => (w.payload as { untranslatableRevision?: number }).untranslatableRevision === entry.mentionRevision)) return;
     const rows = await tx.select().from(translations).where(and(eq(translations.entryId, entry.id), eq(translations.sourceHash, p.sourceHash), eq(translations.field, "body"), sql`(${translations.mentionRevision} is null or ${translations.mentionRevision} = ${entry.mentionRevision})`));
     const rejected = (flags: string[]) => !flags.includes(FLAG_MARKDOWN_BUDGET) && flags.some(flag => [FLAG_UNTRANSLATED, FLAG_QUALITY_MISMATCH, FLAG_LINK_MISMATCH].includes(flag));
+    if (rows.some(r => r.kind === "human" || r.kind === "primary" && !rejected(r.flags))) return;
     const allFailed = targets.every(lang => {
       const mine = rows.filter(r => r.lang === lang);
-      if (mine.some(r => r.kind === "human" || r.kind === "primary" && !rejected(r.flags))) return false;
       const relevant = work.filter(w => w.kind === TRANSLATE_JOB && (w.payload as { lang?: string }).lang === lang);
       const settled = (w: JobRow) => w.status !== "queued" && (w.payload as { settledRevision?: number }).settledRevision === entry.mentionRevision && (w.payload as { settledAttempt?: number }).settledAttempt === w.attempts;
       const latest = relevant.reduce<JobRow | undefined>((last, w) => !last || w.id > last.id ? w : last, undefined);
