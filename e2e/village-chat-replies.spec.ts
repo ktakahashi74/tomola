@@ -53,12 +53,12 @@ test("chat replies preserve chronology, cancel cleanly, open old parents, and no
     await page.goto(`/v/chat-replies/chat?at=${replyId}#chat-${replyId}`); await waitForClientRoute(page);
     await reader.goto(`/v/chat-replies/chat?at=${parentId}#chat-${parentId}`); await waitForClientRoute(reader);
     const editable = reader.locator(`[data-chat-message="${parentId}"]`);
-    await editable.click(); await editable.getByText(m.village_chat_edit, { exact: true }).click();
+    await editable.click(); await editable.locator("summary").filter({ hasText: m.village_chat_edit }).click();
     await editable.locator('textarea[name="body"]').fill("Current parent text");
     await editable.getByRole("button", { name: m.save_changes, exact: true }).click();
     await expect(page.locator(`[data-chat-message="${replyId}"] [data-chat-reply]`)).toContainText("Current parent text");
     await expect(page.locator(`[data-chat-message="${replyId}"] [data-chat-reply]`)).toContainText(m.village_chat_edited);
-    await editable.click(); await editable.getByText(m.village_chat_delete, { exact: true }).click();
+    await editable.click(); await editable.locator("summary").filter({ hasText: m.village_chat_delete }).click();
     await editable.getByRole("button", { name: m.delete_confirm, exact: true }).click();
     await expect(page.locator(`[data-chat-message="${replyId}"] [data-chat-reply]`)).toHaveText(m.village_chat_reply_unavailable);
     await page.goto(`/v/chat-replies/chat?at=${parentId}`); await waitForClientRoute(page);
