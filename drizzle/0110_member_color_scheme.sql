@@ -1,0 +1,2 @@
+ALTER TABLE "profiles" ADD COLUMN "color_scheme" text;--> statement-breakpoint
+ALTER TABLE "profiles" ADD CONSTRAINT "profiles_color_scheme_check" CHECK ("profiles"."color_scheme" in ('light', 'dark'));
