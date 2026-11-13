@@ -71,6 +71,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     ownerId: user.id,
     connectDraftLabel: m.connect_draft_link(),
     // Unfinished topics the member has saved: offered as a link above the form.
+    aiMaterialLabels: { add: m.ai_material_add(), title: m.ai_material_title(), help: m.ai_material_input_help({ count: POST_AI_MATERIAL_CHARS }), error: m.ai_material_error() },
     draftIds: await ownTopicDraftIds(db, user.id),
     ...(posting ? { posting } : {}),
     defaultLang,
@@ -238,12 +239,12 @@ function TopicNewForm({ loaderData, actionData }: Route.ComponentProps) {
           altNotFound={loaderData.altNotFound}
           sharePrefilled={loaderData.sharePrefilled}
         >
-          <details open={!!actionData?.values?.aiMaterial}><summary className="ui-meta">{m.ai_material_add()}</summary>
-            <label className="block" htmlFor="new-ai-material">{m.ai_material_title()}</label>
+          <details open={!!actionData?.values?.aiMaterial}><summary className="ui-meta">{loaderData.aiMaterialLabels.add}</summary>
+            <label className="block" htmlFor="new-ai-material">{loaderData.aiMaterialLabels.title}</label>
             <Textarea id="new-ai-material" name="aiMaterial" rows={8} maxLength={POST_AI_MATERIAL_CHARS} defaultValue={actionData?.values?.aiMaterial ?? ""} />
-            <p className="ui-help">{m.ai_material_input_help({ count: POST_AI_MATERIAL_CHARS })}</p>
+            <p className="ui-help">{loaderData.aiMaterialLabels.help}</p>
           </details>
-          {error && !(posting && isVillageTargetError(error)) && <p id="topic-new-error" role="alert" className="text-destructive">{error === "ai_material_invalid" ? m.ai_material_error() : entryErrorMessage(error)}</p>}
+          {error && !(posting && isVillageTargetError(error)) && <p id="topic-new-error" role="alert" className="text-destructive">{error === "ai_material_invalid" ? loaderData.aiMaterialLabels.error : entryErrorMessage(error)}</p>}
           <div className="flex flex-wrap items-center gap-3">
             {/* The first 「投稿」 button is the default for Enter submission. */}
             <SendButton>{m.submit_post()}</SendButton>
