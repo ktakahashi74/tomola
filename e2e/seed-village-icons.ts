@@ -12,7 +12,7 @@ import sharp from "sharp";
 
 export async function seedVillageIcons(db: Db) {
   if (!villagesEnabled()) return;
-  const people = await db.select().from(profiles).where(inArray(profiles.handle, ["vi_view_ja", "vi_view_en", "vi_owner", "vi_coowner"]));
+  const people = await db.select().from(profiles).where(inArray(profiles.handle, ["vi_view_ja", "vi_view_en", "vi_owner", "vi_coowner", "vi_palette"]));
   const person = (handle: string) => people.find(row => row.handle === handle)!;
   const owner = person("vi_owner");
   const image = await rewriteMedia(await sharp({ create: { width: 80, height: 60, channels: 3, background: "#737373" } }).png().toBuffer(), { avatar: true });
@@ -31,4 +31,6 @@ export async function seedVillageIcons(db: Db) {
       }
     }
   }
+  const palette = await createVillage(db, person("vi_palette").userId, { slug: "icons-palette", name: "Village palette", description: "", kind: "open", sourceLang: "en" });
+  if (!palette.ok) throw Error("Village palette fixture failed");
 }

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { PageHeader } from "./page-header";
 import { NavigationDrawer } from "./navigation-drawer";
 import { CountBadge, UnreadDot } from "./unread";
+import { VillageIcon } from "./village-icon";
 import { useNavigationData } from "~/lib/navigation-data";
 import { villageName } from "~/lib/village-name";
 import { villageNameLang, villageNameTitle, type WithVillageTranslation } from "~/lib/village-translation-view";
@@ -36,7 +37,7 @@ export function VillageHeader({ village, current, chat, actions, purpose, childr
   village: VillageHead; current: "posts" | "chat"; chat?: ChatTab; actions?: ReactNode; purpose?: ReactNode; children?: ReactNode;
 }) {
   const name = villageName(village);
-  const icon = village.iconUrl && <img src={village.iconUrl} alt="" className="me-2 inline-block size-8 shrink-0 rounded align-middle" />;
+  const icon = village.iconUrl && <VillageIcon src={village.iconUrl} className="me-2 inline-block size-8 shrink-0 rounded align-middle" />;
   const tabs = chat ? <VillageTabs village={village} current={current} chat={chat} /> : null;
   if (current === "chat") {
     return <header data-village-header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-background py-2">

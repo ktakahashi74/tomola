@@ -1,4 +1,5 @@
 import { AiReportAssessment } from "~/components/ai-report-assessment";
+import { VillageIcon } from "~/components/village-icon";
 import { ReportReasonSelect } from "~/components/report-reason-select";
 import { Form, Link } from "react-router";
 import { useId } from "react";
@@ -49,14 +50,14 @@ export function VillageModerationCard({ card: c, handled, returnTo }: { card: Ca
     <div className="flex flex-wrap gap-2 ui-meta"><span>{m.mod_kind_village()}</span><span>{c.village.kind === "invite_public" ? m.village_invite_public() : m.village_open()}</span>{c.village.ended && <span>{m.village_ended()}</span>}
       <Link className="underline" to={`/v/${c.village.slug}`}>{m.notification_open()}</Link>
     </div>
-    {c.iconUrl && <img src={c.iconUrl} alt="" className="size-16 rounded" />}
+    {c.iconUrl && <VillageIcon src={c.iconUrl} className="size-16 rounded" />}
     <VillageMetadataView value={c.village} label={m.village_report_current()} />
     {c.creatorHandle && <Link className="block ui-meta underline" to={`/admin/roles?q=${encodeURIComponent(c.creatorHandle)}`}>{m.village_mod_creator({ handle: c.creatorHandle })}</Link>}
     <p className="ui-meta">{m.village_owner()}： {c.ownerHandles.map(handle => <Link key={handle} className="me-3 underline" to={`/admin/roles?q=${encodeURIComponent(handle)}`}>@{handle}</Link>)}</p>
     <ul className="space-y-3">{c.reports.map(r => <li key={r.id} className="space-y-1 rounded border p-2">
       <p className="ui-meta">{m.village_report_target()}： {r.target === "icon" ? m.village_icon_label() : m.village_report_information()}</p>
       <p className="ui-meta">{reasonLabel(r.reason)} ({r.createdAt})</p>
-      {r.iconUrl && <img src={r.iconUrl} alt="" className="size-16 rounded" />}
+      {r.iconUrl && <VillageIcon src={r.iconUrl} className="size-16 rounded" />}
       {r.note && <p className="whitespace-pre-wrap text-sm">{r.note}</p>}
       <AiReportAssessment report={r} />
       {r.snapshot ? <VillageMetadataView value={{ ...r.snapshot, language: c.village.language }} label={m.village_report_snapshot()} /> : <p className="ui-help">{m.village_report_snapshot_pruned()}</p>}

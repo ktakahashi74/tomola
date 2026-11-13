@@ -2,6 +2,7 @@ import { useShellLabels } from "~/lib/use-shell-labels";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
 import { CountBadge, UnreadDot } from "./unread";
+import { VillageIcon } from "./village-icon";
 import type { JoinedVillageNavigation } from "~/lib/village-navigation.server";
 import { FOLLOWED_NAVIGATION_VISIBLE } from "~/lib/village-follow-limits";
 import type { FollowedVillageNavigation } from "~/lib/village-follows.server";
@@ -53,7 +54,7 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
   const inChat = /^\/v\/[^/]+\/chat$/.test(path);
   // A followed village is a plain link to its posts (the chat is for those who joined); it has no mark of its own, and no count of anything is shown.
   const followedRow = (village: FollowedVillageNavigation) => <li key={village.slug}>
-    <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={villagePath(village.slug) === path ? "page" : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <img src={village.iconUrl} alt="" className="size-5 shrink-0 rounded" />}<span className="min-w-0">{villageName(village)}</span></Link>
+    <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={villagePath(village.slug) === path ? "page" : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <VillageIcon src={village.iconUrl} className="size-5 shrink-0 rounded" />}<span className="min-w-0">{villageName(village)}</span></Link>
   </li>;
   const groups = [followedVillages.filter(v => v.kind !== "personal"), followedVillages.filter(v => v.kind === "personal")];
   return <>
@@ -69,7 +70,7 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
           const name = villageName(village);
           const here = villagePath(village.slug) === path || village.slug === slug;
           return <li key={village.slug} className="flex min-w-0 items-center justify-between gap-x-2">
-            <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={here ? (inChat ? "true" : "page") : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <img src={village.iconUrl} alt="" className="size-5 shrink-0 rounded" />}<span className="min-w-0">{name}</span></Link>
+            <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={here ? (inChat ? "true" : "page") : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <VillageIcon src={village.iconUrl} className="size-5 shrink-0 rounded" />}<span className="min-w-0">{name}</span></Link>
             {village.chatAvailable && village.slug && <ChatMark slug={village.slug} name={name} unread={village.unread ?? 0} mentions={village.mentions ?? 0} />}
           </li>;
         })}

@@ -16,8 +16,8 @@ for (const locale of ["ja", "en"] as const) test(`village icons in headers, plac
   const personal = page.locator('[data-site-navigation] a[href="/u/vi_owner"] img');
   await expect(personal).toHaveAttribute("src", /\/media\//);
   const memberImage = await personal.getAttribute("src");
-  const language = page.locator('[data-site-navigation] a[href="/v/en"] img');
-  await expect(language).toHaveAttribute("src", /^data:image\/svg\+xml,/);
+  const language = page.locator('[data-site-navigation] a[href="/v/en"] [data-village-symbol]');
+  await expect(language).toHaveCSS("mask-image", /data:image\/svg\+xml,/);
   await expect(page.locator('[data-site-navigation] a[href="/v/icons-view"] img')).toHaveAttribute("src", image!);
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -47,7 +47,7 @@ for (const locale of ["ja", "en"] as const) test(`village icons in headers, plac
   }
   await page.goto(`/v/en?lang=${locale}`);
   await expect(page.locator("#village-icon-settings")).toHaveCount(0);
-  await expect(page.locator('[data-village-header] h1 img')).toHaveAttribute("src", /^data:image\/svg\+xml,/);
+  await expect(page.locator('[data-village-header] h1 [data-village-symbol]')).toHaveCSS("mask-image", /data:image\/svg\+xml,/);
   const markdown = await page.request.get("/v/icons-view.md");
   expect(await markdown.text()).not.toContain(image!);
 
@@ -59,10 +59,47 @@ for (const locale of ["ja", "en"] as const) test(`village icons in headers, plac
   }
 });
 
+test("village symbols inherit readable ink in device and member color schemes", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await useMember(page, "vi_palette@example.com", "/v/icons-palette?manage=1&lang=en");
+  const colors = async () => {
+    const result: string[] = [];
+    for (const path of ["/v/en?lang=en", "/v/icons-palette?manage=1&lang=en"]) {
+      await page.goto(path);
+      const symbol = page.locator('[data-village-header] h1 [data-village-symbol]');
+      await expect(symbol).toBeVisible();
+      await expect(symbol).toHaveAttribute("aria-hidden", "true");
+      await expect(symbol).toHaveCSS("mask-image", /data:image\/svg\+xml,/);
+      const palette = await symbol.evaluate(element => ({
+        fill: getComputedStyle(element).backgroundColor,
+        ink: getComputedStyle(element.parentElement!).color,
+        ground: getComputedStyle(document.body).backgroundColor,
+      }));
+      expect(palette.fill).toBe(palette.ink);
+      expect(palette.fill).not.toBe(palette.ground);
+      expect(palette.fill).not.toBe("rgba(0, 0, 0, 0)");
+      result.push(palette.fill);
+    }
+    return result;
+  };
+  const light = await colors();
+  await page.emulateMedia({ colorScheme: "dark" });
+  const dark = await colors();
+  expect(dark).not.toEqual(light);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme === "light" ? "dark" : "light" });
+    await page.goto("/settings?lang=en");
+    await waitForHydration(page);
+    await page.getByRole("combobox", { name: en.settings_color_scheme, exact: true }).selectOption(scheme);
+    await expect(page.locator("#settings-appearance").getByRole("status")).toHaveText(en.settings_saved);
+    expect(await colors()).toEqual(scheme === "light" ? light : dark);
+  }
+});
+
 test("village owners upload and reset an image, then report, removal and independent appeal restore it", async ({ page }) => {
   await useMember(page, "vi_owner@example.com", "/v/icons-journey?manage=1&lang=en"); await waitForHydration(page);
   const settings = page.locator("#village-icon-settings");
-  const fallback = await settings.locator("img").getAttribute("src");
+  const fallback = await settings.locator("[data-village-symbol]").evaluate(element => getComputedStyle(element).maskImage);
   const picture = { name: "logo.jpg", mimeType: "image/jpeg", buffer: await sharp({ create: { width: 60, height: 90, channels: 3, background: "#737373" } }).withExif({ IFD0: { Artist: "Private camera" } }).jpeg().toBuffer() };
   const uploadedResponse = uploadResponse(page, "/v/icons-journey/icon");
   await settings.locator('input[type="file"]').setInputFiles(await largeUpload());
@@ -72,7 +109,7 @@ test("village owners upload and reset an image, then report, removal and indepen
   const first = (await settings.locator("img").getAttribute("src"))!;
   await useMember(page, "vi_coowner@example.com", "/v/icons-journey?manage=1&lang=en"); await waitForHydration(page);
   await settings.getByRole("button", { name: en.village_icon_reset, exact: true }).click();
-  await expect(settings.locator("img")).toHaveAttribute("src", fallback!);
+  await expect(settings.locator("[data-village-symbol]")).toHaveCSS("mask-image", fallback);
   expect((await page.request.get(first)).status()).toBe(404);
   const replacementResponse = uploadResponse(page, "/v/icons-journey/icon");
   await settings.locator('input[type="file"]').setInputFiles(picture);
@@ -113,7 +150,7 @@ test("village owners upload and reset an image, then report, removal and indepen
   await card.getByRole("button", { name: en.village_icon_clear, exact: true }).click();
   await expect(card).toHaveCount(0);
   await page.goto("/v/icons-journey?lang=en");
-  await expect(page.locator('[data-village-header] h1 img')).toHaveAttribute("src", fallback!);
+  await expect(page.locator('[data-village-header] h1 [data-village-symbol]')).toHaveCSS("mask-image", fallback);
   expect((await page.request.get(uploaded)).status()).toBe(200);
   await useMember(page, "vi_coowner@example.com", "/notifications?lang=en"); await waitForHydration(page);
   await page.getByRole("link", { name: en.notification_appeal, exact: true }).click();

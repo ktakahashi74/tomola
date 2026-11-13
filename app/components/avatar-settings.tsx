@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useFetcher } from "react-router";
 import { Button } from "./ui/button";
+import { VillageIcon } from "./village-icon";
 import { m } from "~/paraglide/messages.js";
 
 export function AvatarSettings({ url, uploaded, action = "/settings/avatar", village = false }: { url: string; uploaded: boolean; action?: string; village?: boolean }) {
@@ -11,7 +12,7 @@ export function AvatarSettings({ url, uploaded, action = "/settings/avatar", vil
   return <section id={village ? "village-icon-settings" : "settings-avatar"} aria-label={village ? m.village_icon_label() : m.avatar_label()} className="scroll-mt-4 space-y-2">
     {village && <h3 className="text-sm font-semibold">{m.village_icon_label()}</h3>}
     <div className="flex flex-wrap items-center gap-3">
-      <img src={url} alt="" className="member-avatar member-avatar-prominent rounded" />
+      {village ? <VillageIcon src={url} className="member-avatar member-avatar-prominent rounded" /> : <img src={url} alt="" className="member-avatar member-avatar-prominent rounded" />}
       <input ref={picker} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={event => {
         const image = event.target.files?.[0]; event.target.value = "";
         if (!image || busy) return;
