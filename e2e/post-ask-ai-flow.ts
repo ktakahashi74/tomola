@@ -62,7 +62,16 @@ export async function postAskFlow(page: Page, options: {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     await captureScreenshot(page, { path: `question-${locale}-${width}.png`, fullPage: true, animations: "disabled" }, "post-ask-ai");
   }
-  await page.goto(topicPath);
+  const citation = response.answer.citations[0];
+  await page.getByRole("link", { name: labels.post_ask_original, exact: true }).click();
+  await expect(page).toHaveURL(url => url.pathname === topicPath && url.searchParams.get("orig") === topicPath.split("/").at(-1));
+  await expect(page.locator('article[id^="p-"]')).toContainText(citation.original.quote);
+  const translation = citation.translation;
+  if (translation) {
+    await page.goto(translation.href);
+    await expect(page.locator('article[id^="p-"]')).toContainText(translation.quote);
+    await page.goBack();
+  }
   await page.goBack();
   await waitForClientRoute(page);
   await expect(page.getByLabel(labels.post_ask_question, { exact: true })).toHaveValue("");
