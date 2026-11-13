@@ -969,6 +969,7 @@
   "settings_color_scheme_device": "端末に合わせる",
   "settings_color_scheme_light": "明るい",
   "settings_color_scheme_dark": "暗い",
+  "settings_color_scheme_save": "配色を保存",
   "settings_ui_lang_help": "メニュー、ボタン、訳の言語です。",
   "nav_menu": "メニュー",
   "nav_admin": "運営",

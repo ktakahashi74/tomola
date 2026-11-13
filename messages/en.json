@@ -1522,6 +1522,7 @@
   "settings_color_scheme_device": "Match device",
   "settings_color_scheme_light": "Light",
   "settings_color_scheme_dark": "Dark",
+  "settings_color_scheme_save": "Save appearance",
   "settings_ui_lang_help": "The language of menus, buttons and translations.",
   "nav_menu": "Menu",
   "nav_admin": "Admin",

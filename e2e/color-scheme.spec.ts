@@ -71,7 +71,7 @@ test("member appearance persists across pages and devices, saves without JavaScr
       const form = otherPage.locator("form").filter({ has: appearance });
       for (const value of ["light", "", "dark"]) {
         await appearance.selectOption(value);
-        await form.getByRole("button", { name: en.save_changes, exact: true }).click();
+        await form.getByRole("button", { name: en.settings_color_scheme_save, exact: true }).click();
         await expect(appearance).toHaveValue(value);
         await expectDocumentScheme(otherPage, value as ColorScheme || null);
         await otherPage.reload();

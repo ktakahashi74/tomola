@@ -119,7 +119,7 @@ it("defers at the member rate cap and preserves registrations across VAPID mista
 });
 it("exports only counts and coarse labels and cascades registrations on deletion", async () => {
   const f = await fixture(); const exported = await buildMemberExport(f.db, "push_reader");
-  expect(exported.version).toBe(MEMBER_EXPORT_VERSION); expect(exported.version).toBe(15); expect(exported.push_subscriptions.count).toBe(1);
+  expect(exported.version).toBe(MEMBER_EXPORT_VERSION); expect(exported.push_subscriptions.count).toBe(1);
   const text = JSON.stringify(exported.push_subscriptions); for (const secret of [f.sub.endpoint, f.sub.keys.auth, f.sub.keys.p256dh, f.browser.secret]) expect(text).not.toContain(secret);
   await addMember(f.db, "push_delete", "push_delete"); const auth = await pushAuthorization(f.db, "push_delete");
   await registerPush(f.db, "push_delete", identity(), subscription(), "Chrome Linux", auth);

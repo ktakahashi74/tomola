@@ -331,7 +331,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           <input type="hidden" name="intent" value="preferences" />
           <input type="hidden" name="field" value="colorScheme" />
           <ColorSchemeSettings initial={loaderData.colorScheme} />
-          {!enhanced && <Button type="submit">{m.save_changes()}</Button>}
+          {!enhanced && <Button type="submit">{m.settings_color_scheme_save()}</Button>}
         </Form>
         {/* Ordinary submissions keep the combined no-JavaScript path. Enhanced saves name just the field being changed. */}
         <Form method="post" action={withSettingsReturn("/settings#settings-languages", returnTo)} className="space-y-4">
