@@ -132,7 +132,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
         ...(text && tr ? { translation: { text, lang: language, stale: tr.stale } } : {}) });
     }
   }
-  const materials = boundQuestionMaterials(inputs, found.size > ids.length);
+  const materials = await boundQuestionMaterials(inputs, found.size > ids.length);
   const used = new Set(materials.sources.map(source => Number(/^e-(\d+)-/.exec(source.id)![1])));
   const dependencies = new Map(rows.filter(({ entry }) => used.has(entry.id)).map(row => [row.entry.id, row]));
   // Track calling context as well as evidence, so an edit cannot leave old context public.
