@@ -19,7 +19,7 @@ test("chat replies preserve chronology, cancel cleanly, open old parents, and no
   await expect(body).toHaveValue("Keep this draft");
   await parent.click(); await parent.getByRole("button", { name: m.village_chat_reply, exact: true }).click();
   await body.fill("Private reply marker @qry_reply_reader");
-  await body.press("Enter");
+  await page.getByRole("button", { name: m.village_chat_send, exact: true }).click();
   await expect(body).toHaveValue("");
   const reply = page.locator("[data-chat-message]").filter({ has: page.locator("p", { hasText: /^Private reply marker/ }) });
   await expect(reply.locator("[data-chat-reply]")).toContainText("Reply history 1");
