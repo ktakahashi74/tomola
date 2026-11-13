@@ -1,0 +1,6 @@
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_kind_check";--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD COLUMN "reply_to_id" text;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_village_id_unique" UNIQUE("village_id","id");--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_reply_to_fk" FOREIGN KEY ("village_id","reply_to_id") REFERENCES "public"."chat_messages"("village_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_reply_self_check" CHECK ("chat_messages"."reply_to_id" IS NULL OR "chat_messages"."reply_to_id" <> "chat_messages"."id");--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_kind_check" CHECK ("notifications"."kind" in ('reply_to_topic', 'reply_to_reply', 'response_to_topic', 'moderation', 'appeal_decided', 'followed_thread', 'mention', 'village_invite', 'village_added', 'village_removed', 'village_owner_changed', 'chat_mention', 'chat_reply', 'translation_report_result', 'source_language_mismatch', 'entry_translation_unavailable'));
