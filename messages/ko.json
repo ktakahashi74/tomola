@@ -2820,5 +2820,14 @@
   "mail_subject_chat_reply": "채팅에서 회원님에게 답글이 달렸습니다",
   "mail_item_chat_reply": "채팅에서 회원님에게 답글이 달렸습니다.\n\n{url}",
   "mail_item_chat_reply_named": "“{name}” 채팅에서 회원님에게 답글이 달렸습니다.\n\n{url}",
-  "village_chat_addressed": "답글 및 멘션: {count}"
+  "village_chat_addressed": "답글 및 멘션: {count}",
+  "chat_search_title": "이 채팅 검색",
+  "chat_search_results": "일치하는 메시지",
+  "chat_search_back": "채팅으로 돌아가기",
+  "chat_search_more": "이전 일치 항목 더 찾기",
+  "chat_search_incomplete": "일치하는 항목이 없다고 해서 메시지가 존재하지 않는 것은 아닙니다. 최신 번역이 없는 메시지는 원문으로만 찾을 수 있습니다.",
+  "chat_search_match_translation": "번역 발췌본(기계 번역)",
+  "chat_search_invalid": "1자 이상 {max}자 이하로 입력해 주세요.",
+  "chat_search_message_unavailable": "이 메시지는 표시할 수 없습니다.",
+  "chat_search_empty": "메시지를 찾을 수 없습니다. 다른 단어나 더 짧은 어구로 검색해 보세요."
 }

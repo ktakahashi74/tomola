@@ -2302,5 +2302,14 @@
   "mail_subject_chat_reply": "有人在聊天中回覆了您",
   "mail_item_chat_reply": "有人在聊天中回覆了您。\n\n{url}",
   "mail_item_chat_reply_named": "有人在「{name}」的聊天中回覆了您。\n\n{url}",
-  "village_chat_addressed": "回覆與提及：{count}"
+  "village_chat_addressed": "回覆與提及：{count}",
+  "chat_search_title": "在此聊天中搜尋",
+  "chat_search_results": "相符的訊息",
+  "chat_search_back": "返回聊天",
+  "chat_search_more": "尋找更早的相符訊息",
+  "chat_search_incomplete": "搜尋無結果並不代表該訊息不存在。沒有最新翻譯的訊息只能透過原文搜尋。",
+  "chat_search_match_translation": "翻譯摘要（機器翻譯）",
+  "chat_search_invalid": "請輸入 1 到 {max} 個字元。",
+  "chat_search_message_unavailable": "無法顯示此訊息。",
+  "chat_search_empty": "找不到任何訊息。請嘗試其他字詞或較短的詞組。"
 }

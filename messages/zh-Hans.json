@@ -2302,5 +2302,14 @@
   "mail_subject_chat_reply": "有人在聊天中回复了您",
   "mail_item_chat_reply": "有人在聊天中回复了您。\n\n{url}",
   "mail_item_chat_reply_named": "有人在“{name}”的聊天中回复了您。\n\n{url}",
-  "village_chat_addressed": "回复与提及：{count}"
+  "village_chat_addressed": "回复与提及：{count}",
+  "chat_search_title": "在此聊天中搜索",
+  "chat_search_results": "匹配的消息",
+  "chat_search_back": "返回聊天",
+  "chat_search_more": "查找更早的匹配项",
+  "chat_search_incomplete": "未找到匹配项并不代表该消息不存在。尚未获得当前翻译的消息只能通过原文搜索。",
+  "chat_search_match_translation": "翻译节选（机器翻译）",
+  "chat_search_invalid": "请输入 1 到 {max} 个字符。",
+  "chat_search_message_unavailable": "无法显示此消息。",
+  "chat_search_empty": "未找到消息。请尝试其他词语或更短的短语。"
 }

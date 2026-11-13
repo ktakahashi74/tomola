@@ -2927,5 +2927,14 @@
   "mail_subject_chat_reply": "Quelqu’un vous a répondu dans la discussion",
   "mail_item_chat_reply": "Quelqu’un vous a répondu dans la discussion.\n\n{url}",
   "mail_item_chat_reply_named": "Quelqu’un vous a répondu dans la discussion pour « {name} ».\n\n{url}",
-  "village_chat_addressed": "Réponses et mentions : {count}"
+  "village_chat_addressed": "Réponses et mentions : {count}",
+  "chat_search_title": "Rechercher dans cette discussion",
+  "chat_search_results": "Messages correspondants",
+  "chat_search_back": "Retour à la discussion",
+  "chat_search_more": "Trouver des correspondances plus anciennes",
+  "chat_search_incomplete": "L’absence de résultat ne signifie pas qu’aucun message n’existe. Les messages sans traduction à jour ne peuvent être trouvés que dans l’original.",
+  "chat_search_match_translation": "Extrait traduit (traduction automatique)",
+  "chat_search_invalid": "Saisissez entre 1 et {max} caractères.",
+  "chat_search_message_unavailable": "Ce message ne peut pas être affiché.",
+  "chat_search_empty": "Aucun message trouvé. Essayez d’autres mots ou une expression plus courte."
 }
