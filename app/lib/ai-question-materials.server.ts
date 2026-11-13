@@ -41,12 +41,13 @@ export async function readableQuestionPost(db: Db, id: number) {
 
 // Limit text independently of its retrieval method, so a later search can use
 // the same bounded materials, prompt and citation verifier.
-export function boundQuestionMaterials(inputs: readonly AiQuestionSource[], moreReplies = false): AiQuestionMaterials {
+export async function boundQuestionMaterials(inputs: readonly AiQuestionSource[], moreReplies = false): Promise<AiQuestionMaterials> {
   let remaining: number = AI_QUESTION_LIMITS.materialChars;
   let truncated = moreReplies;
   const sources: AiQuestionSource[] = [];
   for (const raw of inputs) {
-    const input = { ...raw, author: visibleUnicode(raw.author), original: aiVisibleMarkdown(raw.original).text, ...(raw.translation ? { translation: { ...raw.translation, text: aiVisibleMarkdown(raw.translation.text).text } } : {}) };
+    const project = async (text: string) => raw.field === "title" ? visibleUnicode(text) : (await aiVisibleMarkdown(text, raw.kind !== "material")).text;
+    const input = { ...raw, author: visibleUnicode(raw.author), original: await project(raw.original), ...(raw.translation ? { translation: { ...raw.translation, text: await project(raw.translation.text) } } : {}) };
     const translation = input.translation?.text.trim() ? input.translation : undefined;
     const translated = translation?.text;
     const originalCap = translated

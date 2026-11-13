@@ -1,3 +1,4 @@
+import * as aiVisible from "../app/lib/ai-visible-text.core.server.ts";
 import * as markdown from "../app/lib/markdown.core.server.ts";
 import * as mentions from "../app/lib/mentions-md.core.server.ts";
 import * as plainText from "../app/lib/plain-text.core.server.ts";
@@ -14,7 +15,7 @@ import * as checks from "../app/lib/eval/checks.core.server.ts";
 import { markdownSpecimen } from "../app/lib/markdown-specimen.ts";
 import { withoutMarkdownParseCache } from "../app/lib/markdown-parser.core.server.ts";
 
-export const markdownOperations = Object.assign({}, markdown, mentions, plainText, references, siteExport, structure, copyDetection, langDetect, headline, inspection, frontmatter, draftIssues, checks);
+export const markdownOperations = Object.assign({}, aiVisible, markdown, mentions, plainText, references, siteExport, structure, copyDetection, langDetect, headline, inspection, frontmatter, draftIssues, checks);
 markdownOperations.renderUncachedMarkdown = (...args) => withoutMarkdownParseCache(() => markdownOperations.renderMarkdown(...args));
 markdownOperations.admitMarkdown = source => {
   if (markdownOperations.tryRenderMarkdown(source) === null) return "body_unrenderable";

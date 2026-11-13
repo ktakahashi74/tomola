@@ -87,14 +87,14 @@ describe("private question protocol", () => {
     expect(verifyQuestionAnswer(output({ readings: [{ text: "A reading.", citations: [] }] }), materials)).toBeNull();
   });
 
-  it("bounds reusable material, preserves Unicode and keeps originals with their supplied translations", () => {
+  it("bounds reusable material, preserves Unicode and keeps originals with their supplied translations", async () => {
     const source = { ...materials.sources[0], original: "漢😀".repeat(10_000), translation: { text: "訳😀".repeat(10_000), lang: "ja" as const, stale: false } };
-    const bounded = boundQuestionMaterials([source, ...materials.sources]);
+    const bounded = await boundQuestionMaterials([source, ...materials.sources]);
     expect(bounded.scope.truncated).toBe(true);
     expect(bounded.sources.reduce((n, s) => n + s.original.length + (s.translation?.text.length ?? 0), 0)).toBeLessThanOrEqual(AI_QUESTION_LIMITS.materialChars);
     for (const s of bounded.sources) expect(Buffer.from(s.original).toString()).toBe(s.original);
     expect(clipQuestionText("a😀z", 2)).toBe("a");
-    expect(boundQuestionMaterials(materials.sources, true).scope.truncated).toBe(true);
+    expect((await boundQuestionMaterials(materials.sources, true)).scope.truncated).toBe(true);
     expect(questionPrompt(materials, "QUESTION_INJECTION_MARKER", "ja").system).not.toContain("QUESTION_INJECTION_MARKER");
   });
 });
@@ -352,4 +352,31 @@ it("expires consented reports after ninety days, respects preservation holds and
   await saveQuestionReport(f.db, f.userId, { kind: "post", id: f.id }, "A reported question", result.response, true);
   await f.db.delete(user).where(eq(user.id, f.userId));
   expect(await f.db.select().from(aiQuestionReports)).toEqual([]);
+});
+
+it("keeps literal titles and visible formula sources in post, reply and translated AI evidence", async () => {
+  const f = await fixture();
+  const title = "1. # <T> Study";
+  const body = "Price $5 and $10. Formula $x^2 + y^2$ and $a + \\phantom{MATH_SECRET}$ <!-- BODY_SECRET -->\n\n$$\nb % COMMENT_SECRET\n+ c\n$$";
+  await f.db.update(entries).set({ title, body }).where(eq(entries.id, f.id));
+  await createReply(f.db, "question-author", f.id, { body: "Reply $$E=mc^2$$", lang: "en" });
+  const [post] = await f.db.select().from(entries).where(eq(entries.id, f.id));
+  await f.db.insert(translations).values([
+    { entryId: f.id, field: "title", lang: "ja", kind: "primary", text: "1. # <T> 訳題", sourceHash: post.sourceHash },
+    { entryId: f.id, field: "body", lang: "ja", kind: "primary", text: "式 $x^2 + y^2$ <!-- TRANSLATION_SECRET -->", sourceHash: post.sourceHash },
+  ]);
+  const projected = (await postQuestionMaterials(f.db, f.id, "ja"))!;
+  expect(projected.sources.find(s => s.field === "title")).toMatchObject({ original: title, translation: { text: "1. # <T> 訳題" } });
+  const userPrompt = questionPrompt(projected, "Which equation?", "ja").user;
+  expect(userPrompt).toContain("$5 and $10");
+  expect(userPrompt).toContain("$x^2 + y^2$");
+  expect(userPrompt).toContain("E=mc^2");
+  expect(userPrompt).not.toContain("SECRET");
+  const engine: JsonCompleter = { engine: "fake", model: "fake", async complete(req) {
+    const sources = JSON.parse(req.user).materials;
+    const source = sources.find((s: { kind: string; field: string }) => s.kind === "post" && s.field === "body");
+    return { text: JSON.stringify({ status: "answered", readings: [{ text: "The equation is supplied.", citations: [{ sourceId: source.id, quote: "$x^2 + y^2$", translatedQuote: "$x^2 + y^2$" }] }] }), inputTokens: 9, outputTokens: 7 };
+  } };
+  const result = await askPostQuestion(f.db, { topicId: f.id, userId: f.userId, question: "Which equation?", language: "ja", request: request(), env, completer: engine });
+  expect(result.ok).toBe(true);
 });

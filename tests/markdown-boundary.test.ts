@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, it, vi } from "vitest";
+import * as aiVisible from "~/lib/ai-visible-text.core.server";
 import * as renderer from "~/lib/markdown.core.server";
 import * as mentions from "~/lib/mentions-md.core.server";
 import * as references from "~/lib/entry-references.core.server";
@@ -13,7 +14,7 @@ import * as language from "~/lib/lang-detect.core.server";
 
 it("keeps body interpretation out of the caller's module instances", async () => {
   const spies = [
-    vi.spyOn(renderer, "renderMarkdown"), vi.spyOn(mentions, "mentionSpellings"),
+    vi.spyOn(aiVisible, "aiVisibleMarkdown"), vi.spyOn(renderer, "renderMarkdown"), vi.spyOn(mentions, "mentionSpellings"),
     vi.spyOn(references, "parseEntryReferences"), vi.spyOn(plain, "markdownToPlainText"),
     vi.spyOn(structure, "checkStructure"), vi.spyOn(copy, "detectCopy"), vi.spyOn(frontmatter, "parseMapping"),
     vi.spyOn(evaluation, "deterministicCheck"),
@@ -21,6 +22,7 @@ it("keeps body interpretation out of the caller's module instances", async () =>
   ];
   try {
     const source = "# A post\n\n**Evidence** and @hana [topic](/t/1), with $x^2$.\n";
+    expect((await (await import("~/lib/ai-visible-text.server")).aiVisibleMarkdown(source)).text).toContain("Evidence");
     await (await import("~/lib/markdown.server")).renderMarkdown(source);
     await (await import("~/lib/mentions-md.server")).mentionSpellings(source);
     await (await import("~/lib/entry-references.server")).parseEntryReferences(source);

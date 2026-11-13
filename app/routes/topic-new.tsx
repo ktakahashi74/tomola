@@ -116,7 +116,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
     const fail = (error: string, village?: string) => data({ error, values: { ...values, ...(village === undefined ? {} : { village }) } }, { status: 400 });
     const supplement = formString(form, "aiMaterial");
-    if (supplement.trim() && (!preparePostAiMaterial(supplement) || formString(form, "intent") === "draft")) return fail("ai_material_invalid");
+    if (supplement.trim() && (!await preparePostAiMaterial(supplement) || formString(form, "intent") === "draft")) return fail("ai_material_invalid");
     if (formString(form, "intent") === "draft") {
       const rate = await hitRateLimit(db, { key: `draft:member:${user.id}`, ...DRAFT_RATE_LIMIT });
       if (!rate.allowed) return data({ error: "rate_limited", values }, { status: 429, headers: rateLimitHeaders(rate) });
@@ -152,7 +152,7 @@ export async function action({ request }: Route.ActionArgs) {
       return posted;
     });
     if (res.ok) {
-      throw redirect(supplement.trim() ? `/t/${res.id}/ai-materials/edit?saved=1` : postedLocation(`/t/${res.id}`, res.id));
+      throw redirect(postedLocation(`/t/${res.id}`, res.id));
     }
     return fail(res.error, res.village);
   }

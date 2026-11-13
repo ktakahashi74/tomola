@@ -1,4 +1,4 @@
-import { readPostAiMaterial } from "~/lib/post-ai-materials.server";
+import { hasPostAiMaterial } from "~/lib/post-ai-materials.server";
 import { loadMemberAvatars } from "~/lib/member-avatar.server";
 import { loadDisplayNames, selectDisplayName, selectDisplayNamePresentation } from "~/lib/display-names.server";
 import { TitledMessage } from "~/components/titled-message";
@@ -354,7 +354,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   }
   return {
     aiMaterialLinks: await (async () => {
-      const material = topic.visibility === "visible" ? await readPostAiMaterial(db, topic.id) : null;
+      const material = topic.visibility === "visible" ? await hasPostAiMaterial(db, topic.id) : null;
       return [...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
         ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : [])];
     })(),

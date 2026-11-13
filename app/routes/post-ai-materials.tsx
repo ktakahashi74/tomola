@@ -5,11 +5,11 @@ import { getViewer, inScope } from "~/lib/roles.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { enforceMemberLimit } from "~/lib/http/limits.server";
 import { parseId } from "~/lib/params.server";
-import { materialTopic, moderatePostAiMaterial, postAiMaterialHistory, readPostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
+import { POST_AI_HISTORY_PAGE_SIZE, materialTopic, moderatePostAiMaterial, postAiMaterialHistory, readPostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
 import { instructionWarnings, POST_AI_MATERIAL_CHARS } from "~/lib/post-ai-materials";
 import { createReport } from "~/lib/moderation.server";
-import { postAiMaterialVersions } from "~/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { postAiMaterials, postAiMaterialVersions } from "~/lib/db/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
 import { m } from "~/paraglide/messages.js";
 import { Button } from "~/components/ui/button";
@@ -28,13 +28,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const moderator = !!viewer && !owner && inScope(viewer.scope, topic.fallbackLang);
   const material = await readPostAiMaterial(db, topicId, viewer);
   if (params.view === "edit" ? !owner : !material) throw data("Not found", { status: 404 });
-  const history = params.view === "history" && material ? await postAiMaterialHistory(db, topicId) : [];
+  const before = new URL(request.url).searchParams.get("before");
+  const history = params.view === "history" && material ? await postAiMaterialHistory(db, topicId, before === null ? undefined : parseId(before)) : { rows: [], nextBefore: null };
+  const [retained] = owner && params.view === "edit" && !material ? await db.select({ version: postAiMaterials.version }).from(postAiMaterials).where(eq(postAiMaterials.topicId, topicId)) : [];
   const warnings = viewer?.scope.operator ? await db.select({ version: postAiMaterialVersions.version, rules: postAiMaterialVersions.instructionWarnings })
-    .from(postAiMaterialVersions).where(eq(postAiMaterialVersions.topicId, topicId)) : null;
-  return { topicId, owner, moderator, member: !!user, view: params.view, version: material?.version ?? 0,
+    .from(postAiMaterialVersions).where(and(eq(postAiMaterialVersions.topicId, topicId), params.view === "history" ? inArray(postAiMaterialVersions.version, history.rows.map(row => row.version)) : undefined)).orderBy(desc(postAiMaterialVersions.version)).limit(POST_AI_HISTORY_PAGE_SIZE) : null;
+  return { topicId, owner, moderator, member: !!user, view: params.view, version: material?.version ?? retained?.version ?? 0,
     instructionNotice: owner && !!material && instructionWarnings(material.text).length > 0,
     body: params.view === "edit" ? material?.body ?? "" : "", material: material ? { html: material.html, author: material.author, lang: material.lang, hidden: material.hidden, materialHidden: material.materialHidden, updatedAt: material.updatedAt } : null,
-    history: history.map(({ version, html, event, createdAt }) => ({ version, html, event, createdAt })), warnings,
+    nextBefore: history.nextBefore, history: history.rows.map(({ version, html, event, createdAt }) => ({ version, html, event, createdAt })), warnings,
     saved: new URL(request.url).searchParams.has("saved") };
 }
 export async function action({ request, params }: Route.ActionArgs) {
@@ -74,7 +76,7 @@ export default function PostAiMaterials({ loaderData: view, actionData }: Route.
     <h1 className="text-2xl font-bold">{m.ai_material_title()}</h1>
     <p className="ui-help">{m.ai_material_notice()}</p>
     {actionData?.message && <p role="status">{actionData.message}</p>}
-    {view.saved && <p role="status">{view.instructionNotice ? m.ai_material_instruction_warning() : m.ai_material_saved()}</p>}
+    {!actionData?.message && (view.saved || view.instructionNotice) && <p role="status">{view.instructionNotice ? m.ai_material_instruction_warning() : m.ai_material_saved()}</p>}
     {view.view === "edit" ? <Form method="post" className="space-y-3">
       <input type="hidden" name="version" value={view.version} />
       <label className="block" htmlFor="ai-material">{m.ai_material_title()}</label>
@@ -90,6 +92,7 @@ export default function PostAiMaterials({ loaderData: view, actionData }: Route.
       </>}
       <div className="flex gap-4 ui-meta"><Link className="underline" to={`${base}/history`}>{m.history_title()}</Link>{view.owner && <Link className="underline" to={`${base}/edit`}>{m.edit()}</Link>}</div>
       {view.history.map(row => <article key={row.version} className="space-y-2 border-t pt-3"><h2>{row.version} · <LocalTime iso={row.createdAt.toISOString()} style="date" /></h2><p>{row.event === "edit" ? m.edit() : row.event === "hide" ? m.ai_material_hide() : m.ai_material_unhide()}</p><div dir="auto" lang={view.material?.lang} className="longread longread-compact break-words" dangerouslySetInnerHTML={{ __html: row.html }} /></article>)}
+      {view.nextBefore && <Link className="underline" to={`${base}/history?before=${view.nextBefore}`}>{m.page_next()}</Link>}
       {view.member && !view.owner && !view.material?.hidden && <details><summary>{m.flag_short()}</summary><Form method="post" className="space-y-2">
         <input type="hidden" name="intent" value="report" /><input type="hidden" name="version" value={view.version} />
         <ReportReasonSelect label={m.flag_reason()} defaultValue="spam" />
