@@ -2511,6 +2511,7 @@
   "translation_working_accessible": "La traduction de cette publication est en préparation.",
   "translation_arrived": "La traduction est affichée.",
   "village_personal": "Mon village",
+  "village_personal_destination": "Mon village (@{handle})",
   "village_personal_places": "Villages des membres",
   "member_page_elsewhere": "Publications ailleurs",
   "member_page_village_follow_hint": "Suivez ce village pour recevoir les publications de cette section.",

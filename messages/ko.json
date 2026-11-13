@@ -2406,6 +2406,7 @@
   "translation_working_accessible": "이 게시물의 번역을 준비하고 있습니다.",
   "translation_arrived": "번역이 준비되었습니다.",
   "village_personal": "내 빌리지",
+  "village_personal_destination": "내 빌리지 (@{handle})",
   "village_personal_places": "회원들의 빌리지",
   "member_page_elsewhere": "다른 곳에 올린 게시물",
   "member_page_village_follow_hint": "이 빌리지를 팔로우하여 이 섹션의 게시물을 읽어보세요.",

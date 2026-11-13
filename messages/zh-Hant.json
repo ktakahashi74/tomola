@@ -1888,6 +1888,7 @@
   "translation_working_accessible": "正在準備這篇貼文的譯文。",
   "translation_arrived": "已顯示這篇貼文的譯文。",
   "village_personal": "我的村",
+  "village_personal_destination": "我的村（@{handle}）",
   "village_personal_places": "成員的村",
   "member_page_elsewhere": "在其他地方的貼文",
   "member_page_village_follow_hint": "追蹤這個村，就能收到這一欄裡的貼文。",
