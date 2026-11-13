@@ -41,20 +41,26 @@ describe("createJsonCompleter: the engines of pnpm i18n:translate", () => {
     const stub = geminiStub(frenchOf);
     const completer = createJsonCompleter("gemini", DEFAULT_I18N_MODELS.gemini, {}, { geminiClient: stub.client });
     expect(completer).toMatchObject({ engine: "gemini", model: "gemini-3.8-flash" });
-    const out = await completer.complete({ system: "SYS", user: JSON.stringify({ a: { en: "Hello" } }), maxOutputTokens: 1234 });
+    const controller = new AbortController();
+    const out = await completer.complete({ system: "SYS", user: JSON.stringify({ a: { en: "Hello" } }), maxOutputTokens: 1234, signal: controller.signal });
     expect(JSON.parse(out.text)).toEqual({ a: "[fr] Hello" });
     expect(out).toMatchObject({ inputTokens: 100, outputTokens: 50 });
     const params = stub.generateContent.mock.calls[0][0] as { model: string; config: Record<string, unknown> };
     expect(params.model).toBe("gemini-3.8-flash");
     expect(params.config).toMatchObject({ systemInstruction: "SYS", maxOutputTokens: 1234, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "LOW" } });
+    controller.abort();
+    expect((params.config.abortSignal as AbortSignal).aborted).toBe(true);
   });
 
   it("uses Claude without sampling overrides, turns thinking off for claude-sonnet-5-5, and reads a fenced JSON answer", async () => {
     const stub = claudeStub((user) => `\`\`\`json\n${frenchOf(user)}\n\`\`\``);
     const haiku = createJsonCompleter("claude", "claude-haiku-4-5", {}, { claudeClient: stub.client });
-    await haiku.complete({ system: "SYS", user: JSON.stringify({ a: { en: "Hello" } }), maxOutputTokens: 5000 });
+    const controller = new AbortController();
+    await haiku.complete({ system: "SYS", user: JSON.stringify({ a: { en: "Hello" } }), maxOutputTokens: 5000, signal: controller.signal });
     expect(stub.create.mock.calls[0][0]).toMatchObject({ model: "claude-haiku-4-5", max_tokens: 5000, system: "SYS" });
     expect(stub.create.mock.calls[0][0]).not.toHaveProperty("temperature");
+    controller.abort();
+    expect((stub.create.mock.calls[0][1] as { signal: AbortSignal }).signal.aborted).toBe(true);
     const sonnet = createJsonCompleter("claude", DEFAULT_I18N_MODELS.claude, {}, { claudeClient: stub.client });
     expect(DEFAULT_I18N_MODELS.claude).toBe("claude-sonnet-5-5");
     const out = await sonnet.complete({ system: "SYS", user: JSON.stringify({ a: { en: "Hello" } }), maxOutputTokens: 5000 });

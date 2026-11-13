@@ -5,14 +5,16 @@ import { costMicro } from "./pricing.server";
 import type { BudgetState, EngineId, LlmEnv } from "./types";
 import { BudgetPausedError } from "./errors.server";
 import { BUDGET_RESERVATION_WAIT } from "../jobs/defer-reasons";
+import { postAskMonthlyBudgetMicro } from "../ai-question-config.server";
 
 export type { BudgetState };
 
 // Cost ledger and monthly budget, using UTC month boundaries.
 
-export type UsagePurpose = "translate" | "retry" | "judge" | "embed" | "chat" | "moderation";
+export type UsagePurpose = "translate" | "retry" | "judge" | "embed" | "chat" | "moderation" | "ask" | "ask_village";
 export const PUBLIC_USAGE_PURPOSES: readonly UsagePurpose[] = ["translate", "retry", "judge", "embed", "moderation"];
 export const CHAT_USAGE_PURPOSES: readonly UsagePurpose[] = ["chat"];
+export const POST_ASK_USAGE_PURPOSES: readonly UsagePurpose[] = ["ask"];
 
 export function chatMonthlyBudgetMicro(env: LlmEnv = process.env): number {
   const raw = env.CHAT_LLM_MONTHLY_BUDGET_USD?.trim() || "2";
@@ -106,7 +108,7 @@ type ReservationRequest = {
   engine: string;
   model: string;
   purpose: UsagePurpose;
-  role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat";
+  role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat" | "ask";
   estimateMicro: number;
   now: Date;
   env?: LlmEnv;
@@ -119,9 +121,9 @@ export async function reserveUsage(db: Db, req: ReservationRequest): Promise<num
   return db.transaction(async tx => {
     await tx.execute(sql`lock table ${llmUsage} in share row exclusive mode`);
     const chat = req.purpose === "chat";
-    const purposes = chat ? CHAT_USAGE_PURPOSES : PUBLIC_USAGE_PURPOSES;
+    const purposes = chat ? CHAT_USAGE_PURPOSES : req.purpose === "ask" ? POST_ASK_USAGE_PURPOSES : PUBLIC_USAGE_PURPOSES;
     const budget = await getBudgetStatus(tx, req.now, req.env, purposes);
-    const disabled = budget.state === "stopped" || (budget.state === "degraded" && !["primary", "embed", "chat"].includes(req.role));
+    const disabled = budget.state === "stopped" || (budget.state === "degraded" && !["primary", "embed", "chat", "ask"].includes(req.role));
     if (disabled) throw new BudgetPausedError(budget.state, budgetResumeAt(req.now), req.role);
     const committed = await getMonthlyCostMicro(tx, req.now, purposes);
     if (committed + req.estimateMicro > budget.budgetMicro) throw new BudgetPausedError(budget.state, budgetResumeAt(req.now), req.role, "insufficient");
@@ -160,11 +162,12 @@ export type BudgetStatus = {
 
 export async function getBudgetStatus(db: Db, now: Date = new Date(), env: LlmEnv = process.env, purposes: readonly UsagePurpose[] = PUBLIC_USAGE_PURPOSES): Promise<BudgetStatus> {
   const chat = purposes.length === 1 && purposes[0] === "chat";
+  const ask = purposes.length === 1 && purposes[0] === "ask";
   const usedMicro = await monthlyCostMicro(db, now, purposes, "exclude");
-  const budgetMicro = chat ? chatMonthlyBudgetMicro(env) : monthlyBudgetMicro(env);
+  const budgetMicro = chat ? chatMonthlyBudgetMicro(env) : ask ? postAskMonthlyBudgetMicro(env) : monthlyBudgetMicro(env);
   const { start, end } = monthRangeUtc(now);
   return {
-    state: chat ? usedMicro >= budgetMicro ? "stopped" : "normal" : budgetStateFor(usedMicro, budgetMicro),
+    state: chat || ask ? usedMicro >= budgetMicro ? "stopped" : "normal" : budgetStateFor(usedMicro, budgetMicro),
     usedMicro,
     budgetMicro,
     percent: budgetMicro > 0 ? (usedMicro / budgetMicro) * 100 : 100,
@@ -175,6 +178,10 @@ export async function getBudgetStatus(db: Db, now: Date = new Date(), env: LlmEn
 
 export function getChatBudgetStatus(db: Db, now = new Date(), env: LlmEnv = process.env): Promise<BudgetStatus> {
   return getBudgetStatus(db, now, env, CHAT_USAGE_PURPOSES);
+}
+
+export function getPostAskBudgetStatus(db: Db, now = new Date(), env: LlmEnv = process.env): Promise<BudgetStatus> {
+  return getBudgetStatus(db, now, env, POST_ASK_USAGE_PURPOSES);
 }
 
 // Checked by jobs before execution.

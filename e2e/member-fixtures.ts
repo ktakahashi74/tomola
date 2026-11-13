@@ -54,6 +54,7 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "villages_suspended@example.com", handle: "villages_suspended", homeArea: "en", uiLocale: "en" },
 ];
 export const MEMBER_FIXTURES: readonly SeedMember[] = [
+  ...["zask_flow", "zask_peer", "zask_ja_flow", "zask_guest_owner", "zask_error"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   { email: "zai_use_author@example.com", handle: "zai_use_author", homeArea: "ja", readLangs: ["ja"], uiLocale: "en" },
   { email: "zai_use_reader@example.com", handle: "zai_use_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   { email: "scribe_other_public@example.com", handle: "scribe_other_public", homeArea: "en", uiLocale: "en" },

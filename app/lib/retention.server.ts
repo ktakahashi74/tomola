@@ -1,6 +1,6 @@
 import { and, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
-import { chatAccessLog, llmUsage, notifications, pushDeliveries, session, signingChallenges, suspendedEmailHashes } from "~/lib/db/schema";
+import { aiQuestionReports, chatAccessLog, llmUsage, notifications, pushDeliveries, session, signingChallenges, suspendedEmailHashes } from "~/lib/db/schema";
 import { RETENTION, daysBefore, monthsBefore } from "~/lib/retention";
 import { drainRetentionRows, withRetentionRun, type RetentionResults, type RetentionRunOptions } from "~/lib/retention-batch.server";
 import { cleanupExpiredLimits } from "~/lib/rate-limit.server";
@@ -8,6 +8,7 @@ import { cleanupExpiredLimits } from "~/lib/rate-limit.server";
 export function runRetentionCleanup(db: Db, now = new Date(), options: RetentionRunOptions = {}): Promise<RetentionResults> {
   return withRetentionRun(options, async () => {
     const results = await cleanupExpiredLimits(db, now);
+    await drainRetentionRows(db, "ai_question_reports", aiQuestionReports, lt(aiQuestionReports.createdAt, daysBefore(now, RETENTION.aiQuestionReportDays)), results);
     await drainRetentionRows(db, "suspended_email_hashes", suspendedEmailHashes, lte(suspendedEmailHashes.expiresAt, now), results);
     await drainRetentionRows(db, "sessions", session, or(lte(session.expiresAt, now), lte(session.createdAt, daysBefore(now, RETENTION.sessionAbsoluteDays)))!, results);
     await drainRetentionRows(db, "chat_access_log", chatAccessLog, lt(chatAccessLog.createdAt, monthsBefore(now, RETENTION.chatAccessYears * 12)), results);

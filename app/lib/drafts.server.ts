@@ -1,5 +1,6 @@
 import { resolvePostLanguage } from "./lang-detect";
 import { recordDraftPublication } from "./eval/signals.server";
+import { finishQuestionDraft } from "./ai-question-usage.server";
 import { checkBodyBudget } from "~/lib/markdown.server";
 import { withEntryRender } from "./entry-render-preparation.server";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
@@ -450,22 +451,25 @@ export function linkedDraftOf(form: FormData): { id: number; version: number } |
 
 // That draft is removed once what was written from it is posted, and only if it is still at the version the screen saw: an AI may have changed it since, and that version is
 // kept. Call it inside the transaction of the post, so that a failure here does not leave a post made and the form still sendable.
-export async function deleteLinkedDraft(db: Db, authorId: string, form: FormData): Promise<boolean> {
+export async function deleteLinkedDraft(db: Db, authorId: string, form: FormData, opts: { questionReplyPublished?: boolean } = {}): Promise<boolean> {
   const linked = linkedDraftOf(form);
   if (!linked) return false;
   const deleted = await db
     .delete(drafts)
     .where(and(eq(drafts.id, linked.id), eq(drafts.authorId, authorId), eq(drafts.version, linked.version)))
     .returning({ id: drafts.id });
+  if (deleted.length) await finishQuestionDraft(db, linked.id, opts.questionReplyPublished === true);
   return deleted.length > 0;
 }
 
 export async function deleteDraft(db: Db, authorId: string, draftId: number): Promise<boolean> {
-  const deleted = await db
-    .delete(drafts)
-    .where(and(eq(drafts.id, draftId), eq(drafts.authorId, authorId)))
-    .returning({ id: drafts.id });
-  return deleted.length > 0;
+  return db.transaction(async tx => {
+    const deleted = await tx.delete(drafts)
+      .where(and(eq(drafts.id, draftId), eq(drafts.authorId, authorId)))
+      .returning({ id: drafts.id });
+    if (deleted.length) await finishQuestionDraft(tx, draftId, false);
+    return deleted.length > 0;
+  });
 }
 
 class PublishFailed extends Error {
@@ -517,6 +521,7 @@ async function publishDraftImplementation(
       );
       if (!res.ok) throw new PublishFailed(res.error);
       await recordDraftPublication(tx, res.id, draft, opts.now ?? new Date());
+      await finishQuestionDraft(tx, draftId, true, opts.now ?? new Date());
       return { ok: true, kind: "reply", id: res.id, threadId, followed: res.followed };
     });
   } catch (error) {

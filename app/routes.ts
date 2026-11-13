@@ -33,6 +33,7 @@ export default [
   route("open-in-ai/status", "routes/open-in-ai-status.ts"),
   route("drafts/ai-write", "routes/ai-draft.ts"),
   route("drafts/autosave", "routes/draft-autosave.ts"),
+  route("t/:id/ask/action", "routes/post-ask-ai-action.ts"),
   // Which translations of one's own new topic are there yet (polled by the notice after posting).
   route("t/:id/translations", "routes/topic-translations.ts"),
   route("t/:id/posted-status", "routes/posted-status.ts"),
@@ -131,6 +132,7 @@ export default [
         route("drafts/:id", "routes/draft.tsx"),
       ]),
       index("routes/home.tsx"),
+      route("t/:id/ask", "routes/post-ask-ai.tsx"),
       route("following", "routes/following.tsx"),
       route("saved", "routes/saved.tsx"),
       route("settings/chat", "routes/settings-chat.tsx"),
@@ -155,6 +157,7 @@ export default [
       route("invites/new", "routes/invites-new.tsx"),
       route("admin/usage", "routes/admin-usage.tsx"),
       route("admin/metrics", "routes/admin-metrics.tsx"),
+      route("admin/ai-question-reports", "routes/admin-ai-question-reports.tsx"),
       route("admin/observation", "routes/admin-observation.tsx"),
       route("admin/translations", "routes/admin-translations.tsx"),
       route("glossary", "routes/glossary.tsx"),

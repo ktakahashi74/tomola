@@ -21,6 +21,7 @@ import {
   type PgColumn,
 } from "drizzle-orm/pg-core";
 import { AI_ASSISTANCE } from "../ai-assistance";
+import type { AiQuestionContent } from "../ai-questions";
 import { GLOSSARY_VIAS, type GlossaryContent } from "../glossary";
 import { AREAS, LANGS, SOURCE_LANGS, type SourceLang, type Lang } from "../languages";
 import { APPEAL_STATUSES, CHAT_ACTIONS, ENTRY_ACTIONS, MEMBER_ACTIONS, MODERATION_ACTIONS, REPORT_REASONS, REPORT_STATUSES, VILLAGE_ACTIONS } from "../moderation";
@@ -854,7 +855,7 @@ export const jobs = pgTable(
 
 // LLM-call cost ledger (app/lib/llm/usage.server.ts). One row per call.
 // cost_usd_micro is an integer in millionths of a dollar. The current UTC month's total determines the budget state: normal, degraded, or stopped.
-// purpose: translate | retry (one retranslation after a mistranslation report) | judge | embed | chat.
+// Purpose separates translation, chat, moderation and private question costs.
 export const llmUsage = pgTable(
   "llm_usage",
   {
@@ -871,9 +872,27 @@ export const llmUsage = pgTable(
   (t) => [
     index("llm_usage_created_idx").on(t.createdAt),
     index("llm_usage_reserved_idx").on(t.createdAt).where(sql`${t.reserved} = true`),
-    check("llm_usage_purpose_check", oneOf(t.purpose, ["translate", "retry", "judge", "embed", "chat", "moderation"])),
+    check("llm_usage_purpose_check", oneOf(t.purpose, ["translate", "retry", "judge", "embed", "chat", "moderation", "ask", "ask_village"])),
   ],
 );
+
+// Private question content is retained only after explicit reporting consent.
+// Either target can use the same report lifecycle; no question history exists.
+export const aiQuestionReports = pgTable("ai_question_reports", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  reporterId: text("reporter_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  topicId: bigint("topic_id", { mode: "number" }).references(() => entries.id, { onDelete: "cascade" }),
+  villageId: text("village_id").references(() => villages.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  answer: jsonb("answer").$type<AiQuestionContent>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index("ai_question_reports_created_idx").on(t.createdAt),
+  index("ai_question_reports_reporter_idx").on(t.reporterId),
+  index("ai_question_reports_topic_idx").on(t.topicId),
+  index("ai_question_reports_village_idx").on(t.villageId),
+  check("ai_question_reports_target_check", sql`(${t.topicId} is not null) <> (${t.villageId} is not null)`),
+]);
 
 // Translations: derivatives of source entries, one row per entry × field × language × kind.
 // field: title | body. kind: primary (main machine translation, including the single retry after a mistranslation report) | secondary (independent system for disagreement measurement, not displayed) | human (manual correction).

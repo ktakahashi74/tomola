@@ -50,14 +50,16 @@ export async function flushUsageSettlements(db: Db, now = new Date()): Promise<v
 
 export async function meteredCall<T>(db: Db, opts: {
   engine: string; model: string; purpose: UsagePurpose;
-  role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat";
+  role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat" | "ask";
   estimateMicro: number; now: Date; clock: () => Date; env?: LlmEnv; signal?: AbortSignal;
 }, call: () => Promise<T>, usageOf: (result: T) => { inputTokens: number; outputTokens: number }): Promise<{ result: T; costUsdMicro: number }> {
   opts.signal?.throwIfAborted();
   await flushUsageSettlements(db, opts.now);
   const reservation = await reserveUsage(db, opts);
   const record = async (u: { inputTokens: number; outputTokens: number }) => {
-    const usage = { ...u, now: opts.clock(), env: opts.env };
+    // Structurally typed callers may return an entire completion. Retain only
+    // numerical usage, never provider text, when settlement needs a retry.
+    const usage = { inputTokens: u.inputTokens, outputTokens: u.outputTokens, now: opts.clock(), env: opts.env };
     try { await settleReservation(db, reservation, usage); }
     catch {
       let entries = pending.get(db);

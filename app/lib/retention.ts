@@ -2,6 +2,7 @@
 export const RETENTION = {
   deletedEntryDays: 30,
   chatReportDays: 180,
+  aiQuestionReportDays: 90,
   villageReportDays: 180,
   identityReportDays: 180,
   chatAccessYears: 1,

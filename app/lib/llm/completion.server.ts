@@ -11,7 +11,7 @@ import { LANGS, type Lang } from "~/lib/languages";
 // No llm_usage ledger entry: a one-time build cost computed and printed from usage by scripts/i18n-translate.ts.
 
 export type Completion = { text: string; inputTokens: number; outputTokens: number };
-export type CompleteRequest = { system: string; user: string; maxOutputTokens: number };
+export type CompleteRequest = { system: string; user: string; maxOutputTokens: number; signal?: AbortSignal };
 
 export type JsonCompleter = {
   engine: EngineId;
@@ -64,7 +64,7 @@ export function createJsonCompleter(engine: EngineId, model: string, env: LlmEnv
       if (!apiKey && !deps.geminiClient) throw new LlmError("config", "GEMINI_API_KEY is not set");
       const client = deps.geminiClient ?? createGeminiClient(apiKey!);
       // Request JSON and LOW thinking to limit thinking-token costs.
-      return { engine, model, complete: (req) => geminiComplete(client, { model, system: req.system, user: req.user, maxOutputTokens: req.maxOutputTokens, json: true, thinkingLevel: "LOW" }) };
+      return { engine, model, complete: (req) => geminiComplete(client, { model, system: req.system, user: req.user, maxOutputTokens: req.maxOutputTokens, json: true, thinkingLevel: "LOW", signal: req.signal }) };
     }
     case "claude": {
       const apiKey = value(env, "ANTHROPIC_API_KEY");
@@ -72,7 +72,7 @@ export function createJsonCompleter(engine: EngineId, model: string, env: LlmEnv
       const client = deps.claudeClient ?? createClaudeClient(apiKey!);
       // Claude has no JSON mode: the prompt requests only a JSON object; parseResponse in translate-messages.server.ts also accepts fenced output.
       // claudeRequestShape handles model differences in thinking and output limits.
-      return { engine, model, complete: (req) => claudeComplete(client, { model, system: req.system, user: req.user, maxTokens: req.maxOutputTokens }) };
+      return { engine, model, complete: (req) => claudeComplete(client, { model, system: req.system, user: req.user, maxTokens: req.maxOutputTokens, signal: req.signal }) };
     }
     case "fake":
       return { engine, model, complete: async (req) => fakeComplete(req) };

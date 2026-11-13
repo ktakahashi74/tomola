@@ -102,6 +102,7 @@ import { readerLoginHref, readingRobotsMeta } from "~/lib/public-reading";
 import { consumeStanceResume, stanceResumeMiddleware } from "~/lib/stance-resume.server";
 import { hasStanceConsent } from "~/lib/trial-consent.server";
 import { collectSessionCookies } from "~/lib/auth/session-cookies.server";
+import { postAskAiEnabled } from "~/lib/ai-question-config.server";
 
 // Keep the native disclosure outside the lazy form's boundary. Hydration can
 // replace a pending form, but must not remove the summary being pressed or
@@ -352,6 +353,8 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   }
   return {
     reader: !user,
+    askAi: user && topic.visibility === "visible" && postAskAiEnabled()
+      ? { href: `/t/${topic.id}/ask?${new URLSearchParams({ lang: displayLang })}`, label: m.post_ask_entry() } : null,
     canReply: !!user && topic.visibility === "visible",
     respondWithPost: user && profile && topic.visibility === "visible" && (await getWriter(db, user.id, { profile })).ok
       ? { formAction: `/t/new?respond=${topic.id}`, children: m.respond_with_post(), variant: "outline" as const, intent: "respond", formNoValidate: true } : null,
@@ -861,6 +864,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           </>
         )}
       </article>
+      {loaderData.askAi && <p className="ui-meta"><Link to={loaderData.askAi.href} className="underline">{loaderData.askAi.label}</Link></p>}
       {loaderData.reader && question.asksStance && <p className="ui-help text-muted-foreground">{m.public_reading_stances()}</p>}
       {question.asksStance && question.stance && topic.placeholder === null && (
         <section id="stance" className="space-y-2 rounded border p-3">

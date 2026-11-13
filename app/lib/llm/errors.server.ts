@@ -54,7 +54,7 @@ export class BudgetPausedError extends DeferJob {
   constructor(
     readonly state: BudgetState,
     until: Date,
-    readonly role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat",
+    readonly role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat" | "ask",
     readonly reason: "state" | "insufficient" = "state",
   ) {
     super(until, reason === "insufficient" ? `llm budget ${state}: insufficient remaining budget for ${role}` : `llm budget ${state}: ${role} disabled`, reason === "insufficient" ? BUDGET_RESERVATION_WAIT : undefined);

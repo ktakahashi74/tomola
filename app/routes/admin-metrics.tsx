@@ -12,6 +12,7 @@ import { LANG_LABELS, type Area } from "~/lib/languages";
 import { getMetrics, observationWeeks } from "~/lib/metrics.server";
 import { POSITIONS } from "~/lib/stances";
 import { m } from "~/paraglide/messages.js";
+import { Link } from "react-router";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: m.metrics_title() }];
@@ -36,6 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
   return {
     history,
+    questionReportsLabel: m.post_ask_reports_title(),
     qualitySignals,
     reading,
     weeks,
@@ -161,6 +163,7 @@ export default function AdminMetrics({ loaderData }: Route.ComponentProps) {
     <main className="space-y-8">
       <h1 className="text-2xl font-bold">{m.metrics_title()}</h1>
       <p className="ui-help text-muted-foreground">{m.metrics_note()}</p>
+      <p><Link className="underline" to="/admin/ai-question-reports">{loaderData.questionReportsLabel}</Link></p>
 
       <ReadingMetrics readings={loaderData.reading} />
       <QualityMetrics history={loaderData.history} signals={loaderData.qualitySignals} />
