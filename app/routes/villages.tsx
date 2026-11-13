@@ -7,7 +7,8 @@ import { localizeVillages } from "~/lib/village-translations.server";
 import { villageNameTitle } from "~/lib/village-translation-view";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { listVillages } from "~/lib/villages.server";
-import { villageName } from "~/lib/village-name";
+import { ownVillageNavigation } from "~/lib/village-navigation.server";
+import { villageName, villagePath } from "~/lib/village-name";
 import { villageDescription } from "~/lib/village-description";
 import { readingHeaders } from "~/lib/public-reading.server";
 import { readingRobotsMeta } from "~/lib/public-reading";
@@ -29,7 +30,9 @@ export function meta({ loaderData, matches }: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   if (!villagesEnabled()) throw data("Not found", { status: 404 });
   const { db, user, profile } = await getReader(request);
-  const directory = { villages: await localizeVillages(db, await listVillages(db, user?.id), villageReaderFor(request, profile)), member: !!user, invites: user ? await localizeVillages(db, await incomingVillageInvites(db, user.id), villageReaderFor(request, profile)) : [] };
+  const [places, own] = await Promise.all([listVillages(db, user?.id), user ? ownVillageNavigation(db, user.id) : null]);
+  if (own) places.unshift({ ...own, joined: true });
+  const directory = { villages: await localizeVillages(db, places, villageReaderFor(request, profile)), member: !!user, invites: user ? await localizeVillages(db, await incomingVillageInvites(db, user.id), villageReaderFor(request, profile)) : [] };
   if (!user || !villageChatEnabled()) return directory;
   const [unread, mentions] = await Promise.all([chatUnreadCounts(db, user.id, { excludeEnded: true }), chatMentionCounts(db, user.id)]);
   return { ...directory, chatUnread: Object.fromEntries(unread), chatMentions: Object.fromEntries(mentions) };
@@ -61,12 +64,12 @@ export default function Villages({ loaderData }: Route.ComponentProps) {
         : group.id === firstGroup && create && <div className="flex justify-end">{create}</div>}
       <ul className="divide-y">
         {group.villages.map(village => {
-          const chat = group.id === "joined-villages" && village.slug && "chatUnread" in loaderData && Object.hasOwn(loaderData.chatUnread, village.slug);
+          const chat = village.kind !== "personal" && group.id === "joined-villages" && village.slug && "chatUnread" in loaderData && Object.hasOwn(loaderData.chatUnread, village.slug);
           // The made-up description of a language village only says what its name says; one an operator wrote is shown.
           const description = village.language && !village.description ? null : villageDescription(village);
           return <li key={village.slug} className="space-y-1 py-3">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <Link to={`/v/${village.slug}`} title={villageNameTitle(village)} className="link-ui inline-flex flex-wrap items-center gap-x-3 font-semibold">{villageName(village)}
+              <Link to={villagePath(village.slug)} title={villageNameTitle(village)} className="link-ui inline-flex flex-wrap items-center gap-x-3 font-semibold">{villageName(village)}
                 {village.kind === "invite_public" && <span title={m.village_invite_only_help()} className="rounded border px-1.5 ui-meta font-normal text-muted-foreground">{m.village_invite_only()}</span>}
               </Link>
               {chat && <ChatEntry slug={village.slug!} name={villageName(village)} unread={loaderData.chatUnread[village.slug!]} mentions={"chatMentions" in loaderData ? loaderData.chatMentions[village.slug!] ?? 0 : 0} />}

@@ -18,7 +18,7 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["vi_view_ja", "vi_view_en", "vi_owner", "vi_coowner", "vi_reporter", "vi_operator", "vi_reviewer"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["en", "ja"].map(locale => ({ email: `target_top_${locale}@example.com`, handle: `target_top_${locale}`, homeArea: "en" as const, uiLocale: locale as "en" | "ja" })),
   ...["error", "draft", "long"].map(name => ({ email: `target_top_${name}@example.com`, handle: `target_top_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
-  ...["pv_author", "pv_browser_reader", "pv_composer"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "other" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
+  ...["pv_author", "pv_browser_reader", "pv_composer", "zown_nav_member", "zown_nav_other"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "other" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["signup_entry_a", "signup_entry_b", "signup_entry_long", "signup_stopped"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["direct_owner", "direct_guest"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["tools", "window", "poll", "trim", "live", "recovery"].flatMap(scenario => ["writer", "reader"].map(role => ({ email: `front_chat_${scenario}_${role}@example.com`, handle: `front_chat_${scenario}_${role}`, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const }))),

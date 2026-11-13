@@ -40,7 +40,7 @@ function ChatMark({ slug, name, unread, mentions }: { slug: string; name: string
   </Link>;
 }
 
-// The places of a member, as one list: Home, Following, Read later, the villages joined (name = posts; a mark = something new in the chat, linking to it), and the way to the list of villages.
+// The places of a member, as one list: Home, Following, Read later, their own village, the villages joined (name = posts; a mark = something new in the chat, linking to it), and the way to the list of villages.
 // The side column (wide list screens) and the drawer (everywhere else) both show exactly this.
 export function PlaceList({ villages, followedVillages = [], followedUnread, pathname, villagesEnabled = true }: {
   villages: JoinedVillageNavigation[]; followedVillages?: FollowedVillageNavigation[]; followedUnread: boolean; pathname: string; villagesEnabled?: boolean;
@@ -67,7 +67,7 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
       <ul className="space-y-0.5">
         {villages.map(village => {
           const name = villageName(village);
-          const here = village.slug === slug;
+          const here = villagePath(village.slug) === path || village.slug === slug;
           return <li key={village.slug} className="flex min-w-0 items-center justify-between gap-x-2">
             <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={here ? (inChat ? "true" : "page") : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <img src={village.iconUrl} alt="" className="size-5 shrink-0 rounded" />}<span className="min-w-0">{name}</span></Link>
             {village.chatAvailable && village.slug && <ChatMark slug={village.slug} name={name} unread={village.unread ?? 0} mentions={village.mentions ?? 0} />}

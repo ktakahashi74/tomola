@@ -27,7 +27,7 @@ test("a personal village has its own follow section and delivers only the posts 
       await expect(page.getByRole("link", { name: "Personal browser post", exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: "Personal elsewhere post", exact: true })).toHaveCount(0);
       if (width === 390) await openPlaces(page);
-      await expect(page.getByRole("heading", { name: m.villages_title, exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: m.village_personal, exact: true })).toHaveAttribute("href", "/u/pv_browser_reader");
       await captureScreenshot(page, { path: `after-places-${width}.png`, fullPage: true }, "personal-villages");
       await page.goto("/following"); await waitForClientRoute(page);
       const place = page.locator("main").getByRole("link", { name: "@pv_author", exact: true });
@@ -49,6 +49,59 @@ test("a personal village has its own follow section and delivers only the posts 
       await expect(anonymous).toHaveURL(/\/login/);
     } finally { await guest.close(); }
   } finally { await context.close(); }
+});
+
+test("members find their own village first in the column, drawer and directory without listing other personal villages", async ({ page, browser }) => {
+  const ownPath = "/u/zown_nav_member";
+  const otherPath = "/u/zown_nav_other";
+  await useMember(page, "zown_nav_member@example.com");
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/"); await waitForClientRoute(page);
+    const places = width === 1280 ? page.locator("[data-site-navigation]") : await openPlaces(page);
+    const own = places.getByRole("link", { name: m.village_personal, exact: true });
+    const joined = places.locator("ul").filter({ has: page.locator(`a[href="${ownPath}"]`) });
+    await expect(joined.getByRole("listitem").first().getByRole("link")).toHaveAttribute("href", ownPath);
+    await expect(own.locator("img")).toBeVisible();
+    await expect(joined.getByRole("listitem")).toHaveCount(1);
+    await expect(places.locator(`a[href="${otherPath}"]`)).toHaveCount(0);
+    await expect(joined.locator('a[href$="/chat"]')).toHaveCount(0);
+    await captureScreenshot(page, { path: `places-${width}.png`, fullPage: true }, "own-village-nav");
+    await own.click();
+    await expect(page).toHaveURL(new RegExp(`${ownPath}$`));
+    await waitForClientRoute(page);
+    await expect((await openPlaces(page)).getByRole("link", { name: m.village_personal, exact: true })).toHaveAttribute("aria-current", "page");
+
+    await page.goto("/villages"); await waitForClientRoute(page);
+    const directory = page.locator("main");
+    const first = directory.locator('section[aria-labelledby="joined-villages"] li').first();
+    await expect(first.getByRole("link")).toHaveAttribute("href", ownPath);
+    await expect(directory.locator('section[aria-labelledby="joined-villages"] li')).toHaveCount(1);
+    await expect(first.locator('p, a[href$="/chat"]')).toHaveCount(0);
+    await expect(directory.locator(`a[href="${otherPath}"]`)).toHaveCount(0);
+    await captureScreenshot(page, { path: `directory-${width}.png`, fullPage: true }, "own-village-nav");
+    await first.getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`${ownPath}$`));
+  }
+  await page.goto("/v/en"); await waitForClientRoute(page);
+  await page.getByRole("button", { name: m.village_join, exact: true }).click();
+  await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
+  await page.goto("/villages"); await waitForClientRoute(page);
+  const joined = page.locator('main section[aria-labelledby="joined-villages"] li');
+  await expect(joined).toHaveCount(2);
+  await expect(joined.first().getByRole("link")).toHaveAttribute("href", ownPath);
+  await expect(joined.locator('a[href="/v/en"]')).toBeVisible();
+  expect(await (await page.request.get("/villages.md")).text()).not.toContain("@zown_nav_member");
+
+  const guest = await browser.newContext();
+  try {
+    const anonymous = await guest.newPage();
+    for (const route of ["/", "/villages"]) {
+      await anonymous.goto(route); await waitForClientRoute(anonymous);
+      await expect(anonymous.getByRole("link", { name: m.village_personal, exact: true })).toHaveCount(0);
+      await expect(anonymous.locator(`a[href="${ownPath}"], a[href="${otherPath}"]`)).toHaveCount(0);
+    }
+  } finally { await guest.close(); }
 });
 
 test("personal compose and settings choices show the resolved default, with no self follow button", async ({ browser }) => {

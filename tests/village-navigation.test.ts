@@ -1,8 +1,11 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
-import { villageMembers, villages } from "~/lib/db/schema";
+import { profiles, villageMembers, villages } from "~/lib/db/schema";
+import { memberAvatarUrl } from "~/lib/member-avatar.server";
+import { endPersonalVillage } from "~/lib/personal-villages.server";
 import * as chat from "~/lib/village-chat.server";
 import { loader as navigation } from "~/routes/member-layout";
+import { loader as directory } from "~/routes/villages";
 import { joinedVillageNavigation } from "~/lib/village-navigation.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 let h: RouteHarness;
@@ -22,14 +25,26 @@ beforeAll(async () => {
 afterAll(() => h.restore());
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
-it("returns only active joined villages and counts unread once", async () => {
+it("returns the member's personal village before active joined villages and counts unread once", async () => {
   vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
   const count = vi.spyOn(chat, "chatUnreadCounts");
   const rows = await joinedVillageNavigation(h.db, h.ids.navigation_reader);
+  expect(rows[0]).toMatchObject({ kind: "personal", slug: "@navigation_reader", name: "" });
+  expect(rows.filter(row => row.kind === "personal")).toHaveLength(1);
+  const [member] = await h.db.select().from(profiles).where(eq(profiles.userId, h.ids.navigation_reader));
+  expect(rows[0].iconUrl).toBe(memberAvatarUrl(member));
+  expect(rows[0]).not.toHaveProperty("chatAvailable");
   expect(rows.find(row => row.slug === "nav-active")).toMatchObject({ unread: 1, chatAvailable: true });
   expect(rows.some(row => ["nav-ended", "nav-outsider"].includes(row.slug!))).toBe(false);
   expect(rows.find(row => row.slug === "nav-unconsented")).toMatchObject({ unread: 0, chatAvailable: false });
   expect(count).toHaveBeenCalledOnce();
+  const lone = await h.signIn("navigation_lone", { homeArea: "other" });
+  expect(await joinedVillageNavigation(h.db, lone)).toMatchObject([{ kind: "personal", slug: "@navigation_lone" }]);
+  const load = () => directory(h.args(h.request("/villages", { as: "navigation_lone" })));
+  expect((await load()).villages.filter(row => row.joined)).toMatchObject([{ kind: "personal", slug: "@navigation_lone" }]);
+  await endPersonalVillage(h.db, lone, new Date());
+  expect(await joinedVillageNavigation(h.db, lone)).toEqual([]);
+  expect((await load()).villages.some(row => row.kind === "personal")).toBe(false);
 });
 it("counts the unread mentions of the member in each village separately from the unread messages", async () => {
   vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1");
@@ -61,6 +76,6 @@ it("sends only village menu fields in the member layout, including while chat is
     expect(value).toHaveProperty("villages");
     if (!("villages" in value)) throw new Error("No joined navigation");
     expect(value.villages.length).toBeGreaterThan(0);
-    for (const row of value.villages) expect(Object.keys(row).sort()).toEqual([...(enabled ? ["chatAvailable"] : []), "iconUrl", "kind", "language", "mentions".repeat(enabled ? 1 : 0), "name", "slug", ...(enabled ? ["unread"] : [])].filter(Boolean).sort());
+    for (const row of value.villages) expect(Object.keys(row).sort()).toEqual([...(enabled && row.kind !== "personal" ? ["chatAvailable", "mentions", "unread"] : []), "iconUrl", "kind", "language", "name", "slug"].sort());
   }
 });
