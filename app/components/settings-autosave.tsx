@@ -6,7 +6,7 @@ type SaveResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 // Keep one request per field in flight. A later choice waits for that write,
 // so neither a delayed response nor a delayed database write can win over it.
-export function useSettingsAutosave<T extends Value>(initial: T, field: "readLangs" | "displayLang" | "village" | "emailPref", control: RefObject<HTMLElement | null>) {
+export function useSettingsAutosave<T extends Value>(initial: T, field: "readLangs" | "displayLang" | "village" | "emailPref" | "colorScheme", control: RefObject<HTMLElement | null>) {
   const [value, setValue] = useState(initial);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);

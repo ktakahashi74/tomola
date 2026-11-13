@@ -61,6 +61,7 @@ it("erases invitation notes, translations and paid checkpoints in the deletion t
 
 it("keeps posts under one shared identity, removes credentials and private membership, always erases chat, and preserves evidence", async () => {
   const w = await world();
+  await w.db.update(profiles).set({ colorScheme: "dark" }).where(eq(profiles.userId, "quit-a"));
   const result = await deleteAccount(w.db, "quit-a", { confirmation: "quitter_a" }, { now: NOW });
   expect(result.ok).toBe(true);
   expect(await w.db.select().from(user).where(eq(user.id, "quit-a"))).toEqual([]);

@@ -42,7 +42,7 @@ test("translation defaults follow the interface while original-reading and expli
     await expect(languages().getByRole("group", { name: en.onboarding_read_langs, exact: true }).getByRole("checkbox", { name: "日本語", exact: true })).toBeChecked();
     await expect(page.locator("header").getByRole("combobox", { name: en.display_lang_label, exact: true })).toHaveCount(0);
     const controls = await languages().locator("select, [role=combobox], fieldset").evaluateAll(elements => elements.map(element => element.tagName === "BUTTON" ? element.getAttribute("aria-label")! : element.getAttribute("name") ?? element.tagName));
-    expect(controls).toEqual([en.language_select, "FIELDSET", "homeArea", "displayLang"]);
+    expect(controls).toEqual([en.language_select, "colorScheme", "FIELDSET", "homeArea", "displayLang"]);
 
     const article = (target: Page = page) => target.locator("article").first();
     await page.goto(english);

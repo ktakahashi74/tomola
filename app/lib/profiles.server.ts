@@ -1,3 +1,4 @@
+import { isColorScheme, type ColorScheme } from "~/lib/theme-colors";
 import { ensurePersonalVillage } from "./personal-villages.server";
 import { isDeletedIdentity } from "./deleted-member";
 import { trialParticipationRequired } from "~/lib/notice-sources.server";
@@ -101,6 +102,7 @@ export type Profile = {
   emailPref: EmailPref;
   // Saved display language, also used for mail, or null if absent.
   uiLocale: string | null;
+  colorScheme: ColorScheme | null;
   signPosts: boolean;
   residenceCountry: string | null;
   adultConfirmedAt: Date | null;
@@ -134,6 +136,7 @@ function toProfile(row: typeof profiles.$inferSelect): Profile {
     reactionsExcludedActionId: row.reactionsExcludedActionId,
     emailPref: isEmailPref(row.emailPref) ? row.emailPref : DEFAULT_EMAIL_PREF,
     uiLocale: row.uiLocale,
+    colorScheme: isColorScheme(row.colorScheme) ? row.colorScheme : null,
     signPosts: row.signPosts,
     residenceCountry: row.residenceCountry,
     adultConfirmedAt: row.adultConfirmedAt,
@@ -239,16 +242,18 @@ export function isSelectableArea(area: unknown): area is Area {
 // Changes of the read languages and the display language (/settings). The read languages may be empty, otherwise enabled languages only (invalid_langs). Values that are saved now but are
 // not enabled are kept (closing a language must not erase a member's setting): they are appended to the submitted read languages. The display language is an enabled language or empty
 // (null: the interface-language default).
-export type PreferencesError = "invalid_langs" | "invalid_display_lang" | "not_found";
+export type PreferencesError = "invalid_langs" | "invalid_display_lang" | "invalid_color_scheme" | "not_found";
 export async function updatePreferences(
   db: Db,
   userId: string,
-  input: { readLangs?: unknown; displayLang?: unknown },
+  input: { readLangs?: unknown; displayLang?: unknown; colorScheme?: unknown },
 ): Promise<{ ok: true } | { ok: false; error: PreferencesError }> {
   const read = langsSchema.safeParse("readLangs" in input ? input.readLangs : []);
   if (!read.success || !read.data.every((l) => isEnabledLang(l))) return { ok: false, error: "invalid_langs" };
   const displayLang = input.displayLang === null || input.displayLang === "" ? null : isEnabledLang(input.displayLang) ? input.displayLang : undefined;
   if ("displayLang" in input && displayLang === undefined) return { ok: false, error: "invalid_display_lang" };
+  const colorScheme = input.colorScheme === null || input.colorScheme === "" ? null : isColorScheme(input.colorScheme) ? input.colorScheme : undefined;
+  if ("colorScheme" in input && colorScheme === undefined) return { ok: false, error: "invalid_color_scheme" };
   return db.transaction(async (tx) => {
     const [row] = await tx.select({ readLangs: profiles.readLangs }).from(profiles).where(eq(profiles.userId, userId)).for("update");
     if (!row) return { ok: false as const, error: "not_found" as const };
@@ -256,6 +261,7 @@ export async function updatePreferences(
     await tx.update(profiles).set({
       ...("readLangs" in input ? { readLangs: [...read.data, ...kept] } : {}),
       ...("displayLang" in input ? { displayLang } : {}),
+      ...("colorScheme" in input ? { colorScheme } : {}),
     }).where(eq(profiles.userId, userId));
     return { ok: true as const };
   });

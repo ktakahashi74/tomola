@@ -1,6 +1,7 @@
 import "~/lib/reading-document";
 import { webPushEnabled } from "~/lib/push/config.server";
 import { THEME_COLORS } from "~/lib/theme-colors";
+import { memberColorScheme } from "~/lib/member-appearance.server";
 import { useOperatorSettings } from "~/lib/operator-context";
 import { operatorConfig } from "~/lib/operator-config.server";
 import { operatorCopy } from "~/lib/operator-settings";
@@ -12,6 +13,7 @@ import { skipRevalidationFor } from "~/lib/stance-ui";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
 import { initializeSiteMarkdown } from "~/lib/markdown-startup.server";
 import {
+  data,
   Links,
   Meta,
   Outlet,
@@ -104,7 +106,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
   // The enabled languages (ENABLED_LANGS), for the language choices (useEnabledLangs in app/lib/use-enabled-langs.ts). Add keys here, do not change the shape.
   const labels = shellLabels();
-  return { ...footerNotices(), labels, loggedOut: hasLogoutNotice(request), webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
+  const colorScheme = await memberColorScheme(request);
+  const result = { ...footerNotices(), colorScheme, labels, loggedOut: hasLogoutNotice(request), webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
+  // Root data may also be requested on public information pages. Keep an
+  // account preference out of shared caches, including single-fetch responses.
+  return colorScheme ? data(result, { headers: { "Cache-Control": "private, no-store" } }) : result;
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -117,16 +123,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const memberData = useRouteLoaderData("routes/member-layout") as { reader: boolean } | undefined;
   const chat = useMatches().some(match => (match.handle as { chat?: boolean } | undefined)?.chat) && rootData?.villageChat;
   return (
-    <html lang={getLocale()} translate={suppressBrowserTranslation ? "no" : undefined}>
+    <html lang={getLocale()} data-color-scheme={rootData?.colorScheme ?? undefined} translate={suppressBrowserTranslation ? "no" : undefined}>
       <head>
         <meta charSet="utf-8" />
         <meta name="tomola-operator" content={JSON.stringify(operator)} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {suppressBrowserTranslation && <meta name="google" content="notranslate" />}
-        {/* Match browser chrome to the device palette; the manifest uses the light paper colour. */}
+        {/* Explicit member choices also set browser chrome; otherwise follow the device. */}
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLORS.light} />
-        <meta name="theme-color" media="(prefers-color-scheme: dark)" content={THEME_COLORS.dark} />
+        {rootData?.colorScheme ? <meta name="theme-color" content={THEME_COLORS[rootData.colorScheme]} /> : <>
+          <meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLORS.light} />
+          <meta name="theme-color" media="(prefers-color-scheme: dark)" content={THEME_COLORS.dark} />
+        </>}
         <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" sizes="any" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

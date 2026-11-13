@@ -422,6 +422,8 @@ export const profiles = pgTable(
     emailPref: text("email_pref").notNull().default(DEFAULT_EMAIL_PREF),
     // Last interface locale, saved at login and on language changes so email uses the recipient's interface language. Null means the default language.
     uiLocale: text("ui_locale"),
+    // Null follows the device; explicit choices apply across the member's devices.
+    colorScheme: text("color_scheme"),
     // Optional passkey confirmation for named writes; preference changes always require a signature.
     signPosts: boolean("sign_posts").notNull().default(false),
     residenceCountry: text("residence_country"),
@@ -440,6 +442,7 @@ export const profiles = pgTable(
     // Null passes CHECK, representing a member who is not suspended.
     check("profiles_suspended_reason_check", oneOf(t.suspendedReason, REPORT_REASONS)),
     check("profiles_email_pref_check", oneOf(t.emailPref, EMAIL_PREFS)),
+    check("profiles_color_scheme_check", oneOf(t.colorScheme, ["light", "dark"])),
   ],
 );
 

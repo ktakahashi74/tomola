@@ -11,7 +11,7 @@ export async function action(args: Route.ActionArgs) {
   if (args.request.method !== "POST") return Response.json({ ok: false, error: "method" }, { status: 405, headers: { ...headers, Allow: "POST" } });
   const form = await args.request.clone().formData();
   const intent = formString(form, "intent");
-  if (formString(form, "autosave") !== "1" || !(intent === "email-pref" || (intent === "preferences" && ["readLangs", "displayLang", "village"].includes(formString(form, "field"))))) {
+  if (formString(form, "autosave") !== "1" || !(intent === "email-pref" || (intent === "preferences" && ["readLangs", "displayLang", "village", "colorScheme"].includes(formString(form, "field"))))) {
     return Response.json({ ok: false, error: "invalid_field" }, { status: 400, headers });
   }
   return saveSettings(args);

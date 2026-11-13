@@ -304,7 +304,8 @@ export async function buildObservationExport(
 // Version 13 includes current uploaded icons of villages the member owns.
 // Version 14 includes the member's private saved topic IDs and save times.
 // Version 15 includes notification registration counts, coarse labels and dates.
-export const MEMBER_EXPORT_VERSION = 15;
+// Version 16 includes the member's saved appearance.
+export const MEMBER_EXPORT_VERSION = 16;
 
 export type MemberExport = {
   format: "tomola-member-export";
@@ -322,6 +323,7 @@ export type MemberExport = {
     display_lang: string | null;
     email_pref: string;
     ui_locale: string | null;
+    color_scheme: string | null;
     sign_posts: boolean;
     residence_country: string | null;
     adult_confirmed_at: string | null;
@@ -464,6 +466,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
           display_lang: profile.displayLang,
           email_pref: profile.emailPref,
           ui_locale: profile.uiLocale,
+          color_scheme: profile.colorScheme,
           sign_posts: profile.signPosts,
           residence_country: profile.residenceCountry,
           adult_confirmed_at: iso(profile.adultConfirmedAt),

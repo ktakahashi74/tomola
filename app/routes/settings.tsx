@@ -1,5 +1,6 @@
 import { pushConfig, webPushEnabled } from "~/lib/push/config.server";
 import { currentPushId, stopPush } from "~/lib/push/subscriptions.server";
+import { ColorSchemeSettings } from "~/components/color-scheme-settings";
 import { SettingsSaveStatus, useSettingsAutosave } from "~/components/settings-autosave";
 import { AvatarSettings } from "~/components/avatar-settings";
 import { InstallGuideSettings } from "~/components/install-guide-settings";
@@ -87,6 +88,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     nextHandleChange: nextHandle !== null && nextHandle > new Date() ? dateOf(nextHandle) : null,
     signPosts: profile.signPosts,
     displayLang: profile.displayLang,
+    colorScheme: profile.colorScheme,
     readLangs: profile.readLangs,
     // While a language-area change is unavailable, provide the next allowed date (UTC); otherwise null, including for the first change.
     nextAreaChange: next !== null && next > new Date() ? dateOf(next) : null,
@@ -178,9 +180,9 @@ async function settingsAction({ request }: { request: Request }) {
   }
   if (formString(form, "intent") !== "preferences") throw data("Bad request", { status: 400 });
   const field = formString(form, "field");
-  if (field && !["homeArea", "readLangs", "displayLang", "village"].includes(field)) throw data("Bad request", { status: 400 });
+  if (field && !["homeArea", "readLangs", "displayLang", "village", "colorScheme"].includes(field)) throw data("Bad request", { status: 400 });
   const autosave = formString(form, "autosave") === "1";
-  if (autosave && !["readLangs", "displayLang", "village"].includes(field)) throw data("Bad request", { status: 400 });
+  if (autosave && !["readLangs", "displayLang", "village", "colorScheme"].includes(field)) throw data("Bad request", { status: 400 });
   let savedValue: string | string[] = "";
   const values = {
     homeArea: formString(form, "homeArea"), displayLang: formString(form, "displayLang"),
@@ -195,8 +197,8 @@ async function settingsAction({ request }: { request: Request }) {
         const area = await changeHomeArea(tx, user.id, values.homeArea);
         if (!area.ok) throw new LanguageSettingsError(area.error, area.error === "too_soon" ? dateOf(area.nextChangeAt) : null);
       }
-      if (!field || field === "readLangs" || field === "displayLang") {
-        const input = field === "readLangs" ? { readLangs: values.readLangs } : field === "displayLang" ? { displayLang: values.displayLang } : values;
+      if (!field || field === "readLangs" || field === "displayLang" || field === "colorScheme") {
+        const input = field === "colorScheme" ? { colorScheme: formString(form, "colorScheme") } : field === "readLangs" ? { readLangs: values.readLangs } : field === "displayLang" ? { displayLang: values.displayLang } : values;
         const preferences = await updatePreferences(tx, user.id, input);
         if (!preferences.ok) throw new LanguageSettingsError(preferences.error);
       }
@@ -211,7 +213,7 @@ async function settingsAction({ request }: { request: Request }) {
       }
       if (autosave) {
         const [updated] = await tx.select().from(profiles).where(eq(profiles.userId, user.id));
-        savedValue = field === "readLangs" ? updated.readLangs : field === "displayLang" ? updated.displayLang ?? "" : values.village.trim().toLowerCase();
+        savedValue = field === "colorScheme" ? updated.colorScheme ?? "" : field === "readLangs" ? updated.readLangs : field === "displayLang" ? updated.displayLang ?? "" : values.village.trim().toLowerCase();
       }
     });
   } catch (error) {
@@ -325,6 +327,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </FieldLabel></Field>
           <p className="ui-help text-muted-foreground">{m.settings_ui_lang_help()}</p>
         </div>
+        <ColorSchemeSettings initial={loaderData.colorScheme} />
         {/* Ordinary submissions keep the combined no-JavaScript path. Enhanced saves name just the field being changed. */}
         <Form method="post" action={withSettingsReturn("/settings#settings-languages", returnTo)} className="space-y-4">
           <input type="hidden" name="intent" value="preferences" />

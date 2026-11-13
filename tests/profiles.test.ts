@@ -15,7 +15,7 @@ describe("profiles", () => {
     const db = await createTestDb();
     await addUser(db, "u1");
     const res = await createProfile(db, "u1", valid);
-    const expected = { userId: "u1", handle: "hana", handleChangedAt: null, displayName: null, displayNameLatin: null, homeArea: "ja", readLangs: ["ja", "en"], displayLang: null, openInAiGeneration: 0, suspendedUntil: null, suspendedReason: null, suspendedActionId: null, reactionsExcludedAt: null, reactionsExcludedActionId: null, emailPref: "auto", uiLocale: null, signPosts: false, residenceCountry: null, adultConfirmedAt: null, trialConsentVersion: null, trialConsentAt: null, stanceConsentVersion: null, stanceConsentAt: null, introEntryId: null };
+    const expected = { userId: "u1", handle: "hana", handleChangedAt: null, displayName: null, displayNameLatin: null, homeArea: "ja", readLangs: ["ja", "en"], displayLang: null, openInAiGeneration: 0, suspendedUntil: null, suspendedReason: null, suspendedActionId: null, reactionsExcludedAt: null, reactionsExcludedActionId: null, emailPref: "auto", uiLocale: null, colorScheme: null, signPosts: false, residenceCountry: null, adultConfirmedAt: null, trialConsentVersion: null, trialConsentAt: null, stanceConsentVersion: null, stanceConsentAt: null, introEntryId: null };
     // Null if the language area has never changed; the first change is always allowed.
     expect(res).toEqual({ ok: true, profile: { ...expected, homeAreaChangedAt: null } });
     const p = await getProfile(db, "u1");
