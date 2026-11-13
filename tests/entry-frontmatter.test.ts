@@ -49,6 +49,7 @@ describe("interpretFrontmatter", () => {
     expect(ok({ type: "reply", reply_to: "c-12" })).toMatchObject({ kind: "reply", replyTo: { kind: "reply", id: 12 } });
     expect(ok({ reply_to: "p-3" })).toMatchObject({ kind: "reply", replyTo: { kind: "topic", id: 3 } });
     expect(ok({})).toEqual({ kind: "topic", explicitType: undefined, replyTo: undefined });
+    expect(ok({ lang: "other" })).toMatchObject({ lang: "other" });
   });
   it("accepts the Markdown twin's post and comment, and treats null as absent", () => {
     expect(ok({ type: "post", title: "T", reply_to: null, lang: null, ai_assistance: null }).kind).toBe("topic");
@@ -74,7 +75,6 @@ describe("interpretFrontmatter", () => {
       else expect(res, String(reply_to)).toEqual({ ok: false, error: "reply_to_malformed" });
     }
     expect(err({ lang: "xx" })).toBe("invalid_lang");
-    expect(err({ lang: "other" })).toBe("invalid_lang");
     expect(err({ ai_assistance: "all" })).toBe("invalid_ai");
     expect(err({ ai_assistance: 1 })).toBe("invalid_ai");
   });

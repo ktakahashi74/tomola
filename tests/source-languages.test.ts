@@ -41,6 +41,15 @@ describe("source language evidence", () => {
     for (const text of ["ciao", "γεια", "hello world", "> " + greek, "```\n" + greek + "\n```", "bonjour hello ciao hola obrigado"]) expect(detectSourceLanguage(text)).toBeNull();
     expect(detectLang(greek)).toBeNull();
   });
+  it("ignores relative image and link destinations, including reference definitions", () => {
+    const path = "/media/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd-10x10.webp";
+    for (const body of [
+      `![own](${path}) ![public](${path}) ![absolute](https://example.org${path})`,
+      `[writing](${path}) [picture][asset]\n\n[asset]: ${path} "a e o a e o"`,
+      `[writing](${path} "${greek}")`,
+    ]) expect(detectSourceLanguage(body)).toBeNull();
+    expect(detectSourceLanguage(`[${greek}](${path})`)).toEqual({ lang: "other", langCode: "el" });
+  });
   it("allows the bounded fake checker to exercise a confident correction independently of whole-text detection", () => {
     const body = greek.repeat(12) + "\n\n" + "The people are here to discuss the work and to learn from each other. ".repeat(60);
     expect(detectSourceLanguage(body)?.lang).toBe("en");

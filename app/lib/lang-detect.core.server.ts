@@ -1,5 +1,6 @@
 import { isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { proseOf } from "~/lib/llm/structure.core.server";
+import { createMarkdownProcessor } from "~/lib/markdown-parser.core.server";
 import { mentionCandidates, withoutResolvedMentions } from "~/lib/mention-syntax";
 
 // Common simplified/traditional pairs. Shared characters carry no evidence about the script.
@@ -27,9 +28,23 @@ const words = {
 
 export type LanguageDecision = { source: "explicit" | "detected" | "default"; detected: SourceLang | null; langCode?: string | null };
 
+const markdown = createMarkdownProcessor();
+type ProseNode = { type: string; value?: string; alt?: string | null; children?: ProseNode[] };
+function sourceProse(body: string): string {
+  // Keep visible link text and image descriptions, never their destinations or titles.
+  // Relative media hashes can otherwise look like short Portuguese function words.
+  const text = (node: ProseNode): string => {
+    if (["definition", "footnoteDefinition", "html"].includes(node.type)) return "";
+    if (node.type === "text") return node.value ?? "";
+    if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
+    return (node.children ?? []).map(text).join(["root", "list", "listItem", "table", "tableRow"].includes(node.type) ? "\n" : "");
+  };
+  return text(markdown.parse(proseOf(body, true)));
+}
+
 // Pure, conservative evidence from prose alone; never guesses from names or identifiers.
 function detect(body: string, hint?: string | null, extended = false): string | null {
-  const prose = proseOf(body, true);
+  const prose = extended ? sourceProse(body) : proseOf(body, true);
   const mentions = mentionCandidates(prose).map(c => `@${c.token}`);
   const text = withoutResolvedMentions(prose, mentions).normalize("NFC").toLowerCase().replace(/’/g, "'");
   const letters = [...text].filter(ch => /\p{L}/u.test(ch));

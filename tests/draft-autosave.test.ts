@@ -153,13 +153,14 @@ it("checks an owned saved link without changing it and reports missing or unavai
   expect((await check("writer")).status).toBe(404);
 });
 
-it("validates current language and destination access even when replaying identical writing", async () => {
+it("preserves an unopened source language and validates destination access when replaying identical writing", async () => {
   vi.stubEnv("ENABLED_LANGS", "ja,en");
   const first = await saved({ lang: "ja" });
   vi.stubEnv("ENABLED_LANGS", "en");
   const closed = await send({ draftId: String(first.id), version: "1", lang: "ja" });
-  expect(closed.status).toBe(400);
-  expect(await closed.json()).toEqual({ error: "invalid_lang" });
+  expect(closed.status).toBe(200);
+  expect(await closed.json()).toMatchObject({ id: first.id, version: 1 });
+  expect(await getDraft(h.db, h.ids.writer, first.id)).toMatchObject({ lang: "ja", version: 1 });
   vi.stubEnv("ENABLED_LANGS", "ja,en");
   vi.stubEnv("VILLAGES", "1");
   await ensureLanguageVillages(h.db);
