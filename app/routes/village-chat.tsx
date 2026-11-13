@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { ChatReportError, createChatReport } from "~/lib/village-chat-reports.server";
 import { ChatReportForm } from "~/components/chat-report-form";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { data, Form, Link, redirect, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
+import { data, Form, isRouteErrorResponse, Link, redirect, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
 import type { Route } from "./+types/village-chat";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
@@ -36,6 +36,8 @@ import { useChatNavigation } from "~/components/site-navigation";
 import { ArrowDown } from "lucide-react";
 import { ChatConsentNotice } from "~/components/chat-consent-notice";
 import { noticesAvailable } from "~/lib/notices.server";
+import { chatSearchTargetAvailable } from "~/lib/village-chat-search.server";
+import { RouteError } from "~/components/route-error";
 
 export const middleware = [privateCacheMiddleware];
 export function headers({ actionHeaders }: Route.HeadersArgs) {
@@ -49,6 +51,10 @@ export function headers({ actionHeaders }: Route.HeadersArgs) {
 }
 export const handle = { chat: true };
 export function meta({ loaderData: page }: Route.MetaArgs) { return [{ title: page && !("unavailable" in page) ? `${villageName(page.village)} · ${m.village_chat_title()}` : m.village_chat_title() }, { name: "robots", content: "noindex" }]; }
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  if (isRouteErrorResponse(error) && error.status === 404 && error.data?.error === "chat_message_unavailable") return <main><p role="status">{m.chat_search_message_unavailable()}</p></main>;
+  return <RouteError error={error} showSite={false} />;
+}
 export async function loader({ request, params }: Route.LoaderArgs) {
   if (!villageChatEnabled()) throw data("Not found", { status: 404 });
   const { db, user, profile } = await requireMember(request);
@@ -57,7 +63,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const after = search.has("after") ? chatSequence(search.get("after")) : undefined;
   if (after === null || before !== undefined && after !== undefined || before === null) throw data("Bad request", { status: 400 });
   const linkLang = langQueryParam(request);
+  if (search.get("from") === "search" && !await chatSearchTargetAvailable(db, user.id, params.slug, search.get("at"))) {
+    throw data({ error: "chat_message_unavailable" }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
+  }
   const page = await chatPage(db, user.id, params.slug, { before, after, at: search.get("report") ?? search.get("at") ?? undefined, unread: !search.has("latest"), topics: { displayLang: displayLangFor(request, profile), readLangs: screenReadLangsFor(request, profile), langParam: linkLang } });
+  if (search.get("from") === "search" && (!page || page.consentRequired || !page.messages.some(message => message.id === search.get("at") && !message.deleted && !message.hidden))) {
+    throw data({ error: "chat_message_unavailable" }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
+  }
   if (!page) {
     if (search.has("at")) return data({ unavailable: true as const }, { status: 404, headers: CHAT_PRIVATE_HEADERS });
     throw redirect(`/v/${params.slug}`);
@@ -301,6 +313,7 @@ function ConsentedChat({ loaderData, actionData }: {
   </div>;
   return <main className="relative mx-auto max-w-3xl space-y-3 [overflow-anchor:none] [overflow-wrap:anywhere]">
     <VillageHeader village={loaderData.village} current="chat" chat={{ joined: true, unread: readThroughEnd ? 0 : unread }}>
+      <Link className="ui-meta underline" to={`/v/${slug}/chat/search${loaderData.linkLang ? `?lang=${loaderData.linkLang}` : ""}`}>{m.chat_search_title()}</Link>
       {hasTranslations && <button type="button" className="ui-meta underline" onClick={() => setOriginals(value => !value)}>{originals ? m.village_chat_translations() : m.village_chat_originals()}</button>}
     </VillageHeader>
     <ChatReaders village={loaderData.village} count={loaderData.readers} />

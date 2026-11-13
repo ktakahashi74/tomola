@@ -2095,5 +2095,14 @@
   "mail_subject_chat_reply": "チャットであなたへの返信があります",
   "mail_item_chat_reply": "チャットであなたへの返信があります。\n\n{url}",
   "mail_item_chat_reply_named": "「{name}」のチャットであなたへの返信があります。\n\n{url}",
-  "village_chat_addressed": "返信・メンション {count}件"
+  "village_chat_addressed": "返信・メンション {count}件",
+  "chat_search_title": "チャットの中を探す",
+  "chat_search_results": "見つかった発言",
+  "chat_search_back": "チャットに戻る",
+  "chat_search_more": "前の発言をさらに探す",
+  "chat_search_incomplete": "見つからなくても、発言がないとは限りません。訳がまだの発言や古い訳しかない発言は、原文でだけ探せます。",
+  "chat_search_match_translation": "訳の抜き出し（機械訳）",
+  "chat_search_invalid": "1〜{max}文字の語句を入れてください。",
+  "chat_search_message_unavailable": "表示できない発言",
+  "chat_search_empty": "発言が見つかりませんでした。別の語句や短い語句でも探してみてください。"
 }

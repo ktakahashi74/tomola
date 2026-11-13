@@ -143,6 +143,7 @@ export default [
       route("villages/new", "routes/village-create.tsx"),
       route("v/:slug", "routes/village.tsx"),
       route("v/:slug/chat", "routes/village-chat.tsx"),
+      route("v/:slug/chat/search", "routes/village-chat-search.tsx"),
       route("a/:lang", "routes/area.tsx"),
       route("t/:id/objections", "routes/topic-objections.tsx"),
       route("t/:id/related", "routes/topic-related.tsx"),

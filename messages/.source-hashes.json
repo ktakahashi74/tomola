@@ -2096,7 +2096,16 @@
   "mail_subject_chat_reply": "556400cf32ac44b6",
   "mail_item_chat_reply": "9731c5ed2fc6464e",
   "mail_item_chat_reply_named": "22370f51a02fed35",
-  "village_chat_addressed": "e1f391458b722c6a"
+  "village_chat_addressed": "e1f391458b722c6a",
+  "chat_search_title": "84281bc748f80c73",
+  "chat_search_results": "f5412fadb2583644",
+  "chat_search_back": "b4981dff912a8d03",
+  "chat_search_more": "19e822db4ee2aeb6",
+  "chat_search_incomplete": "65a9a577e1d3fdf3",
+  "chat_search_match_translation": "60d96d172fc508ca",
+  "chat_search_invalid": "b99b13f947d6d039",
+  "chat_search_message_unavailable": "f6698c77289ed737",
+  "chat_search_empty": "6f1bced6d6333f53"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",

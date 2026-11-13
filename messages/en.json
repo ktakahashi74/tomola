@@ -2873,5 +2873,14 @@
   "mail_subject_chat_reply": "Someone replied to you in chat",
   "mail_item_chat_reply": "Someone replied to you in chat.\n\n{url}",
   "mail_item_chat_reply_named": "Someone replied to you in the chat for “{name}”.\n\n{url}",
-  "village_chat_addressed": "Replies and mentions: {count}"
+  "village_chat_addressed": "Replies and mentions: {count}",
+  "chat_search_title": "Search this chat",
+  "chat_search_results": "Matching messages",
+  "chat_search_back": "Back to chat",
+  "chat_search_more": "Find older matches",
+  "chat_search_incomplete": "No match does not mean a message does not exist. Messages without a current translation can be found only in the original.",
+  "chat_search_match_translation": "Translated excerpt (machine translation)",
+  "chat_search_invalid": "Enter between 1 and {max} characters.",
+  "chat_search_message_unavailable": "This message cannot be displayed.",
+  "chat_search_empty": "No messages found. Try other words or a shorter phrase."
 }

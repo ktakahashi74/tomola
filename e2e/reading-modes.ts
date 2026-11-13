@@ -59,6 +59,7 @@ export const publicOnly = [
 export const bothModes = [
   ["post-ask-ai", "member questions|unverified answers"],
   ["ai-use", ".*"],
+  ["chat-search", ".*"],
   ["color-scheme", "member appearance|failed appearance"],
   ["other-languages", "unopened language replies|background source check|explicit source choice"],
   ["list-seen-sync", "account list boundaries|failed account exchange"],

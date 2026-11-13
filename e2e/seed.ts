@@ -265,6 +265,8 @@ try {
   await seedEarlyActions(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedVillages } = await import("./seed-villages");
   await seedVillages(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
+  const { seedChatSearch } = await import("./seed-chat-search");
+  await seedChatSearch(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedNavigationShell } = await import("./seed-navigation-shell");
   await seedNavigationShell(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedNavigationDisclosure } = await import("./seed-navigation-disclosure");
