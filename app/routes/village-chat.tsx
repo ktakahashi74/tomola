@@ -216,7 +216,7 @@ function ConsentedChat({ loaderData, actionData }: {
   const chooseReply = useCallback((message: ActiveChatMessage) => {
     setReply(message);
     sendForm.current?.querySelector("textarea")?.focus();
-  }, []);
+  }, [setReply]);
   const navigation = useNavigation();
   const submission = useRef<{ intent: string; id: string } | null>(null);
   const sendingGuard = useRef(false);
