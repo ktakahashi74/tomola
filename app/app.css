@@ -322,11 +322,6 @@ main:focus {
   --longread-measure: var(--reading-cjk-measure);
 }
 
-/* Justification is a screen choice: only full-width Japanese and Chinese reading columns. */
-.longread:not(.longread-compact):is(:lang(ja), :lang(zh)) { container: reading-text / inline-size; }
-@container reading-text (min-width: 36em) {
-  .longread :where(p, li):not(:where([data-footnotes] *, [role="doc-endnotes"] *)) { --longread-align: justify; }
-}
 /* Let long links and inline code fill the current CJK line before wrapping. */
 .longread:is(:lang(ja), :lang(zh)) :where(a, :not(pre) > code) { word-break: break-all; }
 
