@@ -17,6 +17,13 @@ vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/me
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); setTestLocale("en"); });
 
 const fake = { TRANSLATION_PRIMARY: "fake", EMBEDDING_ENGINE: "fake" };
+const secrets = {
+  GEMINI_API_KEY: "key-sentinel-gemini-omega", ANTHROPIC_API_KEY: "key-sentinel-anthropic-omega",
+  DATABASE_URL: "postgres://fictional:password-sentinel-omega@127.0.0.1:9198/private-database",
+  SMTP_URL: "smtp://fictional:mail-password-sentinel-omega@127.0.0.1:9197",
+  GEMINI_BASE_URL: "http://127.0.0.1:9199/private-ai-endpoint",
+  SERVICE_CREDENTIALS: "credentials-sentinel-omega", LLM_PRICE_GEMINI_DISCLOSURE_PRIMARY: "177.777,222.222",
+};
 const settings = (): AiUseSettings => structuredClone(testOperator.aiUse);
 const row = (page: ReturnType<typeof aiUsePage>, purpose: string) => page.rows.find(value => value.purpose === purpose)!;
 const md = (path = "/ai-use.md", method = "GET") => markdownLoader({ request: new Request(`http://localhost${path}`, { method }) } as never);
@@ -68,13 +75,6 @@ describe("public AI use", () => {
   });
 
   it.each(["en", "ja"] as const)("keeps keys, credentials, internal endpoints and prices out of HTML, Markdown and loader data in %s", async locale => {
-    const secrets = {
-      GEMINI_API_KEY: "key-sentinel-gemini-omega", ANTHROPIC_API_KEY: "key-sentinel-anthropic-omega",
-      DATABASE_URL: "postgres://fictional:password-sentinel-omega@127.0.0.1:9198/private-database",
-      SMTP_URL: "smtp://fictional:mail-password-sentinel-omega@127.0.0.1:9197",
-      GEMINI_BASE_URL: "http://127.0.0.1:9199/private-ai-endpoint",
-      SERVICE_CREDENTIALS: "credentials-sentinel-omega", LLM_PRICE_GEMINI_DISCLOSURE_PRIMARY: "177.777,222.222",
-    };
     const env = { ...secrets, TRANSLATION_PRIMARY: "gemini", TRANSLATION_GEMINI_MODEL: "gemini-disclosure-primary", EMBEDDING_ENGINE: "gemini", EMBEDDING_MODEL: "gemini-disclosure-embedding" };
     for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
     setTestLocale(locale);
@@ -84,6 +84,22 @@ describe("public AI use", () => {
       expect(output).toContain("gemini-disclosure-primary");
       for (const secret of [...Object.values(secrets), "password-sentinel-omega", "mail-password-sentinel-omega", "177.777", "222.222"]) expect(output).not.toContain(secret);
       for (const key of Object.keys(secrets)) expect(output).not.toContain(key);
+    }
+  });
+
+  it.each(["en", "ja"] as const)("withholds current and historical model names that equal loaded secrets in %s", async locale => {
+    for (const secret of Object.values(secrets)) {
+      const env = { ...secrets, TRANSLATION_PRIMARY: "gemini", TRANSLATION_GEMINI_MODEL: secret, EMBEDDING_ENGINE: "fake" };
+      const config = settings();
+      config.history = [{ ...config.history[0], fromModel: secret, toModel: secret }];
+      const page = aiUsePage(locale, env, config);
+      const withheld = m.ai_use_unknown_model({}, { locale });
+      expect(row(page, "translation-primary")).toMatchObject({ model: withheld, unrecorded: false });
+      expect(page.history[0]).toMatchObject({ fromModel: withheld, toModel: withheld });
+      for (const output of [JSON.stringify(page), await render(page), aiUseMarkdown(page)]) {
+        expect(output).toContain(withheld);
+        expect(output).not.toContain(secret);
+      }
     }
   });
 

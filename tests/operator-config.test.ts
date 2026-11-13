@@ -32,7 +32,7 @@ it("requires strict AI-use settings, validates history references and accepts an
   const original = structuredClone(fixture.settings.aiUse);
   delete fixture.settings.aiUse; fixture.save();
   expect(fixture.load).toThrow("aiUse");
-  fixture.settings.aiUse = JSON.parse(fs.readFileSync("deploy/operator/tomola.org/ai-use.example.json", "utf8")).aiUse;
+  fixture.settings.aiUse = JSON.parse(fs.readFileSync("deploy/operator.example/operator.json", "utf8")).aiUse;
   fixture.save();
   expect(fixture.load().aiUse).toEqual({ history: [], humanReview: null, objectionsUrl: null });
   for (const invalid of [

@@ -7,6 +7,13 @@ import { m } from "~/paraglide/messages.js";
 export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiUseSettings = operatorConfig().aiUse) {
   const options = { locale };
   const disabled = m.ai_use_disabled({}, options);
+  const secretValues = new Set([
+    "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "SMTP_URL",
+    "GEMINI_BASE_URL", "SERVICE_CREDENTIALS",
+    ...Object.keys(env).filter(name => name.startsWith("LLM_PRICE_")),
+  ].map(name => env[name]).filter(value => value !== undefined && value !== ""));
+  const publicModel = (model: string) => PUBLIC_MODEL_NAME.test(model) && !secretValues.has(model)
+    ? model : m.ai_use_unknown_model({}, options);
   const latest = new Map<AiUsePurpose, AiUseSettings["history"][number]>();
   for (const change of settings.history) {
     const previous = latest.get(change.purpose);
@@ -28,7 +35,7 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
       enabled: config !== null,
       status: config ? m.ai_use_enabled({}, options) : disabled,
       provider: config ? providers[config.id] : null,
-      model: config ? PUBLIC_MODEL_NAME.test(config.model) ? config.model : m.ai_use_unknown_model({}, options) : null,
+      model: config ? publicModel(config.model) : null,
       settings: details,
       sent: m.ai_use_sent({ data: m[definition.sent]({}, options) }, options),
       unrecorded: recorded ? recorded.toModel !== (config?.model ?? null) : config !== null,
@@ -54,8 +61,8 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
         date: change.date,
         purpose: change.purpose,
         title: titleFor(change.purpose),
-        fromModel: change.fromModel ?? disabled,
-        toModel: change.toModel ?? disabled,
+        fromModel: change.fromModel === null ? disabled : publicModel(change.fromModel),
+        toModel: change.toModel === null ? disabled : publicModel(change.toModel),
         reason: change.reason[locale] ?? change.reason.en,
         evidenceUrl: change.evidenceUrl,
       })),

@@ -147,6 +147,10 @@ The latest date for each purpose supplies its recorded current model. For
 multiple changes on one date, the last entry wins. The page flags an enabled
 model without a record, a different model, or a use disabled since its last
 record. This warning does not change engine selection or prevent operation.
+Record a separate history entry for every purpose that shares the changed model:
+`figure-translation` uses the primary translation model, and `report-triage` and
+`spam-detection` share the moderation model. A purpose without its own entry
+keeps the unrecorded-change warning.
 
 Set `humanReview` to localized plain text describing the actual language pairs
 and scope people checked, with both `en` and `ja`, or leave it `null` when no
