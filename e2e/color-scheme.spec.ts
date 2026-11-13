@@ -21,7 +21,7 @@ async function expectDocumentScheme(page: Page, scheme: ColorScheme | null) {
   }
 }
 
-test("member appearance persists across pages and devices and returns to matching the device", async ({ browser }) => {
+test("member appearance persists across pages and devices, saves without JavaScript and returns to matching the device", async ({ browser }) => {
   const context = await browser.newContext({ colorScheme: "light", extraHTTPHeaders: clientHeaders("192.0.2.231") });
   try {
     const page = await context.newPage();
@@ -66,6 +66,18 @@ test("member appearance persists across pages and devices and returns to matchin
       const otherPage = await otherDevice.newPage();
       await otherPage.goto(articleUrl);
       await expectDocumentScheme(otherPage, "dark");
+      await otherPage.goto("/settings");
+      const appearance = otherPage.getByRole("combobox", { name: en.settings_color_scheme, exact: true });
+      const form = otherPage.locator("form").filter({ has: appearance });
+      for (const value of ["light", "", "dark"]) {
+        await appearance.selectOption(value);
+        await form.getByRole("button", { name: en.save_changes, exact: true }).click();
+        await expect(appearance).toHaveValue(value);
+        await expectDocumentScheme(otherPage, value as ColorScheme || null);
+        await otherPage.reload();
+        await expect(appearance).toHaveValue(value);
+        await expectDocumentScheme(otherPage, value as ColorScheme || null);
+      }
     } finally { await otherDevice.close(); }
 
     await page.emulateMedia({ colorScheme: "dark" });

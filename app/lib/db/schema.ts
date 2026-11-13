@@ -26,6 +26,7 @@ import { AREAS, LANGS, SOURCE_LANGS, type SourceLang, type Lang } from "../langu
 import { APPEAL_STATUSES, CHAT_ACTIONS, ENTRY_ACTIONS, MEMBER_ACTIONS, MODERATION_ACTIONS, REPORT_REASONS, REPORT_STATUSES, VILLAGE_ACTIONS } from "../moderation";
 import { FOLLOW_STATES } from "../follows";
 import { DEFAULT_EMAIL_PREF, EMAIL_PREFS, NOTIFICATION_KINDS } from "../notifications";
+import { COLOR_SCHEMES } from "../theme-colors";
 import { POSITIONS, STANCE_TAGS } from "../stances";
 import type { ReasonPick } from "../reasons";
 import { user } from "./auth-schema";
@@ -442,7 +443,7 @@ export const profiles = pgTable(
     // Null passes CHECK, representing a member who is not suspended.
     check("profiles_suspended_reason_check", oneOf(t.suspendedReason, REPORT_REASONS)),
     check("profiles_email_pref_check", oneOf(t.emailPref, EMAIL_PREFS)),
-    check("profiles_color_scheme_check", oneOf(t.colorScheme, ["light", "dark"])),
+    check("profiles_color_scheme_check", oneOf(t.colorScheme, COLOR_SCHEMES)),
   ],
 );
 

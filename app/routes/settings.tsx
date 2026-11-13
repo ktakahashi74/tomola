@@ -327,7 +327,12 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </FieldLabel></Field>
           <p className="ui-help text-muted-foreground">{m.settings_ui_lang_help()}</p>
         </div>
-        <ColorSchemeSettings initial={loaderData.colorScheme} />
+        <Form method="post" action={withSettingsReturn("/settings#settings-appearance", returnTo)} className="space-y-4">
+          <input type="hidden" name="intent" value="preferences" />
+          <input type="hidden" name="field" value="colorScheme" />
+          <ColorSchemeSettings initial={loaderData.colorScheme} />
+          {!enhanced && <Button type="submit">{m.save_changes()}</Button>}
+        </Form>
         {/* Ordinary submissions keep the combined no-JavaScript path. Enhanced saves name just the field being changed. */}
         <Form method="post" action={withSettingsReturn("/settings#settings-languages", returnTo)} className="space-y-4">
           <input type="hidden" name="intent" value="preferences" />
