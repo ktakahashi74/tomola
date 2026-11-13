@@ -24,7 +24,9 @@ test("unopened French prose preserves its language and shows a non-blocking noti
     await page.getByLabel(enMessages.field_body, { exact: true }).fill(french);
     await page.getByRole("button", { name: enMessages.submit_post, exact: true }).click();
     await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_detected, { lang: "Français" }), { exact: true })).toBeVisible();
-    await expect(page.getByRole("dialog").getByText(formatMessage(enMessages.original_lang_other_named, { lang: "French" }), { exact: true })).toBeVisible();
+    const notice = page.getByRole("dialog").getByRole("note");
+    await expect(notice).toContainText(formatMessage(enMessages.original_lang_other_named, { lang: "French" }));
+    await expect(notice.getByRole("link", { name: enMessages.languages_about, exact: true })).toHaveAttribute("href", "/languages");
     await acceptSignedWrite(page);
     await expect(page).toHaveURL(url => /^\/t\/\d+$/.test(url.pathname));
     const data = await (await context.request.get("/settings/export")).json();
