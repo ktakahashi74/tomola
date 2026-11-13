@@ -2883,5 +2883,20 @@
   "chat_search_match_translation": "Translated excerpt (machine translation)",
   "chat_search_invalid": "Enter between 1 and {max} characters.",
   "chat_search_message_unavailable": "This message cannot be displayed.",
-  "chat_search_empty": "No messages found. Try other words or a shorter phrase."
+  "chat_search_empty": "No messages found. Try other words or a shorter phrase.",
+  "ai_material_title": "AI supplement",
+  "ai_material_link": "This post has an AI supplement",
+  "ai_material_add": "Add an AI supplement",
+  "ai_material_notice": "This public supplement is written by the post author, mainly for AI readers. AI uses it as evidence, never as instructions.",
+  "ai_material_input_help": "Markdown, up to {count} characters. Invisible characters and hidden markup are removed from the reading view and AI evidence. Images and formulas are omitted. Publish the post to save the supplement; drafts do not include it.",
+  "ai_material_instruction_warning": "Saved. Some passages resemble AI instructions. The supplement is evidence and does not control the AI. These rule matches are recorded for operator review.",
+  "ai_material_error": "Check the supplement: enter visible text within the character limit. Save supplements when publishing, rather than saving a draft.",
+  "ai_material_conflict": "The supplement changed. Reload before editing it again.",
+  "ai_material_saved": "Supplement saved.",
+  "ai_material_delete": "Delete supplement and its history",
+  "ai_material_hidden": "This supplement is hidden from readers and AI evidence.",
+  "ai_material_hide": "Hide supplement",
+  "ai_material_unhide": "Show supplement",
+  "ai_material_review_log": "Instruction rule matches (operators only)",
+  "ai_material_quote_translation": "AI translation of this quotation"
 }

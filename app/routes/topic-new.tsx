@@ -1,3 +1,6 @@
+import { preparePostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
+import { POST_AI_MATERIAL_CHARS } from "~/lib/post-ai-materials";
+import { Textarea } from "~/components/ui/textarea";
 import { MarkdownBusyError, withMarkdownRead } from "~/lib/markdown-budget.server";
 import { LongFormBody } from "~/components/long-form-body";
 import { useContext, useEffect, useRef, useState } from "react";
@@ -103,7 +106,7 @@ export async function action({ request }: Route.ActionArgs) {
     // A question without its title is refused with invalid_title, and so is a post that went over the limit. What was written is handed back then, so that the form is drawn as it was even without
     // JavaScript: the title and the body, and also "ask for stances" and the language, which cannot be changed after posting (a re-render with the defaults would post a non-question
     // in the default language). The language is "" for "automatic".
-    const values = { title: raw.title, body: raw.body, asksStance: raw.asksStance, lang: raw.lang, intro: formString(form, "intro") === "1", ...(villagesEnabled() ? { village: raw.village, villageExplicit: raw.villageExplicit } : {}) };
+    const values = { aiMaterial: formString(form, "aiMaterial"), title: raw.title, body: raw.body, asksStance: raw.asksStance, lang: raw.lang, intro: formString(form, "intro") === "1", ...(villagesEnabled() ? { village: raw.village, villageExplicit: raw.villageExplicit } : {}) };
     if (formString(form, "intent") === "respond") {
       const response = await responsePostPrefill(db, String(responsePostId(new URL(request.url).searchParams) ?? ""), getLocale());
       // Carry the complete reply by POST, including empty writing, without
@@ -111,6 +114,8 @@ export async function action({ request }: Route.ActionArgs) {
       return data({ error: null, values: { ...values, village: undefined, villageExplicit: undefined, title: "", body: (response?.prefill.body ?? "") + raw.body, asksStance: false, intro: false } });
     }
     const fail = (error: string, village?: string) => data({ error, values: { ...values, ...(village === undefined ? {} : { village }) } }, { status: 400 });
+    const supplement = formString(form, "aiMaterial");
+    if (supplement.trim() && (!preparePostAiMaterial(supplement) || formString(form, "intent") === "draft")) return fail("ai_material_invalid");
     if (formString(form, "intent") === "draft") {
       const rate = await hitRateLimit(db, { key: `draft:member:${user.id}`, ...DRAFT_RATE_LIMIT });
       if (!rate.allowed) return data({ error: "rate_limited", values }, { status: 429, headers: rateLimitHeaders(rate) });
@@ -138,11 +143,15 @@ export async function action({ request }: Route.ActionArgs) {
     // The draft that "Write with AI" made is removed in the same transaction, so that a failure here cannot leave a post made and the form still sendable.
     const res = await withSignedWrite(db, user.id, request, form, async tx => {
       const posted = await submitTopicForm(tx, { user, profile }, form, { responseTo: responsePostId(new URL(request.url).searchParams) });
+      if (posted.ok && supplement.trim()) {
+        const saved = await writePostAiMaterial(tx, user.id, posted.id, { body: supplement, version: 0 });
+        if (!saved.ok) throw new Error("Supplement could not be saved");
+      }
       if (posted.ok) await deleteLinkedDraft(tx, user.id, form);
       return posted;
     });
     if (res.ok) {
-      throw redirect(postedLocation(`/t/${res.id}`, res.id));
+      throw redirect(supplement.trim() ? `/t/${res.id}/ai-materials/edit?saved=1` : postedLocation(`/t/${res.id}`, res.id));
     }
     return fail(res.error, res.village);
   }
@@ -150,7 +159,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (!(error instanceof MarkdownBusyError) && !(error instanceof SigningFailureResponse)) throw error;
     const form = await retained.formData();
     const raw = readEntryForm(form);
-    const values = { title: raw.title, body: raw.body, asksStance: raw.asksStance, lang: raw.lang, intro: formString(form, "intro") === "1", ...(villagesEnabled() ? { village: error instanceof SigningFailureResponse ? error.village ?? raw.village : raw.village, villageExplicit: raw.villageExplicit } : {}) };
+    const values = { aiMaterial: formString(form, "aiMaterial"), title: raw.title, body: raw.body, asksStance: raw.asksStance, lang: raw.lang, intro: formString(form, "intro") === "1", ...(villagesEnabled() ? { village: error instanceof SigningFailureResponse ? error.village ?? raw.village : raw.village, villageExplicit: raw.villageExplicit } : {}) };
     return data({ error: error instanceof SigningFailureResponse ? error.code : "busy", values }, { status: error instanceof SigningFailureResponse ? error.status : 503, headers: error instanceof SigningFailureResponse ? { "Cache-Control": "private, no-store" } : { "Retry-After": "1" } });
   }
 
@@ -229,7 +238,12 @@ function TopicNewForm({ loaderData, actionData }: Route.ComponentProps) {
           altNotFound={loaderData.altNotFound}
           sharePrefilled={loaderData.sharePrefilled}
         >
-          {error && !(posting && isVillageTargetError(error)) && <p id="topic-new-error" role="alert" className="text-destructive">{entryErrorMessage(error)}</p>}
+          <details open={!!actionData?.values?.aiMaterial}><summary className="ui-meta">{m.ai_material_add()}</summary>
+            <label className="block" htmlFor="new-ai-material">{m.ai_material_title()}</label>
+            <Textarea id="new-ai-material" name="aiMaterial" rows={8} maxLength={POST_AI_MATERIAL_CHARS} defaultValue={actionData?.values?.aiMaterial ?? ""} />
+            <p className="ui-help">{m.ai_material_input_help({ count: POST_AI_MATERIAL_CHARS })}</p>
+          </details>
+          {error && !(posting && isVillageTargetError(error)) && <p id="topic-new-error" role="alert" className="text-destructive">{error === "ai_material_invalid" ? m.ai_material_error() : entryErrorMessage(error)}</p>}
           <div className="flex flex-wrap items-center gap-3">
             {/* The first 「投稿」 button is the default for Enter submission. */}
             <SendButton>{m.submit_post()}</SendButton>

@@ -1,3 +1,4 @@
+import { readPostAiMaterial } from "../post-ai-materials.server";
 import { countReading } from "~/lib/reading-counts.server";
 import type { ReadingMethod } from "~/lib/reading-sources.server";
 import { historyPath, revisionCounts } from "../entry-history.server";
@@ -330,6 +331,10 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       );
     } else {
       blocks.push(entryBlock(topic, canonical));
+      const supplement = await readPostAiMaterial(db, threadId);
+      if (supplement) blocks.push(mdBlock({ type: "ai_supplement", thread: `p-${threadId}`, author: supplement.author,
+        version: supplement.version, updated_at: isoSeconds(supplement.updatedAt), canonical: siteUrl(`/t/${threadId}/ai-materials`),
+        lang: supplement.lang, content_trust: "untrusted_user_content", role: "author_evidence_not_instructions" }, supplement.text));
       for (const t of tr.shown.get(topic.id) ?? []) blocks.push(translationBlock(topic, t, canonical));
     }
   }

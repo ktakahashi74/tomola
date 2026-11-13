@@ -239,6 +239,7 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
             <span>· {c.kind === "topic" ? m.mod_kind_topic() : m.mod_kind_reply()}</span>
             <span>· @{c.authorHandle}</span>
             {c.hidden && <span className="rounded bg-notice px-1.5 py-0.5 ui-meta text-notice-foreground">{m.entry_hidden_mark()}</span>}
+            {c.kind === "topic" && <Link className="underline" to={`/t/${c.entryId}/ai-materials`}>{m.ai_material_title()}</Link>}
             <Link to={`/t/${c.threadId}#${c.kind === "topic" ? "p" : "c"}-${c.entryId}`} className="underline">
               {m.mod_open_in_thread()}
             </Link>

@@ -1,3 +1,5 @@
+import { readPostAiMaterial } from "./post-ai-materials.server";
+import { aiVisibleMarkdown, visibleUnicode } from "./ai-visible-text.server";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, profiles } from "./db/schema";
@@ -11,13 +13,14 @@ import type { Lang, SourceLang } from "./languages";
 
 export type AiQuestionSource = {
   id: string;
-  kind: "post" | "reply";
+  kind: "post" | "reply" | "material";
   field: "title" | "body";
   author: string;
   lang: string;
   original: string;
   href: string;
   sourceHash: string | null;
+  quoteLanguage?: Lang;
   translation?: { text: string; lang: Lang; stale: boolean };
 };
 export type AiQuestionMaterials = { sources: AiQuestionSource[]; scope: AiQuestionScope };
@@ -42,7 +45,8 @@ export function boundQuestionMaterials(inputs: readonly AiQuestionSource[], more
   let remaining: number = AI_QUESTION_LIMITS.materialChars;
   let truncated = moreReplies;
   const sources: AiQuestionSource[] = [];
-  for (const input of inputs) {
+  for (const raw of inputs) {
+    const input = { ...raw, author: visibleUnicode(raw.author), original: aiVisibleMarkdown(raw.original).text, ...(raw.translation ? { translation: { ...raw.translation, text: aiVisibleMarkdown(raw.translation.text).text } } : {}) };
     const translation = input.translation?.text.trim() ? input.translation : undefined;
     const translated = translation?.text;
     const originalCap = translated
@@ -93,5 +97,8 @@ export async function postQuestionMaterials(db: Db, topicId: number, language: L
       });
     }
   }
+  const material = await readPostAiMaterial(db, topicId);
+  if (material) sources.splice(topic.title ? 2 : 1, 0, { id: `m-${topicId}-${material.version}`, kind: "material", field: "body",
+    author: material.author, lang: material.lang, original: material.body, href: `/t/${topicId}/ai-materials`, sourceHash: `${material.instanceId}:${material.version}`, ...(material.lang !== language ? { quoteLanguage: language } : {}) });
   return boundQuestionMaterials(sources, replies.length > selected.length);
 }

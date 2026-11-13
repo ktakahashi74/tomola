@@ -114,6 +114,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function TopicEdit({ loaderData, actionData }: Route.ComponentProps) {
   const { entry, asksStance, locked, fix, sourceHash, signingView } = loaderData;
+  const materialLink = <Link className="underline ui-meta" to={`/t/${entry.id}/ai-materials/edit`}>{m.ai_material_title()}</Link>;
   const destination = loaderData.destination && <div data-village-target className="space-y-1">
     <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><span>{m.field_village()}</span><span className="wrap-anywhere">{loaderData.destination}</span></div>
     <p className="ui-help text-muted-foreground">{m.village_public_reach()}</p>
@@ -122,7 +123,7 @@ export default function TopicEdit({ loaderData, actionData }: Route.ComponentPro
     return (
       <main className="space-y-4">
         <h1 className="text-2xl font-bold">{m.edit_locked_title()}</h1>
-        <p>{m.edit_locked_body()}</p>
+        <p>{m.edit_locked_body()}</p>{materialLink}
         <p className="flex flex-wrap items-center gap-4">
           <Link to={`/t/${entry.id}#reply`} className="underline">
             {m.edit_locked_reply()}
@@ -160,7 +161,7 @@ export default function TopicEdit({ loaderData, actionData }: Route.ComponentPro
   }
   return (
     <TopicEntryEditForm
-      destination={destination}
+      destination={<>{destination}{materialLink}</>}
       BodyEditor={LongFormBody}
       entry={{ ...entry, asksStance }}
       key={entry.id}

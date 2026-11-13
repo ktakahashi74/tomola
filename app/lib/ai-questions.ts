@@ -26,11 +26,11 @@ export type AiQuestionTarget = { kind: "post"; id: number } | { kind: "village";
 export type AiQuestionScope = { replies: number; sources: number; truncated: boolean };
 export type AiQuestionCitation = {
   sourceId: string;
-  kind: "post" | "reply";
+  kind: "post" | "reply" | "material";
   author: string;
   field: "title" | "body";
   original: { quote: string; lang: string; href: string };
-  translation?: { quote: string; lang: Lang; href: string; stale: boolean };
+  translation?: { quote: string; lang: Lang; href: string; stale: boolean; generated?: boolean };
 };
 export type AiQuestionAnswer = {
   status: "answered" | "not_confirmed";

@@ -1,3 +1,5 @@
+import { readPostAiMaterial } from "./post-ai-materials.server";
+import { aiVisibleMarkdown } from "./ai-visible-text.server";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { chatAccessLog, chatConsents, chatMessages, chatReportSnapshots, entries, reports, villageReportSnapshots, villages } from "./db/schema";
@@ -16,6 +18,13 @@ export async function reportEvidence(db: Db, reportId: number, model: string, no
   if (report.entryId !== null) {
     const [target] = await db.select({ id: entries.id, title: entries.title, body: entries.body, lang: entries.lang, threadId: entries.threadId, parentId: entries.parentId, deletedAt: entries.deletedAt }).from(entries).where(eq(entries.id, report.entryId));
     if (!target || target.deletedAt) return null;
+    const supplementReport = /^AI supplement: \/t\/([1-9]\d*)\/ai-materials \(version ([1-9]\d*)\)\. /.exec(report.note);
+    if (supplementReport && Number(supplementReport[1]) === target.id && target.threadId === null) {
+      const supplement = await readPostAiMaterial(db, target.id);
+      if (!supplement || supplement.version !== Number(supplementReport[2])) return null;
+      return { report: reported, target: { id: target.id, kind: "ai_supplement", version: supplement.version, body: supplement.text, lang: supplement.lang },
+        context: { topicId: target.id, title: aiVisibleMarkdown(target.title ?? "").text } };
+    }
     const [topic] = await db.select({ title: entries.title, body: entries.body, deletedAt: entries.deletedAt }).from(entries).where(eq(entries.id, target.threadId ?? target.id));
     if (!topic || topic.deletedAt) return null;
     const [parent] = target.parentId === null ? [] : await db.select({ id: entries.id, body: entries.body, lang: entries.lang }).from(entries).where(and(eq(entries.id, target.parentId), isNull(entries.deletedAt)));

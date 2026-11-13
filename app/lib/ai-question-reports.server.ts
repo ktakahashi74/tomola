@@ -13,12 +13,12 @@ export const questionContentSchema = z.object({
     status: z.enum(["answered", "not_confirmed"]),
     readings: z.array(z.object({ text: questionText(AI_QUESTION_LIMITS.readingChars), citations: z.array(z.number().int().min(1).max(AI_QUESTION_LIMITS.citations)).max(AI_QUESTION_LIMITS.citations) }).strict()).max(AI_QUESTION_LIMITS.readings),
     citations: z.array(z.object({
-      sourceId: questionText(64), kind: z.enum(["post", "reply"]), field: z.enum(["title", "body"]), author: questionText(128),
+      sourceId: questionText(64), kind: z.enum(["post", "reply", "material"]), field: z.enum(["title", "body"]), author: questionText(128),
       original: passage,
-      translation: passage.extend({ lang: z.enum(LANGS), stale: z.boolean() }).strict().optional(),
+      translation: passage.extend({ lang: z.enum(LANGS), stale: z.boolean(), generated: z.boolean().optional() }).strict().optional(),
     }).strict()).max(AI_QUESTION_LIMITS.citations),
   }).strict(),
-  scope: z.object({ sources: z.number().int().min(0).max((AI_QUESTION_LIMITS.replies + 1) * 2), replies: z.number().int().min(0).max(AI_QUESTION_LIMITS.replies), truncated: z.boolean() }).strict(),
+  scope: z.object({ sources: z.number().int().min(0).max((AI_QUESTION_LIMITS.replies + 1) * 2 + 1), replies: z.number().int().min(0).max(AI_QUESTION_LIMITS.replies), truncated: z.boolean() }).strict(),
   language: z.enum(LANGS), engine: questionText(32), model: questionText(200), expiresAt: z.number().int().nonnegative(),
 }).strict();
 export const questionResponseSchema = questionContentSchema.extend({ receipt: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();

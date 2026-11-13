@@ -1,3 +1,4 @@
+import { readPostAiMaterial } from "~/lib/post-ai-materials.server";
 import { loadMemberAvatars } from "~/lib/member-avatar.server";
 import { loadDisplayNames, selectDisplayName, selectDisplayNamePresentation } from "~/lib/display-names.server";
 import { TitledMessage } from "~/components/titled-message";
@@ -352,6 +353,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
   }
   return {
+    aiMaterial: topic.visibility === "visible" ? !!await readPostAiMaterial(db, topic.id) : false,
     reader: !user,
     askAi: user && topic.visibility === "visible" && postAskAiEnabled()
       ? { href: `/t/${topic.id}/ask?${new URLSearchParams({ lang: displayLang })}`, label: m.post_ask_entry() } : null,
@@ -864,6 +866,8 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           </>
         )}
       </article>
+      {loaderData.aiMaterial && <p className="ui-meta"><Link to={`/t/${topic.id}/ai-materials`} className="underline">{m.ai_material_link()}</Link></p>}
+      {topic.placeholder === null && topic.own && <p className="ui-meta"><Link to={`/t/${topic.id}/ai-materials/edit`} className="underline">{loaderData.aiMaterial ? m.ai_material_title() : m.ai_material_add()}</Link></p>}
       {loaderData.askAi && <p className="ui-meta"><Link to={loaderData.askAi.href} className="underline">{loaderData.askAi.label}</Link></p>}
       {loaderData.reader && question.asksStance && <p className="ui-help text-muted-foreground">{m.public_reading_stances()}</p>}
       {question.asksStance && question.stance && topic.placeholder === null && (

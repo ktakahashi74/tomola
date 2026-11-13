@@ -642,6 +642,30 @@ export const entryEmbeddings = pgTable(
   ],
 );
 
+// Public author supplements live outside entries, feeds and reaction counts.
+export const postAiMaterials = pgTable("post_ai_materials", {
+  instanceId: text("instance_id").notNull().default(sql`gen_random_uuid()::text`),
+  topicId: bigint("topic_id", { mode: "number" }).primaryKey().references(() => entries.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  operatorHidden: boolean("operator_hidden").notNull().default(false),
+}, t => [check("post_ai_materials_version_check", sql`${t.version} > 0`)]);
+
+export const postAiMaterialVersions = pgTable("post_ai_material_versions", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  topicId: bigint("topic_id", { mode: "number" }).notNull().references(() => postAiMaterials.topicId, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  body: text("body").notNull(),
+  actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+  event: text("event").notNull().default("edit"),
+  note: text("note").notNull().default(""),
+  instructionWarnings: jsonb("instruction_warnings").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [unique("post_ai_material_versions_unique").on(t.topicId, t.version),
+  check("post_ai_material_versions_event_check", oneOf(t.event, ["edit", "hide", "unhide"]))]);
+
 // Pre-edit revisions. Outside the initial grace window, preserve the previous title and body before replacing them.
 // editedAt and editorId identify the time and actor of the edit that replaced this revision.
 export const entryRevisions = pgTable(

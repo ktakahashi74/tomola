@@ -1,3 +1,4 @@
+import { exportPostAiMaterials } from "./post-ai-materials.server";
 import { ownPushSubscriptions } from "./push/subscriptions.server";
 import { exportVillageIcons } from "./village-icon.server";
 import { exportMemberAvatar } from "./member-avatar.server";
@@ -397,6 +398,7 @@ export type MemberExport = {
   village_icons: Awaited<ReturnType<typeof exportVillageIcons>>;
   village_follows: Array<{ village: string; created_at: string }>;
   signatures: Array<{ id: number; entry_id: number | null; source_hash: string | null; operation: string; signed_payload: string; payload_hash: string; challenge: string; credential_id: string; public_key: string; rp_id: string; origin: string; assertion: Record<string, unknown>; authenticator_data: string; client_data_json: string; signature: string; created_at: string }>;
+  ai_materials: Awaited<ReturnType<typeof exportPostAiMaterials>>;
   chat_messages: Awaited<ReturnType<typeof exportOwnChat>>;
 };
 
@@ -450,6 +452,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
   }
   const pushRows = await ownPushSubscriptions(db, userId);
   return {
+    ai_materials: await exportPostAiMaterials(db, userId),
     format: "tomola-member-export",
     push_subscriptions: { count: pushRows.length, registrations: pushRows.map(row => ({ browser: row.browser, os: row.os, registered_at: row.createdAt.toISOString() })) },
     version: MEMBER_EXPORT_VERSION,

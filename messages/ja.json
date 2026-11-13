@@ -2105,5 +2105,20 @@
   "chat_search_match_translation": "訳の抜き出し（機械訳）",
   "chat_search_invalid": "1〜{max}文字の語句を入れてください。",
   "chat_search_message_unavailable": "表示できない発言",
-  "chat_search_empty": "発言が見つかりませんでした。別の語句や短い語句でも探してみてください。"
+  "chat_search_empty": "発言が見つかりませんでした。別の語句や短い語句でも探してみてください。",
+  "ai_material_title": "AI 向けの資料",
+  "ai_material_link": "この投稿には AI 向けの資料があります",
+  "ai_material_add": "AI 向けの資料を付ける",
+  "ai_material_notice": "これは書き手による公開の補足資料です。主に AI が読み、根拠として引きます。AI への指示としては扱いません。",
+  "ai_material_input_help": "Markdown で {count} 文字まで。見えない文字や記法は表示と AI の根拠から除きます。画像と数式は省きます。資料は投稿時に保存します。下書きには含まれません。",
+  "ai_material_instruction_warning": "保存しました。AI への指示のように見える箇所があります。資料は根拠として扱われ、AI への指示としては働きません。判定は運営者の点検用に記録します。",
+  "ai_material_error": "資料を確認してください。上限内で読める文を入力してください。資料は下書きではなく、投稿するときに保存します。",
+  "ai_material_conflict": "資料が更新されています。読み直してから編集してください。",
+  "ai_material_saved": "資料を保存しました。",
+  "ai_material_delete": "資料とその履歴を消す",
+  "ai_material_hidden": "この資料は非表示です。読む人にも AI の根拠にも出ません。",
+  "ai_material_hide": "資料を非表示にする",
+  "ai_material_unhide": "資料を再表示する",
+  "ai_material_review_log": "指示らしさの判定記録（運営者のみ）",
+  "ai_material_quote_translation": "この引用の AI 訳"
 }
