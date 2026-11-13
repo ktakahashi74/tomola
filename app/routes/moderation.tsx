@@ -11,7 +11,7 @@ import { listPublicLog } from "~/lib/moderation.server";
 import { parsePage } from "~/lib/params.server";
 import { m } from "~/paraglide/messages.js";
 
-// Moderation log visible to members: action kind, reason category, source language, and date only. Omit actor, reporter, explanation, and post links.
+// Moderation log visible to members: action kind, reason category, source language, date and AI answer number. Omit actor, reporter, explanation and human post links.
 // Suspended members may view it; suspension does not block reading.
 export function meta({}: Route.MetaArgs) {
   return [{ title: m.moderation_log_title() }];
@@ -76,6 +76,7 @@ export default function ModerationLog({ loaderData }: Route.ComponentProps) {
   const { entries, page, hasNext } = loaderData;
   return (
     <main className="space-y-4">
+      <Link to="/nushi/reports" className="underline">{m.nushi_reports()}</Link>
       <h1 className="text-2xl font-bold">{m.moderation_log_title()}</h1>
       <p className="ui-help text-muted-foreground">{m.moderation_log_intro()}</p>
       {entries.length === 0 ? (
@@ -97,7 +98,7 @@ export default function ModerationLog({ loaderData }: Route.ComponentProps) {
                   <TableCell className="py-1 pe-3">
                     <time dateTime={e.date}>{e.date}</time>
                   </TableCell>
-                  <TableCell className="py-1 pe-3">{actionLabel(e.action)}{e.automatic && <span className="ms-2 ui-meta">{m.moderation_automatic()}</span>}</TableCell>
+                  <TableCell className="py-1 pe-3">{actionLabel(e.action)}{e.nushiAnswerId !== undefined && ` · ${m.nushi_name()} #${e.nushiAnswerId}`}{e.automatic && <span className="ms-2 ui-meta">{m.moderation_automatic()}</span>}</TableCell>
                   <TableCell className="py-1 pe-3">{reasonLabel(e.reason)}</TableCell>
                   <TableCell className="py-1 pe-3">{"place" in e ? m.mod_kind_chat() : "village" in e ? e.village ? loaderData.villageLinks ? <Link className="underline" to={`/v/${e.village.slug}`}>{e.village.name}</Link> : e.village.name : m.mod_kind_village() : e.lang ? <span lang={e.lang}>{e.lang === "other" ? m.source_language_other() : LANG_LABELS[e.lang]}</span> : "—"}</TableCell>
                 </TableRow>

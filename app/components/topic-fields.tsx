@@ -1,5 +1,6 @@
-import { TitledMessage } from "~/components/titled-message";
 import { MediaInsert, MediaInsertHelp } from "~/components/media-insert";
+import { NushiComposerEntry } from "./nushi-composer-entry";
+import { TitledMessage } from "~/components/titled-message";
 import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -89,7 +90,7 @@ export function TopicFields({ defaultLang, defaultTitle = "", defaultBody = "", 
     </div>
     <EntryFields error={error} errorId={errorId} key="body" defaultLang={defaultLang} defaultBody={defaultBody} pasteFrontmatter={autoLang ? "topic" : undefined} onBodyInput={value => setPasted(startsWithFrontmatter(value))} showLanguage={false} rows={12} tall
       bodyPlaceholder={asksStance || alt ? m.field_body_placeholder_question() : m.field_body_placeholder_topic()} invalidatePreviewOnEdit={invalidatePreviewOnEdit} previewLanguage={lang}
-      writingHelp={<MediaInsertHelp />} bodyAccessory={<MediaInsert compact />} BodyEditor={BodyEditor} editorLang={lang || defaultLang} />
+      writingHelp={<MediaInsertHelp />} bodyAccessory={<><MediaInsert compact /><NushiComposerEntry /></>} BodyEditor={BodyEditor} editorLang={lang || defaultLang} />
     <div className="space-y-2">
       <PostSettings summary={summary} open={error === "invalid_lang"}>
         <EntryLanguage error={error} errorId={errorId} defaultLang={defaultLang} value={lang === "" && !autoLang ? defaultLang : lang} onChange={setLang} pasteFrontmatter={autoLang} />

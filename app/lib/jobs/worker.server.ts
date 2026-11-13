@@ -1,3 +1,4 @@
+import { expireNushiRequests } from "../nushi.server";
 import { workerDisabledByEnv } from "../../../server/background";
 import { safeErrorText } from "~/lib/error-text.server";
 import { flushUsageSettlements } from "../llm/metering.server";
@@ -113,6 +114,7 @@ export function startWorker(opts: WorkerOptions = {}): Worker | null {
         await queueRenderRebuildIfStale(db);
         renderCacheChecked = true;
       }
+      await expireNushiRequests(db);
       await ensureDigestScheduledThrottled(db);
       await ensureCleanupScheduledThrottled(db);
       await ensureTranslationRecoveryScheduledThrottled(db);

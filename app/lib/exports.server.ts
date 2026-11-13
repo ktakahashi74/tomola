@@ -7,7 +7,7 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { readDistributions } from "~/lib/distribution.server";
-import { divergences, drafts, entries, entryMentionSnapshots, entryRevisions, follows, savedTopics, memberSignatures, profiles, stanceChanges, stances, translations, villageFollows, villages, votes } from "~/lib/db/schema";
+import { divergences, drafts, entries, entryMentionSnapshots, entryRevisions, follows, savedTopics, nushiSources, memberSignatures, profiles, stanceChanges, stances, translations, villageFollows, villages, votes } from "~/lib/db/schema";
 import { publicPostVillageCondition } from "~/lib/villages.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { sourceHash } from "~/lib/source-hash.server";
@@ -306,7 +306,8 @@ export async function buildObservationExport(
 // Version 14 includes the member's private saved topic IDs and save times.
 // Version 15 includes notification registration counts, coarse labels and dates.
 // Version 16 includes the member's saved appearance.
-export const MEMBER_EXPORT_VERSION = 16;
+// Version 17 includes source-attribution snapshots belonging to the member.
+export const MEMBER_EXPORT_VERSION = 17;
 
 export type MemberExport = {
   format: "tomola-member-export";
@@ -400,6 +401,7 @@ export type MemberExport = {
   signatures: Array<{ id: number; entry_id: number | null; source_hash: string | null; operation: string; signed_payload: string; payload_hash: string; challenge: string; credential_id: string; public_key: string; rp_id: string; origin: string; assertion: Record<string, unknown>; authenticator_data: string; client_data_json: string; signature: string; created_at: string }>;
   ai_materials: Awaited<ReturnType<typeof exportPostAiMaterials>>;
   chat_messages: Awaited<ReturnType<typeof exportOwnChat>>;
+  nushi_sources: Array<{ answer_id: number; entry_id: number; author: string; created_at: string }>;
 };
 
 // The villages the member follows, read in two steps so that a member who follows none (or while villages are closed) never makes a read of the villages table.
@@ -450,10 +452,12 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     list.push({ title: r.title, body: r.body, edited_at: r.editedAt.toISOString(), deleted_at: r.deletedAt?.toISOString() ?? null, signature_ids: r.deletedAt ? [] : signaturesFor(r.entryId, savedHash ?? sourceHash(r.title, r.body)) });
     revisionsOf.set(r.entryId, list);
   }
+  const sourceRows = await db.select().from(nushiSources).where(eq(nushiSources.authorId, userId)).orderBy(asc(nushiSources.answerId), asc(nushiSources.entryId));
   const pushRows = await ownPushSubscriptions(db, userId);
   return {
     ai_materials: await exportPostAiMaterials(db, userId),
     format: "tomola-member-export",
+    nushi_sources: sourceRows.map(row => ({ answer_id: row.answerId, entry_id: row.entryId, author: row.author, created_at: row.createdAt.toISOString() })),
     push_subscriptions: { count: pushRows.length, registrations: pushRows.map(row => ({ browser: row.browser, os: row.os, registered_at: row.createdAt.toISOString() })) },
     version: MEMBER_EXPORT_VERSION,
     generated_at: (opts.now ?? new Date()).toISOString(),

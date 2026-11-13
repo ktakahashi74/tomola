@@ -1,4 +1,6 @@
 import { postAiMaterials } from "./db/schema";
+import { requestNushi } from "./nushi.server";
+import { readNushiAnswer } from "./nushi.server";
 import { resolvePostLanguage } from "./lang-detect";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import { withinEditGrace } from "./entry-history.server";
@@ -63,6 +65,7 @@ export type EntryView = {
   authorId: string;
   authorHandle: string;
   parentId: number | null;
+  nushiParentId?: number | null;
   // The value from frontmatter or the API; null when none was stated (posts written on screen carry none).
   aiAssistance: AiAssistance | null;
   createdAt: Date;
@@ -144,6 +147,7 @@ async function notifiable(body: string, mentions: MentionTargets): Promise<strin
 }
 
 const common = {
+  suppressNushi: z.boolean().default(false),
   // Original languages are independent of the enabled translation and interface languages.
   lang: z.enum(SOURCE_LANGS),
   langCode: z.string().regex(/^[a-z]{2,3}$/).nullish(),
@@ -191,6 +195,7 @@ const topicSchema = z
 const replySchema = z.object({
   ...common,
   parentId: z.number().int().positive().optional(),
+  nushiParentId: z.number().int().positive().optional(),
   stanceTag: z.enum(STANCE_TAGS).nullish(),
   asksStance: z.boolean().default(false),
   altOf: z.number().int().positive().nullish(),
@@ -292,6 +297,7 @@ async function createTopicImplementation(
     // too, as the one place that tells the members mentioned in the body.
     await autoFollow(tx, authorId, row.id, now);
     if (!spamHidden) await notifyForNewEntry(tx, { entry: { id: row.id, kind: "topic", threadId: row.id, authorId }, responseTo: opts.via === "api" ? null : opts.responseTo, mentioned: (await notifiable(parsed.data.body, mentions)), now });
+    if (!spamHidden) await requestNushi(tx, row.id, parsed.data.suppressNushi, now);
     if (opts.asIntroduction) await tx.update(profiles).set({ introEntryId: row.id }).where(eq(profiles.userId, authorId));
     return { ok: true as const, id: row.id };
   });
@@ -328,6 +334,10 @@ async function createReplyImplementation(
       .where(and(eq(entries.id, threadId), eq(entries.kind, "topic"), isNull(entries.deletedAt), isNull(entries.hiddenAt)))
       .for("no key update");
     if (!topic) return { ok: false as const, error: "thread_not_found" as const };
+    if (parsed.data.nushiParentId !== undefined) {
+      const answer = await readNushiAnswer(tx, parsed.data.nushiParentId);
+      if (!answer || answer.hidden || answer.threadId !== threadId) return { ok: false as const, error: "parent_not_in_thread" as const };
+    }
     // Reply labels apply only to replies to questions. Validate asks_stance read under the topic-row lock.
     const stanceTag = parsed.data.stanceTag ?? null;
     const attrError = checkStanceAttributes({
@@ -357,6 +367,7 @@ async function createReplyImplementation(
         kind: "reply",
         threadId,
         parentId,
+        nushiParentId: parsed.data.nushiParentId,
         authorId,
         lang: parsed.data.lang,
         langCode: parsed.data.lang === "other" ? parsed.data.langCode ?? null : null,
@@ -401,6 +412,7 @@ async function createReplyImplementation(
     // then the followers of the topic (notifyForNewEntry: a reply notification is sent instead of followed_thread, never both; the author is never notified).
     const followed = await autoFollow(tx, authorId, threadId, now);
     if (!spamHidden) await notifyForNewEntry(tx, { entry: { id: row.id, kind: "reply", threadId, authorId }, topicAuthorId: topic.authorId, parentAuthorId, mentioned: (await notifiable(parsed.data.body, mentions)), now });
+    if (!spamHidden) await requestNushi(tx, row.id, parsed.data.suppressNushi, now);
     return { ok: true as const, id: row.id, followed };
   });
   return created;
@@ -840,6 +852,7 @@ const viewColumns = {
   authorId: entries.authorId,
   authorHandle: retainedAuthorColumn(entries.authorId),
   parentId: entries.parentId,
+  nushiParentId: entries.nushiParentId,
   aiAssistance: entries.aiAssistance,
   createdAt: entries.createdAt,
   editedAt: entries.editedAt,
@@ -866,6 +879,7 @@ type ViewRow = {
   authorId: string;
   authorHandle: string | null;
   parentId: number | null;
+  nushiParentId: number | null;
   aiAssistance: string | null;
   createdAt: Date;
   editedAt: Date | null;

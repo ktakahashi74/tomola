@@ -7,7 +7,7 @@ import { and, eq, inArray, is, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "./db/client.server";
 import * as schema from "./db/schema";
-import { accountDeletions, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, entries, entryMedia, entryMentionSnapshots, invitations, invitationNoteTranslations, jobs, media, memberSignatures, moderationActions, notifications, profiles, reports, suspendedEmailHashes, translations, user, verification, villageEvents, villageInvites, villageMembers, villages } from "./db/schema";
+import { accountDeletions, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, entries, entryMedia, entryMentionSnapshots, invitations, invitationNoteTranslations, jobs, media, memberSignatures, moderationActions, notifications, nushiSources, profiles, reports, suspendedEmailHashes, translations, user, verification, villageEvents, villageInvites, villageMembers, villages } from "./db/schema";
 import { discardPaidTranslationCalls } from "./jobs/paid-translation.server";
 import { TRANSLATE_INVITATION_NOTE_JOB } from "./invitation-note.server";
 import { DELETED_MEMBER_EMAIL, DELETED_MEMBER_HANDLE, DELETED_MEMBER_ID, isDeletedIdentity } from "./deleted-member";
@@ -237,6 +237,7 @@ export async function completeAccountDeletion(db: Db, id: string, opts: { now?: 
     await lockFigureMedia(tx);
     // Keep bytes only where an undeleted discussion still uses the image.
     await tx.update(media).set({ bytes: null, deletedAt: now }).where(and(eq(media.uploadedBy, userId), isNull(media.deletedAt), or(eq(media.avatar, true), sql`not exists (select 1 from ${entryMedia} inner join ${entries} on ${entries.id} = ${entryMedia.entryId} where ${entryMedia.mediaId} = ${media.id} and ${entries.deletedAt} is null)`)));
+    await tx.update(nushiSources).set({ author: DELETED_MEMBER_HANDLE }).where(eq(nushiSources.authorId, userId));
     await tx.update(chatReportSnapshots).set({ authorHandle: DELETED_MEMBER_HANDLE }).where(eq(chatReportSnapshots.authorId, userId));
     await tx.update(chatAccessLog).set({ readerHandle: DELETED_MEMBER_HANDLE }).where(eq(chatAccessLog.readerId, userId));
     await tx.update(villageEvents).set({ actorHandle: DELETED_MEMBER_HANDLE }).where(eq(villageEvents.actorId, userId));

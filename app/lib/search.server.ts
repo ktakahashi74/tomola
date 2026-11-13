@@ -2,10 +2,10 @@ import { loadDisplayNames, selectDisplayName } from "./display-names.server";
 import { publicTopicPlace } from "~/lib/visibility.server";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import { replyPagesOf } from "~/lib/reply-pages.server";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
-import { entries, entryEmbeddings, profiles } from "~/lib/db/schema";
+import { entries, entryEmbeddings, profiles, villages } from "~/lib/db/schema";
 import { isStale, wantsTranslation, type ShownKind } from "~/lib/display";
 import { loadPickedTranslations, loadTopicLineTranslations, topicLine } from "~/lib/entry-display.server";
 import { replyLocationAt } from "~/lib/entries.server";
@@ -72,7 +72,7 @@ export type SearchFound = {
 };
 
 // Top limit visible, undeleted posts by similarity.
-export async function findSimilar(db: Db, vector: readonly number[], model: string, limit: number = SEARCH_LIMIT): Promise<SearchFound[]> {
+export async function findSimilar(db: Db, vector: readonly number[], model: string, limit: number = SEARCH_LIMIT, villageId?: string): Promise<SearchFound[]> {
   const topic = alias(entries, "topic");
   const literal = JSON.stringify(vector);
   // HNSW first retrieves ef_search candidates (default 40), then filters models/deletions. Old-model or
@@ -105,7 +105,7 @@ export async function findSimilar(db: Db, vector: readonly number[], model: stri
       .innerJoin(entries, eq(entries.id, entryEmbeddings.entryId))
       .innerJoin(topic, eq(topic.id, sql`coalesce(${entries.threadId}, ${entries.id})`))
       .leftJoin(profiles, eq(profiles.userId, entries.authorId))
-      .where(and(eq(entryEmbeddings.model, model), isNull(entries.deletedAt), isNull(entries.hiddenAt), isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic)))
+      .where(and(eq(entryEmbeddings.model, model), isNull(entries.deletedAt), isNull(entries.hiddenAt), isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic), villageId ? eq(topic.villageId, villageId) : undefined))
       .orderBy(distance)
       .limit(limit)
       .as("nearest");
@@ -120,6 +120,7 @@ export type SearchOptions = {
   // Carry result-link ?lang= for this page's display-language override.
   carryLang?: string | null;
   limit?: number;
+  villageId?: string;
   llm?: LlmOptions;
 };
 
@@ -146,10 +147,10 @@ export function closeResults(found: readonly SearchFound[], query: string): Sear
 
 // Embed a checkQuery-validated query and find similar posts without display rules; twins expose originals.
 // Stopped budget throws BudgetPausedError; engine failure throws LlmError. Caller shows temporary search unavailability.
-export async function searchFound(db: Db, query: string, opts: { limit?: number; llm?: LlmOptions } = {}): Promise<SearchFound[]> {
+export async function searchFound(db: Db, query: string, opts: { limit?: number; llm?: LlmOptions; villageId?: string } = {}): Promise<SearchFound[]> {
   const engine = opts.llm?.embeddingEngine ?? resolveEmbeddingEngine(opts.llm?.env);
   const out = await embed(db, { text: query, task: "query" }, { ...opts.llm, embeddingEngine: engine });
-  return closeResults(await findSimilar(db, out.vector, engine.model, opts.limit ?? SEARCH_LIMIT), query);
+  return closeResults(await findSimilar(db, out.vector, engine.model, opts.limit ?? SEARCH_LIMIT, opts.villageId), query);
 }
 
 // Search and apply reader display-language rules for the screen.
@@ -208,4 +209,10 @@ export async function toHits(db: Db, found: readonly SearchFound[], opts: Pick<S
       };
     }),
   );
+}
+
+export async function searchVillageId(db: Db, scope: string) {
+  const [row] = await db.select({ id: villages.id }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.ownerId))
+    .where(or(eq(villages.slug, scope), eq(villages.id, scope), and(eq(villages.kind, "personal"), eq(profiles.handle, scope.replace(/^@/, ""))))).limit(1);
+  return row?.id ?? null;
 }

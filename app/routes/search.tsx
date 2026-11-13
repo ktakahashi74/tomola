@@ -1,3 +1,4 @@
+import { searchVillageId } from "~/lib/search.server";
 import { PendingText } from "~/components/pending-text";
 import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "~/components/ui/tooltip";
@@ -35,7 +36,7 @@ export function headers({ loaderHeaders }: Route.HeadersArgs) {
 export function shouldRevalidate({ currentUrl, nextUrl, formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   if (formAction === "/search") return defaultShouldRevalidate;
   const same =
-    currentUrl.pathname === nextUrl.pathname && currentUrl.searchParams.get("q") === nextUrl.searchParams.get("q") && currentUrl.searchParams.get("lang") === nextUrl.searchParams.get("lang");
+    currentUrl.pathname === nextUrl.pathname && currentUrl.searchParams.get("q") === nextUrl.searchParams.get("q") && currentUrl.searchParams.get("lang") === nextUrl.searchParams.get("lang") && currentUrl.searchParams.get("village") === nextUrl.searchParams.get("village");
   return same ? false : defaultShouldRevalidate;
 }
 
@@ -51,13 +52,14 @@ type SearchState = {
   lang: string;
   carryLang: string | null;
   // Minutes to wait when rate_limited.
+  villageScope?: string | null;
   retryMinutes: number;
 };
 const view = (state: SearchState["state"], q: string, extra: Partial<Omit<SearchState, "state" | "q">> = {}): SearchState => ({ state, q, hits: [], literalOnly: false, lang: "", carryLang: null, retryMinutes: 0, ...extra });
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, db, profile } = await requireMember(request);
-  const language = { lang: displayLangFor(request, profile), carryLang: langCarry(request) };
+  const language = { lang: displayLangFor(request, profile), carryLang: langCarry(request), villageScope: new URL(request.url).searchParams.get("village") };
   const raw = new URL(request.url).searchParams.get("q") ?? "";
   if (raw.trim() === "") return view("start", "", language);
   const checked = checkQuery(raw);
@@ -70,10 +72,13 @@ export async function loader({ request }: Route.LoaderArgs) {
       headers: rateLimitHeaders(rate),
     });
   }
-  const opts = { readLangs: screenReadLangsFor(request, profile), displayLang: language.lang, carryLang: language.carryLang };
+  const villageScope = new URL(request.url).searchParams.get("village");
+  const villageId = villageScope ? await searchVillageId(db, villageScope) : null;
+  if (villageScope && !villageId) return view("results", checked.query, { ...language, hits: [] });
+  const opts = { ...(villageId ? { villageId } : {}), readLangs: screenReadLangsFor(request, profile), displayLang: language.lang, carryLang: language.carryLang };
   const result = await combinedSearch(db, checked.query, opts);
   const hits = await combinedHits(db, checked.query, result, opts);
-  return view("results", checked.query, { hits, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang });
+  return view("results", checked.query, { hits, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
 }
 
 export default function Search({ loaderData }: Route.ComponentProps) {
@@ -82,6 +87,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
     <main className="space-y-4">
       <PageHeader title={m.search_title()} purpose={m.search_purpose()} />
       <Form method="get" action="/search" role="search" className="flex gap-2">
+          {loaderData.villageScope && <input type="hidden" name="village" value={loaderData.villageScope} />}
         {carryLang && <input type="hidden" name="lang" value={carryLang} />}
         <Input
           type="search"

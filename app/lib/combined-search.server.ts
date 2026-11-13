@@ -44,7 +44,7 @@ const HTML_COMMENT = "<!--[\\s\\S]*?-->";
 const HTML_TAG = "</?[A-Za-z][A-Za-z0-9:_-]*(?:\\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\\s*=\\s*(?:[^\\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*\\s*/?>";
 const searchableBody = (text: SQLWrapper) => sql<string>`regexp_replace(regexp_replace(${text}, ${HTML_COMMENT}, ' ', 'g'), ${HTML_TAG}, ' ', 'g')`;
 
-export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit">) {
+export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string }) {
   const topic = alias(entries, "literal_topic");
   const rank = translationRank();
   const picked = (field: "title" | "body") => db.select({
@@ -84,14 +84,14 @@ export function literalSearchQuery(db: Db, query: string, opts: Pick<SearchOptio
     .leftJoinLateral(title, sql`true`).leftJoinLateral(body, sql`true`)
     .where(and(
       isNull(entries.deletedAt), isNull(entries.hiddenAt), eq(topic.kind, "topic"),
-      isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic),
+      isNull(topic.deletedAt), isNull(topic.hiddenAt), publicTopicPlace(topic), opts.villageId ? eq(topic.villageId, opts.villageId) : undefined,
       or(ownTitle, translatedTitle, ownBody, translatedBody),
     ))
     .orderBy(sql`case when ${ownTitle} or ${translatedTitle} then 0 else 1 end`, desc(entries.createdAt), desc(entries.id))
     .limit(Math.min(opts.limit ?? SEARCH_LIMIT, SEARCH_LIMIT));
 }
 
-export async function findLiteral(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit">): Promise<CombinedFound[]> {
+export async function findLiteral(db: Db, query: string, opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> & { villageId?: string }): Promise<CombinedFound[]> {
   return (await literalSearchQuery(db, query, opts)).map(({ matchField, matchOriginal, matchText, titleTranslation, bodyTranslation, ...row }) => {
     const tr = matchOriginal ? null : matchField === "title" ? titleTranslation : bodyTranslation;
     return {
@@ -121,7 +121,7 @@ export async function combinedSearch(db: Db, query: string, opts: SearchOptions)
   const literal = await findLiteral(db, query, { ...opts, limit });
   let semantic: SearchFound[];
   try {
-    semantic = await searchFound(db, query, { limit, llm: opts.llm });
+    semantic = await searchFound(db, query, { limit, llm: opts.llm, villageId: opts.villageId });
   } catch (error) {
     if (!semanticUnavailable(error)) throw error;
     console.warn("[search] unavailable: " + safeErrorText(error));

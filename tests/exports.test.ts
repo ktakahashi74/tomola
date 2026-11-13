@@ -271,7 +271,7 @@ describe("the member's own export", () => {
     const out = await buildMemberExport(h.db, h.ids.hanako_unique, { now: new Date("2026-10-15T00:00:00Z") });
     expect(out).toMatchObject({ format: "tomola-member-export", version: MEMBER_EXPORT_VERSION, generated_at: "2026-10-15T00:00:00.000Z" });
     // No author-translation keys since version 2. Personal exports also exclude human-corrected translations.
-    expect(Object.keys(out)).toEqual(["ai_materials", "format", "push_subscriptions", "version", "generated_at", "profile", "entries", "drafts", "insightful", "stances", "stance_changes", "saved_topics", "follows", "village_icons", "village_follows", "signatures", "chat_messages"]);
+    expect(Object.keys(out)).toEqual(["ai_materials", "format", "nushi_sources", "push_subscriptions", "version", "generated_at", "profile", "entries", "drafts", "insightful", "stances", "stance_changes", "saved_topics", "follows", "village_icons", "village_follows", "signatures", "chat_messages"]);
     expect(out.chat_messages).toEqual([]);
     expect(JSON.stringify(out)).not.toContain("SECRET-HUMAN");
     expect(out.profile).toMatchObject({ handle: "hanako_unique", home_area: "ja", read_langs: ["ja", "en"] });

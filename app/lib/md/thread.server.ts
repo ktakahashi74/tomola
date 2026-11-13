@@ -1,4 +1,5 @@
 import { readPostAiMaterial } from "../post-ai-materials.server";
+import { nushiMarkdownBlocks } from "../nushi-markdown.server";
 import { countReading } from "~/lib/reading-counts.server";
 import type { ReadingMethod } from "~/lib/reading-sources.server";
 import { historyPath, revisionCounts } from "../entry-history.server";
@@ -73,6 +74,7 @@ type Row = {
   title: string | null;
   body: string;
   parentId: number | null;
+  nushiParentId: number | null;
   authorId: string;
   handle: string | null;
   authorArea: string | null;
@@ -96,6 +98,7 @@ const columns = {
   title: entries.title,
   body: entries.body,
   parentId: entries.parentId,
+  nushiParentId: entries.nushiParentId,
   authorId: entries.authorId,
   handle: retainedAuthorColumn(entries.authorId, profiles.handle, "handle"),
   authorArea: entries.authorArea,
@@ -247,7 +250,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       ...(e.langCode ? { lang_code: e.langCode } : {}),
       thread: `p-${threadId}`,
       // Replies without an explicit parent reply target the topic.
-      reply_to: isTopic ? null : e.parentId !== null ? `c-${e.parentId}` : `p-${threadId}`,
+      reply_to: isTopic ? null : e.nushiParentId ? `nushi-${e.nushiParentId}` : e.parentId !== null ? `c-${e.parentId}` : `p-${threadId}`,
       author: authorLabel(e.handle),
       ...displayNameFields(names.get(e.handle ?? "")),
       author_area: (e.authorArea as Area | null) ?? null,
@@ -397,6 +400,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       next ? `Next page: ${next}` : "End of thread.",
     ),
   );
+  if (!topic.hiddenAt) blocks.push(...await nushiMarkdownBlocks(db, threadId, [...(opts.page === 1 ? [threadId] : []), ...replies.filter(isShown).map(reply => reply.id)], opts.lang && opts.lang !== "all" ? opts.lang : "en"));
   const markdown = joinBlocks(blocks);
   if (opts.readingMethod && opts.page === 1) await countReading(db, threadId, { method: opts.readingMethod, readerId: opts.readerId,
     lang: opts.lang === "all" ? opts.displayLang ?? topic.lang as Lang : opts.lang ?? topic.lang as Lang });

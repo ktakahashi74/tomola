@@ -1,3 +1,6 @@
+import { nushiPreferences } from "~/lib/nushi-settings.server";
+import { nushiEnabled } from "~/lib/nushi-config.server";
+import { personalVillage } from "~/lib/personal-villages.server";
 import { pushConfig, webPushEnabled } from "~/lib/push/config.server";
 import { currentPushId, stopPush } from "~/lib/push/subscriptions.server";
 import { ColorSchemeSettings } from "~/components/color-scheme-settings";
@@ -78,6 +81,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const [avatar] = await db.select({ publicId: profiles.publicId, avatarMediaId: profiles.avatarMediaId }).from(profiles).where(eq(profiles.userId, user.id));
   return {
     ...(villageChatEnabled() ? { chatOwn: true } : {}),
+    nushi: nushiEnabled() ? { ...await nushiPreferences(db, user.id, request), personal: await personalVillage(db, user.id).then(village => village ? { id: village.id, enabled: village.nushiEnabled === true } : null) } : null,
     avatarUrl: memberAvatarUrl(avatar)!,
     avatarUploaded: !!avatar?.avatarMediaId,
     returnTo: settingsReturnFromRequest(request),
@@ -406,6 +410,12 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
       </section>
 
       {"push" in loaderData && loaderData.push && <Suspense fallback={null}><PushSettings publicKey={loaderData.push.publicKey} /></Suspense>}
+
+      {loaderData.nushi && <section id="settings-nushi" className="space-y-3"><h2 className="text-xl font-semibold">{m.nushi_name()}</h2><p className="ui-help">{m.nushi_intro()}</p>
+        <Form action="/nushi/action" method="post" className="space-y-2"><input type="hidden" name="intent" value="preferences" /><input type="hidden" name="returnTo" value="/settings#settings-nushi" /><label className="block"><input type="checkbox" name="hide" value="1" defaultChecked={loaderData.nushi.hide} /> {m.nushi_hide()}</label><label className="block"><input type="checkbox" name="citations" value="1" defaultChecked={loaderData.nushi.citations} /> {m.nushi_citation_pref()}</label><Button variant="outline" type="submit">{m.settings_email_save()}</Button></Form>
+        {loaderData.nushi.personal && <Form action="/nushi/action" method="post" className="space-y-2"><input type="hidden" name="intent" value="village" /><input type="hidden" name="villageId" value={loaderData.nushi.personal.id} /><input type="hidden" name="returnTo" value="/settings#settings-nushi" /><label><input type="checkbox" name="enabled" value="1" defaultChecked={loaderData.nushi.personal.enabled} /> {m.nushi_enable()}</label><p className="ui-help">{m.nushi_personal_notice()} {m.nushi_stop_help()}</p><Button variant="outline" type="submit">{m.settings_email_save()}</Button></Form>}
+        <Link className="underline" to="/nushi/reports">{m.nushi_report_status()}</Link>
+      </section>}
 
       <section id="settings-email" aria-labelledby="settings-email-heading" className="scroll-mt-4 space-y-3">
         <h2 id="settings-email-heading" className="text-xl font-semibold">{m.settings_email_heading()}</h2>

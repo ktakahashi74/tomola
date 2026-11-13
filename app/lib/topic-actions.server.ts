@@ -118,7 +118,7 @@ export async function postTopicReply(context: TopicAction) {
   const { body, lang, langCode, langSource, aiAssistance, stanceTag } = pasted.input;
   // The draft that "Write with AI" made is removed in the same transaction, so that a failure here cannot leave a reply made and the form still sendable.
   const res = await withSignedWrite(db, user.id, request, form, async tx => {
-    const created = await createReply(tx, user.id, threadId, { body, lang, langCode, langSource, aiAssistance, parentId: pasted.parentId, stanceTag });
+    const created = await createReply(tx, user.id, threadId, { body, lang, langCode, langSource, aiAssistance, parentId: pasted.parentId, stanceTag, suppressNushi: pasted.input.suppressNushi, ...(form.has("nushiParentId") ? { nushiParentId: Number(form.get("nushiParentId")) } : {}) });
     if (created.ok) await deleteLinkedDraft(tx, user.id, form, { questionReplyPublished: true });
     return created;
   });

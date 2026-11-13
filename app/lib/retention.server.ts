@@ -1,6 +1,6 @@
-import { and, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
-import { aiQuestionReports, chatAccessLog, llmUsage, notifications, pushDeliveries, session, signingChallenges, suspendedEmailHashes } from "~/lib/db/schema";
+import { aiQuestionReports, nushiReports, chatAccessLog, llmUsage, notifications, pushDeliveries, session, signingChallenges, suspendedEmailHashes } from "~/lib/db/schema";
 import { RETENTION, daysBefore, monthsBefore } from "~/lib/retention";
 import { drainRetentionRows, withRetentionRun, type RetentionResults, type RetentionRunOptions } from "~/lib/retention-batch.server";
 import { cleanupExpiredLimits } from "~/lib/rate-limit.server";
@@ -8,6 +8,8 @@ import { cleanupExpiredLimits } from "~/lib/rate-limit.server";
 export function runRetentionCleanup(db: Db, now = new Date(), options: RetentionRunOptions = {}): Promise<RetentionResults> {
   return withRetentionRun(options, async () => {
     const results = await cleanupExpiredLimits(db, now);
+    await drainRetentionRows(db, "nushi_error_reports", nushiReports, and(eq(nushiReports.kind, "error"), lt(nushiReports.createdAt, daysBefore(now, RETENTION.aiQuestionReportDays)))!, results);
+    await drainRetentionRows(db, "nushi_moderation_reports", nushiReports, and(eq(nushiReports.kind, "moderation"), lt(nushiReports.createdAt, daysBefore(now, RETENTION.villageReportDays)))!, results);
     await drainRetentionRows(db, "ai_question_reports", aiQuestionReports, lt(aiQuestionReports.createdAt, daysBefore(now, RETENTION.aiQuestionReportDays)), results);
     await drainRetentionRows(db, "suspended_email_hashes", suspendedEmailHashes, lte(suspendedEmailHashes.expiresAt, now), results);
     await drainRetentionRows(db, "sessions", session, or(lte(session.expiresAt, now), lte(session.createdAt, daysBefore(now, RETENTION.sessionAbsoluteDays)))!, results);

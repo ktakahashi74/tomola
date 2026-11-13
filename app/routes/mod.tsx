@@ -1,3 +1,4 @@
+import { pendingNushiReports } from "~/lib/nushi-reports.server";
 import { DisplayNameEvidence } from "~/components/display-name-evidence";
 import { AvatarModerationCard } from "~/components/avatar-moderation-card";
 import { moderateAvatar } from "~/lib/avatar-moderation.server";
@@ -51,17 +52,19 @@ export function shouldRevalidate({ actionResult, defaultShouldRevalidate }: Shou
 async function loaderImplementation({ request }: Route.LoaderArgs) {
   const { user, db, scope } = await requireModerator(request);
   await enforceMemberLimit(db, "mod", user.id);
+  const nushi = scope.operator ? await pendingNushiReports(db) : null;
   const params = new URL(request.url).searchParams;
   const tab = params.get("tab") === "handled" ? "handled" : params.get("tab") === "review" ? "review" : "open";
   // Posts with format characters to check: a read-only list that is not saved. It stands apart from the report cards.
   if (tab === "review") {
     const review = await listUnicodeReviewCandidates(db, scope, { viewerId: user.id, cursor: parseUnicodeReviewCursor(params.get("cursor")) });
-    return { tab, operator: scope.operator, maxDays: 0, cards: [], page: 1, hasNext: false, review };
+    return { nushi, tab, operator: scope.operator, maxDays: 0, cards: [], page: 1, hasNext: false, review };
   }
   // Hide reports against the viewer's own posts, which they may not moderate.
   const result = await listReportCards(db, scope, { page: parsePage(request), handled: tab === "handled", viewerId: user.id });
   return {
     review: null,
+    nushi,
     tab,
     operator: scope.operator,
     maxDays: scope.operator ? MAX_SUSPEND_DAYS.operator : MAX_SUSPEND_DAYS.moderator,
@@ -170,11 +173,19 @@ export async function action({ request }: Pick<Route.ActionArgs, "request">) {
 }
 
 export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
-  const { tab, cards, page, hasNext, maxDays, operator, review } = loaderData;
+  const { tab, cards, page, hasNext, maxDays, operator, review, nushi } = loaderData;
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search}`;
   return (
     <main className="space-y-6">
+      {nushi && <section aria-label={m.nushi_reports()} className="space-y-2">
+        <Link to="/nushi/reports" className="underline">{m.nushi_reports()} ({nushi.count})</Link>
+        {tab === "open" && nushi.reports.map(report => <article key={report.id} className="rounded border p-3">
+          <Link to={`/nushi/${report.answerId}`} className="underline">{m.nushi_name()} #{report.answerId}</Link>
+          <p>{reasonLabel(report.reason)} · {report.note}</p>
+          <Link to={`/nushi/reports?report=${report.id}#nushi-report-${report.id}`} className="underline">{m.nushi_reports()}</Link>
+        </article>)}
+      </section>}
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-2xl font-bold">{m.mod_title()}</h1>
         <Link to="/mod" className={tab === "open" ? "font-semibold underline" : "underline"}>
@@ -212,7 +223,7 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
         {review.scanLimited && <p role="status">{m.mod_review_scan_limited({ count: UNICODE_REVIEW_SCAN_LIMIT })}</p>}
         {review.cursor && <Link className="underline" to={`/mod?tab=review&cursor=${encodeURIComponent(review.cursor)}`}>{m.mod_review_continue()}</Link>}
       </section>}
-      {!review && cards.length === 0 && <p>{tab === "open" ? m.mod_empty() : m.mod_empty_handled()}</p>}
+      {!review && cards.length === 0 && (tab !== "open" || !nushi?.count) && <p>{tab === "open" ? m.mod_empty() : m.mod_empty_handled()}</p>}
       {cards.map((c) => c.kind === "avatar" ? <AvatarModerationCard key={`avatar-${c.userId}`} card={c} handled={tab === "handled"} returnTo={returnTo} /> : c.kind === "display_name" ? <section key={`name-${c.userId}`} className="space-y-2 rounded border p-4">
         <p><Link to={`/u/${c.handle}`} className="underline">@{c.handle}</Link></p>
         <h3>{m.display_name_current()}</h3>

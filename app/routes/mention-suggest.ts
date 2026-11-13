@@ -1,3 +1,8 @@
+import { nushiPlace } from "~/lib/nushi-materials.server";
+import { nushiInVillage } from "~/lib/nushi-config.server";
+import { villageBySlug } from "~/lib/villages.server";
+import { personalVillage } from "~/lib/personal-villages.server";
+import { m } from "~/paraglide/messages.js";
 import { selectDisplayName } from "~/lib/display-names.server";
 import { and, asc, ne, sql } from "drizzle-orm";
 import type { Route } from "./+types/mention-suggest";
@@ -51,6 +56,16 @@ export async function loader({ request }: Route.LoaderArgs) {
       where ${villageMembers.villageId} = ${village.id} and ${villageMembers.userId} = ${profiles.userId})` : undefined))
     .orderBy(asc(profiles.handleKey))
     .limit(MAX_SUGGESTIONS);
-  if (!rows.length) return Response.json({ handles: [] as string[] }, { headers: HEADERS });
-  return Response.json({ handles: rows.map((r) => r.handle), names: Object.fromEntries(rows.map(row => [row.handle, { displayName: row.displayName, displayNameLatin: row.displayNameLatin, label: selectDisplayName(row) }])) }, { headers: HEADERS });
+  const params = new URL(request.url).searchParams;
+  let nushi = false;
+  if (slug === null && (params.has("thread") || params.has("postVillage")) && ("nushi".startsWith(q) || "village-ai".startsWith(q))) {
+    const thread = params.get("thread"), selected = params.get("postVillage");
+    if (thread && /^\d+$/.test(thread)) nushi = !!await nushiPlace(db, Number(thread));
+    else if (selected === `@${member.profile.handle}`) { const place = await personalVillage(db, user.id); nushi = !!place && nushiInVillage(place); }
+    else if (selected) { const place = await villageBySlug(db, selected); nushi = !!place && nushiInVillage(place); }
+  }
+  const handles = [...(nushi ? ["nushi"] : []), ...rows.map(row => row.handle)].slice(0, MAX_SUGGESTIONS);
+  const names = Object.fromEntries(rows.map(row => [row.handle, { displayName: row.displayName, displayNameLatin: row.displayNameLatin, label: selectDisplayName(row) }]));
+  if (nushi) names.nushi = { displayName: null, displayNameLatin: null, label: m.nushi_suggestion() };
+  return Response.json({ handles, names }, { headers: HEADERS });
 }

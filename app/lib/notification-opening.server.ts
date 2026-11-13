@@ -11,6 +11,7 @@ export async function notificationDestination(db: Db, userId: string, id: number
 }
 
 export async function notificationHref(db: Db, n: NotificationItem, pages?: ReadonlyMap<number, number>) {
+  if ((n.kind === "nushi_result" || n.kind === "nushi_cited") && n.nushiRequestId) return `/nushi/request/${n.nushiRequestId}`;
   if (n.kind === "translation_report_result") {
     if (!n.translationResult || n.unavailable || n.entryId === null || n.threadId === null) return null;
     const path = n.entryId === n.threadId ? `/t/${n.threadId}` : pages ? replyLocationAt(n.threadId, n.entryId, pages.get(n.entryId) ?? 1) : await replyLocation(db, n.threadId, n.entryId);

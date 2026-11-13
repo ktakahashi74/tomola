@@ -1,3 +1,4 @@
+import { NushiComposerEntry } from "./nushi-composer-entry";
 import { useState, type ComponentProps } from "react";
 import { AiEditorTools, type AiEditorToolsProps } from "~/components/ai-editor-tools";
 import { EntryLanguage } from "~/components/entry-language";
@@ -16,6 +17,7 @@ export default function ReplyExtrasContent({ error, errorId, defaultLang, select
   const [lang, setLang] = useState(selectedLang ?? (autoLang ? "" : defaultLang));
   const summary = lang === "" && autoLang ? m.reply_summary_lang_auto() : m.reply_summary_lang({ lang: (lang || defaultLang) === "other" ? m.source_language_other() : isLang(lang || defaultLang) ? LANG_LABELS[(lang || defaultLang) as Lang] : lang });
   return <>
+    <NushiComposerEntry />
     <PostSettings summary={summary} open={error === "invalid_lang"}>
       <EntryLanguage error={error} errorId={errorId} defaultLang={defaultLang} value={lang === "" && !autoLang ? defaultLang : lang} onChange={setLang} pasteFrontmatter={autoLang} label={m.field_lang_reply()} />
     </PostSettings>

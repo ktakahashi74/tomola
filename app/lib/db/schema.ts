@@ -164,6 +164,7 @@ export const villages = pgTable("villages", {
   sourceLang: text("source_lang"),
   iconMediaId: text("icon_media_id").references((): AnyPgColumn => media.id, { onDelete: "set null" }),
   iconActionId: bigint("icon_action_id", { mode: "number" }).references((): AnyPgColumn => moderationActions.id, { onDelete: "set null" }),
+  nushiEnabled: boolean("nushi_enabled"),
   system: boolean("system").notNull().default(false),
   // Retain the immutable account ID after deletion; never reassign it to the shared deleted identity.
   ownerId: text("owner_id").unique(),
@@ -426,6 +427,8 @@ export const profiles = pgTable(
     reactionsExcludedAt: timestamp("reactions_excluded_at", { withTimezone: true }),
     reactionsExcludedActionId: bigint("reactions_excluded_action_id", { mode: "number" }).references((): AnyPgColumn => moderationActions.id, { onDelete: "set null" }),
     // Notification email preference (immediate | daily | none; default daily; app/lib/notifications.ts).
+    hideNushi: boolean("hide_nushi").notNull().default(false),
+    nushiCitationNotifications: boolean("nushi_citation_notifications").notNull().default(true),
     emailPref: text("email_pref").notNull().default(DEFAULT_EMAIL_PREF),
     // Last interface locale, saved at login and on language changes so email uses the recipient's interface language. Null means the default language.
     uiLocale: text("ui_locale"),
@@ -467,6 +470,8 @@ export const entries = pgTable(
     kind: text("kind").notNull(), // "topic" | "reply"
     threadId: bigint("thread_id", { mode: "number" }).references((): AnyPgColumn => entries.id),
     parentId: bigint("parent_id", { mode: "number" }).references((): AnyPgColumn => entries.id),
+    nushiParentId: bigint("nushi_parent_id", { mode: "number" }).references((): AnyPgColumn => nushiAnswers.id),
+    nushiDisabled: boolean("nushi_disabled").notNull().default(false),
     authorId: text("author_id")
       .notNull()
       .references(() => user.id),
@@ -1419,6 +1424,7 @@ export const moderationActions = pgTable(
     id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
     action: text("action").notNull(),
     targetEntryId: bigint("target_entry_id", { mode: "number" }).references((): AnyPgColumn => entries.id),
+    targetNushiAnswerId: bigint("target_nushi_answer_id", { mode: "number" }).references((): AnyPgColumn => nushiAnswers.id),
     targetUserId: text("target_user_id").references(() => user.id),
     avatarMediaIdBefore: text("avatar_media_id_before").references(() => media.id, { onDelete: "set null" }),
     iconMediaIdBefore: text("icon_media_id_before").references(() => media.id, { onDelete: "set null" }),
@@ -1456,7 +1462,7 @@ export const moderationActions = pgTable(
     // Entry actions require an entry; member actions require a member. An action without either subject cannot be handled in public records or reversals.
     check(
       "moderation_actions_target_check",
-      sql`(((((${oneOf(t.action, ENTRY_ACTIONS)} and ${t.targetEntryId} is not null) or (${oneOf(t.action, MEMBER_ACTIONS)} and ${t.targetUserId} is not null)) and ${t.targetVillageId} is null and ${t.targetChatMessageId} is null) or (${oneOf(t.action, VILLAGE_ACTIONS)} and ${t.targetVillageId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetChatMessageId} is null) or (${oneOf(t.action, CHAT_ACTIONS)} and ${t.targetChatMessageId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetVillageId} is null)) and ${t.targetMediaId} is null) or (${t.action} = 'delete_media' and ${t.targetMediaId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetVillageId} is null and ${t.targetChatMessageId} is null)`,
+      sql`(${t.targetNushiAnswerId} is null and ((((((${oneOf(t.action, ENTRY_ACTIONS)} and ${t.targetEntryId} is not null) or (${oneOf(t.action, MEMBER_ACTIONS)} and ${t.targetUserId} is not null)) and ${t.targetVillageId} is null and ${t.targetChatMessageId} is null) or (${oneOf(t.action, VILLAGE_ACTIONS)} and ${t.targetVillageId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetChatMessageId} is null) or (${oneOf(t.action, CHAT_ACTIONS)} and ${t.targetChatMessageId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetVillageId} is null)) and ${t.targetMediaId} is null) or (${t.action} = 'delete_media' and ${t.targetMediaId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetVillageId} is null and ${t.targetChatMessageId} is null))) or (${t.action} = 'hide' and ${t.targetNushiAnswerId} is not null and ${t.targetEntryId} is null and ${t.targetUserId} is null and ${t.targetVillageId} is null and ${t.targetChatMessageId} is null and ${t.targetMediaId} is null)`,
     ),
   ],
 );
@@ -1503,6 +1509,8 @@ export const notifications = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
+    nushiRequestId: text("nushi_request_id").references((): AnyPgColumn => nushiRequests.id, { onDelete: "cascade" }),
+    nushiDay: text("nushi_day"),
     translationReportId: bigint("translation_report_id", { mode: "number" }).references(() => translationReports.id, { onDelete: "cascade" }),
     entryId: bigint("entry_id", { mode: "number" }).references(() => entries.id),
     // The first reply of a followed-thread notification; merging keeps it unchanged.
@@ -1526,6 +1534,8 @@ export const notifications = pgTable(
     chatMessageId: text("chat_message_id").references(() => chatMessages.id, { onDelete: "cascade" }),
   },
   (t) => [
+    uniqueIndex("notifications_nushi_citation_day_unique").on(t.userId, t.nushiDay).where(sql`${t.kind} = 'nushi_cited'`),
+    uniqueIndex("notifications_nushi_result_unique").on(t.nushiRequestId).where(sql`${t.kind} = 'nushi_result'`),
     uniqueIndex("notifications_translation_report_unique").on(t.translationReportId),
     check("notifications_translation_report_check", sql`(${t.kind} = 'translation_report_result') = (${t.translationReportId} IS NOT NULL)`),
     index("notifications_user_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
@@ -1759,3 +1769,78 @@ export const readingCounts = pgTable("reading_counts", {
   check("reading_counts_count_check", sql`${t.count} >= 0`),
   check("reading_counts_machine_source_check", sql`${t.method} = 'browser' or ${t.source} = 'none'`),
 ]);
+
+// AI replies have no member identity and never enter human post aggregates.
+export const nushiRequests = pgTable("nushi_requests", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }).unique(),
+  threadId: bigint("thread_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }),
+  villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
+  callerId: text("caller_id").references(() => user.id, { onDelete: "set null" }),
+  revision: integer("revision").notNull(),
+  sourceHash: text("source_hash").notNull(),
+  state: text("state").notNull().default("pending"),
+  failure: text("failure"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  token: text("token"),
+  attempts: integer("attempts").notNull().default(0),
+}, t => [
+  index("nushi_requests_thread_idx").on(t.threadId),
+  index("nushi_requests_village_idx").on(t.villageId),
+  index("nushi_requests_caller_idx").on(t.callerId),
+  index("nushi_requests_pending_idx").on(t.state, t.expiresAt),
+  check("nushi_requests_state_check", oneOf(t.state, ["pending", "processing", "answered", "failed", "cancelled"])),
+]);
+export const nushiAnswers = pgTable("nushi_answers", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  requestId: text("request_id").notNull().references(() => nushiRequests.id, { onDelete: "cascade" }).unique(),
+  answer: jsonb("answer").$type<import("../ai-questions").AiQuestionAnswer>().notNull(),
+  scope: jsonb("scope").$type<{ posts: number; from: string | null; to: string | null; truncated: boolean; materialLanguage: import("../languages").Lang; answerLangCode: string | null; materialIndex: import("../nushi-materials.server").NushiMaterialIndex }>().notNull(),
+  lang: text("lang").notNull(),
+  engine: text("engine").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  hiddenReason: text("hidden_reason"),
+});
+// Every supplied post supports the answer, even when it was not quoted.
+// Only revisions and routing metadata are retained here, never copied bodies.
+export const nushiSources = pgTable("nushi_sources", {
+  answerId: bigint("answer_id", { mode: "number" }).notNull().references(() => nushiAnswers.id, { onDelete: "cascade" }),
+  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id),
+  revision: integer("revision").notNull(),
+  sourceHash: text("source_hash").notNull(),
+  authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+  author: text("author").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, t => [primaryKey({ columns: [t.answerId, t.entryId] }), index("nushi_sources_entry_idx").on(t.entryId), index("nushi_sources_author_idx").on(t.authorId)]);
+export const nushiQuotaLock = pgTable("nushi_quota_lock", { id: integer("id").primaryKey() });
+export const nushiReservations = pgTable("nushi_reservations", {
+  requestId: text("request_id").notNull().references(() => nushiRequests.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  day: text("day").notNull(),
+}, t => [primaryKey({ columns: [t.requestId, t.key] }), index("nushi_reservations_day_idx").on(t.day, t.key)]);
+export const nushiTranslations = pgTable("nushi_translations", {
+  answerId: bigint("answer_id", { mode: "number" }).notNull().references(() => nushiAnswers.id, { onDelete: "cascade" }),
+  lang: text("lang").notNull(),
+  readings: jsonb("readings").$type<string[]>().notNull(),
+  engine: text("engine").notNull(),
+  model: text("model").notNull(),
+}, t => [primaryKey({ columns: [t.answerId, t.lang] })]);
+export const nushiReports = pgTable("nushi_reports", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  answerId: bigint("answer_id", { mode: "number" }).notNull().references(() => nushiAnswers.id, { onDelete: "cascade" }),
+  reporterId: text("reporter_id").references(() => user.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(),
+  reason: text("reason").notNull(),
+  note: text("note").notNull().default(""),
+  // Error reports alone retain the question, answer and material after consent.
+  evidence: jsonb("evidence"),
+  status: text("status").notNull().default("open"),
+  resolution: text("resolution"),
+  resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex("nushi_reports_member_unique").on(t.answerId, t.reporterId, t.kind), index("nushi_reports_status_idx").on(t.status, t.createdAt), index("nushi_reports_reporter_idx").on(t.reporterId), check("nushi_reports_kind_check", oneOf(t.kind, ["moderation", "error"])), check("nushi_reports_status_check", oneOf(t.status, ["open", "resolved", "dismissed"])), check("nushi_reports_consent_check", sql`(${t.kind} = 'error') = (${t.evidence} is not null)`)]);

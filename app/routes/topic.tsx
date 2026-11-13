@@ -1,4 +1,8 @@
 import { hasPostAiMaterial, hasPostAiMaterialInstructionWarning } from "~/lib/post-ai-materials.server";
+import { renderNushiThread } from "~/lib/nushi-html.server";
+import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
+import { nushiPreferences, nushiTopicDisabled } from "~/lib/nushi-settings.server";
+import { nushiEnabled } from "~/lib/nushi-config.server";
 import { loadMemberAvatars } from "~/lib/member-avatar.server";
 import { loadDisplayNames, selectDisplayName, selectDisplayNamePresentation } from "~/lib/display-names.server";
 import { TitledMessage } from "~/components/titled-message";
@@ -354,12 +358,19 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       isAiCrawler(request.headers.get("user-agent") ?? "")) {
     await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
   }
+  const nushi = topic.visibility === "visible" ? await threadNushi(db, topic.id, [topic.id, ...replies.map(reply => reply.id)], displayLang) : { answers: [], requests: [] };
+  const nushiPreference = await nushiPreferences(db, user?.id, request);
+  const nushiTopic = nushiEnabled() ? await nushiTopicDisabled(db, topic.id) : false;
+  const nushiView = { ...nushi, hide: nushiPreference.hide, citations: nushiPreference.citations, setting: !!user && topic.authorId === user.id && nushiEnabled() ? nushiTopic : null };
+  const nushiReplyId = Number(url.searchParams.get("nushi_reply"));
+  const nushiReply = nushiReplyId > 0 && Number.isSafeInteger(nushiReplyId) ? await readNushiAnswer(db, nushiReplyId) : null;
   return {
     aiMaterialLinks: await (async () => {
       const material = topic.visibility === "visible" ? await hasPostAiMaterial(db, topic.id) : null;
       return [...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
         ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : [])];
     })(),
+    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: url.pathname + url.search, reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
     reader: !user,
     askAi: user && topic.visibility === "visible" && postAskAiEnabled()
       ? { href: `/t/${topic.id}/ask?${new URLSearchParams({ lang: displayLang })}`, label: m.post_ask_entry() } : null,
@@ -412,7 +423,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     replyLangCount: thread.replyCount >= 2 && topic.visibility === "visible" ? await countReplyLanguages(db, topic.id) : 0,
     replyBranches,
     replies: replies.map((r) => (r.visibility === "deleted" || r.visibility === "hidden-redacted" ? placeholderOf(r) : {
-      ...common(r), parent: r.parentId === null ? null : parents.get(r.parentId) ?? { state: "unavailable" as const },
+      ...common(r), nushiParentId: r.nushiParentId ?? null, parent: r.parentId === null ? null : parents.get(r.parentId) ?? { state: "unavailable" as const },
     })),
     page: thread.page,
     hasNextPage: thread.page < thread.pageCount,
@@ -435,10 +446,10 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   };
 }
 
-// Prevent shared caching for all readers; the middleware also prevents storage of member responses.
+// Nushi can withdraw replies and apply device preferences between reads.
 // Read-delegation links are issued only by a separate user-triggered POST.
 export function headers() {
-  return readingHeaders();
+  return { ...readingHeaders(), ...(nushiEnabled() ? { "Cache-Control": "private, no-store" } : {}) };
 }
 
 export function meta({ loaderData, location, matches }: Route.MetaArgs) {
@@ -743,10 +754,13 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           />
         </>
       )}
+      {renderNushi(loaderData.nushi.entries[r.id])}
     </article>
   );
   // The end of the article, with reactions and secondary actions. The row has the main actions on the left (Insightful, Reply) and the minor ones on
   // the right. It closes the article. In a question the stance panel is the main thing to do, so Insightful stays under the question and the rest of the block follows the panels (the report button never sits above the stance).
+  const renderNushi = (html?: string) => html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : null;
+
   const full = topic.placeholder === null ? topic : null;
   const asksQuestion = full !== null && question.asksStance;
   const reactions = full && <EntryReactions entryId={full.id} reactions={full.reactions} canVote={!loaderData.reader && !full.own && !full.hidden} anchor={`#p-${full.id}`} loadedAt={loadedAt} reviewHref={full.reviewHref} />;
@@ -873,6 +887,8 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         )}
       </article>
       {loaderData.aiMaterialLinks.map(link => <p className="ui-meta" key={link.href}><Link to={link.href} className="underline">{link.label}</Link></p>)}
+      {renderNushi(loaderData.nushi.entries[topic.id])}
+      {renderNushi(loaderData.nushi.controls)}
       {loaderData.askAi && <p className="ui-meta"><Link to={loaderData.askAi.href} className="underline">{loaderData.askAi.label}</Link></p>}
       {loaderData.reader && question.asksStance && <p className="ui-help text-muted-foreground">{m.public_reading_stances()}</p>}
       {question.asksStance && question.stance && topic.placeholder === null && (
@@ -944,6 +960,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
         {canReply && loaderData.ownerId && (
           <SignedForm protectUnsaved="new" preserveUnsavedOnSamePath signatureRequired={loaderData.signPosts} signIntent="" key={`${loaderData.ownerId}:${topic.id}:${replyRound}`} method="post" className="space-y-2">
+            {renderNushi(loaderData.nushi.reply)}
             {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
             <ReplyFields
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}

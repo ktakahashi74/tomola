@@ -32,6 +32,7 @@ export function readEntryForm(form: FormData) {
     ...(villagesEnabled() && form.has("village") ? { village: formString(form, "village") } : {}),
     ...(villagesEnabled() && form.has("villageExplicit") ? { villageExplicit: formString(form, "villageExplicit") === "1" } : {}),
     ...(villagesEnabled() && form.has("villageDisplayed") ? { villageDisplayed: formString(form, "villageDisplayed") } : {}),
+    ...(form.has("suppressNushi") ? { suppressNushi: formString(form, "suppressNushi") === "1" } : {}),
     title: normalizeNewlines(formString(form, "title")),
     body: normalizeNewlines(formString(form, "body")),
     lang: formString(form, "lang"),
@@ -106,6 +107,7 @@ export async function applyPastedFrontmatter(
     input: {
       ...(villagesEnabled() ? { village: input.villageExplicit === false ? declared.village : input.village ?? declared.village } : {}),
       // The title field of the form is a string, empty when there is no title (the service turns an empty title into "no title").
+      suppressNushi: input.suppressNushi,
       title: input.title.trim() !== "" ? input.title : declared.title === undefined ? "" : normalizeNewlines(declared.title),
       body: normalizeNewlines(extracted.body),
       lang: resolved.lang, langCode: resolved.langCode, langSource: resolved.langSource,

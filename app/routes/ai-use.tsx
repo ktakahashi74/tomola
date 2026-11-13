@@ -38,6 +38,7 @@ export default function AiUse({ loaderData: page }: Route.ComponentProps) {
           </li>)}
         </ul>
       </section>
+      <section id="nushi" className="space-y-2"><h2 className="text-lg font-semibold">{page.nushi.title}</h2><p>{page.nushi.text}</p><p>{page.nushi.versions}</p></section>
       <section aria-labelledby="ai-use-search" className="space-y-2"><h2 id="ai-use-search" className="text-lg font-semibold">{page.searchTitle}</h2><p>{page.searchText}</p></section>
       <section aria-labelledby="ai-use-history" className="space-y-4">
         <h2 id="ai-use-history" className="text-lg font-semibold">{page.historyTitle}</h2>

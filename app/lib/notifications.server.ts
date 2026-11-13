@@ -66,7 +66,7 @@ export async function enqueueImmediateEmails(
   if (created.length === 0) return 0;
   await enqueuePush(db, created, opts.now);
   // Result notices describe the outcome and use available topic titles; they do not need new excerpt translations.
-  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && !isInAppOnlyKind(item.kind)).map(item => item.id));
+  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_result" && item.kind !== "nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
   const runAt = new Date((opts.now ?? new Date()).getTime() + notificationEmailDelaySeconds() * 1000);
   const prefOf = new Map<string, EmailPref>();
   for (const ids of notificationBatches([...new Set(created.map(c => c.userId))])) {
@@ -369,6 +369,7 @@ export async function markAllNotificationsRead(db: Db, userId: string, opts: { n
 
 // One screen item. Deleted/hidden post content (body/title/author) is unavailable and omitted.
 export type NotificationItem = {
+  nushiRequestId?: string;
   translationResult?: TranslationReportResult;
   automatic?: boolean;
   chat?: { id: string; slug: string; name: string; originalName?: string; language: string | null };
@@ -436,6 +437,7 @@ export async function listNotifications(
       createdAt: notifications.createdAt,
       readAt: notifications.readAt,
       entryId: notifications.entryId,
+      nushiRequestId: notifications.nushiRequestId,
       translationReportId: notifications.translationReportId,
       firstEntryId: notifications.firstEntryId,
       actorId: notifications.actorId,
@@ -548,6 +550,7 @@ export async function listNotifications(
     const villageReversal = kind === "moderation" && (action?.action === "unfix_village" || action?.action === "reopen_village" || action?.action === "restore_village_icon");
     return {
       id: r.id,
+      ...(r.nushiRequestId ? { nushiRequestId: r.nushiRequestId } : {}),
       ...(replyShown && result?.outcome ? { translationResult: { outcome: result.outcome, lang: result.lang, field: result.field, sourceHash: result.sourceHash } as TranslationReportResult } : {}),
       ...(chatLocations.has(r.id) ? { chat: { id: chatLocations.get(r.id)!.id, slug: chatLocations.get(r.id)!.slug, name: translatedNames.get(chatLocations.get(r.id)!.slug) ?? chatLocations.get(r.id)!.name, ...originalIfTranslated(translatedNames.get(chatLocations.get(r.id)!.slug) ?? chatLocations.get(r.id)!.name, chatLocations.get(r.id)!.name), language: chatLocations.get(r.id)!.language } } : {}),
       ...(village?.slug ? { village: { slug: village.slug, name: village.name, originalName: village.originalName, language: village.language, reason: r.villageReason ?? null, pending: !village.endedAt && invite?.state === "pending", inviteKind: invite?.kind ?? null } } : {}),

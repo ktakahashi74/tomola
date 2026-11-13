@@ -2,7 +2,7 @@
 // reply_to_topic: reply to own topic; reply_to_reply: reply to own reply; moderation: action on own post/member (hide/delete/suspend,
 // without actor identity). appeal_decided: result of an appeal.
 // followed_thread: a new reply in a followed topic (merged into one row per member and topic while it is unread).
-export const NOTIFICATION_KINDS = ["reply_to_topic", "reply_to_reply", "response_to_topic", "moderation", "appeal_decided", "followed_thread", "mention", "village_invite", "village_added", "village_removed", "village_owner_changed", "chat_mention", "chat_reply", "translation_report_result", "source_language_mismatch", "entry_translation_unavailable"] as const;
+export const NOTIFICATION_KINDS = ["reply_to_topic", "reply_to_reply", "response_to_topic", "moderation", "appeal_decided", "followed_thread", "mention", "village_invite", "village_added", "village_removed", "village_owner_changed", "chat_mention", "chat_reply", "translation_report_result", "source_language_mismatch", "entry_translation_unavailable", "nushi_result", "nushi_cited"] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 export const IN_APP_ONLY_KINDS = ["source_language_mismatch", "entry_translation_unavailable"] as const satisfies readonly NotificationKind[];
 export type InAppOnlyKind = (typeof IN_APP_ONLY_KINDS)[number];

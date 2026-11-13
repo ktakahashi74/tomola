@@ -75,7 +75,7 @@ export function MentionTextarea(props: Props) {
     try {
       const { fetchSuggestions } = await loadSuggestions();
       if (!current()) return;
-      const suggestions = await fetchSuggestions(found.query, village, controller.signal);
+      const suggestions = await fetchSuggestions(found.query, village, controller.signal, ref.current?.form);
       // An answer for what was typed before is not shown for what is typed now.
       if (!current()) return;
       setItems(suggestions);

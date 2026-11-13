@@ -3,8 +3,10 @@ import { getLocale } from "~/paraglide/runtime.js";
 
 export type MentionSuggestion = { handle: string; label: string | null };
 
-export async function fetchSuggestions(query: string, village: string | undefined, signal: AbortSignal): Promise<MentionSuggestion[]> {
-  const response = await fetch(`/mentions/suggest?q=${encodeURIComponent(query.normalize("NFKC").toLowerCase())}&lang=${getLocale()}${village === undefined ? "" : `&village=${encodeURIComponent(village)}`}`, { credentials: "same-origin", signal, headers: { accept: "application/json" } });
+export async function fetchSuggestions(query: string, village: string | undefined, signal: AbortSignal, form?: HTMLFormElement | null): Promise<MentionSuggestion[]> {
+  const thread = village === undefined ? /\/t\/(\d+)/.exec(window.location.pathname)?.[1] : null;
+  const context = village === undefined ? `&${new URLSearchParams(thread ? { thread } : { postVillage: form ? String(new FormData(form).get("village") ?? "") : "" })}` : "";
+  const response = await fetch(`/mentions/suggest?q=${encodeURIComponent(query.normalize("NFKC").toLowerCase())}&lang=${getLocale()}${village === undefined ? "" : `&village=${encodeURIComponent(village)}`}${context}`, { credentials: "same-origin", signal, headers: { accept: "application/json" } });
   if (!response.ok) return [];
   const body = await response.json() as { handles?: unknown; names?: Record<string, { label?: string | null }> };
   return Array.isArray(body.handles) ? body.handles.flatMap(handle => typeof handle === "string" ? [{ handle, label: body.names?.[handle]?.label ?? null }] : []) : [];

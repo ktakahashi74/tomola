@@ -12,6 +12,6 @@ export function handleKey(handle: string): string {
 
 // Reserved usernames are shared by registration and changes.
 export const RESERVED_HANDLES = new Set([
-  "admin", "administrator", "operator", "mod", "moderator", "staff", "official", "support", "help", "system", "root", "tomola", "api", "mcp", "ai", "bot", "everyone", "all", "here", "me", "you", "anonymous", "deleted", "unknown", "null", "undefined",
+  "admin", "administrator", "operator", "mod", "moderator", "staff", "official", "support", "help", "system", "root", "tomola", "api", "mcp", "ai", "nushi", "village-ai", "bot", "everyone", "all", "here", "me", "you", "anonymous", "deleted", "unknown", "null", "undefined",
 ]);
 export const isReservedHandle = (handle: string): boolean => RESERVED_HANDLES.has(handle);

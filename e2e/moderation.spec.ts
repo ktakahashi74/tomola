@@ -127,7 +127,7 @@ test("the public moderation log shows what was done, without who acted, who repo
   await expect(row.getByRole("cell").nth(3)).toHaveText("日本語");
   const body = await reiko.locator("main").innerText();
   for (const secret of ["olga", "sam", "reiko", "advertisement", "SPAM", "安い"]) expect(body, secret).not.toContain(secret);
-  await expect(reiko.locator("main a")).toHaveCount(0);
+  await expect(reiko.locator("tbody a")).toHaveCount(0);
 });
 
 test("the author is notified of the decision with the explanation and appeals; the operator who decided does not review it", async () => {

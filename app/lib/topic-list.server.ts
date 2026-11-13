@@ -1,3 +1,5 @@
+import { m } from "~/paraglide/messages.js";
+import { nushiCounts } from "./nushi.server";
 import { loadDisplayNames, selectDisplayName } from "./display-names.server";
 import type { Db } from "~/lib/db/client.server";
 import { distributionViewerFor, readDistributions } from "~/lib/distribution.server";
@@ -23,6 +25,7 @@ export type TopicItem = {
   authorHandle: string;
   authorName?: string | null;
   replyCount: number;
+  nushiCountLabel?: string;
   createdAt: string;
   lastActivityAt: string;
   latestReply: { id: number; page: number } | null;
@@ -69,6 +72,7 @@ export async function toTopicItems(
   // The name of a village made in another language is read in the reader's (the original stays in the tooltip).
   const localized = new Map((await localizeVillages(db, [...villageNames.values()].map(village => ({ slug: village.slug, name: village.name, language: null })), { displayLang: opts.displayLang, readLangs: opts.readLangs })).map(village => [village.slug, village]));
   const names = await loadDisplayNames(db, topics.map(t => t.authorHandle));
+  const nushi = await nushiCounts(db, topics.map(topic => topic.id));
   return topics.map((t) => ({
     id: t.id,
     lang: t.lang, langCode: t.langCode,
@@ -76,6 +80,7 @@ export async function toTopicItems(
     authorHandle: t.authorHandle,
     authorName: selectDisplayName(names.get(t.authorHandle)),
     replyCount: t.replyCount,
+    ...(nushi.has(t.id) ? { nushiCountLabel: m.nushi_count({ count: nushi.get(t.id)! }) } : {}),
     createdAt: t.createdAt.toISOString(),
     lastActivityAt: t.lastActivityAt.toISOString(),
     latestReply: latestReplies.get(t.id) ?? null,

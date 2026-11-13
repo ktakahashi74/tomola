@@ -1,3 +1,4 @@
+import { nushiEnabled, nushiInVillage } from "~/lib/nushi-config.server";
 import { villageWriters } from "~/lib/village-writers.server";
 import { AuthorLink } from "~/components/author-link";
 import { villageIconUrl } from "~/lib/village-icon.server";
@@ -99,6 +100,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...(resolveReportId !== null ? { resolveReportId } : {}),
     ...(villageChatEnabled() ? { chat: { joined: membership?.joined ?? false, unread: user && membership?.joined ? await chatUnreadCount(db, user.id, village.id) : 0 } } : {}),
     ...(user && profile ? { reported: await openVillageReportTargets(db, village.id, user.id) } : {}),
+    nushi: { available: nushiInVillage(village), setting: nushiEnabled() && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
     reader: !user,
     village: { ...localized, iconUrl: villageIconUrl(village), hasIcon: !!village.iconMediaId },
     source: { name: village.name, description: village.description, lang: village.sourceLang ?? (user && (membership?.owner || operator) ? (await decideVillageLangOf(db, village)).lang : null) },
@@ -218,6 +220,8 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat({ filter: m.home_filter_following() }) : m.village_join_follow_help({ filter: m.home_filter_following() }) : m.village_follow_members_help({ filter: m.home_filter_following() })
     : undefined;
   return <main className="space-y-3 [overflow-wrap:anywhere]">
+    {loaderData.nushi.available && <p className="ui-help">{m.nushi_intro()} <Link to="/ai-use#nushi" className="underline">{m.nushi_name()}</Link></p>}
+    {loaderData.nushi.setting !== null && <Form method="post" action="/nushi/action" className="space-y-2 ui-help"><input type="hidden" name="intent" value="village" /><input type="hidden" name="villageId" value={loaderData.nushi.id} /><input type="hidden" name="returnTo" value={location.pathname + location.search} /><label><input type="checkbox" name="enabled" value="1" defaultChecked={loaderData.nushi.setting} /> {m.nushi_enable()}</label><p>{m.nushi_stop_help()}</p><Button type="submit" variant="outline">{m.settings_email_save()}</Button></Form>}
     <VillageHeader village={village} current="posts" chat={"chat" in loaderData ? { ...loaderData.chat!, member: !loaderData.reader } : undefined} actions={mainAction || membershipAction || followForm ? <>{mainAction}{membershipAction}{followForm}</> : undefined} purpose={<>
       {participationHelp && <p data-village-participation-help className="ui-help">{participationHelp}</p>}
       {shownDescription && <p lang={descriptionLang} className="whitespace-pre-wrap">{shownDescription}</p>}

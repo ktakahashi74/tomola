@@ -94,6 +94,7 @@ export default async function globalSetup(config: FullConfig) {
       TOMOLA_OPERATOR_DIR: process.env.TOMOLA_OPERATOR_DIR || path.join(root, "tests/fixtures/operator"),
       VILLAGES: "",
       POST_ASK_AI: "1",
+      VILLAGE_NUSHI: "1",
       NODE_ENV: "production",
       PORT: String(appPort),
       HOST: "127.0.0.1",

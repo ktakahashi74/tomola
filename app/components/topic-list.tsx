@@ -70,6 +70,7 @@ export function TopicList({
                 {m.home_replies({ count: t.replyCount })}
               </Link>
             ) : <span>{m.home_replies({ count: t.replyCount })}</span> },
+            !!t.nushiCountLabel && { key: "nushi", content: t.nushiCountLabel },
             t.newReplies && { key: "new-replies", content: <Link to={t.newReplies.href} className="link-ui inline-flex items-center gap-1"><UnreadDot />{m.following_new_replies({ count: t.newReplies.count })}</Link> },
             t.village && { key: "village", content: <Link to={`/v/${t.village.slug}`} title={villageNameTitle(t.village)} className="link-ui">{t.village.name}</Link> },
             t.asksStance && { key: "question", badge: true, content: <Badge variant="secondary" className="bg-info text-info-foreground">{m.question_badge()}</Badge> },

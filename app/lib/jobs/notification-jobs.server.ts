@@ -237,6 +237,15 @@ async function buildItems(db: Db, rows: readonly NotificationRow[], recipient: R
   }
   // Result notices contain no report text or reviewer identity. Reload their
   // permissions after all other asynchronous assembly, immediately before mail.
+  for (const row of rows.filter(row => row.kind === "nushi_result" || row.kind === "nushi_cited")) {
+    if (row.kind === "nushi_cited") {
+      const [preference] = await db.select({ enabled: profiles.nushiCitationNotifications }).from(profiles).where(eq(profiles.userId, row.userId));
+      if (!preference?.enabled) { suppressed.add(row.id); continue; }
+    }
+    const notice = (await listNotifications(db, row.userId, { id: row.id, limit: 1 })).items[0];
+    const href = notice ? await notificationHref(db, notice) : null;
+    if (href) items.set(row.id, { kind: row.kind as "nushi_result" | "nushi_cited", url: siteUrl(href) });
+  }
   for (const row of rows.filter(row => row.kind === "translation_report_result")) {
     const [notice] = (await listNotifications(db, profile.userId, { id: row.id, limit: 1, display: { readLangs: [], displayLang } })).items;
     const href = notice && !notice.unavailable ? await notificationHref(db, notice) : null;

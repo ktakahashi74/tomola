@@ -705,8 +705,8 @@ export async function listReportCards(
 // ---- Public moderation record (/moderation) ----
 
 // One public record row: action kind, reason category, original post language (null for member actions), UTC date only.
-// No actor, reporter, note, affected display name or post link/id.
-export type PublicLogEntry = { automatic?: boolean; action: ModerationAction; reason: ReportReason; date: string } & ({ lang: SourceLang | null; village?: never } | { village: { name: string; slug: string | null } | null; lang?: never } | { place: "village_chat"; lang?: never; village?: never });
+// No actor, reporter, note, affected display name or human post link/id. Nushi actions include the AI answer number.
+export type PublicLogEntry = { automatic?: boolean; action: ModerationAction; reason: ReportReason; date: string; nushiAnswerId?: number } & ({ lang: SourceLang | null; village?: never } | { village: { name: string; slug: string | null } | null; lang?: never } | { place: "village_chat"; lang?: never; village?: never });
 export const PUBLIC_LOG_PER_PAGE = 50;
 
 // Newest first; page starts at 1.
@@ -718,7 +718,7 @@ export async function listPublicLog(db: Db, opts: { page?: number; limit?: numbe
   const boundary = offset ? db.select({ createdAt: moderationActions.createdAt, id: moderationActions.id }).from(moderationActions)
     .where(condition).orderBy(desc(moderationActions.createdAt), desc(moderationActions.id)).limit(1).offset(offset - 1) : undefined;
   const rows = await db
-    .select({ automatic: moderationActions.automatic, action: moderationActions.action, reason: moderationActions.reason, lang: entries.lang, createdAt: moderationActions.createdAt, targetVillageId: moderationActions.targetVillageId, targetChatMessageId: moderationActions.targetChatMessageId })
+    .select({ automatic: moderationActions.automatic, action: moderationActions.action, reason: moderationActions.reason, lang: entries.lang, createdAt: moderationActions.createdAt, nushiAnswerId: moderationActions.targetNushiAnswerId, targetVillageId: moderationActions.targetVillageId, targetChatMessageId: moderationActions.targetChatMessageId })
     .from(moderationActions)
     .leftJoin(entries, eq(entries.id, moderationActions.targetEntryId))
     .where(and(condition, afterPageBoundary([moderationActions.createdAt, moderationActions.id], boundary, true)))
@@ -733,6 +733,7 @@ export async function listPublicLog(db: Db, opts: { page?: number; limit?: numbe
       ...(r.automatic ? { automatic: true } : {}),
       action: r.action as ModerationAction,
       reason: r.reason as ReportReason,
+      ...(r.nushiAnswerId === null ? {} : { nushiAnswerId: r.nushiAnswerId }),
       ...(r.targetChatMessageId !== null ? { place: "village_chat" as const } : r.targetVillageId === null ? { lang: r.lang !== null && isSourceLang(r.lang) ? r.lang : null } : { village: (() => { const v = r.action === "dismiss_village_report" ? undefined : villageById.get(r.targetVillageId); return v && isSharedVillageKind(v.kind) ? { name: villageName(v), slug: v.slug } : null; })() }),
       date: r.createdAt.toISOString().slice(0, 10),
     })),

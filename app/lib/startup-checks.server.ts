@@ -1,3 +1,4 @@
+import { assertNushiConfig } from "./nushi-config.server";
 import { pushConfig } from "./push/config.server";
 import { loadOperatorConfig } from "~/lib/operator-config.server";
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
@@ -137,6 +138,7 @@ export function assertStartupConfig(
   assertEnabledLangsConfigured(env);
   publicReading(env);
   assertAiQuestionConfig(env);
+  assertNushiConfig(env);
   if (postAskAiEnabled(env)) questionModel(env);
   operatorOnlyInvitations(env);
   villagesEnabled(env);
