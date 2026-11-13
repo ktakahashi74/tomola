@@ -1144,7 +1144,6 @@
   "original_lang_default": "原文語言：{lang}（您的預設值）",
   "original_lang_mismatch": "文字看起來像是{detected}。要將原文語言改為{detected}嗎？",
   "original_lang_change": "變更為{detected}",
-  "original_lang_disabled": "文字看起來像是{detected}。在本站上，請使用以下語言之一撰寫：{langs}。",
   "ui_preview_notice": "此語言的介面為機器翻譯，尚未經過母語人士審查。若有讀起來不順暢的地方，請發文告訴我們。",
   "login_code_label": "電子郵件中的驗證碼（6 位數）",
   "login_code_submit": "使用驗證碼登入",

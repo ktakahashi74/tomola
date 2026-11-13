@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { detectLang, detectSourceLanguage } from "~/lib/lang-detect.core.server";
 import { resolvePostLanguage } from "~/lib/lang-detect";
 import { entries, entryRevisions, jobs, notifications, reports, translations, readingCounts } from "~/lib/db/schema";
-import { createTopic, editEntry } from "~/lib/entries.server";
-import { createSourceLanguageHandlers, enqueueSourceLanguageCheck, SOURCE_LANGUAGE_JOB, recordUntranslatable } from "~/lib/jobs/source-language-jobs.server";
+import { createTopic, createReply, editEntry, listTopics } from "~/lib/entries.server";
+import { createSourceLanguageHandlers, enqueueSourceLanguageCheck, SOURCE_LANGUAGE_JOB, SOURCE_LANGUAGE_PROMPT_VERSION, recordUntranslatable } from "~/lib/jobs/source-language-jobs.server";
+import { m } from "~/paraglide/messages.js";
 import { inScope, inLanguageScope, canSeeHidden } from "~/lib/roles.server";
 import { effectiveEmailMode } from "~/lib/notifications";
 import { buildThreadMarkdown } from "~/lib/md/thread.server";
@@ -18,9 +19,13 @@ import { detectCopy } from "~/lib/llm/copy-detection.core.server";
 import { translationSystemPrompt } from "~/lib/llm/prompt.server";
 import { enabledTargetLangs } from "~/lib/enabled-langs.server";
 import { addMember, createTestDb } from "./helpers/db";
+import { setTestMessages } from "./stubs/paraglide-messages";
+import { jsonMessages } from "./helpers/messages-json";
 
 const greek = "Αυτή είναι μια συζήτηση για τη γλώσσα και την επικοινωνία μεταξύ των ανθρώπων.";
 const italian = "Questo è un esempio della nostra lingua e della nostra comunità, con tutti gli amici che sono qui per parlare del nostro lavoro.";
+beforeAll(() => setTestMessages(jsonMessages()));
+afterAll(() => setTestMessages());
 afterEach(() => vi.unstubAllEnvs());
 
 describe("source language evidence", () => {
@@ -96,7 +101,7 @@ it.each(["detected", "default"] as const)("corrects %s without author edit histo
   expect((await db.select().from(jobs)).filter(j => j.kind === SOURCE_LANGUAGE_JOB)).toHaveLength(1);
   const edit = await editEntry(db, "source_writer", id, { lang: "other", title: "A language example", body: greek + " Νέα πρόταση." });
   expect(edit.ok).toBe(true);
-  expect((await db.select().from(entries).where(eq(entries.id, id)))[0].langSource).toBe("explicit");
+  expect((await db.select().from(entries).where(eq(entries.id, id)))[0].langSource).toBe("checked");
 });
 
 it.each(["explicit", null] as const)("retains %s choices and creates one in-app-only mismatch notice", async source => {
@@ -152,7 +157,8 @@ it("rounds unopened source and original-reading languages into anonymous other b
 
 it("keeps confirmed, inconclusive and obsolete checks from changing the current source", async () => {
   const { db, id, check, complete } = await fixture();
-  await db.update(entries).set({ langSource: "checked" }).where(eq(entries.id, id));
+  await check();
+  complete.mockClear();
   await check();
   expect(complete).not.toHaveBeenCalled();
   await db.update(entries).set({ langSource: "default", mentionRevision: 2 }).where(eq(entries.id, id));
@@ -247,4 +253,124 @@ it("retains the current receipt through job cleanup and expires it after the ori
   expect(await editEntry(db, "source_writer", id, { lang: "en", title: "A language example", body: greek + " Νέα πρόταση." })).toMatchObject({ ok: true });
   await deleteFinishedJobs(db, future);
   expect(await db.select().from(jobs).where(eq(jobs.kind, "source_language_receipt"))).toHaveLength(0);
+});
+
+it("keeps unopened originals in all lists and out of a different original-language filter", async () => {
+  const { db, id } = await fixture();
+  const japanese = await createTopic(db, "source_writer", { lang: "ja", title: "Japanese original", body: "日本語で書かれた話題です。" });
+  const italianTopic = await createTopic(db, "source_writer", { lang: "other", langCode: "it", title: "Italian original", body: italian });
+  const german = await createTopic(db, "source_writer", { lang: "de", title: "German original", body: "Ein deutscher Beitrag." });
+  if (!japanese.ok || !italianTopic.ok || !german.ok) throw new Error("topic failed");
+  for (const order of ["created", "activity", "insightful"] as const) {
+    expect((await listTopics(db, { kind: "langs", langs: ["ja"] }, { order })).topics.map(t => t.id)).toEqual([japanese.id]);
+    expect((await listTopics(db, { kind: "all" }, { order })).topics.map(t => t.id).sort()).toEqual([id, japanese.id, italianTopic.id, german.id].sort());
+  }
+});
+
+it.each([
+  ["zh", "zh-Hans", null, "detected", "zh-Hans", null],
+  ["ZH", "zh-Hant", null, "explicit", "zh-Hant", null],
+  ["zh", "en", null, "default", "en", null],
+  ["zh", "en", null, "explicit", "en", null],
+  ["zh-hans", "en", null, "default", "zh-Hans", null],
+  ["ZH-hANT", "en", null, "default", "zh-Hant", null],
+  ["zh-CN", "en", null, "default", "zh-Hans", null],
+  ["zh-TW", "zh-Hant", null, "explicit", "zh-Hant", null],
+  ["zh-hans", "zh-Hant", null, "explicit", "zh-Hant", null],
+  ["zh-hans", "other", "zh", "explicit", "other", "zh"],
+  ["IT-it", "other", "it", "explicit", "other", "it"],
+  ["ita", "other", "it", "explicit", "other", "it"],
+  ["ita", "en", null, "default", "other", "it"],
+  ["zzz", "en", null, "explicit", "en", null],
+  ["und", "en", null, "default", "en", null],
+  ["mul", "en", null, "explicit", "en", null],
+  ["zxx", "en", null, "default", "en", null],
+  ["EN-us", "en", null, "explicit", "en", null],
+] as const)("normalizes checker code %s against %s/%s (%s) without false notices", async (code, lang, langCode, langSource, expectedLang, expectedCode) => {
+  const { db, id, check, complete } = await fixture(langSource, code);
+  const [before] = await db.update(entries).set({ lang, langCode }).where(eq(entries.id, id)).returning();
+  await check(); await check();
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect((await db.select().from(entries).where(eq(entries.id, id)))[0]).toMatchObject({
+    lang: expectedLang, langCode: expectedCode,
+    langSource: expectedLang === lang && expectedCode === langCode ? langSource : "checked",
+  });
+  expect(await db.select().from(notifications)).toHaveLength(0);
+  expect((await db.select().from(jobs)).filter(j => j.kind === "source_language_receipt").some(j =>
+    (j.payload as { promptVersion?: string }).promptVersion === SOURCE_LANGUAGE_PROMPT_VERSION)).toBe(true);
+  if (expectedLang === lang && expectedCode === langCode) {
+    expect((await db.select().from(entries).where(eq(entries.id, id)))[0]).toMatchObject({ sourceHash: before.sourceHash, mentionRevision: before.mentionRevision });
+  }
+});
+
+it("settles only requested body targets with reader-based eager translation", async () => {
+  vi.stubEnv("ENABLED_LANGS", "ja,en,fr");
+  vi.stubEnv("TRANSLATION_EAGER_SCOPE", "readers");
+  const db = await createTestDb();
+  await addMember(db, "eager_source", "eager_source", { readLangs: ["ja"] });
+  await addMember(db, "eager_reader", "eager_reader", { readLangs: ["en"] });
+  const topic = await createTopic(db, "eager_source", { lang: "other", langCode: "el", title: "Reader-based targets", body: greek });
+  if (!topic.ok) throw new Error(topic.error);
+  const [entry] = await db.select().from(entries).where(eq(entries.id, topic.id));
+  const work = await db.select().from(jobs).where(eq(jobs.kind, "translate_entry"));
+  expect(work.map(j => (j.payload as { lang: string }).lang).sort()).toEqual(["en", "ja"]);
+  expect((await db.select().from(jobs).where(eq(jobs.kind, "translate_title"))).map(j => (j.payload as { lang: string }).lang).sort()).toEqual(["en", "fr", "ja"]);
+  await db.update(jobs).set({ status: "running" }).where(eq(jobs.kind, "translate_entry"));
+  await recordUntranslatable(work[0], { db, now: new Date() }, true, entry.mentionRevision);
+  expect(await db.select().from(reports)).toHaveLength(0);
+  await recordUntranslatable(work[1], { db, now: new Date() }, true, entry.mentionRevision);
+  await recordUntranslatable(work[1], { db, now: new Date() }, true, entry.mentionRevision);
+  const result = await db.select().from(reports);
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({ reporterId: null, reason: "other", aiAssessment: {
+    en: m.source_translation_unavailable_assessment({}, { locale: "en" }),
+    ja: m.source_translation_unavailable_assessment({}, { locale: "ja" }),
+  } });
+  expect(result[0].aiAssessment?.en).not.toBe("");
+  expect(result[0].aiAssessment?.ja).not.toBe(result[0].aiAssessment?.en);
+  expect(await db.select().from(notifications)).toMatchObject([{ kind: "entry_translation_unavailable" }]);
+  expect((await db.select().from(entries).where(eq(entries.id, topic.id)))[0].hiddenAt).toBeNull();
+});
+
+it("does not report requested-target failure when another requested target has a usable translation", async () => {
+  const { db, id } = await fixture();
+  const [entry] = await db.update(entries).set({ lang: "other", langCode: "el" }).where(eq(entries.id, id)).returning();
+  await db.delete(jobs).where(eq(jobs.kind, "translate_entry"));
+  const work = await db.insert(jobs).values(["ja", "en"].map(lang => ({ kind: "translate_entry", payload: { entryId: id, sourceHash: entry.sourceHash, lang }, status: "running" }))).returning();
+  await db.insert(translations).values({ entryId: id, lang: "en", field: "body", kind: "primary", text: "A usable translation", sourceHash: entry.sourceHash, mentionRevision: entry.mentionRevision });
+  for (const job of work) await recordUntranslatable(job, { db, now: new Date() }, true, entry.mentionRevision);
+  expect(await db.select().from(reports)).toHaveLength(0);
+  expect(await db.select().from(notifications)).toHaveLength(0);
+});
+
+it.each(["detected", "default", "checked", "explicit", null] as const)("preserves %s provenance and known codes on unchanged-language topic and reply edits", async langSource => {
+  const { db, id } = await fixture();
+  const reply = await createReply(db, "source_writer", id, { lang: "other", langCode: "sw", body: "Brief names only" });
+  if (!reply.ok) throw new Error(reply.error);
+  for (const [entryId, title] of [[id, "A language example"], [reply.id, undefined]] as const) {
+    await db.update(entries).set({ lang: "other", langCode: "sw", langSource }).where(eq(entries.id, entryId));
+    expect(await editEntry(db, "source_writer", entryId, { lang: "other", title, body: "A revised name" })).toMatchObject({ ok: true });
+    expect((await db.select().from(entries).where(eq(entries.id, entryId)))[0]).toMatchObject({ lang: "other", langCode: "sw", langSource });
+    expect(await editEntry(db, "source_writer", entryId, { lang: "other", title, body: "A revised name" })).toMatchObject({ ok: true, changed: false });
+    expect((await db.select().from(entries).where(eq(entries.id, entryId)))[0]).toMatchObject({ langCode: "sw", langSource });
+    expect(await editEntry(db, "source_writer", entryId, { lang: "ja", title, body: "A revised name" })).toMatchObject({ ok: true });
+    expect((await db.select().from(entries).where(eq(entries.id, entryId)))[0]).toMatchObject({ lang: "ja", langCode: null, langSource: "explicit" });
+  }
+});
+
+it("checks a new body revision while retaining machine-checked provenance and skips its language-only correction", async () => {
+  const { db, id, check, complete } = await fixture();
+  await check();
+  const [corrected] = await db.select().from(entries).where(eq(entries.id, id));
+  await enqueueSourceLanguageCheck(db, { id, sourceHash: corrected.sourceHash! });
+  expect(await db.select().from(jobs).where(eq(jobs.kind, SOURCE_LANGUAGE_JOB))).toHaveLength(1);
+  expect(await editEntry(db, "source_writer", id, { lang: "other", title: "A language example", body: italian })).toMatchObject({ ok: true });
+  expect((await db.select().from(entries).where(eq(entries.id, id)))[0]).toMatchObject({ lang: "other", langCode: "el", langSource: "checked" });
+  const work = await db.select().from(jobs).where(eq(jobs.kind, SOURCE_LANGUAGE_JOB)).orderBy(jobs.id);
+  expect(work).toHaveLength(2);
+  const handler = createSourceLanguageHandlers({ completer: { engine: "fake", model: "fake-source-language", complete: async () => ({ text: '{"code":"ita","confident":true}', inputTokens: 10, outputTokens: 10 }) } });
+  await handler[SOURCE_LANGUAGE_JOB](work[1], { db, now: new Date() });
+  expect((await db.select().from(entries).where(eq(entries.id, id)))[0]).toMatchObject({ lang: "other", langCode: "it", langSource: "checked" });
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(await db.select().from(notifications)).toHaveLength(0);
 });

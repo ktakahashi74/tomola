@@ -1,5 +1,4 @@
 import { isEnabledLang } from "./enabled-langs.server";
-const bucketLang = (lang: string): SourceLang => isEnabledLang(lang) ? lang : "other";
 import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, profiles, readingCounts } from "./db/schema";
@@ -7,6 +6,8 @@ import type { Lang, SourceLang } from "./languages";
 import { observationWeeks } from "./metrics.server";
 import { publicTopicPlace } from "./visibility.server";
 import { READING_METHODS, READING_SOURCES, type ReadingMethod, type ReadingSource } from "./reading-sources.server";
+
+const bucketLang = (lang: string): SourceLang => isEnabledLang(lang) ? lang : "other";
 
 // Count only buckets. The topic and reader are used solely for eligibility and
 // discarded before the write: no entry, person, device, IP, referrer or user

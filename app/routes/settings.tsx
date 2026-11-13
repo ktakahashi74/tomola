@@ -404,7 +404,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
         {saved === "email" && <p role="status" className="text-success">{m.settings_saved()}</p>}
         {actionData?.intent === "email" && actionData.error && <p role="alert" className="text-destructive">{m.settings_email_error()}</p>}
         <p className="ui-help text-muted-foreground">{m.settings_email_intro()}</p>
-          <p className="ui-help text-muted-foreground">{m.settings_email_in_app_only()}</p>
+        <p className="ui-help text-muted-foreground">{m.settings_email_in_app_only()}</p>
         <Form method="post" action={withSettingsReturn("/settings#settings-email", returnTo)} className="space-y-2">
           <input type="hidden" name="intent" value="email-pref" />
           <div ref={emailControl} role="radiogroup" aria-labelledby="settings-email-heading" className="grid gap-2">

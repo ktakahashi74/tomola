@@ -1569,7 +1569,6 @@
   "original_lang_default": "Original language: {lang} (your default)",
   "original_lang_mismatch": "The text looks like {detected}. Change the original language to {detected}?",
   "original_lang_change": "Change to {detected}",
-  "original_lang_disabled": "The text looks like {detected}. On this site, please write in one of: {langs}.",
   "ui_preview_notice": "The interface in this language is machine-translated and has not been checked by a native speaker yet. If something reads wrong, please tell us in a post.",
   "login_code_label": "Code from the email (6 digits)",
   "login_code_submit": "Log in with the code",
@@ -2767,5 +2766,6 @@
   "posted_reply_language": "Replied in {lang}.",
   "posted_initial_reached": "The initial translations have arrived.",
   "posted_language_mismatch": "This doesn't seem to be in {lang}.",
-  "posted_untranslatable": "This could not be machine-translated. People reading in other languages will see the original."
+  "posted_untranslatable": "This could not be machine-translated. People reading in other languages will see the original.",
+  "source_translation_unavailable_assessment": "Automatic check: machine translation was unavailable in every requested language. Review the original; it has not been hidden."
 }

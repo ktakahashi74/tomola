@@ -1531,7 +1531,6 @@
   "original_lang_default": "원문 언어: {lang}(기본 설정)",
   "original_lang_mismatch": "본문이 {detected}(으)로 작성된 것 같습니다. 원문 언어를 {detected}(으)로 변경하시겠습니까?",
   "original_lang_change": "{detected}(으)로 변경",
-  "original_lang_disabled": "본문이 {detected}(으)로 작성된 것 같습니다. 이 사이트에서는 다음 언어 중 하나로 작성해 주세요: {langs}.",
   "ui_preview_notice": "이 언어의 인터페이스는 기계 번역되었으며 아직 원어민의 검토를 거치지 않았습니다. 어색한 표현이 있다면 게시물로 알려주세요.",
   "login_code_label": "이메일로 받은 코드(6자리)",
   "login_code_submit": "코드로 로그인",

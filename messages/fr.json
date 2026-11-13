@@ -1608,7 +1608,6 @@
   "original_lang_default": "Langue originale : {lang} (votre langue par défaut)",
   "original_lang_mismatch": "Le texte semble être en {detected}. Changer la langue originale pour {detected} ?",
   "original_lang_change": "Changer pour {detected}",
-  "original_lang_disabled": "Le texte semble être en {detected}. Sur ce site, veuillez écrire dans l'une de ces langues : {langs}.",
   "ui_preview_notice": "L'interface dans cette langue est traduite par machine et n'a pas encore été vérifiée par un locuteur natif. Si quelque chose vous semble incorrect, n'hésitez pas à nous le signaler dans une publication.",
   "login_code_label": "Code reçu par e-mail (6 chiffres)",
   "login_code_submit": "Se connecter avec le code",

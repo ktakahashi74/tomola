@@ -1002,7 +1002,6 @@
   "original_lang_default": "原文の言語：{lang}（あなたの既定）",
   "original_lang_mismatch": "本文は{detected}のようです。原文の言語を{detected}に変えますか。",
   "original_lang_change": "{detected}に変更",
-  "original_lang_disabled": "本文は{detected}のようです。この場では、{langs}で書いてください。",
   "ui_preview_notice": "この言語の画面の文言は機械翻訳で、母語話者の確認がまだです。おかしな表現に気づいたら、投稿で知らせてください。",
   "login_code_label": "メールのコード（6桁）",
   "login_code_submit": "コードでログイン",
@@ -1989,5 +1988,6 @@
   "posted_reply_language": "{lang}として返信しました。",
   "posted_initial_reached": "初めの訳が届きました。",
   "posted_language_mismatch": "{lang}ではないようです。",
-  "posted_untranslatable": "訳せませんでした。ほかの言語で読む人には、原文のまま見えます。"
+  "posted_untranslatable": "訳せませんでした。ほかの言語で読む人には、原文のまま見えます。",
+  "source_translation_unavailable_assessment": "自動の確認：頼まれたすべての言語で機械訳を作れませんでした。原文は隠していません。確認してください。"
 }

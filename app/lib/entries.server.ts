@@ -627,7 +627,7 @@ export async function applyEntryEdit(
       body: after.body,
       lang,
       langCode: lang === "other" ? (Object.hasOwn(after, "langCode") ? after.langCode ?? null : entry.langCode) : null,
-      langSource: after.langSource ?? (entry.langSource === "checked" ? "detected" : entry.langSource),
+      langSource: after.langSource ?? entry.langSource,
       sourceHash: hash,
       mentionRevision: entry.mentionRevision + 1,
       html: rendered.cacheable === false ? null : rendered.html,
@@ -729,7 +729,7 @@ async function editEntryImplementation(
     if (!parsed.success) return { ok: false, error: fieldError(parsed.error.issues) };
     ({ body, ...attributes } = parsed.data);
   }
-  const language = attributes.lang ? await resolvePostLanguage(body, attributes.lang, found.entry.lang) : null;
+  const language = attributes.lang && attributes.lang !== found.entry.lang ? await resolvePostLanguage(body, attributes.lang, found.entry.lang) : null;
   if (language) attributes.lang = language.lang as SourceLang;
   const bodyError = await checkBodyBudget(body, editorId);
   if (bodyError) return { ok: false, error: bodyError };
@@ -791,7 +791,6 @@ async function editEntryImplementation(
     const tagChanged = nextTag !== currentTag;
     // Authors cannot edit the title/body/language of a question pinned by a stance.
     if (textChanged && current.stanceLockedAt !== null) return { ok: false as const, error: "locked" as const };
-    if (!textChanged && attributes.lang) await tx.update(entries).set({ langSource: "explicit", langCode: lang === "other" ? language?.langCode ?? current.langCode : null }).where(eq(entries.id, entryId));
     if (!textChanged && !tagChanged) {
       return { ok: true as const, id: entryId, threadId, changed: false };
     }
@@ -808,7 +807,7 @@ async function editEntryImplementation(
       editorId,
       now,
       before: { title: current.title, body: current.body, sourceHash: current.sourceHash, lang: current.lang, hiddenAt: current.hiddenAt },
-      after: { title, body, lang, langCode: language ? language.langCode : found.entry.langCode, ...(language ? { langSource: "explicit" as const } : {}), html: "", preparedRender },
+      after: { title, body, lang, ...(language && lang !== current.lang ? { langCode: language.langCode, langSource: "explicit" as const } : {}), html: "", preparedRender },
       tagChange: tagChanged ? { to: nextTag } : undefined,
       coalesceHistory: await withinEditGrace(tx, entryId, now),
     });
@@ -1118,7 +1117,7 @@ export async function listTopics(
   if (scope.kind === "langs") {
     if (scope.langs.length === 0) return { topics: [], page, limit, hasNext: false };
     const lang = opts.order === "created" ? entries.lang : topicListingStats.lang;
-    conditions.push(or(inArray(lang, [...scope.langs]), notInArray(lang, [...enabledLangs()]))!);
+    conditions.push(inArray(lang, [...scope.langs]));
   } else if (scope.kind === "not-langs" && scope.langs.length > 0) {
     conditions.push(notInArray(opts.order === "created" ? entries.lang : topicListingStats.lang, [...scope.langs]));
   } else if (scope.kind === "village") {

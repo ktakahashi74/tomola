@@ -40,7 +40,6 @@ export function EntryFields({
   editorLang,
   writingHelp,
   bodyAccessory,
-  disabledClosed,
   error,
   errorId,
   bodyPlaceholder,
@@ -64,7 +63,6 @@ export function EntryFields({
   editorLang?: string;
   writingHelp?: ReactNode;
   bodyAccessory?: ReactNode;
-  disabledClosed?: boolean;
   error?: string;
   errorId?: string;
   // Shown inside the empty field and gone once something is typed.
@@ -109,7 +107,7 @@ export function EntryFields({
         <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
       </details>
       <div hidden={richActive}><EntryPreview kind={previewKind} fixedLang={fixedLang} pasteFrontmatter={pasteFrontmatter} invalidateOnEdit={invalidatePreviewOnEdit} selectedLang={previewLanguage ?? previewLang} /></div>
-      {showLanguage && !fixedLang && <EntryLanguage error={error} errorId={errorId} defaultLang={defaultLang} selectedLang={selectedLang} disabledClosed={disabledClosed} pasteFrontmatter={Boolean(pasteFrontmatter)} onChange={invalidatePreviewOnEdit ? setPreviewLang : undefined} />}
+      {showLanguage && !fixedLang && <EntryLanguage error={error} errorId={errorId} defaultLang={defaultLang} selectedLang={selectedLang} pasteFrontmatter={Boolean(pasteFrontmatter)} onChange={invalidatePreviewOnEdit ? setPreviewLang : undefined} />}
     </>
   );
 }

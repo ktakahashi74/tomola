@@ -13,7 +13,6 @@ export function EntryLanguage({ defaultLang, selectedLang, pasteFrontmatter, val
   pasteFrontmatter?: boolean;
   value?: string;
   onChange?: (value: string) => void;
-  disabledClosed?: boolean;
   error?: string;
   errorId?: string;
   label?: string;

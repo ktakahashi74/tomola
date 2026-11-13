@@ -91,9 +91,9 @@ export function EntryEditForm({
         {destination}
         {entry.kind === "topic" && <TitleField error={error} errorId={errorId} required={entry.asksStance === true} defaultValue={values?.title ?? entry.title ?? undefined} />}
         {warning && <p className="ui-help text-muted-foreground">{warning}</p>}
-        <EntryFields previewKind={entry.kind} error={error} errorId={errorId} fixedLang={fixNote ? entry.lang : undefined} defaultLang={entry.lang} selectedLang={values?.lang} disabledClosed defaultBody={values?.body ?? entry.body} BodyEditor={BodyEditor} bodyAccessory={bodyAccessory} writingHelp={writingHelp} showLanguage={false} tall={long} previewLanguage={lang} />
+        <EntryFields previewKind={entry.kind} error={error} errorId={errorId} fixedLang={fixNote ? entry.lang : undefined} defaultLang={entry.lang} selectedLang={values?.lang} defaultBody={values?.body ?? entry.body} BodyEditor={BodyEditor} bodyAccessory={bodyAccessory} writingHelp={writingHelp} showLanguage={false} tall={long} previewLanguage={lang} />
         {!fixNote && <PostSettings summary={(long ? m.post_summary_lang : m.reply_summary_lang)({ lang: lang === "other" ? m.source_language_other() : isLang(lang) ? LANG_LABELS[lang] : lang })} open={error === "invalid_lang"}>
-          <EntryLanguage error={error} errorId={errorId} defaultLang={entry.lang} value={lang} onChange={setLang} disabledClosed />
+          <EntryLanguage error={error} errorId={errorId} defaultLang={entry.lang} value={lang} onChange={setLang} />
         </PostSettings>}
         {!fixNote && ready && <QuietBoundary><Suspense fallback={null}><AiImport candidate={candidate} onCandidateChange={setCandidate} /></Suspense></QuietBoundary>}
         {stanceTag && <StanceTagSelect error={error} errorId={errorId} defaultValue={values?.stanceTag === undefined ? stanceTag.current : values.stanceTag} />}

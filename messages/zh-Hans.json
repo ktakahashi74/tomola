@@ -1144,7 +1144,6 @@
   "original_lang_default": "原文语言：{lang}（您的默认语言）",
   "original_lang_mismatch": "文本看起来像是 {detected}。要将原文语言更改为 {detected} 吗？",
   "original_lang_change": "更改为 {detected}",
-  "original_lang_disabled": "文本看起来像是 {detected}。在本站中，请使用以下语言之一撰写：{langs}。",
   "ui_preview_notice": "该语言的界面为机器翻译，尚未经过母语使用者的校对。如果发现表述不当，请发帖告知我们。",
   "login_code_label": "邮件中的验证码（6 位数字）",
   "login_code_submit": "使用验证码登录",
