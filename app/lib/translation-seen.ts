@@ -1,6 +1,10 @@
 import { documentKey } from "./reading-document";
 import { SHARE_LANG_PARAM } from "./share-language";
 
+// Read the small reply to the end: an unread, compressed body can keep the request
+// open in the browser, so the page never settles.
+const drain = (response: Response) => response.arrayBuffer();
+
 // Browser-only, coalesced once per render turn. Reading HTML never writes this.
 const pending = new Set<number>();
 const pendingReports = new Set<readonly number[]>();
@@ -26,7 +30,7 @@ export function markTranslationSeen(ids: readonly number[]): void {
     const reports = [...pendingReports]; pendingReports.clear();
     if (page !== location.pathname + location.search) return;
     void fetch(`${location.pathname}/translations${location.search}`, { method: "POST", credentials: "same-origin", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent: "seen", ids: seen }) }).then(response => { if (response.ok) reports.forEach(ids => reported.add(ids)); }).catch(() => {});
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent: "seen", ids: seen }) }).then(response => { if (response.ok) reports.forEach(ids => reported.add(ids)); return drain(response); }).catch(() => {});
   }, 0);
 }
 
@@ -44,7 +48,7 @@ export function markTopicRead(page: string): () => void {
     let host = "";
     try { if (!internal && document.referrer) host = new URL(document.referrer).hostname; } catch { /* No usable host. */ }
     void fetch(`${location.pathname}/translations${location.search}`, { method: "POST", credentials: "same-origin", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent: "read", ids: [], internal, shared, referrerHost: host }) }).catch(() => {});
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent: "read", ids: [], internal, shared, referrerHost: host }) }).then(drain).catch(() => {});
   };
   report();
   document.addEventListener("visibilitychange", report);
