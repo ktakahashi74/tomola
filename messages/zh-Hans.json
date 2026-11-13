@@ -2289,5 +2289,18 @@
   "post_ask_error_expired": "此回答的确认信息已过期，或对该成员和帖子无效。在报告错误或创建草稿之前，请重新提问。",
   "post_ask_error_unavailable": "AI 目前无法回答。请稍后再试，或使用“在 AI 中打开”。",
   "ai_use_post_ask": "关于帖子的私密提问",
-  "ai_use_sent_post_ask": "成员的提问以及所选可读取帖子和回复的原文与译文"
+  "ai_use_sent_post_ask": "成员的提问以及所选可读取帖子和回复的原文与译文",
+  "village_chat_reply": "回复",
+  "village_chat_replying": "正在回复 @{handle}：{text}",
+  "village_chat_reply_cancel": "取消回复",
+  "village_chat_reply_unavailable": "无法显示的消息",
+  "village_chat_reply_destination_unavailable": "该消息无法显示。",
+  "village_chat_reply_invalid": "您正在回复的消息不可用。请取消回复或选择其他消息。",
+  "village_chat_reply_outside_context": "（回复此上下文之外的消息）",
+  "notification_chat_activity_authors": "{handles} 在“{name}”的聊天中回复或提及了您。",
+  "notification_chat_activity_anonymous": "在“{name}”的聊天中有针对您的回复或提及。",
+  "mail_subject_chat_reply": "有人在聊天中回复了您",
+  "mail_item_chat_reply": "有人在聊天中回复了您。\n\n{url}",
+  "mail_item_chat_reply_named": "有人在“{name}”的聊天中回复了您。\n\n{url}",
+  "village_chat_addressed": "回复与提及：{count}"
 }

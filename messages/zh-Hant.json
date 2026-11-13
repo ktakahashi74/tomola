@@ -2289,5 +2289,18 @@
   "post_ask_error_expired": "此回答的確認已過期，或對此會員與貼文無效。在回報錯誤或建立草稿前，請重新提問。",
   "post_ask_error_unavailable": "AI 目前無法回答。請稍後再試，或使用「在 AI 中開啟」。",
   "ai_use_post_ask": "關於貼文的私人提問",
-  "ai_use_sent_post_ask": "會員的提問，以及所選取且可閱讀的貼文與回覆之原文和翻譯"
+  "ai_use_sent_post_ask": "會員的提問，以及所選取且可閱讀的貼文與回覆之原文和翻譯",
+  "village_chat_reply": "回覆",
+  "village_chat_replying": "正在回覆 @{handle}：{text}",
+  "village_chat_reply_cancel": "取消回覆",
+  "village_chat_reply_unavailable": "無法顯示的訊息",
+  "village_chat_reply_destination_unavailable": "無法顯示此訊息。",
+  "village_chat_reply_invalid": "您要回覆的訊息無法顯示。請取消回覆或選擇其他訊息。",
+  "village_chat_reply_outside_context": "（回覆此範圍外的訊息）",
+  "notification_chat_activity_authors": "{handles} 在「{name}」的聊天中回覆或提及了您。",
+  "notification_chat_activity_anonymous": "在「{name}」的聊天中有給您的回覆或提及。",
+  "mail_subject_chat_reply": "有人在聊天中回覆了您",
+  "mail_item_chat_reply": "有人在聊天中回覆了您。\n\n{url}",
+  "mail_item_chat_reply_named": "有人在「{name}」的聊天中回覆了您。\n\n{url}",
+  "village_chat_addressed": "回覆與提及：{count}"
 }

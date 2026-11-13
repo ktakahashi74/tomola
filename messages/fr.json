@@ -2914,5 +2914,18 @@
   "post_ask_error_expired": "La confirmation de cette réponse a expiré ou n’est pas valide pour ce membre et cette publication. Posez à nouveau la question avant de la signaler ou d’en faire un brouillon.",
   "post_ask_error_unavailable": "L’IA n’a pas pu répondre pour le moment. Réessayez plus tard, ou utilisez « Ouvrir dans l’IA ».",
   "ai_use_post_ask": "Questions privées sur les publications",
-  "ai_use_sent_post_ask": "La question du membre ainsi que les originaux et traductions des sujets et réponses lisibles sélectionnés"
+  "ai_use_sent_post_ask": "La question du membre ainsi que les originaux et traductions des sujets et réponses lisibles sélectionnés",
+  "village_chat_reply": "Répondre",
+  "village_chat_replying": "En réponse à @{handle} : {text}",
+  "village_chat_reply_cancel": "Annuler la réponse",
+  "village_chat_reply_unavailable": "Message indisponible",
+  "village_chat_reply_destination_unavailable": "Ce message ne peut pas être affiché.",
+  "village_chat_reply_invalid": "Le message auquel vous répondez est indisponible. Annulez la réponse ou choisissez un autre message.",
+  "village_chat_reply_outside_context": "(Réponse à un message en dehors de ce contexte)",
+  "notification_chat_activity_authors": "{handles} vous a répondu ou vous a mentionné dans le salon de discussion pour « {name} ».",
+  "notification_chat_activity_anonymous": "Vous avez des réponses ou des mentions dans le salon de discussion de {name}.",
+  "mail_subject_chat_reply": "Quelqu’un vous a répondu dans la discussion",
+  "mail_item_chat_reply": "Quelqu’un vous a répondu dans la discussion.\n\n{url}",
+  "mail_item_chat_reply_named": "Quelqu’un vous a répondu dans la discussion pour « {name} ».\n\n{url}",
+  "village_chat_addressed": "Réponses et mentions : {count}"
 }
