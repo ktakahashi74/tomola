@@ -76,7 +76,7 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
 
 type Page = ReturnType<typeof aiUsePage>;
 const markdownText = (value: string) => value.replace(/[\r\n]+/g, " ").replace(/[\\`*_[\]<>#!]/g, "\\$&");
-const markdownLink = (label: string, href: string) => `[${markdownText(label)}](${href.replace(/[()[\]<>]/g, character => encodeURIComponent(character))})`;
+const markdownLink = (label: string, href: string) => `[${markdownText(label)}](${href.replace(/[()[\]<>]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)})`;
 
 // The same projected values and selected copy serve both representations. Operator prose stays plain text.
 export function aiUseMarkdown(page: Page): string {

@@ -134,6 +134,8 @@ describe("public AI use", () => {
     const config = settings();
     config.humanReview = { en: '<script>alert("review")</script> [link](javascript:alert)', ja: "日本語の確認範囲" };
     config.history[0].reason = { en: '<img src=x onerror="alert(1)">', ja: "架空の理由" };
+    config.history[0].evidenceUrl = "/comparisons/(draft)";
+    config.objectionsUrl = "https://example.org/objections)";
     const page = aiUsePage("fr", fake, config);
     const html = await render(page);
     const markdown = aiUseMarkdown(page);
@@ -144,6 +146,8 @@ describe("public AI use", () => {
       expect(output).not.toContain('<img src=x onerror="alert(1)">');
     }
     expect(markdown).toContain("\\[link\\]");
+    expect(markdown).toContain("(/comparisons/%28draft%29)");
+    expect(markdown).toContain("(https://example.org/objections%29)");
   });
 
   it("serves anonymous Markdown and HEAD with strict method/language validation and matching metadata", async () => {
