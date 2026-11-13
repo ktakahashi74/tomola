@@ -22,3 +22,9 @@ it.each(["en", "ja"] as const)("names the destination and publication language i
   }
   expect(await render()).toContain(m.posted_topic_public_no_place({ lang: label }));
 });
+
+it.each([false, true])("renders completed source notices immediately with checking=%s", async checking => {
+  const html = await renderInRouter(() => createElement(Notice, { topicId: 1, lang: "en", firstPost: false, initial: [], sourceStatus: { checking, mismatch: true, untranslatable: true }, editHref: "/t/1/edit" }));
+  expect(html).toContain(m.posted_language_mismatch({ lang: languageLabel("en") }));
+  expect(html).toContain(m.posted_untranslatable());
+});

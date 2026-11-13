@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { acceptSignedWrite, enableSigningAuthenticator } from "./signing-helper";
 import { test } from "./editor-fixture";
-import { LANG_LABELS } from "../app/lib/languages";
+import { localizedLanguageLabel } from "../app/lib/language-label";
 import { captureScreenshot, enMessages as m, openUserMenu, openPlaces, state, useMember, waitForClientRoute, waitForFormReady, chooseEditorMode, openPostSettings, uiMessages, formatMessage } from "./helpers";
 
 
@@ -408,7 +408,7 @@ for (const locale of ["en", "ja"] as const) test(`keeps the destination above wr
   await page.locator('textarea[name="body"]').fill("An owned post in my own village.");
   await page.getByRole("button", { name: text.submit_post, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
-  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: text.village_personal, lang: LANG_LABELS.en }) })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: text.village_personal, lang: localizedLanguageLabel("en", locale) }) })).toBeVisible();
   await captureDestination(page, "posted-personal", locale);
   await page.goto("/t/new");
   await waitForClientRoute(page);
@@ -428,7 +428,7 @@ for (const locale of ["en", "ja"] as const) test(`keeps the destination above wr
   await captureDestination(page, "draft", locale);
   await page.getByRole("button", { name: text.draft_publish, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
-  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: languageVillage, lang: LANG_LABELS.en }) })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: languageVillage, lang: localizedLanguageLabel("en", locale) }) })).toBeVisible();
   await captureDestination(page, "posted-village", locale);
   const markdown = await page.request.get(page.url().replace(/(\/t\/\d+).*/, "$1.md"));
   expect(await markdown.text()).toMatch(/^village: ["']?ja["']?$/m);

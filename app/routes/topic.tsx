@@ -68,7 +68,7 @@ import { threadMdMiddleware } from "~/lib/md/twin.server";
 import { readingReturnMiddleware } from "~/lib/auth/reading-return.server";
 import { parseId, parsePage } from "~/lib/params.server";
 import { readEditedId, readPostedId } from "~/lib/posted-ui";
-import { isFirstTopic, postedTranslationStates } from "~/lib/posted-status.server";
+import { isFirstTopic, postedSourceLanguageStatus, postedTranslationStates } from "~/lib/posted-status.server";
 import { useDropNoticeParams } from "~/components/posted-notice";
 import { PostedTopicNotice } from "~/components/posted-topic-notice";
 import { PostedLine } from "~/components/posted-line";
@@ -336,7 +336,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   // Right after posting a topic, its author is told in which language it was published and into which it is being translated (and welcomed, once, for the first).
   const ownPostedTopic = !!user && topic.visibility === "visible" && topic.authorId === user.id && readPostedId(url) === topic.id;
   const ownPostedEntry = !!user ? shown.find(entry => entry.visibility === "visible" && entry.authorId === user.id && readPostedId(url) === entry.id) : null;
-  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry) } : null;
+  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry), sourceStatus: await postedSourceLanguageStatus(db, ownPostedEntry) } : null;
   const showVillage = villagesEnabled() && topic.visibility !== "hidden-redacted";
   const showContinuation = showVillage && topic.visibility === "visible";
   const continuation = showContinuation ? loadedContinuation : null;
@@ -676,7 +676,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             {r.parent.state === "visible" ? <Link to={r.parent.href} className="underline">{m.reply_parent_link({ handle: r.parent.authorHandle })}</Link>
               : r.parent.state === "deleted" ? m.reply_parent_deleted() : m.reply_parent_unavailable()}
           </p>}
-          {r.posted && <PostedTopicNotice topicId={r.id} lang={r.lang} langCode={r.langCode} firstPost={false} initial={loaderData.postedNotice?.langs ?? []} editHref={`/c/${r.id}/edit`} reply followed={loaderData.postedFollowed} />}
+          {r.posted && <PostedTopicNotice topicId={r.id} lang={r.lang} langCode={r.langCode} firstPost={false} initial={loaderData.postedNotice?.langs ?? []} sourceStatus={loaderData.postedNotice?.sourceStatus} editHref={`/c/${r.id}/edit`} reply followed={loaderData.postedFollowed} />}
           {loaderData.edited === r.id && r.own && <PostedLine kind="edited" />}
           {r.hidden && <HiddenMark action={r.hiddenAction} />}
           <TranslatedEntry
@@ -781,7 +781,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           <PlaceholderEntry entry={topic} />
         ) : (
           <>
-            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? villageName(loaderData.village.kind === "personal" ? { ...loaderData.village, name: "" } : loaderData.village) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} editHref={`/t/${topic.id}/edit`} />}
+            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? villageName(loaderData.village.kind === "personal" ? { ...loaderData.village, name: "" } : loaderData.village) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} editHref={`/t/${topic.id}/edit`} />}
             {loaderData.edited === topic.id && topic.own && <PostedLine kind="edited" />}
             {topic.hidden && <HiddenMark action={topic.hiddenAction} />}
             {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={langs => setSettled(previous => ({ id: topic.id, langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])] }))} /></Suspense>}

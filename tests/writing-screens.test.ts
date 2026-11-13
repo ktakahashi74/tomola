@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDraft, deleteLinkedDraft, getDraft, updateDraft } from "~/lib/drafts.server";
 import { createReply, createTopic, deleteOwnEntry } from "~/lib/entries.server";
-import { drafts } from "~/lib/db/schema";
+import { drafts, entries, jobs } from "~/lib/db/schema";
+import { postedSourceLanguageStatus } from "~/lib/posted-status.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 
 let h: RouteHarness;
@@ -36,6 +37,39 @@ describe("the notice after posting reads the translation states of the member's 
     for (const id of [String(gone.id), String(reply.id), "abc", "999999999"]) {
       for (const as of ["writer", "other"]) expect((await status(as, id)).status).toBe(404);
     }
+  });
+
+  it.each(["topic", "reply"] as const)("initializes %s feedback from current source work and completed notices", async kind => {
+    const { loader: statusLoader } = await import("~/routes/posted-status");
+    const { loader: topicLoader } = await import("~/routes/topic");
+    const topic = await createTopic(h.db, h.ids.writer, { lang: "en", body: "Source status topic" });
+    if (!topic.ok) throw new Error("topic failed");
+    const entry = kind === "topic" ? topic : await createReply(h.db, h.ids.writer, topic.id, { lang: "en", body: "Source status reply" });
+    if (!entry.ok) throw new Error("reply failed");
+    await h.db.update(entries).set({ langSource: "detected" }).where(eq(entries.id, entry.id));
+    const [source] = await h.db.select().from(entries).where(eq(entries.id, entry.id));
+    await h.db.delete(jobs).where(sql`${jobs.payload}->>'entryId' = ${String(entry.id)}`);
+    const assertStatus = async (expected: { checking: boolean; mismatch: boolean; untranslatable: boolean }) => {
+      const page = await topicLoader(h.args(h.request(`/t/${topic.id}?posted=${entry.id}`, { as: "writer" }), { id: String(topic.id) }));
+      expect(page.postedNotice?.sourceStatus).toEqual(expected);
+      const polled = await h.outcome(() => statusLoader(h.args(h.request(`/t/${entry.id}/posted-status`, { as: "writer" }), { id: String(entry.id) })));
+      expect(polled.value).toMatchObject({ data: expected });
+    };
+    const settled = { checking: false, mismatch: false, untranslatable: false };
+    await assertStatus(settled);
+    // Work and notices for an earlier revision must not restart polling.
+    await h.db.insert(jobs).values({ kind: "check_source_language", status: "queued", payload: { entryId: entry.id, sourceHash: source.sourceHash, revision: source.mentionRevision - 1, mismatch: true, untranslatableRevision: source.mentionRevision - 1 } });
+    await assertStatus(settled);
+    const [check] = await h.db.insert(jobs).values({ kind: "check_source_language", status: "queued", payload: { entryId: entry.id, sourceHash: source.sourceHash, revision: source.mentionRevision } }).returning();
+    await assertStatus({ ...settled, checking: true });
+    await h.db.update(jobs).set({ status: "running" }).where(eq(jobs.id, check.id));
+    await assertStatus({ ...settled, checking: true });
+    await h.db.update(jobs).set({ status: "done" }).where(eq(jobs.id, check.id));
+    await h.db.insert(jobs).values({ kind: "source_language_receipt", status: "done", payload: { entryId: entry.id, sourceHash: source.sourceHash, revision: source.mentionRevision, mismatch: true, untranslatableRevision: source.mentionRevision } });
+    await assertStatus({ checking: false, mismatch: true, untranslatable: true });
+    await h.db.update(entries).set({ lang: "other", langCode: "el", langSource: "checked" }).where(eq(entries.id, entry.id));
+    expect(await postedSourceLanguageStatus(h.db, source)).toMatchObject({ checking: true });
+    expect(await postedSourceLanguageStatus(h.db, { ...source, lang: "other", langCode: "el" })).toMatchObject({ checking: false });
   });
 });
 

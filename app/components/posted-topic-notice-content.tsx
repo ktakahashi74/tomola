@@ -15,9 +15,9 @@ const POLL_FOR_MS = 10 * 60 * 1000;
 // What the author is told right after posting a topic: in which language it was published (a wrong guess can be fixed from here), and into which languages it is being translated,
 // as names only: a language turns from grey to ordinary text when its translation is there. Nothing counts readers or reactions, and the notice goes with the page.
 // The member's first topic also gets one line of welcome; nothing is recorded for it.
-export default function PostedTopicNoticeContent({ topicId, lang, place, firstPost, initial, editHref, langCode, reply = false, followed = false }: { topicId: number; lang: SourceLang; langCode?: string | null; reply?: boolean; followed?: boolean; place?: string; firstPost: boolean; initial: PostedLang[]; editHref: string }) {
+export default function PostedTopicNoticeContent({ topicId, lang, place, firstPost, initial, editHref, langCode, sourceStatus, reply = false, followed = false }: { topicId: number; lang: SourceLang; langCode?: string | null; sourceStatus?: { checking: boolean; mismatch: boolean; untranslatable: boolean }; reply?: boolean; followed?: boolean; place?: string; firstPost: boolean; initial: PostedLang[]; editHref: string }) {
   const revalidator = useRevalidator();
-  const [status, setStatus] = useState({ lang, langCode, checking: true, mismatch: false, untranslatable: false });
+  const [status, setStatus] = useState({ lang, langCode, checking: false, mismatch: false, untranslatable: false, ...sourceStatus });
   const [langs, setLangs] = useState(initial);
   const hasTargets = useEnabledLangs().some(target => target !== lang);
   const pending = status.checking || langs.some(item => item.state === "pending");
