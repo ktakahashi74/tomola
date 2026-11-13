@@ -1,5 +1,7 @@
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
-import { judgeThinking, resolveEmbeddingEngine, resolveEngines, sourceLanguageConfig, type EngineSet } from "./llm/config.server";
+import { judgeThinking, primaryEngineId, resolveEmbeddingEngine, resolveEngines, sourceLanguageConfig, type EngineSet } from "./llm/config.server";
+import { postAskAiEnabled } from "./ai-question-config.server";
+import { questionModel } from "./ai-question-answer.server";
 import { currentDivergenceSampleRate } from "./llm/divergence-sample.server";
 import type { EngineId, LlmEnv, TranslationEngine } from "./llm/types";
 import type { ThinkingSetting } from "./llm/thinking";
@@ -33,6 +35,7 @@ export const AI_USE_DEFINITIONS = {
   "translation-secondary": { label: "ai_use_secondary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.secondary) },
   "translation-retry": { label: "ai_use_retry", sent: "ai_use_sent_retry", current: (c: Context) => translation(c.engines.retry) },
   "chat-translation": { label: "ai_use_chat", sent: "ai_use_sent_chat", current: (c: Context) => translation(c.engines.chat) },
+  "post-ask": { label: "ai_use_post_ask", sent: "ai_use_sent_post_ask", current: (c: Context): ModelConfig | null => postAskAiEnabled(c.env) ? { id: primaryEngineId(c.env), model: questionModel(c.env) } : null },
   "translation-check": { label: "ai_use_judge", sent: "ai_use_sent_judge", current: (c: Context): ModelConfig | null => {
     const judge = c.engines.judge;
     return judge && c.engines.secondary && c.sampleRate > 0

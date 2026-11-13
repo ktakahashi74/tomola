@@ -2858,5 +2858,7 @@
   "post_ask_error_budget": "The site’s AI is unavailable within its current question budget. Try later, or use Open in AI.",
   "post_ask_error_unverified": "The answer could not be verified, so it is not shown. Try a narrower question, or use Open in AI.",
   "post_ask_error_expired": "This answer’s confirmation has expired or is not valid for this member and post. Ask again before reporting it or making a draft.",
-  "post_ask_error_unavailable": "The AI could not answer now. Try later, or use Open in AI."
+  "post_ask_error_unavailable": "The AI could not answer now. Try later, or use Open in AI.",
+  "ai_use_post_ask": "Private questions about posts",
+  "ai_use_sent_post_ask": "The member’s question and selected readable post and reply originals and translations"
 }

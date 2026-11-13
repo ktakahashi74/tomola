@@ -152,6 +152,11 @@ Record a separate history entry for every purpose that shares the changed model:
 `spam-detection` share the moderation model. A purpose without its own entry
 keeps the unrecorded-change warning.
 
+`post-ask` discloses private questions about posts, including the question and
+selected readable post and reply originals and translations sent to the provider.
+It uses `POST_ASK_AI_MODEL`, defaulting to the primary translation model, and is
+shown as not in use when `POST_ASK_AI` is disabled.
+
 Set `humanReview` to localized plain text describing the actual language pairs
 and scope people checked, with both `en` and `ja`, or leave it `null` when no
 scope has been recorded. Automated tests or model agreement are not human

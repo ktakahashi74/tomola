@@ -2081,7 +2081,9 @@
   "post_ask_error_budget": "b49e0a1e22a8ca6a",
   "post_ask_error_unverified": "6ba61118e66ec43c",
   "post_ask_error_expired": "12c7dd439b749ab4",
-  "post_ask_error_unavailable": "559542337040d7f0"
+  "post_ask_error_unavailable": "559542337040d7f0",
+  "ai_use_post_ask": "f1bccf4d9c099c26",
+  "ai_use_sent_post_ask": "73dd27e282e150d3"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",

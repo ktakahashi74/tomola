@@ -76,6 +76,7 @@ export default async function globalSetup(config: FullConfig) {
     PUBLIC_READING: process.env.E2E_PUBLIC_READING ?? "",
     VILLAGES: config.metadata.publicReading ? "1" : "",
     VILLAGE_CHAT: config.metadata.publicReading ? "1" : "",
+    POST_ASK_AI: "1",
     // Shorten the immediate-notification delay (production default: five minutes); e2e/moderation.spec.ts waits for mail.
     NOTIFICATION_EMAIL_DELAY_SECONDS: "1",
     // Configure one upstream proxy. Tests supply a client address in X-Forwarded-For (clientHeaders in e2e/helpers.ts).

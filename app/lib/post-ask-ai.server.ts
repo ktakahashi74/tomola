@@ -77,10 +77,19 @@ export async function askPostQuestion(db: Db, input: {
       return completer.complete(prompt);
     }, result => ({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }));
     const answer = verifyQuestionAnswer(result.text, materials);
-    // Recheck after generation: a source may have been hidden, removed or edited
-    // while the provider was answering. Never return its stale private copy.
+    // Recheck cited sources after generation. Other replies and newly available
+    // translations do not invalidate passages that are still readable and unchanged.
     const current = answer ? await postQuestionMaterials(db, input.topicId, input.language) : null;
-    if (!answer || JSON.stringify(current) !== JSON.stringify(materials)) {
+    const citationsUnchanged = answer && current && answer.citations.every(citation => {
+      const before = materials.sources.find(source => source.id === citation.sourceId)!;
+      const after = current.sources.find(source => source.id === citation.sourceId);
+      if (!after) return false;
+      const { translation: beforeTranslation, ...beforeOriginal } = before;
+      const { translation: afterTranslation, ...afterOriginal } = after;
+      return JSON.stringify(beforeOriginal) === JSON.stringify(afterOriginal)
+        && (!citation.translation || JSON.stringify(beforeTranslation) === JSON.stringify(afterTranslation));
+    });
+    if (!citationsUnchanged) {
       await countQuestionEvent(db, "ask", "verification_failed", clock());
       return { ok: false, response: fail("unverified", 502) };
     }

@@ -6,6 +6,7 @@ import { aiUseMarkdown, aiUsePage } from "~/lib/ai-use-page.server";
 import { resolveEngines, resolveEmbeddingEngine, sourceLanguageConfig } from "~/lib/llm/config.server";
 import { createFigureReader } from "~/lib/figure-reading.server";
 import { moderationAiConfig } from "~/lib/moderation-ai-config.server";
+import { resolveQuestionCompleter } from "~/lib/ai-question-answer.server";
 import { publicOperatorSettings, type AiUseSettings } from "~/lib/operator-config.server";
 import { m } from "~/paraglide/messages.js";
 import { testOperator } from "./helpers/operator";
@@ -40,6 +41,7 @@ describe("public AI use", () => {
       DIVERGENCE_JUDGE: "gemini", DIVERGENCE_JUDGE_GEMINI_MODEL: "gemini-disclosure-judge", DIVERGENCE_JUDGE_THINKING: "default", DIVERGENCE_SAMPLE_RATE: "0.25",
       VILLAGES: "1", VILLAGE_CHAT: "1", CHAT_TRANSLATION_MODEL: "gemini-disclosure-chat", CHAT_TRANSLATION_THINKING: "off",
       FIGURE_TRANSLATION: "1", FIGURE_READING_MODEL: "gemini-disclosure-figure",
+      POST_ASK_AI: "1", POST_ASK_AI_MODEL: "gemini-disclosure-question",
       EMBEDDING_ENGINE: "gemini", EMBEDDING_MODEL: "gemini-disclosure-embedding",
       MODERATION_AI_MODEL: "gemini-disclosure-moderation", MODERATION_AI_TRIAGE_ENABLED: "1", MODERATION_SPAM_ENABLED: "1", MODERATION_AI_SPAM_ENABLED: "1",
     };
@@ -50,6 +52,7 @@ describe("public AI use", () => {
       ["chat-translation", engines.chat!.model], ["translation-check", engines.judge!.model], ["figure-reading", createFigureReader(env).model],
       ["figure-translation", engines.primary.model], ["source-language", sourceLanguageConfig(env).model],
       ["search-embedding", resolveEmbeddingEngine(env).model], ["report-triage", moderationAiConfig(env).model], ["spam-detection", moderationAiConfig(env).model],
+      ["post-ask", resolveQuestionCompleter(env).model],
     ]) expect(row(page, purpose)).toMatchObject({ enabled: true, model });
     expect(row(page, "translation-primary").provider).toBe("Google");
     expect(row(page, "translation-secondary").provider).toBe("Anthropic");
@@ -63,7 +66,7 @@ describe("public AI use", () => {
 
   it("honors disabled features, both spam switches and the actual comparison sampling condition", () => {
     const page = aiUsePage("en", fake);
-    for (const purpose of ["translation-secondary", "translation-retry", "chat-translation", "translation-check", "figure-reading", "figure-translation", "report-triage", "spam-detection"]) {
+    for (const purpose of ["translation-secondary", "translation-retry", "chat-translation", "post-ask", "translation-check", "figure-reading", "figure-translation", "report-triage", "spam-detection"]) {
       expect(row(page, purpose)).toMatchObject({ enabled: false, model: null, status: m.ai_use_disabled(), unrecorded: false });
     }
     const comparison = { ...fake, TRANSLATION_SECONDARY: "fake", DIVERGENCE_JUDGE: "fake" };
@@ -72,6 +75,9 @@ describe("public AI use", () => {
     expect(row(aiUsePage("en", { ...comparison, DIVERGENCE_SAMPLE_RATE: "1" }), "translation-check").enabled).toBe(true);
     expect(row(aiUsePage("en", { ...fake, MODERATION_AI_SPAM_ENABLED: "1" }), "spam-detection").enabled).toBe(false);
     expect(row(aiUsePage("en", { ...fake, VILLAGE_CHAT: "1" }), "chat-translation").enabled).toBe(false);
+    expect(row(aiUsePage("en", { ...fake, POST_ASK_AI: "0", POST_ASK_AI_MODEL: "fake-question" }), "post-ask").enabled).toBe(false);
+    const questionEnv = { ...fake, POST_ASK_AI: "1" };
+    expect(row(aiUsePage("en", questionEnv), "post-ask").model).toBe(resolveQuestionCompleter(questionEnv).model);
   });
 
   it.each(["en", "ja"] as const)("keeps keys, credentials, internal endpoints and prices out of HTML, Markdown and loader data in %s", async locale => {
@@ -105,8 +111,9 @@ describe("public AI use", () => {
 
   it("withholds URL-shaped model names and never returns raw resolver errors", async () => {
     const secret = "http://127.0.0.1:9199/model-credential-sentinel";
-    const page = aiUsePage("en", { ...fake, TRANSLATION_RETRY_MODEL: secret });
+    const page = aiUsePage("en", { ...fake, TRANSLATION_RETRY_MODEL: secret, POST_ASK_AI: "1", POST_ASK_AI_MODEL: secret });
     expect(row(page, "translation-retry")).toMatchObject({ enabled: true, model: m.ai_use_unknown_model() });
+    expect(row(page, "post-ask")).toMatchObject({ enabled: true, model: m.ai_use_unknown_model() });
     for (const output of [JSON.stringify(page), await render(page), aiUseMarkdown(page)]) expect(output).not.toContain(secret);
     vi.stubEnv("TRANSLATION_PRIMARY", "invalid-provider-credential-sentinel");
     expect(loader).toThrow("AI configuration is unavailable");

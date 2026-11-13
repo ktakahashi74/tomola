@@ -21,6 +21,11 @@ export function questionMemberKey(userId: string, secret = authSecret()): string
   return `member:ai-question:${createHmac("sha256", Buffer.from(key)).update(userId).digest("hex")}`;
 }
 
+export function questionIpKey(address: string, secret = authSecret()): string {
+  const key = hkdfSync("sha256", secret, "", "tomola ai-question IP allowance v1", 32);
+  return `ip:ai-question:${createHmac("sha256", Buffer.from(key)).update(address).digest("hex")}`;
+}
+
 // Deliberately independent of the post, village and usage purpose: future
 // question entry points consume the same member allowance.
 export function hitQuestionMemberLimit(db: Db, userId: string, env: LlmEnv = process.env, now = new Date()): Promise<RateLimitResult> {
@@ -28,7 +33,7 @@ export function hitQuestionMemberLimit(db: Db, userId: string, env: LlmEnv = pro
 }
 export async function hitQuestionIpLimit(db: Db, request: Request, env: LlmEnv = process.env, now = new Date()): Promise<RateLimitResult | null> {
   const address = clientAddress(request);
-  return address === null ? null : hitRateLimit(db, { key: `ip:ai-question:${address}`, ...aiQuestionLimits(env).ip, now });
+  return address === null ? null : hitRateLimit(db, { key: questionIpKey(address), ...aiQuestionLimits(env).ip, now });
 }
 
 // Reuse the existing expiring numeric-counter store. These daily rows have no

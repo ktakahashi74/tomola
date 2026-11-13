@@ -20,6 +20,9 @@ for (const locale of ["en", "ja"]) {
         const fixture = JSON.parse(fs.readFileSync(path.join(state().dir, "ai-use.json"), "utf8"));
         await expect(page.getByRole("heading", { level: 1, name: messages.ai_use_title, exact: true })).toBeVisible();
         await expect(page.locator('[data-ai-purpose="translation-primary"]')).toContainText(fixture.model);
+        await expect(page.locator('[data-ai-purpose="post-ask"]')).toContainText(messages.ai_use_post_ask);
+        await expect(page.locator('[data-ai-purpose="post-ask"]')).toContainText(messages.ai_use_sent_post_ask);
+        await expect(page.locator('[data-ai-purpose="post-ask"]')).not.toContainText(messages.ai_use_disabled);
         await expect(page.locator('[data-ai-purpose="translation-retry"]')).toContainText(messages.ai_use_disabled);
         await expect(page.getByText(testOperator.aiUse.humanReview![locale], { exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: messages.ai_use_objections_link, exact: true })).toHaveAttribute("href", testOperator.aiUse.objectionsUrl!);

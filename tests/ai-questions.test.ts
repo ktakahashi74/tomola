@@ -10,7 +10,8 @@ import { boundQuestionMaterials, postQuestionMaterials, type AiQuestionMaterials
 import { questionPrompt, verifyQuestionAnswer } from "~/lib/ai-question-answer.server";
 import { askPostQuestion } from "~/lib/post-ask-ai.server";
 import { saveQuestionReport, verifyQuestionReceipt } from "~/lib/ai-question-reports.server";
-import { hitQuestionMemberLimit, markQuestionDraft, questionEventCounts, questionMemberKey } from "~/lib/ai-question-usage.server";
+import { hitQuestionIpLimit, hitQuestionMemberLimit, markQuestionDraft, questionEventCounts, questionIpKey, questionMemberKey } from "~/lib/ai-question-usage.server";
+import { cleanupExpiredLimits } from "~/lib/rate-limit.server";
 import { createDraft, deleteDraft, publishDraft } from "~/lib/drafts.server";
 import { getBudgetStatus, getPostAskBudgetStatus, reserveUsage } from "~/lib/llm/usage.server";
 import { runRetentionCleanup } from "~/lib/retention.server";
@@ -216,6 +217,68 @@ it("shares the member allowance atomically across question purposes and resets a
   expect((await hitQuestionMemberLimit(db, "member", env, new Date("2030-01-02T00:00:00Z"))).allowed).toBe(true);
 });
 
+it.each(["reply", "translation"])("returns an answer when an uncited %s arrives during generation", async change => {
+  const f = await fixture();
+  const engine = completer();
+  const original = engine.complete;
+  engine.complete = async req => {
+    const result = await original(req);
+    if (change === "reply") {
+      const reply = await createReply(f.db, f.userId, f.id, { body: "An unrelated new reply.", lang: "en" });
+      expect(reply.ok).toBe(true);
+    } else {
+      const [topic] = await f.db.select().from(entries).where(eq(entries.id, f.id));
+      await f.db.insert(translations).values({ entryId: f.id, field: "body", kind: "primary", lang: "ja", text: "原文の箇所。続きの文。", sourceHash: topic.sourceHash });
+    }
+    return result;
+  };
+  const result = await askPostQuestion(f.db, { ...f, topicId: f.id, language: "ja", question: "Where is the passage?", request: request(), env, completer: engine });
+  expect(result.ok).toBe(true);
+  expect(await questionEventCounts(f.db)).toMatchObject({ asked: 1, verification_failed: 0 });
+});
+
+it.each(["hidden", "deleted", "original", "translation"])("withholds a cited reply changed during generation: %s", async change => {
+  const f = await fixture();
+  const reply = await createReply(f.db, f.userId, f.id, { body: "A cited reply passage.", lang: "en" });
+  if (!reply.ok) throw new Error(reply.error);
+  const [entry] = await f.db.select().from(entries).where(eq(entries.id, reply.id));
+  await f.db.insert(translations).values({ entryId: reply.id, field: "body", kind: "primary", lang: "ja", text: "引用した返信。", sourceHash: entry.sourceHash });
+  const engine = completer();
+  engine.complete = async req => {
+    const source = (JSON.parse(req.user).materials as AiQuestionMaterials["sources"]).find(s => s.kind === "reply")!;
+    const text = JSON.stringify({ status: "answered", readings: [{ text: "A reply reading.", citations: [{ sourceId: source.id, quote: source.original, translatedQuote: source.translation!.text }] }] });
+    if (change === "translation") await f.db.update(translations).set({ text: "置き換えた返信の訳。" }).where(eq(translations.entryId, reply.id));
+    else await f.db.update(entries).set(change === "hidden" ? { hiddenAt: new Date() } : change === "deleted" ? { deletedAt: new Date() } : { body: "An edited reply passage." }).where(eq(entries.id, reply.id));
+    return { text, inputTokens: 9, outputTokens: 7 };
+  };
+  const result = await askPostQuestion(f.db, { ...f, topicId: f.id, language: "ja", question: "What does the reply say?", request: request(), env, completer: engine });
+  expect(result.ok).toBe(false);
+  if (result.ok) throw new Error("unexpected answer");
+  expect(await result.response.json()).toEqual({ error: "unverified" });
+  expect(await questionEventCounts(f.db)).toMatchObject({ asked: 1, verification_failed: 1 });
+});
+
+it("stores keyed IP allowances, enforces their limit and removes expired windows", async () => {
+  const db = await createTestDb();
+  vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
+  const address = "192.0.2.19";
+  const ipRequest = new Request("http://localhost/t/1/ask/action", { headers: { "x-forwarded-for": address } });
+  const now = new Date("2030-01-01T12:00:00Z");
+  expect(questionIpKey(address, "secret-a")).not.toBe(questionIpKey(address, "secret-b"));
+  expect(questionIpKey(address, "secret-a")).not.toBe(questionMemberKey(address, "secret-a"));
+  expect(await hitQuestionIpLimit(db, request(), env, now)).toBeNull();
+  for (let i = 0; i < AI_QUESTION_LIMITS.ipLimit; i++) expect((await hitQuestionIpLimit(db, ipRequest, env, now))?.allowed).toBe(true);
+  expect((await hitQuestionIpLimit(db, ipRequest, env, now))?.allowed).toBe(false);
+  const rows = await db.select().from(rateLimits);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].key).toMatch(/^ip:ai-question:[a-f0-9]{64}$/);
+  expect(JSON.stringify(rows)).not.toContain(address);
+  const nextWindow = new Date(now.getTime() + AI_QUESTION_LIMITS.ipWindowSeconds * 1000);
+  await cleanupExpiredLimits(db, nextWindow);
+  expect(await db.select().from(rateLimits)).toEqual([]);
+  expect((await hitQuestionIpLimit(db, ipRequest, env, nextWindow))?.allowed).toBe(true);
+});
+
 it("stops on feature, daily, IP and independent monthly limits before making a provider call", async () => {
   const f = await fixture();
   const engine = completer();
@@ -232,7 +295,7 @@ it("stops on feature, daily, IP and independent monthly limits before making a p
   expect(await daily.response.json()).toEqual({ error: "daily_limit" });
   vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
   const ipRequest = new Request("http://localhost/t/1/ask/action", { method: "POST", headers: { "x-forwarded-for": "192.0.2.17" } });
-  const ipKey = "ip:ai-question:192.0.2.17";
+  const ipKey = questionIpKey("192.0.2.17");
   const ipTime = new Date("2030-01-01T12:02:03Z");
   await f.db.insert(rateLimits).values({ key: ipKey, windowStart: new Date(Math.floor(ipTime.getTime() / 600000) * 600000), count: 6, expiresAt: new Date(ipTime.getTime() + 600000) });
   const ip = await askPostQuestion(f.db, { ...base, env, request: ipRequest, now: ipTime });
