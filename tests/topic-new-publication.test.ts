@@ -105,7 +105,7 @@ describe("mistakes: the words, what was typed and the opened options come back",
     const before = await topicCount();
     const out = await post("hana", { body: "書いた本文。", title: "", asksStance: "1", lang: "en" });
     expect(out.status).toBe(400);
-    expect(errorOf(out)).toEqual({ error: "invalid_title", values: { body: "書いた本文。", title: "", asksStance: true, lang: "en", intro: false } });
+    expect(errorOf(out)).toEqual({ error: "invalid_title", values: { aiMaterial: "", body: "書いた本文。", title: "", asksStance: true, lang: "en", intro: false } });
     expect(await topicCount()).toBe(before);
   });
 
@@ -228,7 +228,7 @@ describe("the limits of posting from the screens", () => {
     const before = await topicCount();
     const refused = await post("fast", { body: "21番目の投稿", title: "題" });
     expect(refused.status).toBe(429);
-    expect(errorOf(refused)).toEqual({ error: "rate_limited", values: { body: "21番目の投稿", title: "題", asksStance: false, lang: "", intro: false } });
+    expect(errorOf(refused)).toEqual({ error: "rate_limited", values: { aiMaterial: "", body: "21番目の投稿", title: "題", asksStance: false, lang: "", intro: false } });
     expect(await topicCount()).toBe(before);
     expect(((refused.value as { init?: { headers?: Record<string, string> } }).init?.headers ?? {})["Retry-After"]).toBeDefined();
     expect((await post("kim", { body: "別の会員は投稿できる" })).status).toBe(302);

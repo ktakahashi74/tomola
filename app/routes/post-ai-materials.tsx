@@ -80,8 +80,8 @@ export default function PostAiMaterials({ loaderData: view, actionData }: Route.
       <label className="block" htmlFor="ai-material">{m.ai_material_title()}</label>
       <Textarea id="ai-material" name="aiMaterial" rows={16} maxLength={POST_AI_MATERIAL_CHARS} defaultValue={actionData?.body ?? view.body} required />
       <p className="ui-help">{m.ai_material_input_help({ count: POST_AI_MATERIAL_CHARS })}</p>
-      <Button name="intent" value="save">{m.save_changes()}</Button>
-      {view.version > 0 && <Button name="intent" value="delete" formNoValidate variant="outline">{m.ai_material_delete()}</Button>}
+      <Button type="submit" name="intent" value="save">{m.save_changes()}</Button>
+      {view.version > 0 && <Button type="submit" name="intent" value="delete" formNoValidate variant="outline">{m.ai_material_delete()}</Button>}
     </Form> : <>
       {view.material && <>
         <p className="ui-meta">{view.material.author} · <LocalTime iso={view.material.updatedAt.toISOString()} style="date" /></p>
@@ -93,11 +93,11 @@ export default function PostAiMaterials({ loaderData: view, actionData }: Route.
       {view.member && !view.owner && !view.material?.hidden && <details><summary>{m.flag_short()}</summary><Form method="post" className="space-y-2">
         <input type="hidden" name="intent" value="report" /><input type="hidden" name="version" value={view.version} />
         <ReportReasonSelect label={m.flag_reason()} defaultValue="spam" />
-        <label className="block">{m.flag_note()}<Textarea name="note" maxLength={800} /></label><p className="ui-help">{m.flag_privacy()}</p><Button>{m.flag_submit()}</Button>
+        <label className="block">{m.flag_note()}<Textarea name="note" maxLength={800} /></label><p className="ui-help">{m.flag_privacy()}</p><Button type="submit">{m.flag_submit()}</Button>
       </Form></details>}
       {view.moderator && <Form method="post" className="space-y-2 border-t pt-3"><input type="hidden" name="version" value={view.version} />
         <label className="block">{m.flag_note()}<Textarea name="note" required maxLength={1000} /></label>
-        <Button name="intent" value={view.material?.materialHidden ? "unhide" : "hide"}>{view.material?.materialHidden ? m.ai_material_unhide() : m.ai_material_hide()}</Button>
+        <Button type="submit" name="intent" value={view.material?.materialHidden ? "unhide" : "hide"}>{view.material?.materialHidden ? m.ai_material_unhide() : m.ai_material_hide()}</Button>
       </Form>}
     </>}
     {view.warnings && <details><summary>{m.ai_material_review_log()}</summary><pre className="whitespace-pre-wrap">{JSON.stringify(view.warnings, null, 2)}</pre></details>}

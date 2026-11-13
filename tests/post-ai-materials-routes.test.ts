@@ -8,6 +8,8 @@ import { loader, action } from "~/routes/post-ai-materials";
 import { action as publish } from "~/routes/topic-new";
 import { readPostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
 
+vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
+
 let h: RouteHarness;
 beforeAll(async () => {
   h = await setupRouteHarness();
