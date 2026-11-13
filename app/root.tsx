@@ -13,7 +13,6 @@ import { skipRevalidationFor } from "~/lib/stance-ui";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
 import { initializeSiteMarkdown } from "~/lib/markdown-startup.server";
 import {
-  data,
   Links,
   Meta,
   Outlet,
@@ -107,10 +106,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // The enabled languages (ENABLED_LANGS), for the language choices (useEnabledLangs in app/lib/use-enabled-langs.ts). Add keys here, do not change the shape.
   const labels = shellLabels();
   const colorScheme = await memberColorScheme(request);
-  const result = { ...footerNotices(), colorScheme, labels, loggedOut: hasLogoutNotice(request), webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
-  // Root data may also be requested on public information pages. Keep an
-  // account preference out of shared caches, including single-fetch responses.
-  return colorScheme ? data(result, { headers: { "Cache-Control": "private, no-store" } }) : result;
+  return { ...footerNotices(), colorScheme, labels, loggedOut: hasLogoutNotice(request), webPush: webPushEnabled(), testSiteNotice: testSiteEnabled() ? (operatorCopy(operatorConfig(), getLocale()).testSiteNotice ?? m.test_site_notice()) : null, enabledLangs: enabledLangs(), previewLangs: previewLangs(), sourceUrl: source, revision: revision(), homeTrial: homeTrialEnabled(), publicReading: publicReading(), siteOrigin: publicReading() ? siteOrigin() : null, villages: villagesEnabled(), villageChat: villageChatEnabled(), translationWait: await readTranslationWaits(getDb) };
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

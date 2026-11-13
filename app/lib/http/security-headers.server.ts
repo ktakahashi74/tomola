@@ -128,6 +128,10 @@ export const securityHeadersMiddleware: MiddlewareFunction = async ({ context, r
   const documentPath = url.pathname.replace(/\/_\.data$/, "/").replace(/\.data$/, "");
   const publicStatic = /^\/(principles|why|name|connect|offline)\/?$/.test(documentPath);
   const memberOnly = /^\/(settings|notifications|drafts?|mod|admin|invites|onboarding|suspended|login|auth|mcp)(?:\/|$)/.test(documentPath);
-  const privateData = url.pathname.endsWith(".data") && !publicStatic && (memberOnly || !publicReading() || getSessionCookie(request) !== null);
+  // Root data includes account appearance even on public information pages.
+  // Document-only fetches still carry no member preference.
+  const selectedRoutes = url.searchParams.get("_routes");
+  const memberData = getSessionCookie(request) !== null && (!publicStatic || !selectedRoutes || selectedRoutes.split(",").includes("root"));
+  const privateData = url.pathname.endsWith(".data") && (memberData || (!publicStatic && (memberOnly || !publicReading())));
   return response instanceof Response ? withSecurityHeaders(response, { nonce, production: isProductionEnv(), privateData, pathname: url.pathname }) : response;
 };

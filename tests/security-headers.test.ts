@@ -46,16 +46,24 @@ it("isolates the opener and prevents storage of private single-fetch data while 
   } finally { vi.unstubAllEnvs(); }
 });
 
-it("treats name and why single-fetch responses as public static documents in both reading modes", async () => {
+it("protects member root data on public documents while preserving guest and document-only responses", async () => {
   try {
     for (const mode of ["", "1"]) {
       vi.stubEnv("PUBLIC_READING", mode);
       for (const path of ["/why.data", "/name.data", "/name/.data"]) {
-        const response = await securityHeadersMiddleware({
-          request: new Request(`https://forum.example.org${path}`, { headers: { cookie: "better-auth.session_token=present" } }),
-          params: {}, context: new RouterContextProvider(),
-        } as never, (async () => new Response("public document", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } })) as never) as Response;
-        expect(response.headers.get("Cache-Control"), `${mode}: ${path}`).toBe("private");
+        for (const [selection, cookie, expected] of [
+          ["", "better-auth.session_token=present", "private, no-store"],
+          ["?_routes=root", "better-auth.session_token=present", "private, no-store"],
+          ["?_routes=root,routes/why", "better-auth.session_token=present", "private, no-store"],
+          ["?_routes=routes/why", "better-auth.session_token=present", "private"],
+          ["?_routes=root", "", "private"],
+        ]) {
+          const response = await securityHeadersMiddleware({
+            request: new Request(`https://forum.example.org${path}${selection}`, { headers: { cookie } }),
+            params: {}, context: new RouterContextProvider(),
+          } as never, (async () => new Response("document", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } })) as never) as Response;
+          expect(response.headers.get("Cache-Control"), `${mode}: ${path}${selection}`).toBe(expected);
+        }
       }
     }
   } finally { vi.unstubAllEnvs(); }
