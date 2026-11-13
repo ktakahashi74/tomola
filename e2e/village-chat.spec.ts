@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { state, captureScreenshot, enMessages as m, useMember, waitForClientRoute } from "./helpers";
+import { state, captureScreenshot, enMessages as m, formatMessage, useMember, waitForClientRoute } from "./helpers";
 
 test("members receive new, edited and deleted plain messages without reloading", async ({ page, browser }) => {
   await useMember(page, "vchat_live_a@example.com");
@@ -17,13 +17,14 @@ test("members receive new, edited and deleted plain messages without reloading",
     await expect(page.getByLabel(m.village_chat_body, { exact: true })).toHaveValue("");
     await other.reload();
     // The message mentions this member, so the Chat tab and the chat entrance of the side column carry a number (what is addressed to the member); other news is only a dot.
-    await expect(other.locator("main").getByRole("link", { name: /^Chat 1 mention/ })).toBeVisible();
+    const addressed = formatMessage(m.village_chat_addressed, { count: 1 });
+    await expect(other.locator("main").getByRole("link", { name: `${m.village_chat_title} ${addressed}`, exact: true })).toBeVisible();
     const villageLink = other.locator('[data-site-navigation] a[href="/v/chat-live/chat"]');
-    await expect(villageLink).toHaveAccessibleName(/1 mention$/);
+    await expect(villageLink).toHaveAccessibleName(`chat-live · ${m.village_chat_title} · ${addressed}`);
     await expect(villageLink).toContainText("1");
     await other.getByRole("navigation", { name: m.nav_side_label, exact: true }).getByRole("link", { name: m.nav_all_villages, exact: true }).click(); await waitForClientRoute(other);
     const joined = other.getByRole("region", { name: m.villages_joined_heading, exact: true });
-    await expect(joined.locator('a[href="/v/chat-live/chat"]')).toHaveAccessibleName(/1 mention$/);
+    await expect(joined.locator('a[href="/v/chat-live/chat"]')).toHaveAccessibleName(`chat-live · ${m.village_chat_title} · ${addressed}`);
     await joined.locator('a[href="/v/chat-live"]').click(); await waitForClientRoute(other);
     await other.goto("/v/chat-live/chat"); await waitForClientRoute(other);
     const received = other.locator("[data-chat-message]").filter({ hasText: "Plain chat" });

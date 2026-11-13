@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { enMessages as m, state, useMember, waitForClientRoute } from "./helpers";
+import { enMessages as m, formatMessage, state, useMember, waitForClientRoute } from "./helpers";
 
 // A mark for this run: the village keeps what earlier runs of the same file sent.
 const runMark = Math.random().toString(36).slice(2, 8);
@@ -18,7 +18,7 @@ test("the places drawer is reachable by keyboard on a narrow screen and shows a 
   await expect(places.getByRole("link").first()).toBeFocused();
   // A chat that names the member shows a number; a chat with only news shows a dot.
   await expect(summary).toHaveAccessibleName(`${m.nav_places} ${m.notification_unread}`);
-  await expect(places.locator('a[href="/v/ux-nav-chat/chat"]')).toHaveAccessibleName(/1 mention$/);
+  await expect(places.locator('a[href="/v/ux-nav-chat/chat"]')).toHaveAccessibleName(`UX nav chat · ${m.village_chat_title} · ${formatMessage(m.village_chat_addressed, { count: 1 })}`);
   await expect(places.locator('a[href="/v/ux-nav-news/chat"] .bg-unread')).toHaveCount(1);
   await expect(places.locator('a[href="/v/ux-nav-news/chat"]')).not.toContainText(/\d/);
   await page.keyboard.press("Escape");
