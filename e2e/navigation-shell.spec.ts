@@ -77,7 +77,7 @@ for (const scripts of [true, false]) {
       else await section.locator('input[name="readLangs"][value="ja"]').check();
       if (!scripts) await section.getByRole("button", { name: m.save_changes, exact: true }).click();
       await expect(settings).toHaveURL(url => (scripts || url.searchParams.get("saved") === "preferences") && url.searchParams.get("returnTo") === source);
-      await expect(section.getByRole("status")).toContainText(m.settings_saved);
+      await expect(section.getByRole("status").filter({ hasText: m.settings_saved })).toContainText(m.settings_saved);
       if (!scripts) await expect(section.locator('input[name="readLangs"][value="ja"]')).toBeChecked();
       const back = settings.locator("main").getByRole("link", { name: m.settings_return, exact: true });
       await expect(back).toHaveAttribute("href", source); await back.click();
