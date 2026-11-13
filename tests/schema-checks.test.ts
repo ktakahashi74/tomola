@@ -6,6 +6,7 @@ import { FOLLOW_STATES } from "~/lib/follows";
 import { EMAIL_PREFS, NOTIFICATION_KINDS } from "~/lib/notifications";
 import { GLOSSARY_VIAS } from "~/lib/glossary";
 import { createTopic } from "~/lib/entries.server";
+import { SOURCE_LANGS } from "~/lib/languages";
 import { STANCE_TAGS } from "~/lib/stances";
 import { addMember, createTestDb } from "./helpers/db";
 
@@ -39,8 +40,17 @@ describe("enum CHECK constraints", () => {
   it("rejects a value outside the enumeration in every constrained column, and accepts the valid ones", async () => {
     const { db, topicId } = await setup();
     await rejects(() => db.insert(entries).values(entryValues({ kind: "comment" })), "entries_kind_check");
-    await rejects(() => db.insert(entries).values(entryValues({ lang: "xx" })), "entries_lang_check");
-    await rejects(() => db.insert(entries).values(entryValues({ lang: "other" })), "entries_lang_check");
+    for (const lang of ["xx", "not-a-language", "other!"]) {
+      await rejects(() => db.insert(entries).values(entryValues({ lang })), "entries_lang_check");
+    }
+    for (const lang of SOURCE_LANGS) {
+      await db.insert(entries).values(entryValues({ lang }));
+    }
+    await rejects(() => db.insert(entries).values(entryValues({ langSource: "guessed" })), "entries_lang_source_check");
+    for (const langSource of [null, "explicit", "detected", "default", "checked"]) await db.insert(entries).values(entryValues({ langSource }));
+    await db.insert(entries).values(entryValues({ lang: "other", langCode: "el" }));
+    await rejects(() => db.insert(entries).values(entryValues({ lang: "en", langCode: "el" })), "entries_lang_code_check");
+    await rejects(() => db.insert(entries).values(entryValues({ lang: "other", langCode: "garbage!" })), "entries_lang_code_check");
     await rejects(() => db.insert(entries).values(entryValues({ aiAssistance: "full" })), "entries_ai_assistance_check");
     await rejects(() => db.insert(entries).values(entryValues({ via: "sms" })), "entries_via_check");
     await db.insert(entries).values(entryValues({ lang: "zh-Hant", aiAssistance: "coauthor", via: "api" }));
@@ -50,6 +60,7 @@ describe("enum CHECK constraints", () => {
 
     await rejects(() => db.insert(translations).values(translationValues(topicId, { field: "summary" })), "translations_field_check");
     await rejects(() => db.insert(translations).values(translationValues(topicId, { lang: "ja-JP" })), "translations_lang_check");
+    await rejects(() => db.insert(translations).values(translationValues(topicId, { lang: "other" })), "translations_lang_check");
     await rejects(() => db.insert(translations).values(translationValues(topicId, { kind: "draft" })), "translations_kind_check");
     // Author translations, kind author, were removed in migration 0042.
     await rejects(() => db.insert(translations).values(translationValues(topicId, { kind: "author" })), "translations_kind_check");

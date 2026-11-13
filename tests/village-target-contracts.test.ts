@@ -100,7 +100,9 @@ it("extends the existing HTTP creation and MCP create/update contracts without e
   vi.stubEnv("VILLAGES", "");
   const off = await post("{invalid: ignored}");
   expect(off.status).toBe(201);
-  expect(Object.keys(await off.json()).sort()).toEqual(["approve_url", "id", "issues", "issues_truncated", "lang", "language"]);
+  const offBody = await off.json();
+  expect(Object.keys(offBody).sort()).toEqual(["approve_url", "id", "issues", "issues_truncated", "lang", "lang_code", "language"]);
+  expect(offBody).toMatchObject({ lang: "en", lang_code: null });
   for (const name of ["tomola_draft_create", "tomola_draft_update"]) expect((await rpc("tools/list", {})).tools.find((t: { name: string }) => t.name === name).inputSchema.properties).not.toHaveProperty("village");
   expect(view(await call("tomola_draft_create", { kind: "topic", body: "Ignored off target.", village: "missing-target" }))).not.toHaveProperty("village");
 });

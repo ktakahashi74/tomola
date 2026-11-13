@@ -7,8 +7,8 @@ import { createElement, type ReactNode } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { drafts, user } from "~/lib/db/schema";
-import { createDraft } from "~/lib/drafts.server";
+import { drafts, entries, user } from "~/lib/db/schema";
+import { createDraft, publishDraft, updateDraft } from "~/lib/drafts.server";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { createProfile, defaultPostLang, defaultReadLangs, getProfile, updatePreferences, changeHomeArea } from "~/lib/profiles.server";
 import { HOME_AREA_CHANGE_DAYS } from "~/lib/profile-settings";
@@ -125,7 +125,7 @@ describe("read languages in the settings", () => {
   });
 });
 
-describe("the language of a post: the main language by default, chosen per post from the enabled languages", () => {
+describe("the language of a post: an enabled default and an independent source-language choice", () => {
   it("defaultPostLang: the main language if enabled; for \"other\" or a language that is not enabled, the first enabled language the member reads, then the default", () => {
     const enabled: readonly Lang[] = ["ja", "en", "fr"];
     expect(defaultPostLang({ homeArea: "fr", readLangs: ["fr"] }, enabled)).toBe("fr");
@@ -137,32 +137,60 @@ describe("the language of a post: the main language by default, chosen per post 
     expect(defaultPostLang({ homeArea: "ja", readLangs: ["ja"] })).toBe("ja");
   });
 
-  it("a member whose main language is English can post in Japanese; the post language is checked against the enabled languages", async () => {
+  it("accepts enabled and unopened source languages for topics and replies, but rejects invalid values", async () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     const db = await createTestDb();
     await addMember(db, "u1", "kim", { homeArea: "en", readLangs: ["en"] });
     const ja = await createTopic(db, "u1", { lang: "ja", title: "日本語の題", body: "日本語の本文。" });
     expect(ja.ok).toBe(true);
-    expect(await createTopic(db, "u1", { lang: "de", title: "t", body: "b" })).toEqual({ ok: false, error: "invalid_lang" });
     if (!ja.ok) throw new Error("topic failed");
-    expect(await createReply(db, "u1", ja.id, { lang: "de", body: "b" })).toEqual({ ok: false, error: "invalid_lang" });
-    expect(await createReply(db, "u1", ja.id, { lang: "en", body: "ok" })).toMatchObject({ ok: true });
+    for (const lang of ["de", "other", "en"]) {
+      const topic = await createTopic(db, "u1", { lang, title: "t", body: "b" });
+      const reply = await createReply(db, "u1", ja.id, { lang, body: "b" });
+      if (!topic.ok || !reply.ok) throw new Error(`creation failed for ${lang}`);
+      for (const id of [topic.id, reply.id]) expect((await db.select().from(entries).where(eq(entries.id, id)))[0]).toMatchObject({ lang, langCode: null, langSource: "explicit" });
+    }
+    const before = (await db.select().from(entries)).length;
+    for (const lang of ["xx", "not-a-language", "other!"]) {
+      expect(await createTopic(db, "u1", { lang, title: "t", body: "b" })).toEqual({ ok: false, error: "invalid_lang" });
+      expect(await createReply(db, "u1", ja.id, { lang, body: "b" })).toEqual({ ok: false, error: "invalid_lang" });
+    }
+    expect(await db.select().from(entries)).toHaveLength(before);
   });
 
-  it("drafts: a language that is not enabled cannot be saved, and publishing a draft saved before the language was closed fails with invalid_lang and keeps the draft", async () => {
+  it("saves and publishes unopened source languages, rejects invalid draft languages, and retains a draft after failed publication", async () => {
     const db = await createTestDb();
     await addMember(db, "u1", "kim", { homeArea: "en", readLangs: ["en"] });
-    // saved while all nine languages were enabled
+    // A draft saved before its language closes still publishes in its original language.
     const made = await createDraft(db, "u1", { kind: "topic", lang: "de", title: "Titel", body: "Text." });
     if (!made.ok) throw new Error("draft failed");
     vi.stubEnv("ENABLED_LANGS", "ja,en");
-    expect(await createDraft(db, "u1", { kind: "topic", lang: "de", title: "Titel", body: "Text." })).toEqual({ ok: false, error: "invalid_lang" });
-    const { publishDraft } = await import("~/lib/drafts.server");
+    for (const lang of ["xx", "not-a-language", "other!"]) {
+      expect(await createDraft(db, "u1", { kind: "topic", lang, title: "Bad", body: "Bad draft." })).toEqual({ ok: false, error: "invalid_lang" });
+      expect(await updateDraft(db, "u1", made.id, { lang, body: "Must not overwrite." })).toEqual({ ok: false, error: "invalid_lang" });
+    }
+    expect(await db.select().from(drafts)).toMatchObject([{ id: made.id, lang: "de", body: "Text.", version: 1 }]);
+    // Invalid stored values must still fail publication without losing the draft.
+    await db.update(drafts).set({ lang: "xx" }).where(eq(drafts.id, made.id));
     expect(await publishDraft(db, "u1", made.id)).toEqual({ ok: false, error: "invalid_lang" });
-    expect(await db.select().from(drafts).where(eq(drafts.id, made.id))).toHaveLength(1);
+    expect(await db.select().from(drafts).where(eq(drafts.id, made.id))).toMatchObject([{ lang: "xx", body: "Text.", version: 1 }]);
+    expect(await updateDraft(db, "u1", made.id, { lang: "de", body: "Text." })).toEqual({ ok: true });
+    const saved = [made];
+    for (const lang of ["de", "other"]) {
+      const draft = await createDraft(db, "u1", { kind: "topic", lang, title: "Titel", body: "Text." });
+      if (!draft.ok) throw new Error(`draft failed for ${lang}`);
+      saved.push(draft);
+    }
+    for (const draft of saved) {
+      const [original] = await db.select().from(drafts).where(eq(drafts.id, draft.id));
+      const published = await publishDraft(db, "u1", draft.id);
+      if (!published.ok) throw new Error("publication failed");
+      expect((await db.select().from(entries).where(eq(entries.id, published.id)))[0]).toMatchObject({ lang: original.lang, body: original.body });
+      expect(await db.select().from(drafts).where(eq(drafts.id, draft.id))).toHaveLength(0);
+    }
   });
 
-  it("the API draft takes the main language as the default and refuses a language that is not enabled with 400 invalid_lang, naming the enabled languages", async () => {
+  it("defaults API drafts to the main language, accepts unopened sources, and rejects invalid languages with 400 invalid_lang", async () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en");
     const h = await setupRouteHarness();
     try {
@@ -171,17 +199,28 @@ describe("the language of a post: the main language by default, chosen per post 
       const token = await createApiToken(h.db, h.ids.hana, { name: "claude code", kind: "draft" });
       if (!token.ok) throw new Error("token failed");
       const { action } = await import("~/routes/api.drafts");
-      const post = (text: string) =>
-        h.outcome(() => action(h.args(new Request("http://localhost:5173/api/drafts", { method: "POST", headers: { authorization: `Bearer ${token.token}`, "content-type": "text/markdown; charset=utf-8" }, body: text }))));
+      const post = async (text: string) =>
+        (await action(h.args(new Request("http://localhost:5173/api/drafts", { method: "POST", headers: { authorization: `Bearer ${token.token}`, "content-type": "text/markdown; charset=utf-8" }, body: text })))) as Response;
       const ok = await post("---\ntype: post\ntitle: Hello\n---\nA body.");
       expect(ok).toMatchObject({ status: 201 });
       const [draft] = await h.db.select({ lang: drafts.lang }).from(drafts);
       expect(draft.lang).toBe("en");
-      const bad = (await action(h.args(new Request("http://localhost:5173/api/drafts", { method: "POST", headers: { authorization: `Bearer ${token.token}`, "content-type": "text/markdown; charset=utf-8" }, body: "---\ntype: post\ntitle: Hallo\nlang: de\n---\nText." })))) as Response;
-      expect(bad.status).toBe(400);
-      const body = (await bad.json()) as { error: string; message: string };
-      expect(body.error).toBe("invalid_lang");
-      expect(body.message).toContain("ja, en");
+      for (const lang of ["de", "other"]) {
+        const accepted = await post(`---\ntype: post\ntitle: Hallo\nlang: ${lang}\n---\nText.`);
+        expect(accepted.status).toBe(201);
+        const result = await accepted.json();
+        expect(result).toMatchObject({ lang, lang_code: null, language: { source: "explicit" } });
+        expect((await h.db.select().from(drafts).where(eq(drafts.id, result.id)))[0]).toMatchObject({ lang, via: "api" });
+      }
+      const before = (await h.db.select().from(drafts)).length;
+      for (const lang of ["xx", "not-a-language", "other!"]) {
+        const bad = await post(`---\ntype: post\ntitle: Invalid language\nlang: ${lang}\n---\nText.`);
+        expect(bad.status).toBe(400);
+        const body = (await bad.json()) as { error: string; message: string };
+        expect(body.error).toBe("invalid_lang");
+        expect(body.message).toContain("ja, en");
+      }
+      expect(await h.db.select().from(drafts)).toHaveLength(before);
     } finally {
       h.restore();
     }

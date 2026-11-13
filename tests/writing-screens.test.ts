@@ -16,8 +16,8 @@ async function ownDraft(as: string, body = "Made for an AI") {
   return draft.id;
 }
 
-describe("the notice after posting reads the translation states of the member's own topic only", () => {
-  it("answers the author, and 404 for anyone else, for a reply, a deleted topic and a bad id", async () => {
+describe("the notice after posting reads the translation states of the member's own topics and replies only", () => {
+  it("answers the author for topics and replies, and returns 404 for anyone else, deleted entries and bad ids", async () => {
     const { loader } = await import("~/routes/posted-status");
     const topic = await createTopic(h.db, h.ids.writer, { lang: "en", body: "Own topic" });
     const gone = await createTopic(h.db, h.ids.writer, { lang: "en", body: "Topic to delete" });
@@ -26,11 +26,16 @@ describe("the notice after posting reads the translation states of the member's 
     if (!reply.ok) throw new Error("reply failed");
     expect((await deleteOwnEntry(h.db, h.ids.writer, gone.id)).ok).toBe(true);
     const status = (as: string, id: string) => h.outcome(() => loader(h.args(h.request(`/t/${id}/posted-status`, { as }), { id })));
-    expect((await status("writer", String(topic.id))).status).toBe(200);
-    expect((await status("other", String(topic.id))).status).toBe(404);
-    expect((await status("writer", String(reply.id))).status).toBe(404);
-    expect((await status("writer", String(gone.id))).status).toBe(404);
-    expect((await status("writer", "abc")).status).toBe(404);
+    for (const id of [topic.id, reply.id]) {
+      const own = await status("writer", String(id));
+      expect(own.status).toBe(200);
+      expect(own.value).toMatchObject({ data: { lang: "en", langCode: null, langs: expect.any(Array) }, init: { headers: { "Cache-Control": "private, no-store" } } });
+      expect((await status("other", String(id))).status).toBe(404);
+    }
+    expect((await deleteOwnEntry(h.db, h.ids.writer, reply.id)).ok).toBe(true);
+    for (const id of [String(gone.id), String(reply.id), "abc", "999999999"]) {
+      for (const as of ["writer", "other"]) expect((await status(as, id)).status).toBe(404);
+    }
   });
 });
 

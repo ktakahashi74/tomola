@@ -109,15 +109,23 @@ describe("mistakes: the words, what was typed and the opened options come back",
     expect(await topicCount()).toBe(before);
   });
 
-  it("returns an empty-body failure and refuses unavailable languages", async () => {
+  it("rejects an empty body and invalid language values, and accepts unopened source languages", async () => {
+    vi.stubEnv("ENABLED_LANGS", "ja,en");
+    const before = await topicCount();
     const empty = await post("hana", { body: "   \n ", title: "題だけ" });
     expect(empty.status).toBe(400);
     expect(errorOf(empty)).toMatchObject({ error: "body_required" });
-    expect(errorOf(await post("hana", { body: "x", lang: "xx" }))).toMatchObject({ error: "invalid_lang" });
-    // a language that exists but is not enabled on this site is refused the same way
-    vi.stubEnv("ENABLED_LANGS", "ja,en");
-    expect(errorOf(await post("hana", { body: "x", lang: "fr" })).error).toBe("invalid_lang");
-    expect((await post("hana", { body: "x", lang: "en" })).status).toBe(302);
+    for (const lang of ["xx", "not-a-language", "other!"]) {
+      const rejected = await post("hana", { body: "x", lang });
+      expect(rejected.status).toBe(400);
+      expect(errorOf(rejected)).toMatchObject({ error: "invalid_lang" });
+    }
+    expect(await topicCount()).toBe(before);
+    for (const lang of ["fr", "other", "en"]) {
+      const accepted = await post("hana", { body: "x", lang });
+      expect(accepted.status).toBe(302);
+      expect(await rowOf(idFrom(accepted.location))).toMatchObject({ lang, langCode: null, langSource: "explicit" });
+    }
   });
 
   it("retains question fields in the dedicated editor after a title error", async () => {

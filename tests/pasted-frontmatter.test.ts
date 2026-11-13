@@ -16,11 +16,11 @@ const opts = { defaultLang: "ja", threadId: 7 };
 describe("applyPastedFrontmatter", () => {
   it("takes the title, language and ai_assistance from the frontmatter when the form leaves them empty (automatic), and strips it from the body", async () => {
     const res = (await applyPastedFrontmatter(form({ body: md("title: Pasted title\nlang: en\nai_assistance: draft", "First.\n\nSecond.") }), "topic", opts));
-    expect(res).toEqual({ ok: true, language: { source: "explicit", detected: null }, parentId: undefined, input: { title: "Pasted title", body: "First.\n\nSecond.", lang: "en", aiAssistance: "draft", ...noAttrs } });
+    expect(res).toEqual({ ok: true, language: { source: "explicit", detected: null }, parentId: undefined, input: { title: "Pasted title", body: "First.\n\nSecond.", lang: "en", langCode: null, langSource: "explicit", aiAssistance: "draft", ...noAttrs } });
   });
 
   it("hands over an empty title as it is when neither the form nor the frontmatter has one (a topic without a title is allowed; the service decides)", async () => {
-    expect((await applyPastedFrontmatter(form({ body: md("lang: en", "Short remark.") }), "topic", opts))).toEqual({ ok: true, language: { source: "explicit", detected: null }, parentId: undefined, input: { title: "", body: "Short remark.", lang: "en", aiAssistance: null, ...noAttrs } });
+    expect((await applyPastedFrontmatter(form({ body: md("lang: en", "Short remark.") }), "topic", opts))).toEqual({ ok: true, language: { source: "explicit", detected: null }, parentId: undefined, input: { title: "", body: "Short remark.", lang: "en", langCode: null, langSource: "explicit", aiAssistance: null, ...noAttrs } });
     // A pasted title, empty or null, is the same as none.
     expect((await applyPastedFrontmatter(form({ body: md("title: null\nlang: en", "Short remark.") }), "topic", opts))).toMatchObject({ ok: true, input: { title: "" } });
     expect((await applyPastedFrontmatter(form({ body: md("title: ''\nlang: en", "Short remark.") }), "topic", opts))).toMatchObject({ ok: true, input: { title: "" } });
@@ -37,7 +37,7 @@ describe("applyPastedFrontmatter", () => {
 
   it("falls back to the default language, and states no ai_assistance (null, not none), when neither the form nor the frontmatter says", async () => {
     expect((await applyPastedFrontmatter(form({ body: md("title: T") }), "topic", opts))).toMatchObject({ input: { lang: "ja", aiAssistance: null } });
-    expect((await applyPastedFrontmatter(form({ body: "no frontmatter" }), "topic", opts))).toEqual({ ok: true, language: { source: "default", detected: null }, input: { title: "", body: "no frontmatter", lang: "ja", aiAssistance: null, ...noAttrs } });
+    expect((await applyPastedFrontmatter(form({ body: "no frontmatter" }), "topic", opts))).toEqual({ ok: true, language: { source: "default", detected: null }, input: { title: "", body: "no frontmatter", lang: "ja", langCode: null, langSource: "default", aiAssistance: null, ...noAttrs } });
   });
 
   it("keeps text that does not parse as a YAML mapping as the body, unchanged", async () => {
