@@ -133,6 +133,16 @@ Browser check attempts are recorded as `browser-results-*.json` under `.data/che
 
 Vitest defaults to four workers in every configuration, including real PostgreSQL. The full unit stages in integration and release explicitly use six workers per backend; focused and no-database checks keep their existing limits. The production setup additionally starts and stops `node server.ts` without a fixture preload and checks that a Markdown page renders before starting the instrumented browser server. To exercise populated upgrades separately, run `pnpm check:focused --pg tests/migrate-seeded.test.ts` with a dedicated `TEST_DATABASE_URL`. It creates a disposable historical schema at migration `0073`, inserts synthetic posts, a reply, a draft, a translation, queued jobs and an image, then checks data preservation, backfills and idempotence through the current migration set. Release also includes it in the PostgreSQL unit stage; no production database or real participant data is used.
 
+### Chat search performance measurement
+
+The synthetic PostgreSQL measurement lives in `scripts/chat-search-performance.test.ts`, outside the ordinary unit-test include. Neither the PGlite nor the PostgreSQL unit suite collects it or counts it as skipped. Run it explicitly with a dedicated `TEST_DATABASE_URL` whose account can create disposable databases:
+
+```sh
+TOMOLA_TEST_PG=1 pnpm exec vitest run --config scripts/chat-search-performance.config.ts
+```
+
+The dedicated configuration reuses the unit fixtures, fake engines and database cleanup, and rejects runs without PostgreSQL mode. It seeds 50,000 messages and 25,000 current translations, then records twenty single requests and twenty five-member bursts for no matches, many original matches and many translated matches. The output includes median, p95, maximum and query plans. The 500 ms p95 target is reported without failing the run; assertions still check fixture distribution and search results. Timings cover the authenticated action, excluding HTTP and browser rendering.
+
 ### Translation evaluation
 
 `eval/translation/cases.yaml` is a versioned set of public excerpts and invented examples. Each case supplies stable checklist IDs, severity weight, source attribution and target languages. Change the set version when changing its contents. Runs also retain a content hash so changed checklists are not compared accidentally.

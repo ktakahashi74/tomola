@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
-import { PG_MODE } from "./helpers/pg-test";
-import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
-import { consentChatMembers } from "./helpers/chat-consent";
+import { PG_MODE } from "../tests/helpers/pg-test";
+import { setupRouteHarness, type RouteHarness } from "../tests/helpers/route-harness";
+import { consentChatMembers } from "../tests/helpers/chat-consent";
 import { chatSequences, villageMembers, villages } from "~/lib/db/schema";
 import { chatSearchQuery } from "~/lib/village-chat-search.server";
 import { action } from "~/routes/village-chat-search";
 
-const performanceEnabled = process.env.TOMOLA_CHAT_SEARCH_PERF === "1";
-describe.skipIf(!PG_MODE || !performanceEnabled)("chat search synthetic PostgreSQL performance", { tags: performanceEnabled ? ["postgres"] : [] }, () => {
+describe.skipIf(!PG_MODE)("chat search synthetic PostgreSQL performance", { tags: ["postgres"] }, () => {
   let h: RouteHarness, villageId: string;
   const handles = Array.from({ length: 5 }, (_, i) => `cs_perf_${i}`);
   beforeAll(async () => {
