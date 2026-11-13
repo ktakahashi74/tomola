@@ -42,7 +42,8 @@ test("chat replies preserve chronology, cancel cleanly, open old parents, and no
     await notice.click(); await waitForHydration(reader);
     const received = reader.locator(`[data-chat-message="${replyId}"]`);
     await expect(received).toBeInViewport();
-    await received.click();
+    // Tapping the quote opens its parent; reveal actions from the reply body.
+    await received.locator("p").filter({ hasText: /^Private reply marker/ }).click({ position: { x: 4, y: 4 } });
     await received.getByRole("button", { name: m.village_chat_reply, exact: true }).click();
     await expect(reader.locator("[data-chat-replying]")).toContainText("Private reply marker");
     await expect(reader.getByLabel(m.village_chat_body, { exact: true })).toBeFocused();
