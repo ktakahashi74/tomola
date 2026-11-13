@@ -182,7 +182,7 @@ export async function villageSlug(db: Db, villageId: string | null): Promise<str
   return row?.kind === "personal" ? row.handle ? `@${row.handle}` : null : row?.slug ?? null;
 }
 
-export type PostingVillages = { choices: Array<PublicVillage & WithVillageTranslation>; selected: string; explicit: boolean; changed: boolean; error: "village_required" | null };
+export type PostingVillages = { choices: Array<PublicVillage & WithVillageTranslation>; ownHandle: string | null; selected: string; explicit: boolean; changed: boolean; error: "village_required" | null };
 export async function postingVillages(db: Db, userId: string, selected?: string | null, opts: { repair?: boolean; reader?: VillageReader } = {}): Promise<PostingVillages> {
   // Settings must not consume the notice promised for the next writing screen.
   const restored = opts.repair === false
@@ -193,7 +193,7 @@ export async function postingVillages(db: Db, userId: string, selected?: string 
   const ownTarget = personal && !personal.endedAt ? await villageSlug(db, personal.id) : null;
   if (ownTarget) choices.unshift({ ...publicVillage(personal!), slug: ownTarget });
   const target = selected?.trim().toLowerCase() ?? await villageSlug(db, restored.defaultVillageId) ?? ownTarget ?? "";
-  return { choices, selected: target, explicit: selected != null, changed: restored.changed, error: target && !choices.some(row => row.slug === target) ? "village_required" : null };
+  return { choices, ownHandle: ownTarget?.slice(1) ?? null, selected: target, explicit: selected != null, changed: restored.changed, error: target && !choices.some(row => row.slug === target) ? "village_required" : null };
 }
 
 export async function topicVillage(db: Db, topicId: number): Promise<PublicVillage | null> {

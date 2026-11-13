@@ -2458,6 +2458,7 @@
   "translation_working_accessible": "A translation of this post is being prepared.",
   "translation_arrived": "The translation is ready.",
   "village_personal": "My village",
+  "village_personal_destination": "My village (@{handle})",
   "village_personal_places": "Members’ villages",
   "member_page_elsewhere": "Posts elsewhere",
   "member_page_village_follow_hint": "Follow this village to read the posts in this section.",

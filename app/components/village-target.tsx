@@ -4,7 +4,7 @@ import { Link, useNavigation } from "react-router";
 import { FormVillageReviewContext } from "~/components/form-contexts";
 import { Button } from "~/components/ui/button";
 import { DropdownMenu, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName } from "~/lib/village-name";
 import type { PostingVillages } from "~/lib/villages.server";
 import { m } from "~/paraglide/messages.js";
 
@@ -94,7 +94,7 @@ export function VillageTarget({ posting, selected = posting.selected, explicitSe
   }, [frontmatter, reviewedBody]);
   const displayed = !explicit && hint ? hint : choice;
   const village = posting.choices.find(row => row.slug === displayed);
-  const name = village ? villageName(village) : displayed ? m.village_target_unavailable() : m.village_choose();
+  const name = village ? postingVillageName(village, posting.ownHandle) : displayed ? m.village_target_unavailable() : m.village_choose();
   const choose = (value: string) => { manuallyChosen.current = true; explicitChoice.current = true; setExplicit(true); setHint(null); setChoice(value); setReviewError(null); };
   return <div ref={element} data-village-target className="space-y-1">
     <input type="hidden" name="village" value={choice} />
@@ -106,7 +106,7 @@ export function VillageTarget({ posting, selected = posting.selected, explicitSe
         <DropdownMenuTrigger aria-invalid={Boolean(targetError) || undefined} aria-labelledby={`${labelId} ${valueId}`} aria-describedby={[reachId, targetError ? errorId : undefined].filter(Boolean).join(" ")} render={<Button type="button" variant="outline" className="h-auto max-w-full whitespace-normal" />}><span id={valueId} className="min-w-0 [overflow-wrap:anywhere]">{name}{village?.kind === "invite_public" && <> · {m.village_invite_public()}</>}</span><span aria-hidden="true">▾</span></DropdownMenuTrigger>
         <DropdownMenuContent className="max-w-[calc(100vw-2rem)]">
           <DropdownMenuRadioGroup value={displayed} onValueChange={choose}>
-            {posting.choices.filter(row => row.slug).map(row => <DropdownMenuRadioItem key={row.slug} value={row.slug!} closeOnClick onClick={() => choose(row.slug!)}>{villageName(row)}</DropdownMenuRadioItem>)}
+            {posting.choices.filter(row => row.slug).map(row => <DropdownMenuRadioItem key={row.slug} value={row.slug!} closeOnClick onClick={() => choose(row.slug!)}>{postingVillageName(row, posting.ownHandle)}</DropdownMenuRadioItem>)}
           </DropdownMenuRadioGroup>
           {posting.choices.length === 0 && <DropdownMenuGroup><DropdownMenuLabel className="p-2 ui-help">{m.village_target_none()}</DropdownMenuLabel></DropdownMenuGroup>}
         </DropdownMenuContent>

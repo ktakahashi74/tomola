@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { captureScreenshot, clientHeaders, enMessages as m, openPlaces, openPostSettings, useMember, waitForClientRoute } from "./helpers";
+import { captureScreenshot, clientHeaders, enMessages as m, formatMessage, openPlaces, openPostSettings, useMember, waitForClientRoute } from "./helpers";
 
 test("a personal village has its own follow section and delivers only the posts placed there", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.240") });
@@ -105,6 +105,7 @@ test("members find their own village first in the column, drawer and directory w
 });
 
 test("personal compose and settings choices show the resolved default, with no self follow button", async ({ browser }) => {
+  const personal = formatMessage(m.village_personal_destination, { handle: "pv_composer" });
   const context = await browser.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.241") });
   try {
     const page = await context.newPage();
@@ -114,10 +115,15 @@ test("personal compose and settings choices show the resolved default, with no s
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/t/new"); await waitForClientRoute(page); await openPostSettings(page);
       await expect(page.locator('input[name="village"]')).toHaveValue("@pv_composer");
-      await expect(page.getByRole("button", { name: `${m.field_village} ${m.village_personal}`, exact: true })).toBeVisible();
+      const destination = page.getByRole("button", { name: `${m.field_village} ${personal}`, exact: true });
+      await expect(destination).toBeVisible();
+      await destination.click();
+      await expect(page.getByRole("menuitemradio", { name: personal, exact: true })).toBeChecked();
+      await page.keyboard.press("Escape");
       await captureScreenshot(page, { path: `after-compose-${width}.png`, fullPage: true }, "personal-villages");
       await page.goto("/settings"); await waitForClientRoute(page);
       await expect(page.locator('select[name="village"]')).toHaveValue("@pv_composer");
+      await expect(page.locator('select[name="village"] option:checked')).toHaveText(personal);
       await captureScreenshot(page, { path: `after-settings-${width}.png`, fullPage: true }, "personal-villages");
     }
   } finally { await context.close(); }

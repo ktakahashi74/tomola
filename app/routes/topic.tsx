@@ -76,7 +76,7 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { topicVillage } from "~/lib/villages.server";
 import { localizeVillage } from "~/lib/village-translations.server";
 import { villageNameTitle } from "~/lib/village-translation-view";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName, villageName } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 import { SigningFailureResponse } from "~/lib/signing.server";
 import { SendButton, SignedForm } from "~/components/signed-form";
@@ -784,7 +784,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           <PlaceholderEntry entry={topic} />
         ) : (
           <>
-            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? villageName(loaderData.village.kind === "personal" ? { ...loaderData.village, name: "" } : loaderData.village) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} editHref={`/t/${topic.id}/edit`} />}
+            {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? postingVillageName(loaderData.village, topic.authorHandle) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} editHref={`/t/${topic.id}/edit`} />}
             {loaderData.edited === topic.id && topic.own && <PostedLine kind="edited" />}
             {topic.hidden && <HiddenMark action={topic.hiddenAction} />}
             {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={langs => setSettled(previous => ({ id: topic.id, langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])] }))} /></Suspense>}

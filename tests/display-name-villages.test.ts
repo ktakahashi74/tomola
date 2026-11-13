@@ -6,13 +6,16 @@ import { followedVillageNavigation, setVillageFollow } from "~/lib/village-follo
 import { topicContinuation } from "~/lib/topic-continuation.server";
 import { postingVillages } from "~/lib/villages.server";
 import { buildListMarkdown } from "~/lib/md/lists.server";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName, villageName } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { setTestMessages } from "./stubs/paraglide-messages";
+import { jsonMessages } from "./helpers/messages-json";
 
 let h: RouteHarness, topicId: number;
 beforeAll(async () => {
+  setTestMessages(jsonMessages());
   vi.stubEnv("VILLAGES", "1"); vi.stubEnv("ENABLED_LANGS", "ja,en");
   h = await setupRouteHarness();
   await h.signIn("dn_place_owner", { homeArea: "ja" });
@@ -21,7 +24,7 @@ beforeAll(async () => {
   if (!created.ok) throw Error(created.error); topicId = created.id;
   await setVillageFollow(h.db, h.ids.dn_place_reader, "@dn_place_owner", true);
 });
-afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
+afterAll(() => { h.restore(); vi.unstubAllEnvs(); setTestMessages(); });
 
 it("selects personal village names on the server for navigation and the article's next posts", async () => {
   await updateDisplayNames(h.db, h.ids.dn_place_owner, "光の書き手", "Light Writer");
@@ -32,9 +35,11 @@ it("selects personal village names on the server for navigation and the article'
     const navigation = await followedVillageNavigation(h.db, h.ids.dn_place_reader, reader);
     expect(navigation[0]).toMatchObject({ name, slug: "@dn_place_owner" });
     expect((await topicContinuation(h.db, topicId, reader))?.village).toMatchObject({ name, slug: "@dn_place_owner" });
-    // The posting destination uses the generic label; it does not name the owner.
+    // General labels stay generic; posting labels identify the current owner.
     const own = (await postingVillages(h.db, h.ids.dn_place_owner, undefined, { reader, repair: false })).choices.find(village => village.kind === "personal")!;
     expect(villageName(own)).toBe(m.village_personal());
+    expect(postingVillageName(own, "dn_place_owner")).toBe(m.village_personal_destination({ handle: "dn_place_owner" }));
+    expect(postingVillageName(navigation[0], "dn_place_reader")).toBe(name);
   }
 });
 

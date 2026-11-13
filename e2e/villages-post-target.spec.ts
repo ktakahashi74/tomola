@@ -385,6 +385,7 @@ for (const locale of ["en", "ja"] as const) test(`keeps the destination above wr
   await waitForClientRoute(page);
   await joinJapaneseVillage(page);
   const text = await uiMessages(page);
+  const personal = formatMessage(text.village_personal_destination, { handle: `target_top_${locale}` });
   const target = page.locator("[data-village-target]");
   const button = target.getByRole("button");
   const summary = page.locator("[data-post-settings] > summary");
@@ -402,13 +403,13 @@ for (const locale of ["en", "ja"] as const) test(`keeps the destination above wr
     })).toBe(true);
   };
   await assertTop();
-  await expect(button).toContainText(text.village_personal);
+  await expect(button).toContainText(personal);
   await expect(summary).toHaveText(`${text.post_summary_lang_auto}·${text.post_settings_change}`);
   await captureDestination(page, "new", locale);
   await page.locator('textarea[name="body"]').fill("An owned post in my own village.");
   await page.getByRole("button", { name: text.submit_post, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
-  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: text.village_personal, lang: localizedLanguageLabel("en", locale) }) })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: formatMessage(text.posted_topic_public, { place: personal, lang: localizedLanguageLabel("en", locale) }) })).toBeVisible();
   await captureDestination(page, "posted-personal", locale);
   await page.goto("/t/new");
   await waitForClientRoute(page);

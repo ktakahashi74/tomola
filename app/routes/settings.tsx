@@ -47,7 +47,7 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
 import { villageReaderFor } from "~/lib/display-lang.server";
 import { postingVillages, setDefaultVillage, villageSlug } from "~/lib/villages.server";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 import { siteUrl } from "~/lib/site-url";
 import { shareBookmarklet } from "~/lib/share-bookmarklet";
@@ -376,7 +376,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Field><FieldLabel htmlFor="settings-default-village">{m.settings_default_village()}</FieldLabel>
               <NativeSelect ref={destinationControl} id="settings-default-village" name="village" value={destination.value} onChange={event => destination.change(event.target.value)} className="w-full">
                 {!defaultVillageAvailable && <NativeSelectOption value="">{loaderData.posting.choices.length === 0 ? m.village_target_none() : m.village_choose()}</NativeSelectOption>}
-                {loaderData.posting.choices.filter(village => village.slug).map(village => <NativeSelectOption key={village.slug} value={village.slug!}>{villageName(village)}</NativeSelectOption>)}
+                {loaderData.posting.choices.filter(village => village.slug).map(village => <NativeSelectOption key={village.slug} value={village.slug!}>{postingVillageName(village, loaderData.handle)}</NativeSelectOption>)}
               </NativeSelect>
             </Field>
             {loaderData.posting.error && <FieldDescription>{m.village_target_unavailable()}</FieldDescription>}

@@ -11,7 +11,7 @@ import { Form, useNavigation, useSubmit } from "react-router";
 import { loadSigningAuthentication } from "~/lib/signing-authentication";
 import { SIGNATURE_ASSERTION_FIELD, SIGNATURE_CHALLENGE_FIELD, type SigningContent, type SigningOperation, type SigningOptions, type SigningPreview } from "~/lib/signing";
 import { useEnabledLangs } from "~/lib/use-enabled-langs";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName } from "~/lib/village-name";
 import { isLang, LANG_LABELS } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 import { readerLoginHref } from "~/lib/public-reading";
@@ -209,7 +209,7 @@ export function SignedForm({ children, signatureRequired, protectUnsaved, unsave
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
           <DialogTitle className="text-xl font-semibold">{m.signing_heading()}</DialogTitle>
           <p>{pending.preview.signatureRequired ? m.signing_intro() : m.confirm_ai_draft_intro()}</p>
-          {pending.preview.village && <div className="space-y-1" data-signing-village><p>{villageName(pending.preview.village)}</p><p>{m.village_public_reach()}</p></div>}
+          {pending.preview.village && <div className="space-y-1" data-signing-village><p>{postingVillageName(pending.preview.village, pending.preview.village.slug?.slice(1) ?? null)}</p><p>{m.village_public_reach()}</p></div>}
           {pending.preview.lastEditor?.id && <p>{m.signing_last_ai({ name: pending.preview.lastEditor.name ?? pending.preview.lastEditor.id, id: pending.preview.lastEditor.id, at: pending.preview.lastEditor.at ?? "" })}</p>}
           {pending.preview.lastEditor?.id && <p className="ui-help text-notice-emphasis">{m.signing_client_warning()}</p>}
           {pending.preview.content.lang && <div className="flex min-w-0 flex-wrap items-center gap-2">

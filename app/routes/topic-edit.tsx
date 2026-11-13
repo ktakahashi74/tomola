@@ -19,7 +19,7 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { topicVillage } from "~/lib/villages.server";
 import { localizeVillage } from "~/lib/village-translations.server";
 import { villageReaderFor } from "~/lib/display-lang.server";
-import { villageName } from "~/lib/village-name";
+import { postingVillageName } from "~/lib/village-name";
 import { entryEditVersion } from "~/lib/entry-edit-version.server";
 import { editConflict, editFormValues, editFormVersion } from "~/lib/edit-form.server";
 
@@ -36,9 +36,9 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   // The base of the moderator's fix form (see fixEntry): the hash of the text the form was opened on.
   const sourceHash = mode === "moderator-fix" ? (found.entry.sourceHash ?? "") : null;
   const village = villagesEnabled() ? await topicVillage(db, id) : null;
-  const destination = village?.kind === "personal" && village.slug !== `@${profile.handle}` ? { ...village, name: village.slug ?? village.name } : village;
+  const destination = village?.kind === "personal" ? { ...village, name: village.slug ?? village.name } : village;
   return { ownerId: user.id, entry: { id, kind, lang, title, body }, asksStance, locked: mode === "author-locked", fix: mode === "moderator-fix", sourceHash,
-    destination: villagesEnabled() ? destination ? villageName(await localizeVillage(db, destination, villageReaderFor(request, profile))) : m.village_target_unavailable() : null,
+    destination: villagesEnabled() ? destination ? postingVillageName(await localizeVillage(db, destination, villageReaderFor(request, profile)), profile.handle) : m.village_target_unavailable() : null,
     signPosts: profile.signPosts, editVersion: entryEditVersion(found.entry),
     signingView: signingViewToken({ userId: user.id, kind: "entry", id, version: found.entry.sourceHash ?? "", title, body, lang }) };
 }

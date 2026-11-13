@@ -1694,6 +1694,7 @@
   "translation_working_accessible": "この投稿の訳を作っています。",
   "translation_arrived": "この投稿の訳を表示しました。",
   "village_personal": "自分のビレッジ",
+  "village_personal_destination": "自分のビレッジ（@{handle}）",
   "village_personal_places": "会員のビレッジ",
   "member_page_elsewhere": "ほかのビレッジへの投稿",
   "member_page_village_follow_hint": "このビレッジをフォローすると、ここに置いた投稿が届きます。",

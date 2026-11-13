@@ -138,6 +138,9 @@ it("allows public reading and member replies, while following delivers only post
   expect(content.topics.map(t => t.id)).toEqual([elsewhereId]);
   expect(content.topics[0].village?.slug).toBe("en");
   await changeHandle(db, "pv-owner", "pv_renamed");
+  const renamed = await postingVillages(db, "pv-owner");
+  expect(renamed.ownHandle).toBe("pv_renamed");
+  expect(renamed.choices[0].slug).toBe("@pv_renamed");
   expect((await listFollowedVillages(db, "pv-reader"))[0].slug).toBe("@pv_renamed");
   await setVillageFollow(db, "pv-reader", "@pv_renamed", false);
   expect(await listFollowedVillages(db, "pv-reader")).toEqual([]);

@@ -2,7 +2,7 @@ import { autosavePage, autosaveQuiet, autosaveState } from "./autosave-clock";
 import { routeModule } from "./support/module-route";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { captureScreenshot, chooseEditorMode, clientHeaders, enMessages as en, messagePattern, openPostSettings, state, useMember as restoreAutosaveMember, waitForClientRoute, waitForFormReady } from "./helpers";
+import { captureScreenshot, chooseEditorMode, clientHeaders, enMessages as en, formatMessage, messagePattern, openPostSettings, state, useMember as restoreAutosaveMember, waitForClientRoute, waitForFormReady } from "./helpers";
 import { baseOf } from "../app/lib/local-draft";
 import { LANG_LABELS } from "../app/lib/languages";
 import { acceptSignedWrite, enableSigningAuthenticator } from "./signing-helper";
@@ -634,7 +634,7 @@ for (const mode of ["markdown", "rich"] as const) test(`personal destinations st
   const id = await draftId(page);
   expect(await (await page.request.get(`/drafts/${id}.md`)).text()).toContain("village: null");
   await page.getByRole("button", { name: en.submit_post, exact: true }).click();
-  await expect(page.getByRole("dialog").locator("[data-signing-village]")).toContainText(en.village_personal);
+  await expect(page.getByRole("dialog").locator("[data-signing-village]")).toContainText(formatMessage(en.village_personal_destination, { handle: `draft_autosave_${scenario}` }));
   const version = await page.locator('input[name="fromDraftVersion"]').inputValue();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.locator("form[data-draft-recovery=ready]")).toHaveCount(1);
@@ -654,7 +654,7 @@ test("personal destinations remain unsaved when only the explicit choice changes
   await page.route("**/drafts/autosave", route => route.abort());
   await openPostSettings(page);
   await page.locator("[data-village-target]").getByRole("button").click();
-  await page.getByRole("menuitemradio", { name: en.village_personal, exact: true }).click();
+  await page.getByRole("menuitemradio", { name: formatMessage(en.village_personal_destination, { handle: "draft_autosave_personal_guard" }), exact: true }).click();
   await expect(page.locator('input[name="villageExplicit"]')).toHaveValue("1");
   const pending = page.waitForEvent("dialog");
   await navigate(page, "/drafts");
