@@ -96,7 +96,7 @@ describe("the member export has the member's own stances and the history of chan
   it("lists the member's own stances (one row per question, the current one) and the changes (first registration, change with its trigger), and no one else's", async () => {
     const out = await buildMemberExport(h.db, h.ids.tia_stance_only, { now: NOW });
     expect(out.version).toBe(MEMBER_EXPORT_VERSION);
-    expect(Object.keys(out)).toEqual(["format", "push_subscriptions", "version", "generated_at", "profile", "entries", "drafts", "insightful", "stances", "stance_changes", "saved_topics", "follows", "village_icons", "village_follows", "signatures", "chat_messages"]);
+    expect(Object.keys(out)).toEqual(["ai_materials", "format", "push_subscriptions", "version", "generated_at", "profile", "entries", "drafts", "insightful", "stances", "stance_changes", "saved_topics", "follows", "village_icons", "village_follows", "signatures", "chat_messages"]);
     expect(out.chat_messages).toEqual([]);
     // the current stances: q is now "disagree" (version 2); hiddenQ is a question that was hidden afterwards: it is the member's own record, so it stays
     expect(out.stances).toEqual([

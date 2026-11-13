@@ -91,7 +91,7 @@ describe("asks_stance is set when the topic is created, on every way of creating
     // A non-boolean asks_stance in front matter is a form error.
     const bad = await submit("topic-new", "hana", "/t/new", { title: "貼り付け", body: "---\nasks_stance: yes please\nlang: ja\n---\n本文。", lang: "", aiAssistance: "" });
     expect(bad.status).toBe(400);
-    expect((bad.value as { data?: { error?: string } }).data).toEqual({ error: "frontmatter_invalid", values: { title: "貼り付け", body: "---\nasks_stance: yes please\nlang: ja\n---\n本文。", lang: "", asksStance: false, intro: false } });
+    expect((bad.value as { data?: { error?: string } }).data).toEqual({ error: "frontmatter_invalid", values: { aiMaterial: "", title: "貼り付け", body: "---\nasks_stance: yes please\nlang: ja\n---\n本文。", lang: "", asksStance: false, intro: false } });
   });
 
   it("through the form's draft button and the draft screen: the checkbox can be changed while it is a draft, and publishing makes the question", async () => {
@@ -379,7 +379,7 @@ describe("reply marks (stance_tag)", () => {
     // Pasting stance_tag front matter into the topic form is a type mismatch.
     const mismatch = await submit("topic-new", "hana", "/t/new", { title: "t", body: "---\nstance_tag: agree\n---\nb", lang: "", aiAssistance: "" });
     expect(mismatch.status).toBe(400);
-    expect((mismatch.value as { data?: { error?: string } }).data).toEqual({ error: "frontmatter_type_mismatch", values: { title: "t", body: "---\nstance_tag: agree\n---\nb", lang: "", asksStance: false, intro: false } });
+    expect((mismatch.value as { data?: { error?: string } }).data).toEqual({ error: "frontmatter_type_mismatch", values: { aiMaterial: "", title: "t", body: "---\nstance_tag: agree\n---\nb", lang: "", asksStance: false, intro: false } });
   });
 
   it("can be changed and removed by the writer, and only by the writer", async () => {
@@ -537,7 +537,7 @@ describe("another way of asking, and the objection panel", () => {
     await hideEntry(h.db, { ...OP, id: mary }, { entryId: hidden, reason: "spam", note: "n" });
     const refused = await submit("topic-new", "taro", "/t/new", { title: "x", body: "b", lang: "en", aiAssistance: "none", asksStance: "1", altOf: String(hidden) });
     expect(refused.status).toBe(400);
-    expect((refused.value as { data?: { error?: string } }).data).toEqual({ error: "invalid_alt_of", values: { title: "x", body: "b", lang: "en", asksStance: true, intro: false } });
+    expect((refused.value as { data?: { error?: string } }).data).toEqual({ error: "invalid_alt_of", values: { aiMaterial: "", title: "x", body: "b", lang: "en", asksStance: true, intro: false } });
   });
 
   it("opens the new-topic form with the original question and asks_stance on; an unreadable original is dropped with a notice", async () => {

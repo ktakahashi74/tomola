@@ -61,6 +61,8 @@ it("routes reports to the moderation queue, hides all versions, and keeps operat
   await h.db.update(entries).set({ title: "1. # <T> Topic" }).where(eq(entries.id, id));
   const [report] = await h.db.select().from(reports).where(eq(reports.entryId, id));
   expect(await reportEvidence(h.db, report.id, "fake", new Date())).toMatchObject({ target: { kind: "ai_supplement", body: expect.stringContaining("Public evidence.") }, context: { title: "1. # <T> Topic" } });
+  await h.db.update(entries).set({ title: null }).where(eq(entries.id, id));
+  expect(await reportEvidence(h.db, report.id, "fake", new Date())).toMatchObject({ context: { topicId: id, title: null } });
   expect((await loader(args(id, "supp_route_operator"))).warnings).toMatchObject([{ rules: ["override"] }]);
   expect((await h.outcome(() => action(args(id, "supp_route_reader", { intent: "hide", version: "1", note: "Unauthorized" })))).status).toBe(403);
   expect((await h.outcome(() => action(args(id, "supp_route_operator", { intent: "hide", version: "1", note: "Review evidence" })))).status).toBe(302);

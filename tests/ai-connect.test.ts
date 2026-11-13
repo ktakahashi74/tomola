@@ -122,7 +122,7 @@ describe("connection data and discovery", () => {
     const loader = (await import("~/routes/llms-txt")).loader;
     const plan = connectPlan();
     const text = await (await loader(args("/llms.txt")) as Response).text();
-    expect(text.split("\n\n")[1]).toContain(connectPointer(plan));
+    expect(text.split("\n\n").find(paragraph => paragraph.startsWith("> tomola "))).toContain(connectPointer(plan));
     expect(text).toContain(accountsSection(plan).trim());
     expect(accountsPointer(plan)).toContain(plan.accountsUrl);
     const guide = mcpConnectionGuide();

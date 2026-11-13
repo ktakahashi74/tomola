@@ -23,7 +23,7 @@ export async function reportEvidence(db: Db, reportId: number, model: string, no
       const supplement = await readPostAiMaterial(db, target.id);
       if (!supplement || supplement.version !== Number(supplementReport[2])) return null;
       return { report: reported, target: { id: target.id, kind: "ai_supplement", version: supplement.version, body: supplement.text, lang: supplement.lang },
-        context: { topicId: target.id, title: visibleUnicode(target.title ?? "") } };
+        context: { topicId: target.id, title: target.title === null ? null : visibleUnicode(target.title) } };
     }
     const [topic] = await db.select({ title: entries.title, body: entries.body, deletedAt: entries.deletedAt }).from(entries).where(eq(entries.id, target.threadId ?? target.id));
     if (!topic || topic.deletedAt) return null;

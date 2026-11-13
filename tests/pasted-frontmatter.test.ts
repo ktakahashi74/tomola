@@ -127,11 +127,11 @@ describe("the new topic and reply forms with pasted frontmatter", () => {
     // "ask for stances" and the language, which cannot be changed after posting.
     const refused = await newTopic({ title: "", asksStance: "1", body: "Kept body.", lang: "en" });
     expect(refused.status).toBe(400);
-    expect((refused.value as { data: unknown }).data).toEqual({ error: "invalid_title", values: { title: "", body: "Kept body.", asksStance: true, lang: "en", intro: false } });
+    expect((refused.value as { data: unknown }).data).toEqual({ error: "invalid_title", values: { aiMaterial: "", title: "", body: "Kept body.", asksStance: true, lang: "en", intro: false } });
     expect(await h.db.select().from(entries).where(eq(entries.body, "Kept body."))).toEqual([]);
     // The language left on "automatic" is handed back as it is (empty), and an unchecked box as false.
     const auto = await newTopic({ title: "t".repeat(201), body: "Kept auto.", lang: "" });
-    expect((auto.value as { data: unknown }).data).toEqual({ error: "invalid_title", values: { title: "t".repeat(201), body: "Kept auto.", asksStance: false, lang: "", intro: false } });
+    expect((auto.value as { data: unknown }).data).toEqual({ error: "invalid_title", values: { aiMaterial: "", title: "t".repeat(201), body: "Kept auto.", asksStance: false, lang: "", intro: false } });
     // A draft is saved without a title either way, and the title is stored as NULL, never as an empty or blank string.
     const draft = await newTopic({ intent: "draft", title: "", asksStance: "1", body: "Draft of a question.", lang: "ja" });
     expect(draft.status).toBe(302);
@@ -251,21 +251,21 @@ describe("the new topic form drawn again after a refusal (no JavaScript)", () =>
   // The form uses <Form>, so it is drawn inside a static router.
   async function render(actionData: unknown, loaderData: Record<string, unknown> = {}): Promise<string> {
     const { default: TopicNew } = await import("~/routes/topic-new");
-    const props = { loaderData: { defaultLang: "ja", prefill: null, asksStance: false, alt: null, altNotFound: false, draftIds: [], ...loaderData }, actionData, params: {}, matches: [] };
+    const props = { loaderData: { aiMaterialLabels: { add: "ai_material_add", title: "ai_material_title", help: "ai_material_input_help", error: "ai_material_error" }, defaultLang: "ja", prefill: null, asksStance: false, alt: null, altNotFound: false, draftIds: [], ...loaderData }, actionData, params: {}, matches: [] };
     return renderInRouter(() => createElement(TopicNew as never, props as never), "/t/new");
   }
   // The tag of the input with this name (the attributes are in no fixed order).
   const inputTag = (html: string, name: string) => html.match(new RegExp(`<input\\b[^>]*\\bname="${name}"[^>]*>`))?.[0] ?? "";
   // A checked asksStance input submits "1"; an unchecked input submits no value.
   const checkedKind = (html: string) => (html.match(/<input\b[^>]*\bname="asksStance"[^>]*>/g) ?? []).find(tag => tag.includes('checked=""')) ?? "";
-  const refused = { error: "invalid_title", values: { title: "", body: "Kept body.", asksStance: true, lang: "en" } };
+  const refused = { error: "invalid_title", values: { aiMaterial: "", title: "", body: "Kept body.", asksStance: true, lang: "en" } };
 
   it("keeps the checked box, the chosen language, the title and the body; the form has no AI level to keep", async () => {
     const html = await render(refused);
     expect(checkedKind(html)).toContain('value="1"');
     expect(html).toMatch(/<input[^>]*name="lang"[^>]*value="en"/);
     // The values handed back carry no ai_assistance, and the form has no such field.
-    expect(Object.keys(refused.values).sort()).toEqual(["asksStance", "body", "lang", "title"]);
+    expect(Object.keys(refused.values).sort()).toEqual(["aiMaterial", "asksStance", "body", "lang", "title"]);
     expect(html).not.toContain("aiAssistance");
     expect(html).not.toMatch(/<input[^>]*name="lang"[^>]*value=""/);
     expect(html).toContain(">Kept body.</textarea>");
