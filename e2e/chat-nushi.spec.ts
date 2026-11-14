@@ -1,4 +1,6 @@
 import { expect } from "@playwright/test";
+import fs from "node:fs";
+import { join } from "node:path";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
 import { expectNushiPending } from "./support/nushi-pending";
@@ -165,4 +167,26 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
     await expect(moderator.getByText(en.chat_reports_done, { exact: true })).toBeVisible();
     await expect(answer).toContainText(en.nushi_hidden);
   } finally { await moderatorContext.close(); }
+  const clockFile = join(state().dir, "server-clock.txt");
+  const previous = fs.readFileSync(clockFile, "utf8");
+  fs.writeFileSync(clockFile, String(Number(previous) + 120_000));
+  try {
+    const before = await page.locator("[data-chat-nushi]").count();
+    for (let i = 1; i <= 3; i++) {
+      const question = `@nushi orchard interval ${i}`;
+      await field.fill(question);
+      await page.getByRole("button", { name: en.village_chat_send, exact: true }).click();
+      await expect(field).toHaveValue("");
+      if (i < 3) await expect(page.locator("[data-chat-nushi]")).toHaveCount(before + i);
+      else {
+        await expect(async () => {
+          await page.reload();
+          const status = page.locator("[data-chat-message]").filter({ hasText: question }).locator("[data-nushi-status]");
+          await expect(status).toContainText(en.nushi_failure_interval);
+          await expect(status).not.toContainText(en.nushi_failure_limit);
+        }).toPass({ timeout: 20_000 });
+        await expect(page.locator("[data-chat-nushi]")).toHaveCount(before + 2);
+      }
+    }
+  } finally { fs.writeFileSync(clockFile, previous); }
 });

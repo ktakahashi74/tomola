@@ -17,6 +17,7 @@ import { aiUsePage } from "~/lib/ai-use-page.server";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CASE_CONTEXT_COUNT } from "~/lib/chat-access";
 import { CHAT_NUSHI_PROMPT_VERSION } from "~/lib/chat-nushi-config.server";
+import { assertNushiConfig, chatNushiLimits, nushiLimits } from "~/lib/nushi-config.server";
 import { createChatTranslationHandlers } from "~/lib/jobs/chat-translation-jobs.server";
 import { runDueJobs } from "~/lib/jobs/queue.server";
 
@@ -32,8 +33,8 @@ async function world() {
   await consentChatMembers(db);
   const source = await createTopic(db, "zcn_owner", { title: "Orchard plan", body: "The orchard needs public review. Some growers disagree about timing.", lang: "en", village: village.slug });
   if (!source.ok) throw new Error(source.error);
-  const call = async (body = "@nushi orchard", extra: { replyToId?: string; suppressNushi?: boolean } = {}) => {
-    const sent = await mutateChat(db, "zcn_caller", village.slug!, "send", { body, ...extra });
+  const call = async (body = "@nushi orchard", extra: { replyToId?: string; suppressNushi?: boolean } = {}, callerId = "zcn_caller") => {
+    const sent = await mutateChat(db, callerId, village.slug!, "send", { body, ...extra });
     const [request] = await db.select().from(chatNushiRequests).where(eq(chatNushiRequests.messageId, sent.id));
     return { sent, request };
   };
@@ -145,12 +146,66 @@ it("annotates a later calling edit and withdraws on calling deletion", async () 
   if (page.consentRequired) throw new Error("Consent missing");
   expect(page.messages.at(-1)).toMatchObject({ hidden: true });
 });
-it("limits a chat to three answers per ten minutes and publishes retries once", async () => {
+it("defaults to two chat answers per minute across callers and publishes retries once", async () => {
   const w = await world();
-  for (let i = 0; i < 4; i++) { const c = await w.call(); await processChatNushiRequest(w.db, c.request.id); await processChatNushiRequest(w.db, c.request.id); }
+  const start = Date.now(); let now = new Date(start); const clock = () => now;
+  for (let i = 0; i < 2; i++) { const c = await w.call(); await processChatNushiRequest(w.db, c.request.id, { clock }); await processChatNushiRequest(w.db, c.request.id, { clock }); }
+  expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toHaveLength(2);
+  now = new Date(start + 59_999);
+  const blocked = await w.call("@nushi orchard", {}, "zcn_reader");
+  const complete = vi.fn();
+  await processChatNushiRequest(w.db, blocked.request.id, { clock, completer: { engine: "fake", model: "fake", complete } });
+  await processChatNushiRequest(w.db, blocked.request.id, { clock });
+  expect(complete).not.toHaveBeenCalled();
+  expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, blocked.request.id)))[0]).toMatchObject({ state: "failed", failure: "interval", attempts: 0 });
+  expect(await w.db.select().from(chatNushiReservations).where(eq(chatNushiReservations.requestId, blocked.request.id))).toEqual([]);
+  const own = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
+  const other = (await chatPage(w.db, "zcn_caller", w.village.slug!))!;
+  if (own.consentRequired || other.consentRequired) throw new Error("Missing consent");
+  expect(own.messages.find(message => message.id === blocked.sent.id)).toMatchObject({ nushiCall: { state: "failed", failure: "interval" } });
+  expect(other.messages.find(message => message.id === blocked.sent.id)).not.toHaveProperty("nushiCall");
+  expect((await listNotifications(w.db, "zcn_reader")).items).toMatchObject([{ kind: "chat_nushi_result", chat: { id: blocked.sent.id } }]);
+  now = new Date(start + 60_001);
+  const next = await w.call(); await processChatNushiRequest(w.db, next.request.id, { clock });
+  expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, next.request.id)))[0].state).toBe("answered");
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toHaveLength(3);
-  expect((await w.db.select().from(chatNushiRequests)).filter(r => r.failure === "limit")).toHaveLength(1);
   expect((await w.db.select().from(notifications)).filter(r => r.kind === "chat_nushi_result")).toHaveLength(4);
+});
+it("uses the configured chat interval and allowance without changing posting allowances", async () => {
+  const w = await world();
+  const env = { ...process.env, VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS: "120", VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT: "3" };
+  const start = Date.now(); let now = new Date(start); const clock = () => now;
+  for (let i = 0; i < 3; i++) { const c = await w.call(); await processChatNushiRequest(w.db, c.request.id, { env, clock }); }
+  expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toHaveLength(3);
+  for (const elapsed of [0, 60_001]) {
+    now = new Date(start + elapsed);
+    const c = await w.call(); await processChatNushiRequest(w.db, c.request.id, { env, clock });
+    expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, c.request.id)))[0]).toMatchObject({ state: "failed", failure: "interval" });
+  }
+  now = new Date(start + 120_001);
+  const c = await w.call(); await processChatNushiRequest(w.db, c.request.id, { env, clock });
+  expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, c.request.id)))[0].state).toBe("answered");
+  expect(nushiLimits(env)).toEqual(nushiLimits(process.env));
+});
+it.each([true, false])("counts processing requests only while their lease is active: %s", async active => {
+  const w = await world(), first = await w.call(), now = new Date();
+  const env = { ...process.env, VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT: "1" };
+  await w.db.update(chatNushiRequests).set({ state: "processing", leaseUntil: new Date(now.getTime() + (active ? 300_000 : -1)) }).where(eq(chatNushiRequests.id, first.request.id));
+  const second = await w.call(); await processChatNushiRequest(w.db, second.request.id, { env, clock: () => now });
+  expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, second.request.id)))[0]).toMatchObject(active ? { state: "failed", failure: "interval" } : { state: "answered", failure: null });
+});
+it("reads chat interval defaults and trimmed integer overrides", () => {
+  expect(chatNushiLimits({})).toEqual({ intervalSeconds: 60, intervalLimit: 2 });
+  expect(chatNushiLimits({ VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS: " ", VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT: "" })).toEqual({ intervalSeconds: 60, intervalLimit: 2 });
+  expect(chatNushiLimits({ VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS: " 90 ", VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT: "4" })).toEqual({ intervalSeconds: 90, intervalLimit: 4 });
+});
+it.each(["VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS", "VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT"])("rejects invalid %s at chat startup without affecting posting-only startup", key => {
+  for (const value of ["0", "-1", "1.5", "invalid", "1000001", "9007199254740992"]) {
+    const env = { TRANSLATION_PRIMARY: "fake", VILLAGE_CHAT_NUSHI: "1", [key]: value };
+    expect(() => chatNushiLimits(env)).toThrow(`Invalid ${key}`);
+    expect(() => assertNushiConfig(env)).toThrow(`Invalid ${key}`);
+    expect(() => assertNushiConfig({ ...env, VILLAGE_CHAT_NUSHI: "0", VILLAGE_NUSHI: "1" })).not.toThrow();
+  }
 });
 it("includes the direct reply target in translation and audited report review without following its parent", async () => {
   const w = await world();

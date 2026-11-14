@@ -42,6 +42,17 @@ it.each(["untranslated_script", "untranslated_similar"])("renders %s as source t
 it.each(["invalid_output", "engine", "recovery_limit", "untranslated"])("keeps the failure notice for %s", async reason => {
   expect(await render(reason)).toContain(m.village_chat_translation_failed());
 });
+it.each(["en", "ja"] as const)("distinguishes the chat interval notice from the daily allowance in %s", async locale => {
+  setTestLocale(locale);
+  try {
+    const call = (failure: string) => render("", false, { messages: [{ id: "a".repeat(32), author: "display_writer", own: true, lang: locale, parts: [{ type: "text", text: "@nushi orchard" }], createdSeq: 1, changedSeq: 1, createdAt: "2026-10-15T00:00:00Z", edited: false, deleted: false, hidden: false, translation: null, nushiCall: { state: "failed", failure } }] });
+    const interval = await call("interval"), daily = await call("limit");
+    expect(interval).toContain(m.nushi_failure_interval());
+    expect(interval).not.toContain(m.nushi_failure_limit());
+    expect(daily).toContain(m.nushi_failure_limit());
+    expect(daily).not.toContain(m.nushi_failure_interval());
+  } finally { setTestLocale("en"); }
+});
 it("offers the latest destination in both historical and live windows without eager report forms", async () => {
   for (const historical of [true, false]) {
     const html = await render("engine", historical);

@@ -2141,6 +2141,7 @@
   "nushi_failed": "ヌシは答えられませんでした。",
   "nushi_failure_unverified": "根拠を確かめられませんでした。",
   "nushi_failure_limit": "1 日の上限に達しました。",
+  "nushi_failure_interval": "少し間をあけてから、もう一度呼んでください。",
   "nushi_failure_budget": "月の予算に達しました。",
   "nushi_failure_expired": "頼みの期限が切れました。",
   "nushi_failure_private": "呼んだ投稿かその文脈が公開されていません。",

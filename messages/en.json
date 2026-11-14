@@ -2919,6 +2919,7 @@
   "nushi_failed": "Nushi could not answer.",
   "nushi_failure_unverified": "The supporting passages could not be checked.",
   "nushi_failure_limit": "The daily limit has been reached.",
+  "nushi_failure_interval": "Please wait a moment before calling Nushi again.",
   "nushi_failure_budget": "The monthly budget has been reached.",
   "nushi_failure_expired": "The request expired.",
   "nushi_failure_private": "The calling post or its context is not public.",

@@ -20,6 +20,12 @@ export function nushiLimits(env: LlmEnv = process.env) {
     ttlSeconds: integer(env, "VILLAGE_NUSHI_TTL_SECONDS", 3600),
   };
 }
+export function chatNushiLimits(env: LlmEnv = process.env) {
+  return {
+    intervalSeconds: integer(env, "VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS", 60),
+    intervalLimit: integer(env, "VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT", 2),
+  };
+}
 export function nushiMonthlyBudgetMicro(env: LlmEnv = process.env) {
   const raw = env.VILLAGE_NUSHI_LLM_MONTHLY_BUDGET_USD?.trim() || "10", value = Number(raw);
   if (!/^\d+(\.\d+)?$/.test(raw) || !Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 1_000_000))) throw new Error("Invalid VILLAGE_NUSHI_LLM_MONTHLY_BUDGET_USD");
@@ -41,4 +47,5 @@ export function assertNushiConfig(env: LlmEnv = process.env) {
   if (![undefined, "", "0", "1"].includes(env.VILLAGE_CHAT_NUSHI)) throw new Error("VILLAGE_CHAT_NUSHI must be 1, 0 or empty");
   if (!nushiEnabled(env) && env.VILLAGE_CHAT_NUSHI !== "1") return;
   nushiLimits(env); nushiMonthlyBudgetMicro(env); nushiModel(env);
+  if (env.VILLAGE_CHAT_NUSHI === "1") chatNushiLimits(env);
 }

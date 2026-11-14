@@ -5,8 +5,8 @@ import type { Db } from "./db/client.server";
 import { chatConsents, chatMessages, chatNushiRequests, chatNushiReservations, chatNushiSources, nushiRequests, nushiReservations, notifications, profiles, villageMembers, villages, entries } from "./db/schema";
 import { CHAT_CONSENT_VERSION } from "./village-chat-consent";
 import { callsNushi } from "./nushi-call.server";
-import { CHAT_NUSHI_INTERVAL_LIMIT, CHAT_NUSHI_INTERVAL_MS, CHAT_NUSHI_PROMPT_VERSION, chatNushiEnabled, chatNushiInVillage } from "./chat-nushi-config.server";
-import { nushiLimits } from "./nushi-config.server";
+import { CHAT_NUSHI_PROMPT_VERSION, chatNushiEnabled, chatNushiInVillage } from "./chat-nushi-config.server";
+import { chatNushiLimits, nushiLimits } from "./nushi-config.server";
 import { collectNushiMaterials, nushiMaterialIndex, reconstructNushiMaterials, snapshotsCurrent } from "./nushi-materials.server";
 import { nushiPrompt, quotaLock, resolveNushiCompleter } from "./nushi.server";
 import { projectQuestionSource } from "./ai-question-materials.server";
@@ -87,8 +87,10 @@ async function claim(db: Db, id: string, now: Date, env: LlmEnv) {
     const [postRunning] = await tx.select({ n: count() }).from(nushiRequests).where(and(eq(nushiRequests.state, "processing"), gt(nushiRequests.leaseUntil, now)));
     const limits = nushiLimits(env);
     if (chatRunning.n + postRunning.n >= limits.concurrent) throw new DeferJob(new Date(now.getTime() + 5000), "Village AI is busy");
-    const [recent] = await tx.select({ n: count() }).from(chatNushiRequests).where(and(eq(chatNushiRequests.villageId, request.villageId), sql`${chatNushiRequests.id} <> ${id}`, sql`((${chatNushiRequests.state} = 'processing' and ${chatNushiRequests.leaseUntil} > ${now}) or exists (select 1 from ${chatMessages} where ${chatMessages.id} = ${chatNushiRequests.answerMessageId} and ${chatMessages.createdAt} >= ${new Date(now.getTime() - CHAT_NUSHI_INTERVAL_MS)}))`, inArray(chatNushiRequests.state, ["processing", "answered"])));
-    if (recent.n >= CHAT_NUSHI_INTERVAL_LIMIT || !await reserve(tx, request, [[`member:${request.callerId}`, limits.member], [`village:${request.villageId}`, limits.village]], now)) { await finish(tx, id, "limit", now); return null; }
+    const interval = chatNushiLimits(env);
+    const [recent] = await tx.select({ n: count() }).from(chatNushiRequests).where(and(eq(chatNushiRequests.villageId, request.villageId), sql`${chatNushiRequests.id} <> ${id}`, sql`((${chatNushiRequests.state} = 'processing' and ${chatNushiRequests.leaseUntil} > ${now}) or exists (select 1 from ${chatMessages} where ${chatMessages.id} = ${chatNushiRequests.answerMessageId} and ${chatMessages.createdAt} >= ${new Date(now.getTime() - interval.intervalSeconds * 1000)}))`, inArray(chatNushiRequests.state, ["processing", "answered"])));
+    if (recent.n >= interval.intervalLimit) { await finish(tx, id, "interval", now); return null; }
+    if (!await reserve(tx, request, [[`member:${request.callerId}`, limits.member], [`village:${request.villageId}`, limits.village]], now)) { await finish(tx, id, "limit", now); return null; }
     const [claimed] = await tx.update(chatNushiRequests).set({ state: "processing", attempts: request.attempts + 1, token: randomUUID(), leaseUntil: new Date(now.getTime() + 300_000) }).where(eq(chatNushiRequests.id, id)).returning();
     return claimed;
   });
