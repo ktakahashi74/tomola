@@ -111,7 +111,7 @@ function verifyChatAnswer(raw: string, materials: AiQuestionMaterials) {
 
 function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, language: Lang, dates: Map<number, string>, posts: number, from: string | null, to: string | null) {
   const options = { locale: language };
-  if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [] } };
+  if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [], clarificationNeeded } };
   const ranges: Array<[number, number]> = [];
   let body = "";
   for (const reading of answer.readings) {

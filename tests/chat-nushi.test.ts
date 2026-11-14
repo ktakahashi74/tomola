@@ -17,6 +17,8 @@ import { aiUsePage } from "~/lib/ai-use-page.server";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CASE_CONTEXT_COUNT } from "~/lib/chat-access";
 import { CHAT_NUSHI_PROMPT_VERSION } from "~/lib/chat-nushi-config.server";
+import { createChatTranslationHandlers } from "~/lib/jobs/chat-translation-jobs.server";
+import { runDueJobs } from "~/lib/jobs/queue.server";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -297,9 +299,28 @@ it.each([false, true].flatMap(omitReadings => [undefined, false, true].map(clari
   } } });
   expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "answered", failure: null });
   const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
-  expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [] } });
+  expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [], clarificationNeeded: clarificationNeeded === true } });
   expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_result")).toMatchObject([{ userId: "zcn_caller", chatMessageId: answer.id }]);
   expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_cited")).toEqual([]);
+});
+
+it.each([false, true].flatMap(legacy => (["en", "ja"] as const).flatMap(sourceLang => [false, true].map(clarificationNeeded => ({ legacy, sourceLang, clarificationNeeded })))))("preserves clarification=$clarificationNeeded when reading a not-found answer from $sourceLang in another language (legacy=$legacy)", async ({ legacy, sourceLang, clarificationNeeded }) => {
+  const w = await world(), c = await w.call();
+  await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() {
+    return { text: JSON.stringify({ status: "not_confirmed", readings: [], clarificationNeeded }), inputTokens: 1, outputTokens: 1 };
+  } } });
+  const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
+  expect(answer).toBeDefined();
+  await w.db.update(chatMessages).set({ lang: sourceLang, body: [m.nushi_not_found({}, { locale: sourceLang }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: sourceLang })] : [])].join(" "), ...(legacy ? { nushiShape: { status: "not_confirmed" as const, ranges: [] } } : {}) }).where(eq(chatMessages.id, answer.id));
+  const language = sourceLang === "en" ? "ja" : "en";
+  await w.db.update(profiles).set({ displayLang: language, readLangs: [language], uiLocale: language }).where(eq(profiles.userId, "zcn_reader"));
+  await chatPage(w.db, "zcn_reader", w.village.slug!);
+  const result = await runDueJobs(w.db, createChatTranslationHandlers());
+  expect(result).toMatchObject({ failed: 0, retried: 0 });
+  const page = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
+  if (page.consentRequired) throw new Error("Consent missing");
+  const translated = page.messages.find(message => message.id === answer.id)!.translation;
+  expect(translated).toMatchObject({ state: "ready", lang: language, text: [m.nushi_not_found({}, { locale: language }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" ") });
 });
 
 it.each(["missing-answered-readings", "nonempty-not-confirmed-readings", "null-not-confirmed-readings"])("rejects %s without publishing an answer", async mode => {

@@ -12,7 +12,12 @@ import { m } from "~/paraglide/messages.js";
 export async function translateChatNushi(db: Db, message: typeof chatMessages.$inferSelect, language: Lang, options: { clock: () => Date; signal?: AbortSignal }) {
   const shape = message.nushiShape;
   if (!shape) throw new Error("Missing village chat AI answer structure");
-  if (shape.status === "not_confirmed") return { text: `${m.nushi_not_found({}, { locale: language })} ${m.chat_nushi_clarify({}, { locale: language })}`, flags: [], model: "site-copy", promptVersion: CHAT_NUSHI_PROMPT_VERSION };
+  if (shape.status === "not_confirmed") {
+    // Older answers predate the saved flag; inspect their original-language copy.
+    const clarificationNeeded = typeof shape.clarificationNeeded === "boolean" ? shape.clarificationNeeded
+      : message.body.includes(m.chat_nushi_clarify({}, { locale: message.lang as Lang }));
+    return { text: [m.nushi_not_found({}, { locale: language }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" "), flags: [], model: "site-copy", promptVersion: CHAT_NUSHI_PROMPT_VERSION };
+  }
   const engine = resolveEngines().primary;
   if (!engine) throw new Error("Village chat AI translation is unavailable");
   let text = message.body;
