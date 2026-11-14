@@ -62,6 +62,7 @@ export const MEMBER_RATE_LIMITS = {
   "draft-autosave": { limit: 600, windowSeconds: 3600 },
   "display-name": { limit: 5, windowSeconds: 86400 },
   "village-create": { limit: 5, windowSeconds: 86400 },
+  "village-slug-suggest": { limit: 30, windowSeconds: 3600 },
   "village-membership": { limit: 30, windowSeconds: 3600 },
   // Following and unfollowing a village (POST /v/<slug>): 60 per hour per member.
   "village-follow": { limit: 60, windowSeconds: 3600 },

@@ -32,6 +32,23 @@ export function validVillageSlug(value: unknown): value is string {
   return typeof value === "string" && value.length <= VILLAGE_SLUG_MAX
     && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value) && !/^[a-f0-9]{32}$/.test(value) && !reserved.has(value);
 }
+
+// Decomposition keeps accented Latin letters on the local suggestion path.
+export function villageNameNeedsAiSlug(name: string): boolean {
+  return [...name.normalize("NFKD")].some(char => /\p{L}/u.test(char) && !/\p{Script_Extensions=Latin}/u.test(char));
+}
+
+export function villageSlugFromName(name: string): string | null {
+  if (villageNameNeedsAiSlug(name)) return null;
+  let slug = name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (slug.length > VILLAGE_SLUG_MAX) {
+    const boundary = slug.lastIndexOf("-", VILLAGE_SLUG_MAX);
+    if (boundary < 1) return null;
+    slug = slug.slice(0, boundary);
+  }
+  return validVillageSlug(slug) ? slug : null;
+}
 // Preserve script-shaping joiners while rejecting other format controls.
 const forbiddenFormat = /(?![\u200c\u200d])\p{Cf}/u;
 // Hangul fillers are letters, but do not provide a visible name.

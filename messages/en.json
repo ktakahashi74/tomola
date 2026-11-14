@@ -2957,5 +2957,9 @@
   "chat_consent_v4_nushi": "You can call the village AI in chat. Only your calling message is sent for the question; its answer is visible only within this chat.",
   "ai_use_chat_nushi": "Village AI in chat",
   "ai_use_sent_chat_nushi": "only the calling member’s message, projected to visible text, plus bounded public posts from the same village; no reply target or surrounding chat messages",
-  "chat_nushi_description": "In chat, only the calling member’s message is used to interpret the question. Replies and surrounding messages are excluded. Answers draw on the same village’s public posts and are readable only by consenting village members. Questions, answers and provider errors are not copied into request or generation records."
+  "chat_nushi_description": "In chat, only the calling member’s message is used to interpret the question. Replies and surrounding messages are excluded. Answers draw on the same village’s public posts and are readable only by consenting village members. Questions, answers and provider errors are not copied into request or generation records.",
+  "village_slug_ai_help": "For names with non-Latin letters, AI receives the name to suggest an English address. Review and edit the suggestion before creating the village; you cannot change the address later.",
+  "village_slug_suggesting": "Suggesting an address…",
+  "ai_use_village_slug": "Village address suggestions",
+  "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug."
 }
