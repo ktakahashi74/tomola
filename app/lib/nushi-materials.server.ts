@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { sourceHash as hashPost } from "./source-hash.server";
 import { and, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
-import { entries, nushiAnswers, nushiRequests, nushiReservations, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
+import { entries, nushiAnswers, nushiRequests, nushiReservations, nushiSources, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "./visibility.server";
 import { nushiInVillage, nushiLimits } from "./nushi-config.server";
 import { findLiteral } from "./combined-search.server";
@@ -159,7 +159,6 @@ export async function snapshotsCurrent(db: Db, snapshots: readonly NushiSnapshot
 
 export async function nushiSourceLabels(db: Db, answerId: number) {
   // Membership is shown at read time; it is not a claim that a former member agrees now.
-  const { nushiSources } = await import("./db/schema");
   const rows = await db.select({ source: nushiSources, publicId: profiles.publicId, present: sql<boolean>`not exists (select 1 from ${villageDepartures} where ${villageDepartures.villageId} = ${nushiRequests.villageId} and ${villageDepartures.userId} = ${nushiSources.authorId}) or exists (select 1 from ${villageMembers} where ${villageMembers.villageId} = ${nushiRequests.villageId} and ${villageMembers.userId} = ${nushiSources.authorId})` })
     .from(nushiSources).leftJoin(profiles, eq(profiles.userId, nushiSources.authorId)).innerJoin(nushiAnswers, eq(nushiAnswers.id, nushiSources.answerId)).innerJoin(nushiRequests, eq(nushiRequests.id, nushiAnswers.requestId)).where(eq(nushiSources.answerId, answerId));
   return rows.map(({ source, present, publicId }) => ({ id: source.entryId, author: source.author, authorHref: publicId ? `/u/id/${publicId}` : null, date: source.createdAt.toISOString(), left: !present }));

@@ -65,7 +65,9 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await expect(caller.getByText("Please check the seasonal context of the orchard quotation.", { exact: true })).toBeVisible();
     await caller.goto(`${topic}?lang=en`);
     const guest = await guestContext.newPage();
-    await guest.goto(`${topic}?lang=en`);
+    const response = await guest.goto(`${topic}?lang=en`);
+    expect(response?.headers()["cache-control"]).toBe("private, no-store");
+    expect((await guest.request.get(`${topic}.data?lang=en`)).headers()["cache-control"]).toBe("private, no-store");
     await expect(guest.locator("[data-nushi-answer]")).toHaveCount(1);
     const markdown = await guest.request.get(`${topic}.md?lang=en`);
     expect(await markdown.text()).toContain("author_kind: ai");

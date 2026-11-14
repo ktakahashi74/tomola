@@ -106,10 +106,25 @@ it("lists pending moderation reports for operators and records hiding in the pub
   expect(log.entries).toContainEqual(expect.objectContaining({ action: "hide", reason: "other", nushiAnswerId: answerId }));
   expect(JSON.stringify(log)).not.toContain("Hidden after source review");
 });
-it("restores topic caching when the feature is disabled", async () => {
-  const { headers } = await import("~/routes/topic");
-  vi.stubEnv("VILLAGE_NUSHI", "");
+it.each(["", ".data"])("uses no-store only for member state or a thread with AI requests on %s reads", async (suffix) => {
+  const { headers, middleware } = await import("~/routes/topic");
+  const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "A topic without AI requests.", lang: "en" });
+  const pending = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard pending", lang: "en" });
+  if (!topic.ok || !pending.ok) throw new Error("Missing cache fixtures");
+  const [answered] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.state, "answered"));
+  const cache = async (id: number | string, as?: string) => {
+    const response = await middleware.at(-1)!(h.args(h.request(`/t/${id}${suffix}`, { as }), { id: String(id) }), async () => new Response("", { headers: headers() }));
+    return (response as Response).headers.get("Cache-Control");
+  };
   expect(headers()["Cache-Control"]).toBe("private");
-  vi.stubEnv("VILLAGE_NUSHI", "1");
-  expect(headers()["Cache-Control"]).toBe("private, no-store");
+  expect(await cache("999999999999999999999")).toBe("private");
+  expect(await cache(topic.id)).toBe("private");
+  expect(await cache(pending.id)).toBe("private, no-store");
+  expect(await cache(answered.threadId)).toBe("private, no-store");
+  expect(await cache(topic.id, "znushi_route_reader")).toBe("private, no-store");
+  vi.stubEnv("VILLAGE_NUSHI", "");
+  try {
+    expect(await cache(answered.threadId)).toBe("private");
+    expect(await cache(topic.id, "znushi_route_reader")).toBe("private, no-store");
+  } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
 });

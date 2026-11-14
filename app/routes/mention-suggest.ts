@@ -67,5 +67,5 @@ export async function loader({ request }: Route.LoaderArgs) {
   const handles = [...(nushi ? ["nushi"] : []), ...rows.map(row => row.handle)].slice(0, MAX_SUGGESTIONS);
   const names = Object.fromEntries(rows.map(row => [row.handle, { displayName: row.displayName, displayNameLatin: row.displayNameLatin, label: selectDisplayName(row) }]));
   if (nushi) names.nushi = { displayName: null, displayNameLatin: null, label: m.nushi_suggestion() };
-  return Response.json({ handles, names }, { headers: HEADERS });
+  return Response.json({ handles, ...(handles.length ? { names } : {}) }, { headers: HEADERS });
 }

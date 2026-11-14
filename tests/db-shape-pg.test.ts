@@ -54,13 +54,14 @@ describe.skipIf(!PG_MODE)("PostgreSQL listing indexes, HOT updates and admission
       await db.update(profiles).set({ reactionsExcludedAt: new Date() }).where(eq(profiles.userId, "upgrade_excluded"));
       for (const voterId of ["upgrade_voter", "upgrade_excluded"]) await admin.query(`INSERT INTO votes (entry_id, voter_id, voter_area) VALUES ($1, $2, 'ja')`, [root.id, voterId]);
       await db.insert(jobs).values({ kind: "translate_entry", status: "done", payload: { entryId: root.id, paidTranslationCalls: { old: { text: "Legacy translation" } } } });
-      const entryRows = async () => (await admin.query(`SELECT * FROM entries ORDER BY id`)).rows.map(({ history_started_at: _added, lang_code: _langCode, lang_source: _langSource, ...row }: Record<string, unknown>) => row);
+      const entryRows = async () => (await admin.query(`SELECT * FROM entries ORDER BY id`)).rows.map(({ history_started_at: _added, lang_code: _langCode, lang_source: _langSource, nushi_disabled: _nushiDisabled, nushi_parent_id: _nushiParentId, ...row }: Record<string, unknown>) => row);
       const before = await entryRows();
       await admin.query("BEGIN");
       for (const migration of migrations.slice(82)) await admin.query(migration.sql.join("\n"));
       await admin.query("COMMIT");
       expect(await entryRows()).toEqual(before);
       expect((await admin.query(`SELECT lang_code, lang_source FROM entries ORDER BY id`)).rows).toEqual(before.map(() => ({ lang_code: null, lang_source: null })));
+      expect((await admin.query(`SELECT nushi_disabled, nushi_parent_id FROM entries ORDER BY id`)).rows).toEqual(before.map(() => ({ nushi_disabled: false, nushi_parent_id: null })));
       expect((await db.select().from(jobs))[0].payload).toEqual({ entryId: root.id });
       expect(await db.select().from(topicListingStats)).toMatchObject([{ topicId: root.id, insightfulCount: 1, lastActivityAt: root.lastActivityAt }]);
       await setVote(db, "upgrade_voter", root.id, false);

@@ -3,6 +3,9 @@ import { renderNushiThread } from "~/lib/nushi-html.server";
 import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
 import { nushiPreferences, nushiTopicDisabled } from "~/lib/nushi-settings.server";
 import { nushiEnabled } from "~/lib/nushi-config.server";
+import { getDb } from "~/lib/db/client.server";
+import { nushiRequests } from "~/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { loadMemberAvatars } from "~/lib/member-avatar.server";
 import { loadDisplayNames, selectDisplayName, selectDisplayNamePresentation } from "~/lib/display-names.server";
 import { TitledMessage } from "~/components/titled-message";
@@ -71,7 +74,7 @@ import { isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { languageLabel } from "~/lib/language-label";
 import { threadMdMiddleware } from "~/lib/md/twin.server";
 import { readingReturnMiddleware } from "~/lib/auth/reading-return.server";
-import { parseId, parsePage } from "~/lib/params.server";
+import { parseId, parseIdOrNull, parsePage } from "~/lib/params.server";
 import { readEditedId, readPostedId } from "~/lib/posted-ui";
 import { isFirstTopic, postedSourceLanguageStatus, postedTranslationStates } from "~/lib/posted-status.server";
 import { useDropNoticeParams } from "~/components/posted-notice";
@@ -120,16 +123,21 @@ const ModerationPanel = memo(function ModerationPanel({ className, ...props }: C
   return <ActionPanel label={m.mod_panel_summary()} className={className ?? "text-sm"} summaryClassName="touch-action h-auto px-1 ui-meta"><Suspense fallback={null}><ModerationPanelContent {...props} /></Suspense></ActionPanel>;
 });
 
-const memberCacheMiddleware: Route.MiddlewareFunction = async ({ request }, next) => {
+const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params }, next) => {
   const response = await next();
-  if (!(response instanceof Response) || !await getSessionUser(request)) return response;
-  // Only member responses contain private saved state. Cover both documents and client-router data requests.
+  if (!(response instanceof Response)) return response;
+  const member = await getSessionUser(request);
+  const threadId = parseIdOrNull(params.id);
+  const nushi = !member && nushiEnabled() && threadId !== null
+    ? (await (await getDb()).select({ id: nushiRequests.id }).from(nushiRequests).where(eq(nushiRequests.threadId, threadId)).limit(1)).length > 0 : false;
+  if (!member && !nushi) return response;
+  // Saved state and changing AI replies must stay current in documents and client-router data requests.
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "private, no-store");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 };
 // Handle /t/:id.md and /t/:id.txt here, returning Markdown without running the UI loader (app/lib/md/twin.server.ts).
-export const middleware: Route.MiddlewareFunction[] = [threadMdMiddleware, readingReturnMiddleware, stanceResumeMiddleware, memberCacheMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [threadMdMiddleware, readingReturnMiddleware, stanceResumeMiddleware, topicCacheMiddleware];
 
 // These three controls show their own action responses. Other writes still reload
 // the thread, including replies, reports, deletion and translation reports.
@@ -446,10 +454,9 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   };
 }
 
-// Nushi can withdraw replies and apply device preferences between reads.
 // Read-delegation links are issued only by a separate user-triggered POST.
 export function headers() {
-  return { ...readingHeaders(), ...(nushiEnabled() ? { "Cache-Control": "private, no-store" } : {}) };
+  return readingHeaders();
 }
 
 export function meta({ loaderData, location, matches }: Route.MetaArgs) {
