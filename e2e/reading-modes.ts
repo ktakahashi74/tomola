@@ -44,6 +44,7 @@ export const publicOnly = [
   ["village-chat-mentions", ".*"],
   ["village-chat-replies", ".*"],
   ["villages-create", ".*"],
+  ["village-slug-suggest", ".*"],
   ["village-translations", ".*"],
   ["villages-post-target", ".*"],
   ["villages", ".*"],

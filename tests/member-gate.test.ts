@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getActiveMember, getWriter } from "~/lib/members.server";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { authenticateRead } from "~/lib/api/read-auth.server";
@@ -110,11 +110,15 @@ describe("every write path goes through the writer gate", () => {
       ["stance (choose, change, withdraw)", () => import("~/routes/stance") as never, "/stance", {}, { questionId: id, position: "agree", version: "0" }],
       ["settings-tokens (create)", () => import("~/routes/settings-tokens") as never, "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
       ["invites-new", () => import("~/routes/invites-new") as never, "/invites/new", {}, { email: "x@example.com" }],
+      ["village address suggestion", () => import("~/routes/village-slug-suggest") as never, "/villages/suggest-slug", {}, { name: "京都" }],
     ];
     for (const [name, load, p, params, form] of cases) {
       const mod = await load();
-      const outcome = await h.outcome(() => mod.action(h.args(h.request(p, { as: "halfway", form }), params)));
-      expect(outcome, name).toMatchObject({ status: 302, location: "/onboarding" });
+      if (p === "/villages/suggest-slug") { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_SLUG_SUGGEST", "1"); }
+      try {
+        const outcome = await h.outcome(() => mod.action(h.args(h.request(p, { as: "halfway", form }), params)));
+        expect(outcome, name).toMatchObject({ status: 302, location: "/onboarding" });
+      } finally { vi.unstubAllEnvs(); }
     }
   });
 

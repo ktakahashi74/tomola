@@ -3,6 +3,7 @@ import { nushiEnabled, nushiModel } from "./nushi-config.server";
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
 import { judgeThinking, primaryEngineId, resolveEmbeddingEngine, resolveEngines, sourceLanguageConfig, type EngineSet } from "./llm/config.server";
 import { postAskAiEnabled } from "./ai-question-config.server";
+import { villageSlugSuggestConfig, villageSlugSuggestEnabled } from "./village-slug-suggest-config.server";
 import { questionModel } from "./ai-question-answer.server";
 import { currentDivergenceSampleRate } from "./llm/divergence-sample.server";
 import type { EngineId, LlmEnv, TranslationEngine } from "./llm/types";
@@ -33,6 +34,11 @@ const moderation = (env: LlmEnv): ModelConfig => {
 // One row defines a use, its copy and its actual resolver. History validation uses these same IDs.
 // Adding a use here does not change engine selection or enable a feature.
 export const AI_USE_DEFINITIONS = {
+  "village-slug-suggest": { label: "ai_use_village_slug", sent: "ai_use_sent_village_slug", current: (c: Context): ModelConfig | null => {
+    if (!villageSlugSuggestEnabled(c.env)) return null;
+    const config = villageSlugSuggestConfig(c.env);
+    return { id: config.engine, model: config.model, thinking: "off" };
+  } },
   "translation-primary": { label: "ai_use_primary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.primary) },
   "translation-secondary": { label: "ai_use_secondary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.secondary) },
   "translation-retry": { label: "ai_use_retry", sent: "ai_use_sent_retry", current: (c: Context) => translation(c.engines.retry) },

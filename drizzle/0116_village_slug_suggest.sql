@@ -1,0 +1,2 @@
+ALTER TABLE "llm_usage" DROP CONSTRAINT "llm_usage_purpose_check";--> statement-breakpoint
+ALTER TABLE "llm_usage" ADD CONSTRAINT "llm_usage_purpose_check" CHECK ("llm_usage"."purpose" in ('translate', 'retry', 'judge', 'embed', 'chat', 'moderation', 'ask', 'ask_village', 'village_slug_suggest'));

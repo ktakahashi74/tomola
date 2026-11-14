@@ -93,6 +93,8 @@ export default defineConfig({
       PREVIEW_LANGS: "",
       PUBLIC_READING: "",
       VILLAGES: "",
+      VILLAGE_SLUG_SUGGEST: "",
+      VILLAGE_SLUG_SUGGEST_MODEL: "",
       VILLAGE_CHAT: "",
       TRANSLATION_BACKFILL_ENABLED: "",
       FIGURE_TRANSLATION: "",

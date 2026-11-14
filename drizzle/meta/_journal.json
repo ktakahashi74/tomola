@@ -813,6 +813,13 @@
       "when": 1794621397402,
       "tag": "0115_chat_nushi",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1794667988938,
+      "tag": "0116_village_slug_suggest",
+      "breakpoints": true
     }
   ]
 }

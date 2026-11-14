@@ -66,6 +66,16 @@ describe("public AI use", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("discloses village address suggestions only while villages and the feature are enabled", () => {
+    for (const locale of ["en", "ja"] as const) {
+      expect(row(aiUsePage(locale, fake), "village-slug-suggest").enabled).toBe(false);
+      expect(row(aiUsePage(locale, { ...fake, VILLAGE_SLUG_SUGGEST: "1" }), "village-slug-suggest").enabled).toBe(false);
+      const page = aiUsePage(locale, { ...fake, VILLAGES: "1", VILLAGE_SLUG_SUGGEST: "1" });
+      expect(row(page, "village-slug-suggest")).toMatchObject({ enabled: true, model: "fake-village-slug" });
+      expect(row(page, "village-slug-suggest").sent).toContain(m.ai_use_sent_village_slug({}, { locale }));
+    }
+  });
+
   it("honors disabled features, both spam switches and the actual comparison sampling condition", () => {
     const page = aiUsePage("en", fake);
     for (const purpose of ["translation-secondary", "translation-retry", "chat-translation", "post-ask", "translation-check", "figure-reading", "figure-translation", "report-triage", "spam-detection"]) {
