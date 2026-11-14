@@ -2996,5 +2996,19 @@
   "ai_use_nushi": "Nushi du village",
   "ai_use_sent_nushi": "La publication appelante et un ensemble limité de publications publiques de ce village ; les réponses antérieures de l’IA uniquement comme contexte. Les réponses sont enregistrées en tant que réponses publiques de l’IA. Les signalements d’erreur n’enregistrent la question, la réponse et les sources qu’après consentement.",
   "nushi_versions": "Version du prompt : {version}. Les vérifications de citation établissent que les passages existent, et non qu’une réponse soit correcte ou impartiale.",
-  "nushi_saved": "Enregistré."
+  "nushi_saved": "Enregistré.",
+  "chat_nushi_call_notice": "Ce message appellera Nushi et sera envoyé à l’IA d’un fournisseur externe. Sa réponse apparaîtra dans ce tchat.",
+  "chat_nushi_label": "IA répondant à partir des publications de ce village · demandé par @{handle}",
+  "chat_nushi_call_edited": "Le message d’appel a été modifié après cette réponse.",
+  "chat_nushi_read": "Lire la réponse et ses sources",
+  "chat_nushi_clarify": "Veuillez préciser l’objet de votre question. Pour connaître l’avis actuel d’une personne ou un nouvel accord, demandez-le-lui dans une publication. Pour une discussion plus approfondie, posez votre question dans une publication.",
+  "chat_consent_reply_translation": "Une réponse est envoyée avec le message auquel elle fait directement référence à l’IA d’un fournisseur externe en tant que contexte de traduction. Les références supprimées ou masquées sont exclues.",
+  "chat_consent_reply_review": "L’examen inclut également la cible directe de la réponse du message signalé, même en dehors de cette plage. Les cibles de réponse supprimées ou masquées ne sont pas lues.",
+  "chat_consent_nushi": "Lorsque Nushi est disponible dans ce village, appeler @nushi ou @village-ai dans un message envoie uniquement ce message de votre part à l’IA d’un fournisseur externe afin d’interpréter votre question. Les messages des autres personnes ne sont pas envoyés. Nushi répond à partir des publications publiques de ce village, jamais à partir des messages du tchat. Sa réponse apparaît ici pour les personnes pouvant lire ce tchat : les membres du village ayant accepté ce consentement. L’explication relative à la confidentialité décrit la conservation et l’utilisation par le fournisseur.",
+  "chat_consent_nushi_hide": "Masquer les réponses de Nushi modifie uniquement leur affichage sur votre écran.",
+  "chat_consent_v4_replies": "Le contexte de traduction et l’examen des signalements incluent désormais le message directement référencé.",
+  "chat_consent_v4_nushi": "Vous pouvez appeler l’IA du village dans le tchat. Seul votre message d’appel est envoyé pour la question ; sa réponse n’est visible qu’au sein de ce tchat.",
+  "ai_use_chat_nushi": "IA du village dans le tchat",
+  "ai_use_sent_chat_nushi": "uniquement le message du membre appelant, réduit au texte visible, ainsi qu’un nombre délimité de publications publiques du même village ; aucune cible de réponse ni message environnant du tchat",
+  "chat_nushi_description": "Dans le tchat, seul le message du membre appelant est utilisé pour interpréter la question. Les réponses et les messages environnants sont exclus. Les réponses s’appuient sur les publications publiques du même village et ne peuvent être lues que par les membres du village ayant donné leur consentement. Les questions, réponses et erreurs du fournisseur ne sont pas copiées dans les registres de requêtes ou de génération."
 }
