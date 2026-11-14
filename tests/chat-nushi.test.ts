@@ -348,12 +348,14 @@ it.each(["missing-answered-readings", "nonempty-not-confirmed-readings", "null-n
 });
 
 it.each(["clarificationNeeded", "askPerson"].flatMap(field => ["PROVIDER_TEXT", null, 1, [], {}].map(value => ({ field, value }))))("rejects invalid $field=$value without publishing provider text", async ({ field, value }) => {
+  const log = vi.spyOn(console, "warn").mockImplementation(() => {});
   const w = await world(), c = await w.call();
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() {
     return { text: JSON.stringify({ status: "not_confirmed", readings: [], [field]: value }), inputTokens: 1, outputTokens: 1 };
   } } });
   expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "failed", failure: "unverified" });
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toEqual([]);
+  expect(log.mock.calls).toEqual([["Nushi answer verification failed", { requestId: c.request.id, reason: "schema", counts: { readings: 0, citations: 0 } }]]);
 });
 
 it("does not advance withdrawn answer cursors on later village updates", async () => {

@@ -75,6 +75,7 @@ export default [
   route("nushi/action", "routes/nushi-action.ts"),
   route("nushi/availability", "routes/nushi-availability.ts"),
   route("nushi/request/:id", "routes/nushi-request.ts"),
+  route("nushi/request/:id/status", "routes/nushi-status.ts"),
   route("nushi/:id.json", "routes/nushi-read.ts", { id: "nushi-json" }),
   route("nushi/:id.md", "routes/nushi-read.ts", { id: "nushi-md" }),
   route("manifest.json", "routes/manifest.ts"),

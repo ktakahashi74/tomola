@@ -1,7 +1,7 @@
 import { ChatTranslationReport } from "~/components/chat-translation-report";
 import { ChatReplyLine } from "~/components/chat-reply";
 import { memo, useEffect, useRef, useState } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, useRouteLoaderData } from "react-router";
 import { CHAT_BODY_MAX, chatParts, type ActiveChatMessage } from "~/lib/village-chat";
 import { MentionTextarea } from "~/components/mention-autocomplete";
 import { Button } from "~/components/ui/button";
@@ -10,6 +10,7 @@ import { NEAR_COPY_FLAGS } from "~/lib/llm/flags";
 import { m } from "~/paraglide/messages.js";
 import { chatClock, type ChatCalendar } from "~/lib/chat-calendar";
 import { useTranslationWait, waitText } from "~/lib/translation-wait";
+import { NushiPending } from "~/components/nushi-pending";
 
 export const ChatMessageView = memo(function ChatMessageView({ message, ended, slug, originals, grouped, calendar, self, onReport, onReply, tabIndex = 0, onActivate }: {
   message: ActiveChatMessage; ended: boolean; slug: string; originals: boolean; grouped: boolean; calendar: ChatCalendar; self: string; onReport: (id: string) => void; onReply?: (message: ActiveChatMessage) => void; tabIndex?: number; onActivate?: (id: string) => void;
@@ -54,7 +55,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {message.translation?.state === "failed" && !NEAR_COPY_FLAGS.includes(message.translation.errorCode ?? "") && <p className="mt-1 ui-help text-muted-foreground">{m.village_chat_translation_failed()}</p>}
       {message.translation?.state === "paused" && <p className="mt-1 ui-help text-muted-foreground">{waitText({ kind: "stopped" }, false)}</p>}
     </>}
-    {message.nushiCall && message.nushiCall.state !== "answered" && <p role="status" className="ui-help text-muted-foreground">{["pending", "processing"].includes(message.nushiCall.state) ? m.nushi_pending() : <>{m.nushi_failed()} {message.nushiCall.failure === "limit" ? m.nushi_failure_limit() : message.nushiCall.failure === "budget" ? m.nushi_failure_budget() : message.nushiCall.failure === "expired" ? m.nushi_failure_expired() : ""}</>}</p>}
+    {message.nushiCall && message.nushiCall.state !== "answered" && <p role="status" data-nushi-status className="ui-help text-muted-foreground">{["pending", "processing"].includes(message.nushiCall.state) ? <NushiPending /> : <>{m.nushi_failed()} {message.nushiCall.failure === "limit" ? m.nushi_failure_limit() : message.nushiCall.failure === "budget" ? m.nushi_failure_budget() : message.nushiCall.failure === "expired" ? m.nushi_failure_expired() : ""}</>}</p>}
     {!message.hidden && <ChatTopicCards topics={message.topics} tabIndex={interactionTabIndex} />}
     {/* Anchor overlays below the visible byline and reply link, without moving later messages. */}
     <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-nowrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : message.reply && !message.hidden ? "top-0 row-start-3" : "top-0 row-start-2"}
@@ -88,7 +89,8 @@ function TranslationMark({ tabIndex }: { tabIndex?: number }) {
   return <a href="/ai-use" tabIndex={tabIndex} title={m.village_chat_translation_machine()} className="shrink-0 rounded border px-1 text-[0.7rem] leading-4"><span aria-hidden="true">{m.village_chat_translation_badge()}</span><span className="sr-only">{m.village_chat_translation_machine()}</span></a>;
 }
 
-function ChatNushiBody({ parts }: { parts: ActiveChatMessage["parts"] }) {
+export function ChatNushiBody({ parts }: { parts: ActiveChatMessage["parts"] }) {
+  const root = useRouteLoaderData("root") as { siteOrigin?: string | null } | undefined;
   const ref = useRef<HTMLParagraphElement>(null), [long, setLong] = useState(false);
   useEffect(() => {
     const element = ref.current;
@@ -97,6 +99,12 @@ function ChatNushiBody({ parts }: { parts: ActiveChatMessage["parts"] }) {
     const observer = new ResizeObserver(measure); observer.observe(element); measure();
     return () => observer.disconnect();
   }, [parts]);
-  const body = <p ref={ref} dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{part.text}</a>)}</p>;
+  const body = <p ref={ref} dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => {
+    if (part.type === "text") return part.text;
+    let internal = false;
+    try { internal = part.type === "link" && !!root?.siteOrigin && new URL(part.href, root.siteOrigin).origin === root.siteOrigin; }
+    catch { /* Preserve the existing label for an unrecognized destination. */ }
+    return <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{internal ? m.nushi_open_post() : part.text}</a>;
+  })}</p>;
   return long ? <details className="space-y-2"><summary className="cursor-pointer underline">{m.chat_nushi_read()}</summary>{body}</details> : body;
 }

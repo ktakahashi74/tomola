@@ -116,6 +116,7 @@ import { postAskAiEnabled } from "~/lib/ai-question-config.server";
 // replace a pending form, but must not remove the summary being pressed or
 // reset its open state. The server still includes the complete form.
 const TranslationWatch = lazy(() => import("~/components/translation-watch").then(module => ({ default: module.TranslationWatch })));
+const NushiStatusWatches = lazy(() => import("~/components/nushi-status-watch"));
 const LazyModerationPanel = lazy(() => import("~/components/moderation-panel").then(module => ({ default: module.ModerationForm })));
 const ServerModerationPanel = import.meta.env.SSR ? (await import("~/components/moderation-panel")).ModerationForm : null;
 const ModerationPanelContent: ComponentType<ComponentProps<typeof LazyModerationPanel>> = ServerModerationPanel ?? LazyModerationPanel;
@@ -805,6 +806,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   );
   return (
     <main ref={quoteRoot} className="reading-column reading-topic space-y-6">
+      {loaderData.nushi.pending.length > 0 && <Suspense fallback={null}><NushiStatusWatches requestIds={loaderData.nushi.pending} /></Suspense>}
       {topic.placeholder !== null && <div className="flex justify-end">
         <OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} />
       </div>}

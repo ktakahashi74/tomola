@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
+import { expectNushiPending } from "./support/nushi-pending";
 
 test.use({ actionTimeout: 20_000 });
 
@@ -51,8 +52,22 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   });
   await field.fill("@nushi orchard planting date");
   await expect(page.getByText(en.chat_nushi_call_notice, { exact: true })).toBeVisible();
+  let releaseCallerAI = false;
+  await page.route("**/chat/changes?*", async route => {
+    const response = await route.fetch();
+    if (!response.ok() || releaseCallerAI) { await route.fulfill({ response }); return; }
+    const data = await response.json();
+    const ai = data.messages?.filter((message: { nushi?: unknown }) => !!message.nushi) ?? [];
+    data.messages = data.messages?.filter((message: { nushi?: unknown }) => !message.nushi);
+    if (ai.length) data.next = Math.min(data.next, ...ai.map((message: { changedSeq: number }) => message.changedSeq - 1));
+    for (const message of data.messages ?? []) if (message.nushiCall?.state === "answered") message.nushiCall.state = "processing";
+    await route.fulfill({ response, json: data });
+  });
   await page.getByRole("button", { name: en.village_chat_send, exact: true }).click();
   await expect(field).toHaveValue("");
+  await expectNushiPending(page, page.locator("[data-nushi-status]").filter({ hasText: en.nushi_pending }));
+  releaseCallerAI = true;
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect(page.locator("[data-chat-nushi]")).toHaveCount(1, { timeout: 120_000 });
   await expect(reader.getByRole("log")).toContainText("@nushi orchard planting date");
   await reader.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -68,6 +83,11 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   await expect(answer).toContainText("zcn_flow_caller");
   if (await answer.locator("details").count()) await answer.locator("details > summary").first().click();
   await expect(answer).toContainText("zcn_flow_owner");
+  const sourceLinks = answer.getByRole("link", { name: en.nushi_open_post, exact: true });
+  await expect(sourceLinks.first()).toBeVisible();
+  const href = await sourceLinks.first().getAttribute("href");
+  expect(href).toMatch(/\/t\/\d+.*#(?:p|c)-\d+:~:text=/);
+  expect(new URL(href!).origin).toBe(new URL(state().baseURL).origin);
   await expect(answer.locator("[data-chat-reply]")).toContainText("@nushi orchard planting date");
   await expect(answer.locator("[data-chat-read-seq]")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -78,9 +98,12 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
     expect((await outsider.request.get("/v/chat-nushi-browser/chat/changes?since=0")).status()).toBe(401);
   } finally { await guest.close(); }
   await answer.locator('[id^="chat-byline-"]').click(); await answer.getByRole("button", { name: en.village_chat_reply, exact: true }).click();
-  await field.fill("A human reply to the source guide");
+  await field.fill(`A human reply to the source guide ${href} https://example.org/reference`);
   await page.getByRole("button", { name: en.village_chat_send, exact: true }).click();
   await expect(page.getByRole("log")).toContainText("A human reply to the source guide");
+  const human = page.locator("[data-chat-message]").filter({ hasText: "A human reply to the source guide" }).filter({ has: page.locator(`a[href="${href}"]`) }).last();
+  await expect(human.getByRole("link", { name: href!, exact: true })).toHaveAttribute("href", href!);
+  await expect(human.getByRole("link", { name: "https://example.org/reference", exact: true })).toHaveAttribute("href", "https://example.org/reference");
   await answer.locator('[id^="chat-byline-"]').click(); await answer.getByRole("link", { name: en.chat_reports_flag, exact: true }).click();
   await page.getByRole("dialog", { name: en.chat_reports_flag, exact: true }).getByRole("button", { name: en.flag_submit, exact: true }).click();
   await expect(page.getByText(en.chat_reports_flagged, { exact: true })).toBeVisible();

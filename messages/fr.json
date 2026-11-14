@@ -2969,7 +2969,6 @@
   "nushi_citation_pref": "M’avertir lorsque Nushi cite mes publications (au maximum une fois par jour)",
   "nushi_hidden": "Réponse de Nushi (actuellement non affichée)",
   "nushi_source_changed": "Les publications sources ont été modifiées. Cette réponse n’est plus affichée.",
-  "nushi_pending": "Nushi prépare une réponse.",
   "nushi_failed": "Nushi n’a pas pu répondre.",
   "nushi_failure_unverified": "Les passages justificatifs n’ont pas pu être vérifiés.",
   "nushi_failure_limit": "La limite quotidienne a été atteinte.",

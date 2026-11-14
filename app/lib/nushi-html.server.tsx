@@ -20,7 +20,7 @@ export function renderNushiThread(view: ComponentProps<typeof NushiThreadControl
   }
   const controls = view.setting !== null || view.answers.length ? renderToStaticMarkup(<NushiThreadControls view={view} {...options} />, { identifierPrefix: `nushi-controls-${options.threadId}-` }) : "";
   const reply = options.reply ? renderToStaticMarkup(<><input type="hidden" name="nushiParentId" value={options.reply} /><p>{m.nushi_name()} · {m.reply_to_button()}</p></>) : "";
-  return { entries, controls, reply };
+  return { entries, controls, reply, pending: view.requests.filter(request => ["pending", "processing"].includes(request.state)).map(request => request.id) };
 }
 
 type NushiReportList = { operator: boolean; page: number; evidence: string | null; reports: Array<Omit<Awaited<ReturnType<typeof listNushiReports>>[number], "date"> & { date: string }> };

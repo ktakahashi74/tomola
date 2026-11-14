@@ -2344,7 +2344,6 @@
   "nushi_citation_pref": "當 Nushi 引用我的貼文時通知我（每天最多一次）",
   "nushi_hidden": "Nushi 的回答（目前未顯示）",
   "nushi_source_changed": "來源貼文已變更。此回答不再顯示。",
-  "nushi_pending": "Nushi 正在準備回答。",
   "nushi_failed": "Nushi 無法回答。",
   "nushi_failure_unverified": "無法驗證佐證段落。",
   "nushi_failure_limit": "已達每日上限。",

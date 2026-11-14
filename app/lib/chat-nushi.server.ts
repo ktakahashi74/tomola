@@ -10,7 +10,7 @@ import { nushiLimits } from "./nushi-config.server";
 import { collectNushiMaterials, nushiMaterialIndex, reconstructNushiMaterials, snapshotsCurrent } from "./nushi-materials.server";
 import { nushiPrompt, quotaLock, resolveNushiCompleter } from "./nushi.server";
 import { projectQuestionSource } from "./ai-question-materials.server";
-import { verifyNushiAnswer } from "./nushi-answer.server";
+import { logNushiVerificationFailure, verifyNushiAnswerResult } from "./nushi-answer.server";
 import type { AiQuestionAnswer } from "./ai-questions";
 import { completionEstimate, meteredCall } from "./llm/metering.server";
 import { BudgetPausedError } from "./llm/errors.server";
@@ -133,8 +133,8 @@ For status not_confirmed, including when clarification is needed, return {"statu
 Keep readings short in every language. You may reduce the number of readings for brevity, but preserve each retained reading's attribution, conditions, reservations and relevant disagreements, along with the consulted scope. If supplied posts contradict a premise of the question, such as everyone opposing a proposal, show those posts without adopting that premise. Do not return not_confirmed merely because an answer available in the supplied materials is difficult to shorten.
 Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
     const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask", estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env), now: clock(), clock, env, signal }, () => completer.complete(prompt), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
-    const verified = verifyNushiAnswer(result.text, input.materials, "chat");
-    if (!verified) { await finish(db, id, "unverified", clock(), request.token!); return; }
+    const verified = verifyNushiAnswerResult(result.text, input.materials, "chat");
+    if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer, clarificationNeeded } = verified;
     const published = await db.transaction(async tx => {
       // Profile locks precede village/member locks, matching suspension and account deletion.

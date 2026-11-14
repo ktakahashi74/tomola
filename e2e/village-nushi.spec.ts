@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
+import { expectNushiPending } from "./support/nushi-pending";
 
 test("village owners manage Nushi below the village header", async ({ page }) => {
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.217"));
@@ -102,9 +103,28 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await body.fill("@nushi orchard planting date");
     await expect(caller.getByText(en.nushi_call_notice, { exact: true })).toBeVisible();
     await expect(caller.locator('input[name="suppressNushi"]')).toHaveCount(0);
+    let releaseStatus = false, statusReads = 0;
+    await caller.route("**/nushi/request/*/status", async route => {
+      statusReads++;
+      const response = await route.fetch();
+      if (!response.ok()) { await route.fulfill({ response }); return; }
+      const data = await response.json();
+      expect(Object.keys(data)).toEqual(["state"]);
+      await route.fulfill({ response, json: releaseStatus ? data : { state: "pending" } });
+    });
     await caller.getByRole("button", { name: en.submit_reply, exact: true }).click();
     await expect(caller.locator("#replies")).toContainText("@nushi orchard planting date");
-    await expect.poll(async () => { await caller.reload(); return caller.locator("[data-nushi-answer]").count(); }, { timeout: 120_000, intervals: [1000, 2000, 4000] }).toBe(1);
+    await expectNushiPending(caller, caller.locator("[data-nushi-status]").filter({ hasText: en.nushi_pending }));
+    await expect.poll(() => statusReads).toBeGreaterThan(0);
+    await caller.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => true }); document.dispatchEvent(new Event("visibilitychange")); });
+    const readsBeforeHidden = statusReads;
+    await caller.clock.install();
+    await caller.clock.fastForward(20_000);
+    expect(statusReads).toBe(readsBeforeHidden);
+    releaseStatus = true;
+    await caller.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); document.dispatchEvent(new Event("visibilitychange")); });
+    await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1, { timeout: 120_000 });
+    await expect(caller.locator("[data-nushi-status]")).toHaveCount(0);
     const answer = caller.locator("[data-nushi-answer]");
     await expect(answer).toContainText("znushi_flow_caller");
     await expect(answer).toContainText(en.nushi_personal_notice);
@@ -167,7 +187,7 @@ test("Nushi moderation reports appear in the operator queue and public action lo
   await page.getByRole("button", { name: en.submit_post, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
   const topic = new URL(page.url()).pathname;
-  await expect.poll(async () => { await page.reload(); return page.locator("[data-nushi-answer]").count(); }, { timeout: 120_000 }).toBe(1);
+  await expect(page.locator("[data-nushi-answer]")).toHaveCount(1, { timeout: 120_000 });
   const answerId = (await page.locator("[data-nushi-answer]").getAttribute("id"))!.replace("nushi-", "");
   const form = page.locator('[data-nushi-answer] form:has(input[value="moderation"])');
   await form.locator("..").locator("summary").click();

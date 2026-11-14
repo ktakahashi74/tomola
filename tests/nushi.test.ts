@@ -18,6 +18,7 @@ import { nushiMarkdownBlocks } from "~/lib/nushi-markdown.server";
 import { getBudgetStatus, NUSHI_USAGE_PURPOSES, reserveUsage } from "~/lib/llm/usage.server";
 import type { Db } from "~/lib/db/client.server";
 import type { JsonCompleter } from "~/lib/llm/completion.server";
+import { AI_QUESTION_LIMITS } from "~/lib/ai-questions";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 async function published(f: Awaited<ReturnType<typeof nushiFixture>>, completer?: JsonCompleter) {
@@ -44,6 +45,13 @@ it("keeps the public prompt as the default while selecting a private chat destin
   expect(chatPrompt.system).not.toContain("When the question refers to the calling topic itself");
   expect(chatPrompt.system).toContain("you may add askPerson as a JSON boolean");
   for (const prompt of [publicPrompt, chatPrompt]) expect(prompt.system).toContain('return "readings":[] even when nothing is found; never omit required fields');
+  for (const prompt of [publicPrompt, chatPrompt]) {
+    expect(prompt.system).toContain(`at most ${AI_QUESTION_LIMITS.readings} readings, each at most ${AI_QUESTION_LIMITS.readingChars} characters`);
+    expect(prompt.system).toContain(`at most ${AI_QUESTION_LIMITS.citations} distinct citations overall`);
+    expect(prompt.system).toContain(`quote and translatedQuote must be at most ${AI_QUESTION_LIMITS.quoteChars} characters`);
+    expect(prompt.system).toContain("verbatim contiguous excerpt");
+    expect(prompt.system).toContain("choose representative supplied posts");
+  }
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
   expect(nushiEnabled({})).toBe(false); expect(nushiMonthlyBudgetMicro({})).toBe(10_000_000);
@@ -137,11 +145,13 @@ it("publishes translated Markdown evidence and saves exactly the projected model
   expect(JSON.stringify(evidence)).not.toContain("SECRET");
 });
 it("rejects invented quotes and untrusted output fields without publishing", async () => {
+  const log = vi.spyOn(console, "warn").mockImplementation(() => {});
   const f = await nushiFixture();
   const fake = resolveNushiCompleter();
   await processNushiRequest(f.db, f.request.id, { completer: { ...fake, async complete() { return { text: JSON.stringify({ status: "answered", readings: [{ text: "Invented evidence", citations: [{ sourceId: `e-${f.source}-body`, quote: "THIS DOES NOT EXIST" }] }] }), inputTokens: 1, outputTokens: 1 }; } } });
   expect(await f.db.select().from(nushiAnswers)).toHaveLength(0);
   expect((await f.db.select().from(nushiRequests))[0]).toMatchObject({ state: "failed", failure: "unverified" });
+  expect(log.mock.calls).toEqual([["Nushi answer verification failed", { requestId: f.request.id, reason: "quote_not_found", counts: { readings: 1, citations: 1 } }]]);
 });
 it.each(["source", "caller", "village", "topic", "switch"])("does not publish across a concurrent %s change", async kind => {
   const f = await nushiFixture(), fake = resolveNushiCompleter();

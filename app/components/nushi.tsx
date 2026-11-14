@@ -4,6 +4,7 @@ import { reasonLabel } from "./reason-label";
 import { Button } from "./ui/button";
 import type { readNushiAnswer } from "~/lib/nushi.server";
 import { m } from "~/paraglide/messages.js";
+import { NushiPending } from "./nushi-pending";
 
 export type NushiAnswerView = NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>;
 export function NushiAnswer({ answer: value, hide = false, member = false, back }: { answer: NushiAnswerView; hide?: boolean; member?: boolean; back?: string }) {
@@ -60,6 +61,7 @@ function NushiReport({ answerId, back }: { answerId: number; back: string }) {
 }
 
 export function NushiCallStatus({ state, failure }: { state: string; failure: string | null }) {
+  const pending = ["pending", "processing"].includes(state);
   const reason = failure === "unverified" ? m.nushi_failure_unverified() : failure === "limit" ? m.nushi_failure_limit() : failure === "budget" ? m.nushi_failure_budget() : failure === "expired" ? m.nushi_failure_expired() : failure === "private" ? m.nushi_failure_private() : "";
-  return <p role="status" data-nushi-status className="ui-help text-muted-foreground">{["pending", "processing"].includes(state) ? m.nushi_pending() : `${m.nushi_failed()} ${reason}`}</p>;
+  return <p role="status" data-nushi-status className="ui-help text-muted-foreground">{pending ? <NushiPending /> : `${m.nushi_failed()} ${reason}`}</p>;
 }

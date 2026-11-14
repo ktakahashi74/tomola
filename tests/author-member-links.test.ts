@@ -41,7 +41,7 @@ const entry = (id: number, authorHandle: string, display = original) => ({
 });
 const thread = (display = original) => ({
   aiMaterialLinks: [],
-  nushi: { entries: {}, controls: "", reply: "" },
+  nushi: { entries: {}, controls: "", reply: "", pending: [] },
   topic: { ...entry(1, "current_topic", display), title: "A topic", headline: null },
   replies: [entry(2, "current_reply", display)],
   question: { asksStance: false, isAlt: false, origin: null, locked: false, canFix: false, stance: null, reasons: null, objections: null },
