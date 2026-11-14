@@ -78,6 +78,10 @@ describe("public AI use", () => {
     expect(row(aiUsePage("en", { ...fake, POST_ASK_AI: "0", POST_ASK_AI_MODEL: "fake-question" }), "post-ask").enabled).toBe(false);
     const questionEnv = { ...fake, POST_ASK_AI: "1" };
     expect(row(aiUsePage("en", questionEnv), "post-ask").model).toBe(resolveQuestionCompleter(questionEnv).model);
+    // The village AI is described only while it is offered.
+    expect(aiUsePage("en", fake).nushi).toBeNull();
+    expect(aiUseMarkdown(aiUsePage("en", fake))).not.toContain(m.nushi_description());
+    expect(aiUsePage("en", { ...fake, VILLAGE_NUSHI: "1" }).nushi?.title).toBe(m.nushi_name());
   });
 
   it.each(["en", "ja"] as const)("keeps keys, credentials, internal endpoints and prices out of HTML, Markdown and loader data in %s", async locale => {

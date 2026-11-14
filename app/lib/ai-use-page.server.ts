@@ -1,4 +1,4 @@
-import { NUSHI_PROMPT_VERSION } from "./nushi-config.server";
+import { NUSHI_PROMPT_VERSION, nushiEnabled } from "./nushi-config.server";
 import { AI_USE_DEFINITIONS, PUBLIC_MODEL_NAME, readAiUseConfigurations, type AiUsePurpose } from "./ai-use-registry.server";
 import { operatorConfig, type AiUseSettings } from "./operator-config.server";
 import type { Lang } from "./languages";
@@ -52,7 +52,8 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
     settingsNote: m.ai_use_settings_note({}, options),
     unrecorded: m.ai_use_unrecorded({}, options),
     rows,
-    nushi: { title: m.nushi_name({}, options), text: m.nushi_description({}, options), versions: m.nushi_versions({ version: NUSHI_PROMPT_VERSION }, options) },
+    // Describe the village AI only while it is offered.
+    nushi: nushiEnabled(env) ? { title: m.nushi_name({}, options), text: m.nushi_description({}, options), versions: m.nushi_versions({ version: NUSHI_PROMPT_VERSION }, options) } : null,
     searchTitle: m.ai_use_search({}, options),
     searchText: m.ai_use_search_text({}, options),
     historyTitle: m.ai_use_history({}, options),
@@ -92,9 +93,7 @@ export function aiUseMarkdown(page: Page): string {
   return [
     `# ${markdownText(page.title)}`,
     `${markdownText(page.opening)} ${markdownLink(page.connectLabel, "/connect")}`,
-    `## ${markdownText(page.nushi.title)}`,
-    markdownText(page.nushi.text),
-    markdownText(page.nushi.versions),
+    ...(page.nushi ? [`## ${markdownText(page.nushi.title)}`, markdownText(page.nushi.text), markdownText(page.nushi.versions)] : []),
     `## ${markdownText(page.currentTitle)}`,
     markdownText(page.configNote),
     markdownText(page.settingsNote),
