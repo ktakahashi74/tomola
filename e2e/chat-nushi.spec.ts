@@ -5,6 +5,39 @@ import { expectNushiPending } from "./support/nushi-pending";
 
 test.use({ actionTimeout: 20_000 });
 
+test("chat guidance follows consent and village availability without prefilling a question", async ({ page }, info) => {
+  test.skip(!info.config.metadata.publicReading, "Village chat requires public reading");
+  await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.236"));
+  const path = "/v/chat-nushi-browser/chat?ask=nushi&lang=en";
+  await useMember(page, "zcn_flow_owner@example.com", path);
+  await waitForClientRoute(page);
+  const help = page.locator("[data-nushi-mention-help]");
+  await expect(help).toHaveCount(0);
+  await page.getByRole("button", { name: en.village_chat_consent_accept, exact: true }).click();
+  const field = page.getByLabel(en.village_chat_body, { exact: true });
+  await expect(field).toHaveValue("");
+  await expect(help).toHaveCount(process.env.E2E_CHAT_NUSHI === "1" ? 1 : 0);
+  await page.goto("/v/chat-nushi-browser?lang=en");
+  const management = page.locator("#village-management");
+  await management.locator(":scope > summary").click();
+  const setting = management.locator('form[action="/nushi/action"]');
+  await setting.locator('input[name="enabled"]').uncheck();
+  await setting.getByRole("button").click();
+  await waitForClientRoute(page);
+  try {
+    await page.goto(path);
+    await waitForClientRoute(page);
+    await expect(field).toHaveValue("");
+    await expect(help).toHaveCount(0);
+  } finally {
+    await page.goto("/v/chat-nushi-browser?lang=en");
+    await management.locator(":scope > summary").click();
+    await setting.locator('input[name="enabled"]').check();
+    await setting.getByRole("button").click();
+    await waitForClientRoute(page);
+  }
+});
+
 // Every identity belongs only to this scenario.
 test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary replies", async ({ page, browser }, info) => {
   test.setTimeout(240_000);
@@ -23,6 +56,12 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   await expect(consent.getByText(en.chat_consent_nushi_hide, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: en.village_chat_consent_accept, exact: true }).click();
   await expect(page.getByRole("log")).toBeVisible();
+  const help = page.locator("[data-nushi-mention-help]");
+  await expect(help).toHaveCount(enabled ? 1 : 0);
+  if (enabled) {
+    await expect(help).toHaveClass(/ui-help/);
+    await expect(help.getByRole("link")).toHaveAttribute("href", "/ai-use#nushi");
+  }
   const field = page.getByLabel(en.village_chat_body, { exact: true });
   await expect(field.locator("xpath=ancestor::form")).toHaveClass(enabled ? /\bflex-wrap\b/ : /^(?!.*\bflex-wrap\b).*$/);
   await field.fill("@nushi orchard");
@@ -32,6 +71,9 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
     return;
   }
   await expect(page.getByText(en.chat_nushi_call_notice, { exact: true })).toBeVisible();
+  await expect(help).toHaveCount(0);
+  await field.fill("");
+  await expect(help).toBeVisible();
   await expect(page.locator('input[name="suppressNushi"]')).toHaveCount(0);
   const readerContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.232") });
   const reader = await readerContext.newPage();

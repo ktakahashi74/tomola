@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { m } from "~/paraglide/messages.js";
+import { NushiMentionHelp } from "./nushi-mention-help";
 
 export function ChatNushiComposer({ slug }: { slug: string }) {
   const ref = useRef<HTMLDivElement>(null), [calling, setCalling] = useState(false);
@@ -24,5 +25,5 @@ export function ChatNushiComposer({ slug }: { slug: string }) {
     form.addEventListener("input", inspect); inspect();
     return () => { clearTimeout(timer); controller?.abort(); form.removeEventListener("input", inspect); };
   }, [slug]);
-  return <div ref={ref} className="basis-full">{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.chat_nushi_call_notice()}</p></div>}</div>;
+  return <div ref={ref} className="basis-full">{calling ? <div className="space-y-1 rounded border p-2 ui-help"><p>{m.chat_nushi_call_notice()}</p></div> : <NushiMentionHelp />}</div>;
 }

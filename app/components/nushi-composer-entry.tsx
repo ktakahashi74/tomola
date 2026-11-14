@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 
 const Composer = lazy(() => import("./nushi-composer").then(module => ({ default: module.NushiComposerNotice })));
 
 // A normal reading or writing page does not load the optional AI controls.
-export function NushiComposerEntry() {
+export function NushiComposerEntry({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null), [active, setActive] = useState(false);
   useEffect(() => {
     const form = ref.current?.closest("form");
@@ -12,5 +12,5 @@ export function NushiComposerEntry() {
     form.addEventListener("input", inspect); inspect();
     return () => form.removeEventListener("input", inspect);
   }, []);
-  return <div ref={ref} className={active ? "basis-full" : undefined}>{active && <Suspense fallback={null}><Composer /></Suspense>}</div>;
+  return <div ref={ref} className={active || children ? "basis-full" : undefined}>{active ? <Suspense fallback={children}><Composer>{children}</Composer></Suspense> : children}</div>;
 }

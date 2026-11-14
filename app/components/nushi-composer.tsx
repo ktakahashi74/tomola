@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { m } from "~/paraglide/messages.js";
 
-export function NushiComposerNotice() {
+export function NushiComposerNotice({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [calling, setCalling] = useState(false);
   useEffect(() => {
@@ -29,5 +29,5 @@ export function NushiComposerNotice() {
     form.addEventListener("input", inspect); form.addEventListener("change", inspect); inspect();
     return () => { clearTimeout(timer); controller?.abort(); form.removeEventListener("input", inspect); form.removeEventListener("change", inspect); };
   }, []);
-  return <div ref={ref}>{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.nushi_call_notice()}</p></div>}</div>;
+  return <div ref={ref}>{calling ? <div className="space-y-1 rounded border p-2 ui-help"><p>{m.nushi_call_notice()}</p></div> : children}</div>;
 }

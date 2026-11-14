@@ -4,8 +4,9 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { ChatReportError, createChatReport } from "~/lib/village-chat-reports.server";
 import { ChatReportForm } from "~/components/chat-report-form";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { data, Form, isRouteErrorResponse, Link, redirect, replace, useLocation, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
+import { data, Form, isRouteErrorResponse, Link, redirect, replace, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
 import type { Route } from "./+types/village-chat";
+import { getWriter } from "~/lib/members.server";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
@@ -86,7 +87,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const report = search.get("report");
   if (report && (page.consentRequired || !page.messages.some(message => !message.deleted && !message.hidden && !message.own && message.id === report))) throw data("Not found", { status: 404 });
   // The name in the reader's language when the village was named in another (its original stays in the tooltip of the head).
-  return { ...page, targetUnavailable: page.consentRequired ? search.has("at") : page.targetUnavailable, privacyAvailable: page.consentRequired && noticesAvailable().privacy, village: (await withVillageIcons(db, [await localizeVillage(db, page.village, villageReaderFor(request, profile))]))[0], linkLang, report, reported: search.get("reported"), now: Date.now(), latest: search.has("latest"), window: `${search.get("before") ?? ""}:${search.get("at") ?? ""}:${search.get("after") ?? ""}` };
+  return { ...page, chatNushiAvailable: !page.consentRequired && page.chatNushiAvailable && (await getWriter(db, user.id, { profile })).ok, targetUnavailable: page.consentRequired ? search.has("at") : page.targetUnavailable, privacyAvailable: page.consentRequired && noticesAvailable().privacy, village: (await withVillageIcons(db, [await localizeVillage(db, page.village, villageReaderFor(request, profile))]))[0], linkLang, report, reported: search.get("reported"), now: Date.now(), latest: search.has("latest"), window: `${search.get("before") ?? ""}:${search.get("at") ?? ""}:${search.get("after") ?? ""}` };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -235,20 +236,6 @@ function ConsentedChat({ loaderData, actionData }: {
     };
   }, [ended]);
   const sendForm = useRef<HTMLFormElement>(null);
-  const location = useLocation();
-  useEffect(() => {
-    const search = new URLSearchParams(location.search);
-    if (search.get("ask") !== "nushi") return;
-    const field = sendForm.current?.querySelector("textarea");
-    if (loaderData.chatNushiAvailable && !ended && field && field.value === "") {
-      field.value = "@nushi ";
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.focus({ preventScroll: true });
-      field.setSelectionRange(field.value.length, field.value.length);
-    }
-    search.delete("ask");
-    navigate({ pathname: location.pathname, search: search.toString(), hash: location.hash }, { replace: true, preventScrollReset: true });
-  }, [location.pathname, location.search, location.hash, loaderData.chatNushiAvailable, ended, navigate]);
   const [reply, setReply] = useState<ActiveChatMessage | null>(null);
   const replyTarget = messages.find(message => message.id === reply?.id) ?? reply;
   const pendingReply = useRef<ActiveChatMessage | null>(null);

@@ -17,7 +17,7 @@ const Extras = lazy(() => import("./reply-extras-content"));
 // `above` holds what belongs above the field (the reply target, the tag of a reply to a question); `aiTools` the writing-with-AI entry (inside "…").
 // `actions` replaces the reply button (the draft screen has its own); `keeper` names the local copy and the text the screen starts from (a reply form starts empty); `autoLang` false
 // is for a saved draft, whose language is already chosen.
-export function ReplyFields({ owner, threadId, error, errorId, errorText, defaultLang, defaultBody = "", selectedLang, above, aiTools, actions, keeper, autoLang = true, invalidatePreviewOnEdit = false }: {
+export function ReplyFields({ owner, threadId, error, errorId, errorText, defaultLang, defaultBody = "", selectedLang, above, aiTools, actions, keeper, nushiAvailable, autoLang = true, invalidatePreviewOnEdit = false }: {
   owner: string; threadId: number; error?: string; errorId?: string; errorText?: string; defaultBody?: string; above?: ReactNode; actions?: ReactNode; keeper?: { scope: string; startBody: string; family?: string };
 } & Omit<ReplyExtrasProps, "autoLang" | "invalidatePreviewOnEdit"> & { autoLang?: boolean; invalidatePreviewOnEdit?: boolean }) {
   const bodyId = useId();
@@ -38,7 +38,7 @@ export function ReplyFields({ owner, threadId, error, errorId, errorText, defaul
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       {actions ?? <SendButton>{m.submit_reply()}</SendButton>}
       {ready
-        ? <QuietBoundary fallback={language}><Suspense fallback={language}><Extras error={error} errorId={errorId} defaultLang={defaultLang} selectedLang={selectedLang} autoLang={autoLang} invalidatePreviewOnEdit={invalidatePreviewOnEdit} aiTools={aiTools} /></Suspense></QuietBoundary>
+        ? <QuietBoundary fallback={language}><Suspense fallback={language}><Extras nushiAvailable={nushiAvailable} error={error} errorId={errorId} defaultLang={defaultLang} selectedLang={selectedLang} autoLang={autoLang} invalidatePreviewOnEdit={invalidatePreviewOnEdit} aiTools={aiTools} /></Suspense></QuietBoundary>
         : language}
     </div>
   </>;

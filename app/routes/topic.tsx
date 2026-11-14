@@ -2,6 +2,7 @@ import { hasPostAiMaterial, hasPostAiMaterialInstructionWarning } from "~/lib/po
 import { renderNushiThread } from "~/lib/nushi-html.server";
 import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
 import { nushiPreferences, nushiTopicDisabled } from "~/lib/nushi-settings.server";
+import { nushiPlace } from "~/lib/nushi-materials.server";
 import { nushiEnabled } from "~/lib/nushi-config.server";
 import { getDb } from "~/lib/db/client.server";
 import { nushiRequests } from "~/lib/db/schema";
@@ -370,6 +371,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   const nushi = topic.visibility === "visible" ? await threadNushi(db, topic.id, [topic.id, ...replies.map(reply => reply.id)], displayLang) : { answers: [], requests: [] };
   const nushiPreference = await nushiPreferences(db, user?.id, request);
   const nushiTopic = nushiEnabled() ? await nushiTopicDisabled(db, topic.id) : false;
+  const canWriteReply = !!user && !!profile && topic.visibility === "visible" && (await getWriter(db, user.id, { profile })).ok;
   const nushiView = { ...nushi, hide: nushiPreference.hide, citations: nushiPreference.citations, setting: !!user && topic.authorId === user.id && nushiEnabled() ? nushiTopic : null };
   const nushiReplyId = Number(url.searchParams.get("nushi_reply"));
   const nushiReply = nushiReplyId > 0 && Number.isSafeInteger(nushiReplyId) ? await readNushiAnswer(db, nushiReplyId) : null;
@@ -379,12 +381,13 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       return [...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
         ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : [])];
     })(),
-    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: url.pathname + url.search, reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
+    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: `/t/${topic.id}${url.search}`, reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
+    nushiAvailable: canWriteReply && !!await nushiPlace(db, topic.id),
     reader: !user,
     askAi: user && topic.visibility === "visible" && postAskAiEnabled()
       ? { href: `/t/${topic.id}/ask?${new URLSearchParams({ lang: displayLang })}`, label: m.post_ask_entry() } : null,
     canReply: !!user && topic.visibility === "visible",
-    respondWithPost: user && profile && topic.visibility === "visible" && (await getWriter(db, user.id, { profile })).ok
+    respondWithPost: canWriteReply
       ? { formAction: `/t/new?respond=${topic.id}`, children: m.respond_with_post(), variant: "outline" as const, intent: "respond", formNoValidate: true } : null,
     stanceResume: resume.position,
     share,
@@ -973,6 +976,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             {renderNushi(loaderData.nushi.reply)}
             {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
             <ReplyFields
+              nushiAvailable={loaderData.nushiAvailable}
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
               error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error"
               errorText={actionData?.intent === "reply" && actionData.error ? entryErrorMessage(actionData.error) : undefined}
