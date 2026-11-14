@@ -2348,6 +2348,7 @@
   "nushi_failed": "Nushi 無法回答。",
   "nushi_failure_unverified": "無法驗證佐證段落。",
   "nushi_failure_limit": "已達每日上限。",
+  "nushi_failure_interval": "請稍候片刻再呼叫 Nushi。",
   "nushi_failure_budget": "已達每月預算額度。",
   "nushi_failure_expired": "請求已逾期。",
   "nushi_failure_private": "呼叫的貼文或其上下文非公開。",

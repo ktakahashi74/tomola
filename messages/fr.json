@@ -2973,6 +2973,7 @@
   "nushi_failed": "Nushi n’a pas pu répondre.",
   "nushi_failure_unverified": "Les passages justificatifs n’ont pas pu être vérifiés.",
   "nushi_failure_limit": "La limite quotidienne a été atteinte.",
+  "nushi_failure_interval": "Veuillez patienter un instant avant d’appeler à nouveau Nushi.",
   "nushi_failure_budget": "Le budget mensuel a été atteint.",
   "nushi_failure_expired": "La demande a expiré.",
   "nushi_failure_private": "La publication appelante ou son contexte n’est pas public.",

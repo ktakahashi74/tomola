@@ -2866,6 +2866,7 @@
   "nushi_failed": "Nushi가 답변할 수 없습니다.",
   "nushi_failure_unverified": "근거 구절을 확인할 수 없습니다.",
   "nushi_failure_limit": "일일 한도에 도달했습니다.",
+  "nushi_failure_interval": "잠시 기다린 후 Nushi를 다시 불러 주십시오.",
   "nushi_failure_budget": "월간 예산에 도달했습니다.",
   "nushi_failure_expired": "요청이 만료되었습니다.",
   "nushi_failure_private": "호출한 게시물이나 해당 맥락이 공개되지 않았습니다.",
