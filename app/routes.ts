@@ -40,6 +40,7 @@ export default [
   route("vote", "routes/vote.ts"),
   // Handle suggestions for @mentions in the posting textareas (GET, members only).
   route("mentions/suggest", "routes/mention-suggest.ts"),
+  route("villages/suggest-slug", "routes/village-slug-suggest.ts"),
   route("v/:slug/chat/nushi", "routes/village-chat-nushi.ts"),
   route("v/:slug/chat/changes", "routes/village-chat-changes.ts"),
   route("v/:slug/chat/read", "routes/village-chat-read.ts"),

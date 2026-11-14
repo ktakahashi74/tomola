@@ -12,8 +12,8 @@ export type { BudgetState };
 
 // Cost ledger and monthly budget, using UTC month boundaries.
 
-export type UsagePurpose = "translate" | "retry" | "judge" | "embed" | "chat" | "moderation" | "ask" | "ask_village";
-export const PUBLIC_USAGE_PURPOSES: readonly UsagePurpose[] = ["translate", "retry", "judge", "embed", "moderation"];
+export type UsagePurpose = "translate" | "retry" | "judge" | "embed" | "chat" | "moderation" | "ask" | "ask_village" | "village_slug_suggest";
+export const PUBLIC_USAGE_PURPOSES: readonly UsagePurpose[] = ["translate", "retry", "judge", "embed", "moderation", "village_slug_suggest"];
 export const CHAT_USAGE_PURPOSES: readonly UsagePurpose[] = ["chat"];
 export const NUSHI_USAGE_PURPOSES: readonly UsagePurpose[] = ["ask_village"];
 export const POST_ASK_USAGE_PURPOSES: readonly UsagePurpose[] = ["ask"];

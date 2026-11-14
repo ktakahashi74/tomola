@@ -2180,7 +2180,11 @@
   "chat_consent_v4_nushi": "32faa7f4e6508d58",
   "ai_use_chat_nushi": "6b414c6b5bbeec2c",
   "ai_use_sent_chat_nushi": "e29fa44788fff079",
-  "chat_nushi_description": "a42c34fa8eb8f7e4"
+  "chat_nushi_description": "a42c34fa8eb8f7e4",
+  "village_slug_ai_help": "d81daf69b1734ecd",
+  "village_slug_suggesting": "ad089f10d2962916",
+  "ai_use_village_slug": "0fde45327d3377df",
+  "ai_use_sent_village_slug": "3118324dfb3db4ad"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4362,7 +4366,11 @@
   "chat_consent_v4_nushi": "32faa7f4e6508d58",
   "ai_use_chat_nushi": "6b414c6b5bbeec2c",
   "ai_use_sent_chat_nushi": "e29fa44788fff079",
-  "chat_nushi_description": "a42c34fa8eb8f7e4"
+  "chat_nushi_description": "a42c34fa8eb8f7e4",
+  "village_slug_ai_help": "d81daf69b1734ecd",
+  "village_slug_suggesting": "ad089f10d2962916",
+  "ai_use_village_slug": "0fde45327d3377df",
+  "ai_use_sent_village_slug": "3118324dfb3db4ad"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -6975,7 +6983,11 @@
   "chat_consent_v4_nushi": "32faa7f4e6508d58",
   "ai_use_chat_nushi": "6b414c6b5bbeec2c",
   "ai_use_sent_chat_nushi": "e29fa44788fff079",
-  "chat_nushi_description": "a42c34fa8eb8f7e4"
+  "chat_nushi_description": "a42c34fa8eb8f7e4",
+  "village_slug_ai_help": "d81daf69b1734ecd",
+  "village_slug_suggesting": "ad089f10d2962916",
+  "ai_use_village_slug": "0fde45327d3377df",
+  "ai_use_sent_village_slug": "3118324dfb3db4ad"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9157,7 +9169,11 @@
   "chat_consent_v4_nushi": "32faa7f4e6508d58",
   "ai_use_chat_nushi": "6b414c6b5bbeec2c",
   "ai_use_sent_chat_nushi": "e29fa44788fff079",
-  "chat_nushi_description": "a42c34fa8eb8f7e4"
+  "chat_nushi_description": "a42c34fa8eb8f7e4",
+  "village_slug_ai_help": "d81daf69b1734ecd",
+  "village_slug_suggesting": "ad089f10d2962916",
+  "ai_use_village_slug": "0fde45327d3377df",
+  "ai_use_sent_village_slug": "3118324dfb3db4ad"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11339,7 +11355,11 @@
   "chat_consent_v4_nushi": "32faa7f4e6508d58",
   "ai_use_chat_nushi": "6b414c6b5bbeec2c",
   "ai_use_sent_chat_nushi": "e29fa44788fff079",
-  "chat_nushi_description": "a42c34fa8eb8f7e4"
+  "chat_nushi_description": "a42c34fa8eb8f7e4",
+  "village_slug_ai_help": "d81daf69b1734ecd",
+  "village_slug_suggesting": "ad089f10d2962916",
+  "ai_use_village_slug": "0fde45327d3377df",
+  "ai_use_sent_village_slug": "3118324dfb3db4ad"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

@@ -3,6 +3,7 @@ import { nushiEnabled, nushiModel } from "./nushi-config.server";
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
 import { judgeThinking, primaryEngineId, resolveEmbeddingEngine, resolveEngines, sourceLanguageConfig, type EngineSet } from "./llm/config.server";
 import { postAskAiEnabled } from "./ai-question-config.server";
+import { villageSlugSuggestConfig, villageSlugSuggestEnabled } from "./village-slug-suggest-config.server";
 import { questionModel } from "./ai-question-answer.server";
 import { currentDivergenceSampleRate } from "./llm/divergence-sample.server";
 import type { EngineId, LlmEnv, TranslationEngine } from "./llm/types";
@@ -51,6 +52,11 @@ export const AI_USE_DEFINITIONS = {
   "source-language": { label: "ai_use_source_language", sent: "ai_use_sent_source", current: (c: Context): ModelConfig => {
     const config = sourceLanguageConfig(c.env);
     return { id: config.engine, model: config.model };
+  } },
+  "village-slug-suggest": { label: "ai_use_village_slug", sent: "ai_use_sent_village_slug", current: (c: Context): ModelConfig | null => {
+    if (!villageSlugSuggestEnabled(c.env)) return null;
+    const config = villageSlugSuggestConfig(c.env);
+    return { id: config.engine, model: config.model, thinking: "off" };
   } },
   "search-embedding": { label: "ai_use_embedding", sent: "ai_use_sent_embedding", current: (c: Context): ModelConfig => ({ id: c.embedding.id, model: c.embedding.model, dimensions: c.embedding.dim }) },
   "report-triage": { label: "ai_use_triage", sent: "ai_use_sent_triage", current: (c: Context) => triageEnabled(c.env) ? moderation(c.env) : null },
