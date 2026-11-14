@@ -19,11 +19,18 @@ describe("local village addresses", () => {
     for (const name of ["NEW", "ja", "API", "---", "a".repeat(32)]) expect(villageSlugFromName(name)).toBeNull();
   });
   it("keeps non-Latin and mixed-script names on the AI path", () => {
-    for (const name of ["京都の集い", "中文 2026", "한국어 모임", "English 日本語", "Русский", "Ελληνικά", "العربية"]) {
+    for (const name of ["京都の集い", "中文 2026", "한국어 모임", "English 日本語", "Русский", "Ελληνικά", "العربية", "Ƶebra Club"]) {
       expect(villageNameNeedsAiSlug(name)).toBe(true);
       expect(villageSlugFromName(name)).toBeNull();
     }
     for (const name of ["Café", "Cafe\u0301", "Crème brûlée 2026 🎉", "Łódź", "123"]) expect(villageNameNeedsAiSlug(name)).toBe(false);
+  });
+  it.each([
+    ["Straße Club", "strasse-club"], ["STRAẞE CLUB", "strasse-club"], ["Đà Nẵng", "da-nang"],
+    ["æ œ ø đ ð þ ł ı", "ae-oe-o-d-d-th-l-i"], ["Æ Œ Ø Đ Ð Þ Ł I", "ae-oe-o-d-d-th-l-i"],
+  ])("transliterates common Latin letters in %s", (name, slug) => {
+    expect(villageNameNeedsAiSlug(name)).toBe(false);
+    expect(villageSlugFromName(name)).toBe(slug);
   });
 });
 
@@ -93,13 +100,44 @@ it("charges address suggestions to the shared budget under their own purpose", a
 });
 
 it("rejects malformed, reserved, hexadecimal and explanatory provider output", async () => {
-  for (const text of ["new", "a".repeat(32), "hello--world", "Here is your slug: reading-circle", "京都の集い", "reading-circle\nother-circle", "word-".repeat(20)]) {
+  for (const text of ["new", "a".repeat(32), "hello--world", "Here is your slug: reading-circle", "京都の集い", "reading-circle\nother-circle", "word-".repeat(20), "```\nreading-circle\nother-circle\n```", "reading.circle", "reading-circle!", "```text\nreading-circle\n```", "```\nhello--world\n```", "```\n京都の集い\n```", "one-two-three-four-five-six"]) {
     fakeCompletion(text);
     expect(await (await post()).json()).toEqual({ slug: null });
     vi.restoreAllMocks();
   }
   fakeCompletion(' "Reading-Circle" ');
   expect(await (await post()).json()).toEqual({ slug: "reading-circle" });
+});
+
+it("accepts only surrounding periods, quotes and code fences around an otherwise valid slug", async () => {
+  for (const text of [".Reading-Circle。", '"reading-circle."', "```reading-circle```", "```\nreading-circle\n```", "。```\nReading-Circle.\n```."]) {
+    fakeCompletion(text);
+    expect(await (await post()).json()).toEqual({ slug: "reading-circle" });
+    vi.restoreAllMocks();
+  }
+});
+
+it("uses AI for unsupported Latin letters and offers nothing while disabled", async () => {
+  const complete = fakeCompletion("zebra-club");
+  expect(await (await post("Ƶebra Club")).json()).toEqual({ slug: "zebra-club" });
+  expect(complete).toHaveBeenCalledOnce();
+  expect(await suggestVillageSlug(h.db, h.ids.zslug_writer, "Ƶebra Club", { env: { VILLAGES: "1", TRANSLATION_PRIMARY: "fake" } })).toBeNull();
+  expect(complete).toHaveBeenCalledOnce();
+});
+
+it("discards truncated provider output, settles billed thinking and logs only the reason", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const name = "京都の名前";
+  const generateContent = vi.fn(async () => ({ text: "secret-partial-slug", candidates: [{ finishReason: FinishReason.MAX_TOKENS, finishMessage: name }],
+    usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 4, thoughtsTokenCount: 128 } }));
+  const completer = config.resolveVillageSlugCompleter({ TRANSLATION_PRIMARY: "gemini" }, { geminiClient: { models: { generateContent } } });
+  expect(await suggestVillageSlug(h.db, h.ids.zslug_writer, name, { completer })).toBeNull();
+  expect(generateContent).toHaveBeenCalledOnce();
+  expect(warn.mock.calls).toEqual([["[village-slug-suggest] truncated"]]);
+  const [usage] = await h.db.select().from(llmUsage);
+  expect(usage).toMatchObject({ reserved: false, inputTokens: 12, outputTokens: 132 });
+  expect(JSON.stringify(usage)).not.toContain(name);
+  expect(JSON.stringify(usage)).not.toContain("secret-partial-slug");
 });
 
 it("skips occupied and held addresses with bounded suffixes and never calls AI for Latin names", async () => {
@@ -181,5 +219,5 @@ it("uses lightweight defaults and a data-only prompt without inheriting translat
   const generateContent = vi.fn(async () => ({ text: "quiet-reading", candidates: [{ finishReason: FinishReason.STOP, content: { parts: [{ text: "quiet-reading" }] } }], usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 4 } }));
   const completer = config.resolveVillageSlugCompleter({ TRANSLATION_PRIMARY: "gemini" }, { geminiClient: { models: { generateContent } } });
   await completer.complete(prompt);
-  expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ model: "gemini-3.5-flash-lite", config: expect.objectContaining({ thinkingConfig: { thinkingLevel: "MINIMAL" } }) }));
+  expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({ model: "gemini-3.5-flash-lite", config: expect.objectContaining({ maxOutputTokens: 2112, thinkingConfig: { thinkingLevel: "MINIMAL" } }) }));
 });

@@ -33,14 +33,18 @@ export function validVillageSlug(value: unknown): value is string {
     && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value) && !/^[a-f0-9]{32}$/.test(value) && !reserved.has(value);
 }
 
-// Decomposition keeps accented Latin letters on the local suggestion path.
+const latinSlugLetters: Record<string, string> = { "ß": "ss", "æ": "ae", "œ": "oe", "ø": "o", "đ": "d", "ð": "d", "þ": "th", "ł": "l", "ı": "i" };
+const normalizedSlugName = (name: string) => name.normalize("NFKD").toLowerCase()
+  .replace(/[ßæœøđðþłı]/g, char => latinSlugLetters[char]);
+
+// Only letters that can be represented locally may stay on the local path.
 export function villageNameNeedsAiSlug(name: string): boolean {
-  return [...name.normalize("NFKD")].some(char => /\p{L}/u.test(char) && !/\p{Script_Extensions=Latin}/u.test(char));
+  return [...normalizedSlugName(name)].some(char => /\p{L}/u.test(char) && !/[a-z]/.test(char));
 }
 
 export function villageSlugFromName(name: string): string | null {
   if (villageNameNeedsAiSlug(name)) return null;
-  let slug = name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
+  let slug = normalizedSlugName(name).replace(/\p{M}/gu, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   if (slug.length > VILLAGE_SLUG_MAX) {
     const boundary = slug.lastIndexOf("-", VILLAGE_SLUG_MAX);

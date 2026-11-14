@@ -11,6 +11,23 @@ import { createFigureReader } from "~/lib/figure-reading.server";
 const CLEAN_COUNTS = { ja: { unverified: 0, unverifiedPublic: 0, missing: 0, stale: 0 }, en: { unverified: 0, unverifiedPublic: 0, missing: 0, stale: 0 } };
 const assertStartupConfig = (env: Record<string, string | undefined>, log?: (message: string) => void) => startupConfig({ TOMOLA_OPERATOR_DIR: process.env.TOMOLA_OPERATOR_DIR, ...env }, log, { reviewCounts: CLEAN_COUNTS });
 
+it("validates the village suggestion switch and enabled model before accepting requests", () => {
+  const env = { NODE_ENV: "test", TRANSLATION_PRIMARY: "fake", EMBEDDING_ENGINE: "fake" };
+  for (const VILLAGE_SLUG_SUGGEST of [undefined, "", "0", "1"]) {
+    expect(() => assertStartupConfig({ ...env, VILLAGE_SLUG_SUGGEST })).not.toThrow();
+  }
+  for (const VILLAGE_SLUG_SUGGEST of ["true", "false", "2", " 1 "]) {
+    expect(() => assertStartupConfig({ ...env, VILLAGE_SLUG_SUGGEST })).toThrow("VILLAGE_SLUG_SUGGEST");
+  }
+  for (const TRANSLATION_PRIMARY of ["gemini", "claude"]) {
+    const wrongModel = TRANSLATION_PRIMARY === "gemini" ? "claude-haiku-4-5" : "gemini-3.5-flash-lite";
+    for (const VILLAGE_SLUG_SUGGEST_MODEL of ["invalid/model", wrongModel]) {
+      expect(() => assertStartupConfig({ ...env, TRANSLATION_PRIMARY, VILLAGE_SLUG_SUGGEST: "1", VILLAGE_SLUG_SUGGEST_MODEL })).toThrow("VILLAGE_SLUG_SUGGEST_MODEL");
+      expect(() => assertStartupConfig({ ...env, TRANSLATION_PRIMARY, VILLAGE_SLUG_SUGGEST: "0", VILLAGE_SLUG_SUGGEST_MODEL })).not.toThrow();
+    }
+  }
+});
+
 it("refuses missing and example operator settings at the server startup gate", () => {
   expect(() => assertStartupConfig({ NODE_ENV: "test", TOMOLA_OPERATOR_DIR: undefined })).toThrow("TOMOLA_OPERATOR_DIR is required");
   expect(() => assertStartupConfig({ NODE_ENV: "test", TOMOLA_OPERATOR_DIR: path.resolve("deploy/operator.example") })).toThrow("status");

@@ -3,6 +3,7 @@ import type { Db } from "./db/client.server";
 import { villages } from "./db/schema";
 import type { CompleteRequest } from "./llm/completion.server";
 import { completionEstimate, meteredCall } from "./llm/metering.server";
+import { LlmError } from "./llm/errors.server";
 import type { LlmEnv } from "./llm/types";
 import { hitMemberLimit } from "./rate-limit.server";
 import { villageSlugHeld } from "./village-slugs.server";
@@ -18,7 +19,9 @@ export function villageSlugPrompt(name: string): CompleteRequest {
 }
 
 function checkedAiSlug(text: string): string | null {
-  const slug = text.trim().toLowerCase().replace(/^(["'`])([^\n]+)\1$/, "$2");
+  const stripPeriods = (value: string) => value.trim().replace(/^[.。]+|[.。]+$/g, "").trim();
+  const unfenced = stripPeriods(text).replace(/^```(?:\r?\n)?([\s\S]*?)(?:\r?\n)?```$/, "$1");
+  const slug = stripPeriods(stripPeriods(unfenced).toLowerCase().replace(/^(["'`])([^\n]+)\1$/, "$2"));
   return validVillageSlug(slug) && slug.split("-").length >= 2 && slug.split("-").length <= 5 ? slug : null;
 }
 
@@ -66,8 +69,9 @@ export async function suggestVillageSlug(db: Db, userId: string, value: unknown,
       slug = checkedAiSlug(result.text);
     } else slug = villageSlugFromName(name);
     return slug === null ? null : await availableSlug(db, slug, signal);
-  } catch {
-    // Provider errors may echo input. Suggestions fail silently, without logging names.
+  } catch (error) {
+    // Provider errors may echo input. Log only a known reason, never their text.
+    if (error instanceof LlmError && error.code === "truncated") console.warn("[village-slug-suggest] truncated");
     return null;
   }
 }

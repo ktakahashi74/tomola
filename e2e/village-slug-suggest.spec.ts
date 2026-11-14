@@ -12,6 +12,10 @@ test("suggests local and AI village addresses while preserving manual edits and 
   await expect(slug).toHaveValue("cafe-reading-club");
   await name.fill("Café & Music");
   await expect(slug).toHaveValue("cafe-music");
+  await name.fill("Straße Club");
+  await expect(slug).toHaveValue("strasse-club");
+  await name.fill("Đà Nẵng");
+  await expect(slug).toHaveValue("da-nang");
   await slug.fill("my-own-address");
   await name.fill("Another Name");
   await name.blur();
@@ -24,6 +28,10 @@ test("suggests local and AI village addresses while preserving manual edits and 
   await name.fill("京都の読書会");
   await expect(slug).toHaveValue("");
   expect(requests).toEqual([]);
+  await name.blur();
+  await expect(slug).toHaveValue("gathering-place");
+  expect(requests).toHaveLength(1);
+  await name.focus();
   await name.blur();
   await expect(slug).toHaveValue("gathering-place");
   expect(requests).toHaveLength(1);
@@ -49,4 +57,32 @@ test("suggests local and AI village addresses while preserving manual edits and 
   await expect(slug).toHaveValue("chosen-by-me");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("does not repeat a null suggestion until the name changes, including unsupported Latin letters", async ({ page }) => {
+  await useMember(page, "zslug_creator@example.com", "/villages/new");
+  await waitForClientRoute(page);
+  const name = page.getByLabel(m.village_name_field, { exact: true });
+  const slug = page.getByLabel(m.village_slug_field, { exact: true });
+  const requests: string[] = [];
+  page.on("request", request => { if (request.url().endsWith("/villages/suggest-slug")) requests.push(request.postData() ?? ""); });
+  await page.route("**/villages/suggest-slug", route => route.fulfill({ json: { slug: null } }));
+  await name.fill("Ƶebra Club");
+  await expect(slug).toHaveValue("");
+  await Promise.all([page.waitForResponse("**/villages/suggest-slug"), name.blur()]);
+  await expect(page.getByRole("status")).toHaveText("");
+  expect(requests).toHaveLength(1);
+  await name.focus();
+  await name.blur();
+  await expect(slug).toHaveValue("");
+  expect(requests).toHaveLength(1);
+  await slug.fill("chosen-by-me");
+  await slug.fill("");
+  await name.focus();
+  await name.blur();
+  expect(requests).toHaveLength(1);
+  await name.fill("新しい集い");
+  await Promise.all([page.waitForResponse("**/villages/suggest-slug"), name.blur()]);
+  await expect(page.getByRole("status")).toHaveText("");
+  expect(requests).toHaveLength(2);
 });

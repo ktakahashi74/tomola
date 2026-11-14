@@ -34,11 +34,6 @@ const moderation = (env: LlmEnv): ModelConfig => {
 // One row defines a use, its copy and its actual resolver. History validation uses these same IDs.
 // Adding a use here does not change engine selection or enable a feature.
 export const AI_USE_DEFINITIONS = {
-  "village-slug-suggest": { label: "ai_use_village_slug", sent: "ai_use_sent_village_slug", current: (c: Context): ModelConfig | null => {
-    if (!villageSlugSuggestEnabled(c.env)) return null;
-    const config = villageSlugSuggestConfig(c.env);
-    return { id: config.engine, model: config.model, thinking: "off" };
-  } },
   "translation-primary": { label: "ai_use_primary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.primary) },
   "translation-secondary": { label: "ai_use_secondary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.secondary) },
   "translation-retry": { label: "ai_use_retry", sent: "ai_use_sent_retry", current: (c: Context) => translation(c.engines.retry) },
@@ -57,6 +52,11 @@ export const AI_USE_DEFINITIONS = {
   "source-language": { label: "ai_use_source_language", sent: "ai_use_sent_source", current: (c: Context): ModelConfig => {
     const config = sourceLanguageConfig(c.env);
     return { id: config.engine, model: config.model };
+  } },
+  "village-slug-suggest": { label: "ai_use_village_slug", sent: "ai_use_sent_village_slug", current: (c: Context): ModelConfig | null => {
+    if (!villageSlugSuggestEnabled(c.env)) return null;
+    const config = villageSlugSuggestConfig(c.env);
+    return { id: config.engine, model: config.model, thinking: "off" };
   } },
   "search-embedding": { label: "ai_use_embedding", sent: "ai_use_sent_embedding", current: (c: Context): ModelConfig => ({ id: c.embedding.id, model: c.embedding.model, dimensions: c.embedding.dim }) },
   "report-triage": { label: "ai_use_triage", sent: "ai_use_sent_triage", current: (c: Context) => triageEnabled(c.env) ? moderation(c.env) : null },
