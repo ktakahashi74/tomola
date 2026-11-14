@@ -9,9 +9,9 @@ import { CHAT_NUSHI_INTERVAL_LIMIT, CHAT_NUSHI_INTERVAL_MS, CHAT_NUSHI_PROMPT_VE
 import { nushiLimits } from "./nushi-config.server";
 import { collectNushiMaterials, nushiMaterialIndex, reconstructNushiMaterials, snapshotsCurrent } from "./nushi-materials.server";
 import { nushiPrompt, quotaLock, resolveNushiCompleter } from "./nushi.server";
-import { projectQuestionSource, type AiQuestionMaterials } from "./ai-question-materials.server";
-import { verifyQuestionAnswer } from "./ai-question-answer.server";
-import { AI_QUESTION_LIMITS, type AiQuestionAnswer } from "./ai-questions";
+import { projectQuestionSource } from "./ai-question-materials.server";
+import { verifyNushiAnswer } from "./nushi-answer.server";
+import type { AiQuestionAnswer } from "./ai-questions";
 import { completionEstimate, meteredCall } from "./llm/metering.server";
 import { BudgetPausedError } from "./llm/errors.server";
 import type { JsonCompleter } from "./llm/completion.server";
@@ -96,21 +96,6 @@ async function claim(db: Db, id: string, now: Date, env: LlmEnv) {
 
 // The generated record is the private chat message itself. All saved provenance
 // is identifiers/revisions; model prompts, responses and provider errors are not logged.
-function verifyChatAnswer(raw: string, materials: AiQuestionMaterials) {
-  if (raw.length > AI_QUESTION_LIMITS.outputChars) return null;
-  let value: unknown;
-  try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")); }
-  catch { return null; }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const { clarificationNeeded, askPerson, ...answerData } = value as Record<string, unknown>;
-  if (clarificationNeeded !== undefined && typeof clarificationNeeded !== "boolean") return null;
-  if (askPerson !== undefined && typeof askPerson !== "boolean") return null;
-  if (answerData.status === "not_confirmed" && answerData.readings === undefined) answerData.readings = [];
-  const answer = verifyQuestionAnswer(JSON.stringify(answerData), materials);
-  if (answer?.status === "not_confirmed") answer.askPerson = askPerson === true;
-  return answer ? { answer, clarificationNeeded: answer.status === "not_confirmed" && clarificationNeeded === true } : null;
-}
-
 function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, language: Lang, dates: Map<number, string>, posts: number, from: string | null, to: string | null) {
   const options = { locale: language };
   if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(answer.askPerson ? [m.nushi_ask_person({}, options)] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [], clarificationNeeded, askPerson: answer.askPerson === true } };
@@ -148,7 +133,7 @@ For status not_confirmed, including when clarification is needed, return {"statu
 Keep readings short in every language. You may reduce the number of readings for brevity, but preserve each retained reading's attribution, conditions, reservations and relevant disagreements, along with the consulted scope. If supplied posts contradict a premise of the question, such as everyone opposing a proposal, show those posts without adopting that premise. Do not return not_confirmed merely because an answer available in the supplied materials is difficult to shorten.
 Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
     const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask", estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env), now: clock(), clock, env, signal }, () => completer.complete(prompt), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
-    const verified = verifyChatAnswer(result.text, input.materials);
+    const verified = verifyNushiAnswer(result.text, input.materials, "chat");
     if (!verified) { await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer, clarificationNeeded } = verified;
     const published = await db.transaction(async tx => {

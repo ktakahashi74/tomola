@@ -1,7 +1,7 @@
 import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { createHash } from "node:crypto";
 import { sourceHash as hashPost } from "./source-hash.server";
-import { and, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, nushiAnswers, nushiRequests, nushiReservations, nushiSources, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "./visibility.server";
@@ -16,7 +16,7 @@ import { loadMdTranslations } from "./md/translations.server";
 import { loadReplyLocations } from "./reply-locations.server";
 import { authorLabel } from "./deleted-member";
 import { retainedAuthorColumn } from "./deleted-member.server";
-import { clipQuestionText } from "./ai-questions";
+import { AI_QUESTION_LIMITS, clipQuestionText } from "./ai-questions";
 import { isLang, type Lang, type SourceLang } from "./languages";
 import type { EmbeddingEngine, LlmEnv } from "./llm/types";
 
@@ -89,16 +89,23 @@ export async function reconstructNushiMaterials(db: Db, index: NushiMaterialInde
 }
 
 export type NushiRetrievalOptions = { env: LlmEnv; now: Date; clock: () => Date; signal?: AbortSignal; embedding?: EmbeddingEngine };
-export async function collectNushiMaterials(db: Db, input: { villageId: string; callerId: string | null; callingPost: string; language: Lang; excludeEntryId?: number; priorityEntryIds?: readonly number[] }, options: NushiRetrievalOptions) {
+export async function collectNushiMaterials(db: Db, input: { villageId: string; callerId: string | null; callingPost: string; language: Lang; excludeEntryId?: number; priorityEntryIds?: readonly number[]; contextThreadId?: number }, options: NushiRetrievalOptions) {
   const language = input.language;
   const exhausted = chatNushiEnabled(options.env) ? (await db.execute(sql`select key from (select key, day from nushi_reservations union all select key, day from chat_nushi_reservations) shared where day = ${options.now.toISOString().slice(0, 10)} and key like 'author:%' group by key having count(*) >= ${nushiLimits(options.env).author}`) as { rows: { key: string }[] }).rows : await db.select({ key: nushiReservations.key }).from(nushiReservations)
     .where(and(eq(nushiReservations.day, options.now.toISOString().slice(0, 10)), like(nushiReservations.key, "author:%")))
     .groupBy(nushiReservations.key).having(sql`${count()} >= ${nushiLimits(options.env).author}`);
   const excludedAuthors = exhausted.map(row => row.key.slice(7)).filter(id => id !== input.callerId);
   const query = clipQuestionText(input.callingPost.replace(/[@＠](?:nushi|village-ai)\b/giu, "").trim(), 200);
-  const found = new Map<number, unknown>();
-  // Calling topics and reply targets pass the same evidence gate as search hits.
-  for (const id of input.priorityEntryIds ?? []) if (id !== input.excludeEntryId) found.set(id, null);
+  const priorityIds = new Set((input.priorityEntryIds ?? []).filter(id => id !== input.excludeEntryId));
+  const excludedIds = [...priorityIds, ...(input.excludeEntryId === undefined ? [] : [input.excludeEntryId])];
+  // Thread replies pass the same public visibility and author gates as search hits.
+  const replies = input.contextThreadId === undefined ? [] : await db.select({ id: entries.id }).from(entries)
+    .innerJoin(rootTopic, rootTopicOn())
+    .where(and(eq(entries.threadId, input.contextThreadId), eq(entries.kind, "reply"), eq(rootTopic.villageId, input.villageId), visibleWithTopic(),
+      excludedIds.length ? notInArray(entries.id, excludedIds) : undefined, excludedAuthors.length ? notInArray(entries.authorId, excludedAuthors) : undefined))
+    .orderBy(asc(entries.createdAt), asc(entries.id)).limit(AI_QUESTION_LIMITS.replies + 1);
+  for (const reply of replies.slice(0, AI_QUESTION_LIMITS.replies)) priorityIds.add(reply.id);
+  const found = new Map<number, { threadId: number }>();
   const opts = { readLangs: [] as Lang[], displayLang: language, limit: 20, villageId: input.villageId, excludedAuthorIds: excludedAuthors };
   if (query) {
     // Keep literal matches ahead of semantic matches, using the same search SQL.
@@ -114,7 +121,8 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
     }, () => engine.embed(req), value => ({ inputTokens: value.inputTokens, outputTokens: 0 }));
     if (isUsableEmbedding(result.vector)) for (const row of closeResults(await findSimilar(db, result.vector, engine.model, 20, input.villageId, excludedAuthors), query)) if (row.id !== input.excludeEntryId && !found.has(row.id)) found.set(row.id, row);
   }
-  const ids = [...found.keys()].slice(0, 20);
+  const searchIds = [...found].filter(([id, row]) => !priorityIds.has(id) && row.threadId !== input.contextThreadId).map(([id]) => id);
+  const ids = [...priorityIds, ...searchIds.slice(0, 20)];
   const rows = ids.length ? await db.select({ entry: entries, author: retainedAuthorColumn(entries.authorId, profiles.handle, "handle") }).from(entries)
     .innerJoin(rootTopic, rootTopicOn()).leftJoin(profiles, eq(profiles.userId, entries.authorId))
     .where(and(inArray(entries.id, ids), eq(rootTopic.villageId, input.villageId), visibleWithTopic(), excludedAuthors.length ? notInArray(entries.authorId, excludedAuthors) : undefined)) : [];
@@ -123,11 +131,12 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
     loadMdTranslations(db, rows.map(({ entry }) => ({ id: entry.id, lang: entry.lang as SourceLang, sourceHash: entry.sourceHash })), language),
     loadReplyLocations(db, [...new Set(rows.map(({ entry }) => entry.threadId ?? entry.id))], rows.filter(({ entry }) => entry.kind === "reply").map(({ entry }) => entry.id)),
   ]);
-  const inputs: AiQuestionSource[] = [];
+  const contextInputs: AiQuestionSource[] = [], searchInputs: AiQuestionSource[] = [];
   for (const { entry, author } of rows) {
     const location = entry.kind === "topic" ? { state: "visible", href: `/t/${entry.id}` } : locations.get(entry.id);
     if (location?.state !== "visible") continue;
     const tr = translated.shown.get(entry.id)?.[0];
+    const inputs = priorityIds.has(entry.id) ? contextInputs : searchInputs;
     for (const field of ["title", "body"] as const) {
       if (!entry[field]?.trim()) continue;
       const text = field === "title" ? tr?.title : tr?.text;
@@ -135,7 +144,13 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
         ...(text && tr ? { translation: { text, lang: language, stale: tr.stale } } : {}) });
     }
   }
-  const materials = await boundQuestionMaterials(inputs, found.size > ids.length);
+  // Reserve at least half the text budget for village-wide search, including translations.
+  const context = await boundQuestionMaterials(contextInputs, replies.length > AI_QUESTION_LIMITS.replies, Math.floor(AI_QUESTION_LIMITS.materialChars / 2));
+  const contextChars = context.sources.reduce((sum, source) => sum + source.original.length + (source.translation?.text.length ?? 0), 0);
+  const search = await boundQuestionMaterials(searchInputs, searchIds.length > 20, AI_QUESTION_LIMITS.materialChars - contextChars);
+  const materials: AiQuestionMaterials = { sources: [...context.sources, ...search.sources], scope: {
+    sources: context.scope.sources + search.scope.sources, replies: context.scope.replies + search.scope.replies, truncated: context.scope.truncated || search.scope.truncated,
+  } };
   const used = new Set(materials.sources.map(source => Number(/^e-(\d+)-/.exec(source.id)![1])));
   const dependencies = new Map(rows.filter(({ entry }) => used.has(entry.id)).map(row => [row.entry.id, row]));
 
@@ -157,7 +172,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
   const contextText = async (original: string, field: "title" | "body" = "body") => (await projectQuestionSource({ kind: "post", field, author: "", original })).original;
   const callingPost = await contextText(caller.entry.body);
   const language = isLang(caller.entry.lang) ? caller.entry.lang : "en";
-  const collected = await collectNushiMaterials(db, { villageId: request.villageId, callerId: request.callerId, callingPost, language, excludeEntryId: request.entryId, priorityEntryIds: [request.threadId, ...(caller.parent ? [caller.parent.id] : [])] }, options);
+  const collected = await collectNushiMaterials(db, { villageId: request.villageId, callerId: request.callerId, callingPost, language, excludeEntryId: request.entryId, priorityEntryIds: [...(caller.parent ? [caller.parent.id] : []), request.threadId], contextThreadId: request.threadId }, options);
   const dependencies = new Map<number, { entry: typeof entries.$inferSelect; author: string | null }>();
   // Track calling context as well as evidence, so an edit cannot leave old context public.
   for (const id of [request.entryId, request.threadId, caller.entry.parentId].filter((id): id is number => id !== null)) {

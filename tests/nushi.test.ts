@@ -43,6 +43,7 @@ it("keeps the public prompt as the default while selecting a private chat destin
   expect(publicPrompt.system).toContain("When the question refers to the calling topic itself");
   expect(chatPrompt.system).not.toContain("When the question refers to the calling topic itself");
   expect(chatPrompt.system).toContain("you may add askPerson as a JSON boolean");
+  for (const prompt of [publicPrompt, chatPrompt]) expect(prompt.system).toContain('return "readings":[] even when nothing is found; never omit required fields');
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
   expect(nushiEnabled({})).toBe(false); expect(nushiMonthlyBudgetMicro({})).toBe(10_000_000);

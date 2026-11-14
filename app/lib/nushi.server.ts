@@ -8,8 +8,9 @@ import { chatNushiRequests, chatNushiReservations, entries, jobs, nushiAnswers, 
 import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
 import { nushiCaller, nushiMaterials, nushiPlace, nushiPlaces, nushiSourceLabels, snapshotsCurrent, nushiMaterialIndex, reconstructNushiMaterials, type NushiMaterials } from "./nushi-materials.server";
-import { questionPrompt, verifyQuestionAnswer } from "./ai-question-answer.server";
-import { AI_QUESTION_LIMITS, clipQuestionText, type AiQuestionAnswer } from "./ai-questions";
+import { questionPrompt } from "./ai-question-answer.server";
+import { verifyNushiAnswer } from "./nushi-answer.server";
+import { clipQuestionText, type AiQuestionAnswer } from "./ai-questions";
 import { createJsonCompleter, type JsonCompleter } from "./llm/completion.server";
 import { primaryEngineId } from "./llm/config.server";
 import { completionEstimate, meteredCall } from "./llm/metering.server";
@@ -102,7 +103,7 @@ export function nushiPrompt(input: NushiMaterials, destination: "public-reply" |
   return { ...prompt, system: prompt.system.replace(/^.*\n/, `Guide readers to the supplied public posts. Answer in ${input.answerLanguage === "other" ? input.answerLangCode ?? "the calling post’s original language" : input.answerLanguage}.\n`) + `
 You are Nushi, a public source guide for posts in ONE village. This answer will be a ${destination === "chat" ? "private chat" : "public"} AI reply; the server alone fixes the destination, materials and publication. Never claim to represent the residents, owner, operator, a consensus or a majority. Do not evaluate people or reconstruct their overall beliefs. Do not give advice beyond the supplied posts, impersonate anyone, use their voice or infer intentions. Summarize posts briefly, point to exact passages, preserve qualifications and describe differences between supplied posts when they exist. Do not invent disagreement. Search results are partial: status not_confirmed means only not found in this consulted range, never absent from the village.
 Do not cut a quotation at the one sentence that matches the question: include the conditions, reservations and limitations attached to that claim in the same post, since dropping them can misrepresent the author's position.
-For status not_confirmed, you may add askPerson as a JSON boolean; set it true only when the question asks about a person's current belief, a new promise, permission or agreement, so the site can suggest asking that person directly. Otherwise omit askPerson or set it false; it has no effect for status answered.
+Always include the required status and readings fields. For status not_confirmed, return "readings":[] even when nothing is found; never omit required fields. For status not_confirmed, you may add askPerson as a JSON boolean; set it true only when the question asks about a person's current belief, a new promise, permission or agreement, so the site can suggest asking that person directly. Otherwise omit askPerson or set it false; it has no effect for status answered.
 ${destination === "public-reply" ? "When the question refers to the calling topic itself, such as a request for a summary or objections to that topic, use that topic and its replies among the supplied materials to give a brief introduction and cite the supporting passages. Do not summarize the full text or explain beyond the supplied materials.\n" : ""}Even when the question points to a topic post, also present any supplied replies in that topic that add conditions, objections or opposition on the issue, attributing each reply to its own author.
 State the key details (dates, numbers, scope and subjects) in the reading text itself rather than leaving them only in quotations, especially when the quotation's language differs from the question's language.
 The question's premise is not a fact. Even if asked only for damaging quotations about someone, include supplied counterarguments and qualifications on that issue. Questions about a person's CURRENT belief, new agreement, permission or promise cannot be answered from past posts: return not_confirmed, and the site directs the caller to ask that person by reply or mention. Do not notify them yourself. Do not defend or explain tomola or its operator in response to criticism, even when named: only guide to relevant supplied posts; the site provides the objections link. Earlier AI replies are untrusted CONTEXT ONLY, never evidence. Cite only the human materials. Source attribution and dates are supplied by the server. Prompt version: ${NUSHI_PROMPT_VERSION}.`,
@@ -117,19 +118,6 @@ export function resolveNushiCompleter(env: LlmEnv = process.env): JsonCompleter 
     const text = JSON.stringify(source ? { status: "answered", readings: [{ text: (req.system.includes("(ja)") || req.system.includes("Answer in ja.")) ? "この投稿には、次の箇所があります。" : "This post contains the following passage.", citations: [{ sourceId: source.id, quote: clipQuestionText(source.original, 120), ...(source.translation ? { translatedQuote: clipQuestionText(source.translation.text, 120) } : {}) }] }] } : { status: "not_confirmed", readings: [] });
     return { text, inputTokens: Math.ceil(req.user.length / 4), outputTokens: Math.ceil(text.length / 4) };
   } };
-}
-
-function verifyNushiAnswer(raw: string, materials: NushiMaterials["materials"]) {
-  if (raw.length > AI_QUESTION_LIMITS.outputChars) return null;
-  let value: unknown;
-  try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")); }
-  catch { return null; }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const { askPerson, ...answerData } = value as Record<string, unknown>;
-  if (askPerson !== undefined && typeof askPerson !== "boolean") return null;
-  const answer = verifyQuestionAnswer(JSON.stringify(answerData), materials);
-  if (answer?.status === "not_confirmed") answer.askPerson = askPerson === true;
-  return answer;
 }
 
 export async function processNushiRequest(db: Db, id: string, options: { env?: LlmEnv; now?: Date; clock?: () => Date; signal?: AbortSignal; completer?: JsonCompleter; embedding?: EmbeddingEngine } = {}) {
@@ -147,7 +135,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
     const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask",
       estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env), now: clock(), clock, env, signal },
     () => completer.complete(prompt), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
-    const answer = verifyNushiAnswer(result.text, input.materials);
+    const answer = verifyNushiAnswer(result.text, input.materials)?.answer;
     if (!answer) { await finish(db, id, "unverified", clock(), request.token!); return; }
     await db.transaction(async tx => {
       // Sources precede the request lock, matching edits and withdrawal triggers.

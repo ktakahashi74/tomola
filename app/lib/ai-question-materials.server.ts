@@ -46,8 +46,8 @@ export async function readableQuestionPost(db: Db, id: number) {
 
 // Limit text independently of its retrieval method, so a later search can use
 // the same bounded materials, prompt and citation verifier.
-export async function boundQuestionMaterials(inputs: readonly AiQuestionSource[], moreReplies = false): Promise<AiQuestionMaterials> {
-  let remaining: number = AI_QUESTION_LIMITS.materialChars;
+export async function boundQuestionMaterials(inputs: readonly AiQuestionSource[], moreReplies = false, materialChars: number = AI_QUESTION_LIMITS.materialChars): Promise<AiQuestionMaterials> {
+  let remaining = materialChars;
   let truncated = moreReplies;
   const sources: AiQuestionSource[] = [];
   for (const raw of inputs) {
