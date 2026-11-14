@@ -16,6 +16,7 @@ import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
 import { aiUsePage } from "~/lib/ai-use-page.server";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CASE_CONTEXT_COUNT } from "~/lib/chat-access";
+import { CHAT_NUSHI_PROMPT_VERSION } from "~/lib/chat-nushi-config.server";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -288,16 +289,28 @@ it.each([false, true])("excludes an AI reply target from translation context eve
   expect(context?.context).not.toContain(answer.body);
 });
 
-it.each([undefined, false, true])("asks for a subject only when clarificationNeeded is true (%s)", async clarificationNeeded => {
+it.each([false, true].flatMap(omitReadings => [undefined, false, true].map(clarificationNeeded => ({ omitReadings, clarificationNeeded }))))("publishes a not-found answer with omitted readings=$omitReadings and clarificationNeeded=$clarificationNeeded", async ({ omitReadings, clarificationNeeded }) => {
   const w = await world(), c = await w.call(clarificationNeeded ? "@nushi ?" : "@nushi orchard planting date");
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete(req) {
-    expect(req.system).toContain("This answer will be a private chat AI reply");
-    expect(req.system).toContain("Missing evidence alone never needs clarification");
-    return { text: JSON.stringify({ status: "not_confirmed", readings: [], clarificationNeeded }), inputTokens: 1, outputTokens: 1 };
+    expect(req.system).toContain(CHAT_NUSHI_PROMPT_VERSION);
+    return { text: JSON.stringify({ status: "not_confirmed", ...(omitReadings ? {} : { readings: [] }), clarificationNeeded }), inputTokens: 1, outputTokens: 1 };
   } } });
+  expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "answered", failure: null });
   const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
-  expect(answer.body).toContain(m.nushi_not_found());
-  expect(answer.body.includes(m.chat_nushi_clarify())).toBe(clarificationNeeded === true);
+  expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [] } });
+  expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_result")).toMatchObject([{ userId: "zcn_caller", chatMessageId: answer.id }]);
+  expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_cited")).toEqual([]);
+});
+
+it.each(["missing-answered-readings", "nonempty-not-confirmed-readings", "null-not-confirmed-readings"])("rejects %s without publishing an answer", async mode => {
+  const w = await world(), c = await w.call();
+  await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() {
+    const response = mode === "missing-answered-readings" ? { status: "answered" }
+      : { status: "not_confirmed", readings: mode === "null-not-confirmed-readings" ? null : [{ text: "The owner calls for public review.", citations: [{ sourceId: `e-${w.source}-body`, quote: "The orchard needs public review." }] }] };
+    return { text: JSON.stringify(response), inputTokens: 1, outputTokens: 1 };
+  } } });
+  expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "failed", failure: "unverified" });
+  expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toEqual([]);
 });
 
 it("rejects an invalid clarification flag without publishing provider text", async () => {
