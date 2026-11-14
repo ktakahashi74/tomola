@@ -2,6 +2,20 @@ import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
 
+test("village owners manage Nushi below the village header", async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.217"));
+  await useMember(page, "zcn_flow_owner@example.com", "/v/chat-nushi-browser?lang=en");
+  await waitForClientRoute(page);
+  const management = page.locator("#village-management");
+  const form = management.locator('form[action="/nushi/action"]:has(input[value="village"])');
+  await expect(form).toHaveCount(1);
+  await expect(page.locator('main > form[action="/nushi/action"]')).toHaveCount(0);
+  await expect(page.locator('[data-village-header] ~ p').filter({ hasText: en.nushi_intro })).toHaveCount(1);
+  await management.locator(":scope > summary").click();
+  await expect(form.locator('input[name="enabled"]')).toBeVisible();
+  await expect(form.locator("p")).toHaveText(en.nushi_stop_help);
+});
+
 test("Nushi calls produce sourced public AI replies with independent reader and owner controls", async ({ page, browser }) => {
   test.setTimeout(240_000);
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.218"));
@@ -28,16 +42,9 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await body.fill("@nu");
     await expect(caller.getByRole("option").filter({ hasText: "@nushi" })).toBeVisible();
     await caller.getByRole("option").filter({ hasText: "@nushi" }).click();
-    await body.fill("@nushi orchard");
-    await expect(caller.getByText(en.nushi_call_notice, { exact: true })).toBeVisible();
-    await caller.getByLabel(en.nushi_suppress, { exact: true }).check();
-    await caller.getByRole("button", { name: en.submit_reply, exact: true }).click();
-    await expect(caller.locator("#replies")).toContainText("@nushi orchard");
-    await expect(body).toHaveValue("");
-    await expect(caller.locator("[data-nushi-answer]")).toHaveCount(0);
     await body.fill("@nushi orchard planting date");
     await expect(caller.getByText(en.nushi_call_notice, { exact: true })).toBeVisible();
-    await caller.getByLabel(en.nushi_suppress, { exact: true }).uncheck();
+    await expect(caller.locator('input[name="suppressNushi"]')).toHaveCount(0);
     await caller.getByRole("button", { name: en.submit_reply, exact: true }).click();
     await expect(caller.locator("#replies")).toContainText("@nushi orchard planting date");
     await expect.poll(async () => { await caller.reload(); return caller.locator("[data-nushi-answer]").count(); }, { timeout: 120_000, intervals: [1000, 2000, 4000] }).toBe(1);

@@ -221,8 +221,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat({ filter: m.home_filter_following() }) : m.village_join_follow_help({ filter: m.home_filter_following() }) : m.village_follow_members_help({ filter: m.home_filter_following() })
     : undefined;
   return <main className="space-y-3 [overflow-wrap:anywhere]">
-    {loaderData.nushi.available && <p className="ui-help">{m.nushi_intro()} <Link to="/ai-use#nushi" className="underline">{m.nushi_name()}</Link></p>}
-    {loaderData.nushi.setting !== null && <Form method="post" action="/nushi/action" className="space-y-2 ui-help"><input type="hidden" name="intent" value="village" /><input type="hidden" name="villageId" value={loaderData.nushi.id} /><input type="hidden" name="returnTo" value={location.pathname + location.search} /><label><input type="checkbox" name="enabled" value="1" defaultChecked={loaderData.nushi.setting} /> {m.nushi_enable()}</label><p>{m.nushi_stop_help()}</p><Button type="submit" variant="outline">{m.settings_email_save()}</Button></Form>}
     <VillageHeader village={village} current="posts" chat={"chat" in loaderData ? { ...loaderData.chat!, member: !loaderData.reader } : undefined} actions={mainAction || membershipAction || followForm ? <>{mainAction}{membershipAction}{followForm}</> : undefined} purpose={<>
       {participationHelp && <p data-village-participation-help className="ui-help">{participationHelp}</p>}
       {shownDescription && <p lang={descriptionLang} className="whitespace-pre-wrap">{shownDescription}</p>}
@@ -230,6 +228,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {village.translation && <VillageTranslationNote info={village.translation} />}
       {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
     </>} />
+    {loaderData.nushi.available && <p className="ui-help">{m.nushi_intro()} <Link to="/ai-use#nushi" className="underline">{m.nushi_name()}</Link></p>}
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
     {actionData && "error" in actionData && <p role="alert">{villageError(String(actionData.error))}</p>}
     {ended && <p role="status">{m.village_ended()}</p>}
@@ -256,6 +255,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     </details>}
     {canManage && <PersistentDetails key={village.slug} id="village-management" open={managementOpen} className="space-y-3">
       <summary className="link-ui cursor-pointer">{m.village_manage()}</summary>
+      {loaderData.nushi.setting !== null && <Form method="post" action="/nushi/action" className="space-y-2 ui-help"><input type="hidden" name="intent" value="village" /><input type="hidden" name="villageId" value={loaderData.nushi.id} /><input type="hidden" name="returnTo" value={location.pathname + location.search} /><label><input type="checkbox" name="enabled" value="1" defaultChecked={loaderData.nushi.setting} /> {m.nushi_enable()}</label><p>{m.nushi_stop_help()}</p><Button type="submit" variant="outline">{m.settings_email_save()}</Button></Form>}
       {notice && search.get("notice") !== "remove-member" && <p role="status">{notice}</p>}
       {owner && !ended && !village.language && <AvatarSettings village action={`/v/${village.slug}/icon`} url={village.iconUrl} uploaded={village.hasIcon} />}
       {(owner || operator && !!village.language) && <section className="space-y-4">

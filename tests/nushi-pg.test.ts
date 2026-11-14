@@ -71,7 +71,9 @@ pg("checks only cited authors under the publication lock across PostgreSQL conne
   const [request] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, second.id));
   let calls = 0;
   const completer = { ...fake, async complete(req: Parameters<typeof fake.complete>[0]) {
-    const result = await fake.complete(req);
+    const input = JSON.parse(req.user);
+    input.materials = input.materials.filter((source: { id: string }) => source.id.startsWith(`e-${f.source}-`));
+    const result = await fake.complete({ ...req, user: JSON.stringify(input) });
     if (++calls === 2) entered.resolve();
     await release.promise;
     return result;

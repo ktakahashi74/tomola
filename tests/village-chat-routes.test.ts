@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { seedRateLimit } from "./helpers/fixtures";
 import { MEMBER_RATE_LIMITS } from "~/lib/rate-limit.server";
-import { chatConsents, chatMessages, chatSequences, chatTranslationReports, profiles, rateLimits, villageMembers, villages } from "~/lib/db/schema";
+import { chatConsents, chatMessages, chatNushiRequests, chatSequences, chatTranslationReports, profiles, rateLimits, villageMembers, villages } from "~/lib/db/schema";
 import { chatSourceHash, saveChatTranslation } from "~/lib/village-chat-translations.server";
 import { loader as page, action } from "~/routes/village-chat";
 import { loader as changes } from "~/routes/village-chat-changes";
@@ -28,6 +28,18 @@ afterAll(() => h.restore());
 afterEach(() => { stopVillageChat(); vi.unstubAllEnvs(); });
 const args = (as?: string, query = "") => h.args(h.request(`/v/route-chat/chat${query}`, as ? { as } : {}), { slug: "route-chat" });
 const enabled = () => { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1"); };
+
+it("ignores suppression submitted through a chat form", async () => {
+  enabled(); vi.stubEnv("VILLAGE_CHAT_NUSHI", "1"); vi.stubEnv("PUBLIC_READING", "1");
+  const handle = "zchat_form", slug = "chat-form-call";
+  await h.signIn(handle);
+  const [village] = await h.db.insert(villages).values({ slug, kind: "open" }).returning();
+  await h.db.insert(villageMembers).values({ villageId: village.id, userId: h.ids[handle] });
+  await consentChatMembers(h.db);
+  const result = await h.outcome(() => action(h.args(h.request(`/v/${slug}/chat`, { as: handle, form: { intent: "send", body: "@nushi orchard", suppressNushi: "1" } }), { slug })));
+  expect(result.status).toBe(302);
+  expect(await h.db.select().from(chatNushiRequests)).toHaveLength(1);
+});
 
 it("keeps syntax previews and chat polling in separate member allowances", async () => {
   enabled(); vi.stubEnv("VILLAGE_CHAT_NUSHI", "1"); vi.stubEnv("PUBLIC_READING", "1");

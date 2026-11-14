@@ -89,7 +89,7 @@ export async function reconstructNushiMaterials(db: Db, index: NushiMaterialInde
 }
 
 export type NushiRetrievalOptions = { env: LlmEnv; now: Date; clock: () => Date; signal?: AbortSignal; embedding?: EmbeddingEngine };
-export async function collectNushiMaterials(db: Db, input: { villageId: string; callerId: string | null; callingPost: string; language: Lang; excludeEntryId?: number }, options: NushiRetrievalOptions) {
+export async function collectNushiMaterials(db: Db, input: { villageId: string; callerId: string | null; callingPost: string; language: Lang; excludeEntryId?: number; priorityEntryIds?: readonly number[] }, options: NushiRetrievalOptions) {
   const language = input.language;
   const exhausted = chatNushiEnabled(options.env) ? (await db.execute(sql`select key from (select key, day from nushi_reservations union all select key, day from chat_nushi_reservations) shared where day = ${options.now.toISOString().slice(0, 10)} and key like 'author:%' group by key having count(*) >= ${nushiLimits(options.env).author}`) as { rows: { key: string }[] }).rows : await db.select({ key: nushiReservations.key }).from(nushiReservations)
     .where(and(eq(nushiReservations.day, options.now.toISOString().slice(0, 10)), like(nushiReservations.key, "author:%")))
@@ -97,6 +97,8 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
   const excludedAuthors = exhausted.map(row => row.key.slice(7)).filter(id => id !== input.callerId);
   const query = clipQuestionText(input.callingPost.replace(/[@＠](?:nushi|village-ai)\b/giu, "").trim(), 200);
   const found = new Map<number, unknown>();
+  // Calling topics and reply targets pass the same evidence gate as search hits.
+  for (const id of input.priorityEntryIds ?? []) if (id !== input.excludeEntryId) found.set(id, null);
   const opts = { readLangs: [] as Lang[], displayLang: language, limit: 20, villageId: input.villageId, excludedAuthorIds: excludedAuthors };
   if (query) {
     // Keep literal matches ahead of semantic matches, using the same search SQL.
@@ -155,7 +157,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
   const contextText = async (original: string, field: "title" | "body" = "body") => (await projectQuestionSource({ kind: "post", field, author: "", original })).original;
   const callingPost = await contextText(caller.entry.body);
   const language = isLang(caller.entry.lang) ? caller.entry.lang : "en";
-  const collected = await collectNushiMaterials(db, { villageId: request.villageId, callerId: request.callerId, callingPost, language, excludeEntryId: request.entryId }, options);
+  const collected = await collectNushiMaterials(db, { villageId: request.villageId, callerId: request.callerId, callingPost, language, excludeEntryId: request.entryId, priorityEntryIds: [request.threadId, ...(caller.parent ? [caller.parent.id] : [])] }, options);
   const dependencies = new Map<number, { entry: typeof entries.$inferSelect; author: string | null }>();
   // Track calling context as well as evidence, so an edit cannot leave old context public.
   for (const id of [request.entryId, request.threadId, caller.entry.parentId].filter((id): id is number => id !== null)) {

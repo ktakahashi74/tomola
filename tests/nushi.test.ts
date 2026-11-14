@@ -40,7 +40,9 @@ it("keeps the public prompt as the default while selecting a private chat destin
   const chatPrompt = nushiPrompt(input, "chat");
   expect(chatPrompt.user).toBe(publicPrompt.user);
   expect(chatPrompt.system).toContain("This answer will be a private chat AI reply");
-  expect(chatPrompt.system.replace("private chat AI reply", "public AI reply")).toBe(publicPrompt.system);
+  expect(publicPrompt.system).toContain("When the question refers to the calling topic itself");
+  expect(chatPrompt.system).not.toContain("When the question refers to the calling topic itself");
+  expect(chatPrompt.system).toContain("you may add askPerson as a JSON boolean");
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
   expect(nushiEnabled({})).toBe(false); expect(nushiMonthlyBudgetMicro({})).toBe(10_000_000);
@@ -287,12 +289,17 @@ it("withdraws a chain of AI contexts while preserving human replies", async () =
 });
 it("merges citation notices within a UTC day and honors the cited member's opt-out", async () => {
   const f = await nushiFixture(); await published(f);
+  const fake = resolveNushiCompleter();
   for (let n = 0; n < 2; n++) {
     if (n === 1) await f.db.update(profiles).set({ nushiCitationNotifications: false }).where(eq(profiles.userId, "nushi-owner"));
     const reply = await createReply(f.db, "nushi-caller", f.topic, { body: `@nushi orchard notice ${n}`, lang: "en" });
     if (!reply.ok) throw new Error(reply.error);
     const [request] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, reply.id));
-    await processNushiRequest(f.db, request.id);
+    await processNushiRequest(f.db, request.id, { completer: { ...fake, async complete(req) {
+      const input = JSON.parse(req.user);
+      input.materials = input.materials.filter((s: { id: string }) => s.id.startsWith(`e-${f.source}-`));
+      return fake.complete({ ...req, user: JSON.stringify(input) });
+    } } });
   }
   const rows = await f.db.select().from(notifications).where(eq(notifications.kind, "nushi_cited"));
   expect(rows).toHaveLength(1); expect(rows[0].mergedCount).toBe(2);
@@ -321,7 +328,7 @@ it("shows the limited-range result for a fixed current-belief refusal", async ()
     expect(req.system).toContain("CURRENT belief");
     return { text: JSON.stringify({ status: "not_confirmed", readings: [] }), inputTokens: 1, outputTokens: 1 };
   } });
-  expect(answer.answer).toEqual({ status: "not_confirmed", readings: [], citations: [] });
+  expect(answer.answer).toEqual({ status: "not_confirmed", readings: [], citations: [], askPerson: false });
 });
 it("bounds retries without retaining provider text in requests or errors", async () => {
   const f = await nushiFixture(), fake = resolveNushiCompleter();

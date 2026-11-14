@@ -12,7 +12,7 @@ import { findChatMessages } from "~/lib/village-chat-search.server";
 import { chatTranslationSource, chatSourceHash } from "~/lib/village-chat-translations.server";
 import { countUnreadNotifications, listNotifications } from "~/lib/notifications.server";
 import { createChatReport, readChatEvidence } from "~/lib/village-chat-reports.server";
-import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
+import { readNushiAnswer, resolveNushiCompleter, threadNushi } from "~/lib/nushi.server";
 import { aiUsePage } from "~/lib/ai-use-page.server";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CASE_CONTEXT_COUNT } from "~/lib/chat-access";
@@ -64,6 +64,19 @@ it("publishes a private source guide without an AI member or human unread/search
   expect(notices.filter(n => n.kind === "chat_nushi_cited")).toMatchObject([{ userId: "zcn_owner" }]);
   const reply = await mutateChat(w.db, "zcn_reader", w.village.slug!, "send", { body: "Thank you", replyToId: answer.id });
   expect((await w.db.select().from(notifications)).filter(n => n.chatMessageId === reply.id)).toEqual([]);
+});
+
+it("ignores person and clarification flags on a sourced chat answer", async () => {
+  const w = await world(), c = await w.call(), fake = resolveNushiCompleter();
+  await processChatNushiRequest(w.db, c.request.id, { completer: { ...fake, async complete(req) {
+    const result = await fake.complete(req);
+    return { ...result, text: JSON.stringify({ ...JSON.parse(result.text), askPerson: true, clarificationNeeded: true }) };
+  } } });
+  const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
+  expect(answer.nushiShape).toMatchObject({ status: "answered" });
+  expect(answer.nushiShape).not.toHaveProperty("askPerson");
+  expect(answer.body).not.toContain(m.nushi_ask_person());
+  expect(answer.body).not.toContain(m.chat_nushi_clarify());
 });
 it("sends only the projected calling message, including for a follow-up with a reply target", async () => {
   const w = await world();
@@ -291,27 +304,27 @@ it.each([false, true])("excludes an AI reply target from translation context eve
   expect(context?.context).not.toContain(answer.body);
 });
 
-it.each([false, true].flatMap(omitReadings => [undefined, false, true].map(clarificationNeeded => ({ omitReadings, clarificationNeeded }))))("publishes a not-found answer with omitted readings=$omitReadings and clarificationNeeded=$clarificationNeeded", async ({ omitReadings, clarificationNeeded }) => {
+it.each([false, true].flatMap(omitReadings => [undefined, false, true].flatMap(clarificationNeeded => [undefined, false, true].map(askPerson => ({ omitReadings, clarificationNeeded, askPerson })))))("publishes a not-found answer with omitted readings=$omitReadings and clarificationNeeded=$clarificationNeeded and askPerson=$askPerson", async ({ omitReadings, clarificationNeeded, askPerson }) => {
   const w = await world(), c = await w.call(clarificationNeeded ? "@nushi ?" : "@nushi orchard planting date");
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete(req) {
     expect(req.system).toContain(CHAT_NUSHI_PROMPT_VERSION);
-    return { text: JSON.stringify({ status: "not_confirmed", ...(omitReadings ? {} : { readings: [] }), clarificationNeeded }), inputTokens: 1, outputTokens: 1 };
+    return { text: JSON.stringify({ status: "not_confirmed", ...(omitReadings ? {} : { readings: [] }), clarificationNeeded, askPerson }), inputTokens: 1, outputTokens: 1 };
   } } });
   expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "answered", failure: null });
   const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
-  expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [], clarificationNeeded: clarificationNeeded === true } });
+  expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(askPerson === true ? [m.nushi_ask_person()] : []), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [], clarificationNeeded: clarificationNeeded === true, askPerson: askPerson === true } });
   expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_result")).toMatchObject([{ userId: "zcn_caller", chatMessageId: answer.id }]);
   expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_cited")).toEqual([]);
 });
 
-it.each([false, true].flatMap(legacy => (["en", "ja"] as const).flatMap(sourceLang => [false, true].map(clarificationNeeded => ({ legacy, sourceLang, clarificationNeeded })))))("preserves clarification=$clarificationNeeded when reading a not-found answer from $sourceLang in another language (legacy=$legacy)", async ({ legacy, sourceLang, clarificationNeeded }) => {
+it.each([false, true].flatMap(legacy => (["en", "ja"] as const).flatMap(sourceLang => [false, true].flatMap(clarificationNeeded => [false, true].map(askPerson => ({ legacy, sourceLang, clarificationNeeded, askPerson }))))))("preserves clarification=$clarificationNeeded and person guidance=$askPerson when reading a not-found answer from $sourceLang in another language (legacy=$legacy)", async ({ legacy, sourceLang, clarificationNeeded, askPerson }) => {
   const w = await world(), c = await w.call();
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() {
-    return { text: JSON.stringify({ status: "not_confirmed", readings: [], clarificationNeeded }), inputTokens: 1, outputTokens: 1 };
+    return { text: JSON.stringify({ status: "not_confirmed", readings: [], clarificationNeeded, askPerson }), inputTokens: 1, outputTokens: 1 };
   } } });
   const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
   expect(answer).toBeDefined();
-  await w.db.update(chatMessages).set({ lang: sourceLang, body: [m.nushi_not_found({}, { locale: sourceLang }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: sourceLang })] : [])].join(" "), ...(legacy ? { nushiShape: { status: "not_confirmed" as const, ranges: [] } } : {}) }).where(eq(chatMessages.id, answer.id));
+  await w.db.update(chatMessages).set({ lang: sourceLang, body: [m.nushi_not_found({}, { locale: sourceLang }), ...(askPerson ? [m.nushi_ask_person({}, { locale: sourceLang })] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: sourceLang })] : [])].join(" "), ...(legacy ? { nushiShape: { status: "not_confirmed" as const, ranges: [] } } : {}) }).where(eq(chatMessages.id, answer.id));
   const language = sourceLang === "en" ? "ja" : "en";
   await w.db.update(profiles).set({ displayLang: language, readLangs: [language], uiLocale: language }).where(eq(profiles.userId, "zcn_reader"));
   await chatPage(w.db, "zcn_reader", w.village.slug!);
@@ -320,7 +333,7 @@ it.each([false, true].flatMap(legacy => (["en", "ja"] as const).flatMap(sourceLa
   const page = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
   if (page.consentRequired) throw new Error("Consent missing");
   const translated = page.messages.find(message => message.id === answer.id)!.translation;
-  expect(translated).toMatchObject({ state: "ready", lang: language, text: [m.nushi_not_found({}, { locale: language }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" ") });
+  expect(translated).toMatchObject({ state: "ready", lang: language, text: [m.nushi_not_found({}, { locale: language }), ...(askPerson ? [m.nushi_ask_person({}, { locale: language })] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" ") });
 });
 
 it.each(["missing-answered-readings", "nonempty-not-confirmed-readings", "null-not-confirmed-readings"])("rejects %s without publishing an answer", async mode => {
@@ -334,10 +347,10 @@ it.each(["missing-answered-readings", "nonempty-not-confirmed-readings", "null-n
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toEqual([]);
 });
 
-it("rejects an invalid clarification flag without publishing provider text", async () => {
+it.each(["clarificationNeeded", "askPerson"].flatMap(field => ["PROVIDER_TEXT", null, 1, [], {}].map(value => ({ field, value }))))("rejects invalid $field=$value without publishing provider text", async ({ field, value }) => {
   const w = await world(), c = await w.call();
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() {
-    return { text: JSON.stringify({ status: "not_confirmed", readings: [], clarificationNeeded: "PROVIDER_TEXT" }), inputTokens: 1, outputTokens: 1 };
+    return { text: JSON.stringify({ status: "not_confirmed", readings: [], [field]: value }), inputTokens: 1, outputTokens: 1 };
   } } });
   expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "failed", failure: "unverified" });
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toEqual([]);

@@ -13,7 +13,7 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
     {hide && <a className="ms-2 underline" href={`/nushi/${value.id}`}>{m.notification_open()}</a>}
   </div>;
   const content = <>
-    {value.answer.status === "not_confirmed" && <p>{m.nushi_not_found()} {m.nushi_ask_person()}</p>}
+    {value.answer.status === "not_confirmed" && <p>{m.nushi_not_found()}{value.answer.askPerson !== false && <> {m.nushi_ask_person()}</>}</p>}
     {value.answer.readings.map((reading, index) => <p key={index} lang={value.lang === "other" ? value.langCode ?? undefined : value.lang}>{reading.text} {reading.citations.map(number => <a key={number} className="underline" href={`#nushi-${value.id}-source-${number}`}>[{number}]</a>)}</p>)}
     <ol className="space-y-3">
       {value.answer.citations.map((citation, index) => {

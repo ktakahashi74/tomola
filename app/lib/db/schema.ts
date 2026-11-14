@@ -248,7 +248,7 @@ export const chatMessages = pgTable("chat_messages", {
   authorKind: text("author_kind").notNull().default("human"),
   lang: text("lang").notNull(),
   body: text("body").notNull(),
-  nushiShape: jsonb("nushi_shape").$type<{ status: "answered" | "not_confirmed"; ranges: Array<[number, number]>; clarificationNeeded?: boolean }>(),
+  nushiShape: jsonb("nushi_shape").$type<{ status: "answered" | "not_confirmed"; ranges: Array<[number, number]>; clarificationNeeded?: boolean; askPerson?: boolean }>(),
   replyToId: text("reply_to_id"),
   createdSeq: bigint("created_seq", { mode: "number" }).notNull(),
   changedSeq: bigint("changed_seq", { mode: "number" }).notNull(),

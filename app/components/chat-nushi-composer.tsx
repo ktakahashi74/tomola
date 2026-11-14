@@ -24,5 +24,5 @@ export function ChatNushiComposer({ slug }: { slug: string }) {
     form.addEventListener("input", inspect); inspect();
     return () => { clearTimeout(timer); controller?.abort(); form.removeEventListener("input", inspect); };
   }, [slug]);
-  return <div ref={ref} className="basis-full">{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.chat_nushi_call_notice()}</p><label><input type="checkbox" name="suppressNushi" value="1" /> {m.nushi_suppress()}</label></div>}</div>;
+  return <div ref={ref} className="basis-full">{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.chat_nushi_call_notice()}</p></div>}</div>;
 }

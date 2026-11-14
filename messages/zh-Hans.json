@@ -2333,7 +2333,6 @@
   "nushi_intro": "在话题或回复中写入 @nushi，即可针对本村的公开帖子提问。回答将以附带出处的公开回复形式发布。",
   "nushi_description": "Nushi 负责检索本村的公开帖子并为你指明出处。运营者提供此项共享服务并对回答负责。每个回答都会显示所参考的有限范围。未找到某些内容并不意味着无人写过。Nushi 不代表村民或拥有者发言。该名称取自日语中对某个场所常驻者的称呼，例如民间故事中池塘或森林里的古老生灵，或是老店与论坛里的常客。",
   "nushi_call_notice": "此帖子会呼叫 Nushi。其回答将作为公开回复发布。",
-  "nushi_suppress": "不在此帖子中呼叫 Nushi",
   "nushi_suggestion": "Nushi — 根据本村帖子进行回答的 AI",
   "nushi_personal_notice": "此为 AI 向导，并非拥有者本人的回答。拥有者尚未对此进行核实。",
   "nushi_enable": "在此村引入 Nushi",

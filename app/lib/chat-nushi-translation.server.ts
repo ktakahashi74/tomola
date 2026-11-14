@@ -16,7 +16,9 @@ export async function translateChatNushi(db: Db, message: typeof chatMessages.$i
     // Older answers predate the saved flag; inspect their original-language copy.
     const clarificationNeeded = typeof shape.clarificationNeeded === "boolean" ? shape.clarificationNeeded
       : message.body.includes(m.chat_nushi_clarify({}, { locale: message.lang as Lang }));
-    return { text: [m.nushi_not_found({}, { locale: language }), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" "), flags: [], model: "site-copy", promptVersion: CHAT_NUSHI_PROMPT_VERSION };
+    const askPerson = typeof shape.askPerson === "boolean" ? shape.askPerson
+      : message.body.includes(m.nushi_ask_person({}, { locale: message.lang as Lang }));
+    return { text: [m.nushi_not_found({}, { locale: language }), ...(askPerson ? [m.nushi_ask_person({}, { locale: language })] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, { locale: language })] : [])].join(" "), flags: [], model: "site-copy", promptVersion: CHAT_NUSHI_PROMPT_VERSION };
   }
   const engine = resolveEngines().primary;
   if (!engine) throw new Error("Village chat AI translation is unavailable");

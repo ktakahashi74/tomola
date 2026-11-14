@@ -23,11 +23,6 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   await page.getByRole("button", { name: en.village_chat_consent_accept, exact: true }).click();
   await expect(page.getByRole("log")).toBeVisible();
   const field = page.getByLabel(en.village_chat_body, { exact: true });
-  let releasePreview = () => {};
-  if (enabled) {
-    const ready = new Promise<void>(resolve => { releasePreview = resolve; });
-    await page.route("**/chat/nushi", async route => { await ready; await route.continue(); });
-  }
   await expect(field.locator("xpath=ancestor::form")).toHaveClass(enabled ? /\bflex-wrap\b/ : /^(?!.*\bflex-wrap\b).*$/);
   await field.fill("@nushi orchard");
   if (!enabled) {
@@ -36,12 +31,7 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
     return;
   }
   await expect(page.getByText(en.chat_nushi_call_notice, { exact: true })).toBeVisible();
-  await page.getByLabel(en.nushi_suppress, { exact: true }).check();
-  releasePreview();
-  await page.unroute("**/chat/nushi");
-  await page.getByRole("button", { name: en.village_chat_send, exact: true }).click();
-  await expect(field).toHaveValue("");
-  await expect(page.locator("[data-chat-nushi]")).toHaveCount(0);
+  await expect(page.locator('input[name="suppressNushi"]')).toHaveCount(0);
   const readerContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.232") });
   const reader = await readerContext.newPage();
   await useMember(reader, "zcn_flow_reader@example.com", path); await waitForClientRoute(reader);
@@ -61,8 +51,6 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   });
   await field.fill("@nushi orchard planting date");
   await expect(page.getByText(en.chat_nushi_call_notice, { exact: true })).toBeVisible();
-  const suppress = page.getByLabel(en.nushi_suppress, { exact: true });
-  if (await suppress.isChecked()) await suppress.uncheck();
   await page.getByRole("button", { name: en.village_chat_send, exact: true }).click();
   await expect(field).toHaveValue("");
   await expect(page.locator("[data-chat-nushi]")).toHaveCount(1, { timeout: 120_000 });

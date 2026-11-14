@@ -29,5 +29,5 @@ export function NushiComposerNotice() {
     form.addEventListener("input", inspect); form.addEventListener("change", inspect); inspect();
     return () => { clearTimeout(timer); controller?.abort(); form.removeEventListener("input", inspect); form.removeEventListener("change", inspect); };
   }, []);
-  return <div ref={ref}>{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.nushi_call_notice()}</p><label><input type="checkbox" name="suppressNushi" value="1" /> {m.nushi_suppress()}</label></div>}</div>;
+  return <div ref={ref}>{calling && <div className="space-y-1 rounded border p-2 ui-help"><p>{m.nushi_call_notice()}</p></div>}</div>;
 }

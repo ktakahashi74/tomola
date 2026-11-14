@@ -128,7 +128,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         } });
       }
     } else {
-      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId"), suppressNushi: form.get("suppressNushi") === "1" });
+      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId") });
       if (intent === "send") return redirect(`/v/${params.slug}/chat?latest=1#chat-${result.id}`);
       if (intent === "delete" && new URL(request.url).searchParams.get("at") === result.id) {
         const linkLang = langQueryParam(request);

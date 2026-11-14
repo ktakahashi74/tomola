@@ -102,16 +102,18 @@ function verifyChatAnswer(raw: string, materials: AiQuestionMaterials) {
   try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")); }
   catch { return null; }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const { clarificationNeeded, ...answerData } = value as Record<string, unknown>;
+  const { clarificationNeeded, askPerson, ...answerData } = value as Record<string, unknown>;
   if (clarificationNeeded !== undefined && typeof clarificationNeeded !== "boolean") return null;
+  if (askPerson !== undefined && typeof askPerson !== "boolean") return null;
   if (answerData.status === "not_confirmed" && answerData.readings === undefined) answerData.readings = [];
   const answer = verifyQuestionAnswer(JSON.stringify(answerData), materials);
+  if (answer?.status === "not_confirmed") answer.askPerson = askPerson === true;
   return answer ? { answer, clarificationNeeded: answer.status === "not_confirmed" && clarificationNeeded === true } : null;
 }
 
 function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, language: Lang, dates: Map<number, string>, posts: number, from: string | null, to: string | null) {
   const options = { locale: language };
-  if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [], clarificationNeeded } };
+  if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(answer.askPerson ? [m.nushi_ask_person({}, options)] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [], clarificationNeeded, askPerson: answer.askPerson === true } };
   const ranges: Array<[number, number]> = [];
   let body = "";
   for (const reading of answer.readings) {

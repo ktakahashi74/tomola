@@ -34,6 +34,7 @@ export type AiQuestionCitation = {
 };
 export type AiQuestionAnswer = {
   status: "answered" | "not_confirmed";
+  askPerson?: boolean;
   readings: Array<{ text: string; citations: number[] }>;
   citations: AiQuestionCitation[];
 };

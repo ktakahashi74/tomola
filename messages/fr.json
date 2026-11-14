@@ -2958,7 +2958,6 @@
   "nushi_intro": "Écrivez @nushi dans une publication ou une réponse pour interroger les publications publiques de ce village. Les réponses sont des réponses publiques avec sources.",
   "nushi_description": "Nushi parcourt les publications publiques d’un village et vous oriente vers les sources. L’opérateur fournit ce service partagé et est responsable de ses réponses. Chaque réponse indique le périmètre limité consulté. Ne rien trouver ne signifie pas que personne ne l’a écrit. Nushi ne parle pas au nom des résidents ou des propriétaires. Ce nom vient d’un mot japonais désignant l’habitant de longue date d’un lieu, comme la créature ancestrale d’un étang ou d’une forêt dans les contes, ou un habitué d’une boutique ou d’un forum.",
   "nushi_call_notice": "Cette publication fait appel à Nushi. Sa réponse sera une réponse publique.",
-  "nushi_suppress": "Ne pas faire appel à Nushi depuis cette publication",
   "nushi_suggestion": "Nushi — IA répondant depuis les publications de ce village",
   "nushi_personal_notice": "Ceci est un guide par IA, non la réponse du propriétaire. Le propriétaire ne l’a pas vérifiée.",
   "nushi_enable": "Placer Nushi dans ce village",

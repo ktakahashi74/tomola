@@ -7,7 +7,12 @@ export function nushiBody(value: NonNullable<Awaited<ReturnType<typeof readNushi
   if (value.hidden) return "AI (Nushi) answer — currently not displayed.";
   const lines = ["AI (Nushi) answer", `Called by @${value.caller ?? "?"}. From this village’s public posts.`];
   if (value.personal) lines.push("This is not the owner's answer. The owner has not checked it.");
-  if (value.answer.status === "not_confirmed") lines.push(value.originalLang === "ja" ? "今回参照した投稿では見つかりませんでした。人のいまの考えや新しい同意は、その人への返信かメンションで聞いてください。" : "Not found in the posts consulted this time. Ask the person by reply or mention about current views or a new agreement.");
+  if (value.answer.status === "not_confirmed") {
+    const askPerson = value.answer.askPerson !== false;
+    lines.push(value.originalLang === "ja"
+      ? "今回参照した投稿では見つかりませんでした。" + (askPerson ? "人のいまの考えや新しい同意は、その人への返信かメンションで聞いてください。" : "")
+      : "Not found in the posts consulted this time." + (askPerson ? " Ask the person by reply or mention about current views or a new agreement." : ""));
+  }
   for (const reading of value.answer.readings) lines.push(`${reading.text} ${reading.citations.map(index => `[${index}]`).join(" ")}`);
   value.answer.citations.forEach((citation, index) => {
     const label = value.labels.find(source => source.id === Number(/^e-(\d+)-/.exec(citation.sourceId)![1]));

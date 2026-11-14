@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, expect, it } from "vitest";
-import { entries, profiles, reports } from "~/lib/db/schema";
+import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import { entries, nushiRequests, profiles, reports, villageMembers, villages } from "~/lib/db/schema";
 import { createTopic } from "~/lib/entries.server";
 import { action } from "~/routes/topic";
+import { action as newTopic } from "~/routes/topic-new";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 
 let h: RouteHarness;
@@ -17,6 +18,21 @@ beforeAll(async () => {
   id = topic.id;
 });
 afterAll(() => h.restore());
+afterEach(() => vi.unstubAllEnvs());
+
+it("ignores suppression submitted through topic and reply forms", async () => {
+  for (const flag of ["VILLAGES", "PUBLIC_READING", "VILLAGE_NUSHI"]) vi.stubEnv(flag, "1");
+  const [village] = await h.db.insert(villages).values({ slug: "form-calls", kind: "open" }).returning();
+  await h.db.insert(villageMembers).values({ villageId: village.id, userId: h.ids.dispatch_writer, role: "owner" });
+  const posted = await h.outcome(() => newTopic(h.args(h.request("/t/new", { as: "dispatch_writer", form: { body: "@nushi topic source", lang: "en", village: village.slug!, villageExplicit: "1", villageDisplayed: village.slug!, suppressNushi: "1" } }))));
+  expect(posted, JSON.stringify(posted.value)).toMatchObject({ status: 302 });
+  const [request] = await h.db.select().from(nushiRequests);
+  expect(request).toBeDefined();
+  const path = `/t/${request.threadId}`;
+  const replied = await h.outcome(() => action(h.args(h.request(path, { as: "dispatch_writer", form: { intent: "reply", body: "@nushi explain", lang: "en", suppressNushi: "1" } }), { id: String(request.threadId) })));
+  expect(replied.status).toBe(302);
+  expect(await h.db.select().from(nushiRequests)).toHaveLength(2);
+});
 
 it("rejects unknown intents without creating a reply", async () => {
   const before = await h.db.select({ id: entries.id }).from(entries);
