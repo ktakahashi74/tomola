@@ -101,10 +101,15 @@ export function ChatNushiBody({ parts }: { parts: ActiveChatMessage["parts"] }) 
   }, [parts]);
   const body = <p ref={ref} dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => {
     if (part.type === "text") return part.text;
-    let internal = false;
-    try { internal = part.type === "link" && !!root?.siteOrigin && new URL(part.href, root.siteOrigin).origin === root.siteOrigin; }
+    let source = false;
+    try {
+      const url = new URL(part.href);
+      source = part.type === "link" && url.origin === root?.siteOrigin && /^\/t\/\d+$/.test(url.pathname)
+        && (i === 0 || parts[i - 1].text.endsWith("\n"))
+        && (i === parts.length - 1 || parts[i + 1].text.startsWith("\n"));
+    }
     catch { /* Preserve the existing label for an unrecognized destination. */ }
-    return <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{internal ? m.nushi_open_post() : part.text}</a>;
+    return <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{source ? m.nushi_open_post() : part.text}</a>;
   })}</p>;
   return long ? <details className="space-y-2"><summary className="cursor-pointer underline">{m.chat_nushi_read()}</summary>{body}</details> : body;
 }

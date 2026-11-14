@@ -9,16 +9,17 @@ function NushiStatusWatch({ requestId }: { requestId: string }) {
   const revalidator = useRevalidator();
   const settled = useEffectEvent(() => { void revalidator.revalidate(); });
   useEffect(() => {
-    const deadline = Date.now() + 5 * 60_000;
+    let remaining = 5 * 60_000, visibleSince = document.hidden ? undefined : Date.now();
+    const withinBudget = () => remaining > (visibleSince === undefined ? 0 : Date.now() - visibleSince);
     let attempts = 0, stopped = false, timer: ReturnType<typeof setTimeout> | undefined;
     let controller: AbortController | undefined;
     const schedule = () => {
-      if (!stopped && !document.hidden && attempts < 40 && Date.now() < deadline) {
+      if (!stopped && !document.hidden && attempts < 40 && withinBudget()) {
         timer = setTimeout(check, Math.min(2000 * 1.5 ** attempts, 10_000));
       }
     };
     const check = async () => {
-      if (stopped || document.hidden || Date.now() >= deadline) return;
+      if (stopped || document.hidden || attempts >= 40 || !withinBudget()) return;
       attempts++;
       const current = new AbortController();
       controller = current;
@@ -46,7 +47,13 @@ function NushiStatusWatch({ requestId }: { requestId: string }) {
       clearTimeout(timer);
       controller?.abort();
       controller = undefined;
-      if (!document.hidden) schedule();
+      if (document.hidden) {
+        if (visibleSince !== undefined) remaining -= Date.now() - visibleSince;
+        visibleSince = undefined;
+      } else {
+        visibleSince ??= Date.now();
+        void check();
+      }
     };
     schedule();
     document.addEventListener("visibilitychange", visibility);

@@ -2901,7 +2901,7 @@
   "ai_material_quote_translation": "AI translation of this quotation",
   "nushi_name": "Nushi",
   "nushi_label": "AI · from this village’s posts · called by @{handle}",
-  "nushi_mention_help": "Mention {nushi} (@nushi) to get an answer about this village's posts.",
+  "nushi_mention_help": "Mention {nushi} (@nushi) to get an answer about this village’s posts.",
   "nushi_intro": "Write @nushi in a post or reply to ask about this village’s public posts. Answers are public replies with sources.",
   "nushi_description": "Nushi searches a village’s public posts and points you to the sources. The operator provides this shared service and is responsible for its answers. Each answer shows its limited consulted range. Not finding something does not mean nobody wrote it. Nushi does not speak for residents or owners. The name comes from a Japanese word for a long-time dweller of a place, such as the old creature of a pond or forest in folktales, or an old-timer of a shop or forum.",
   "nushi_call_notice": "This post calls Nushi. Its answer will be a public reply.",

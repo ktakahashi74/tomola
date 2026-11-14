@@ -27,3 +27,19 @@ it("shortens only same-origin AI source labels while preserving exact destinatio
   expect(html).toContain(`>${spoof}</a>`);
   expect(html).not.toContain(`>${internal}</a>`);
 });
+
+it("preserves URLs in readings and original and translated quotations while shortening the source line", () => {
+  const url = "https://example.test/t/7#p-7:~:text=An%20orchard";
+  const body = `Read more at ${url} [1]\n\n[1] @author\nOriginal quote with ${url} in its prose.\nTranslated quote with ${url} in its prose.\n${url}`;
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body) }));
+  expect(html.split(`>${url}</a>`)).toHaveLength(4);
+  expect(html.split(`>${m.nushi_open_post()}</a>`)).toHaveLength(2);
+  expect(html.split(`href="${url}"`)).toHaveLength(5);
+});
+
+it.each(["/v/orchard", "/settings/profile", "/t/word", "/t/7/extra"])("preserves a standalone URL to %s", path => {
+  const url = `https://example.test${path}`;
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(url) }));
+  expect(html).toContain(`>${url}</a>`);
+  expect(html).not.toContain(m.nushi_open_post());
+});

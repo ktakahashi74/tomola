@@ -112,10 +112,11 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await caller.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => true }); document.dispatchEvent(new Event("visibilitychange")); });
     const readsBeforeHidden = statusReads;
     await caller.clock.install();
-    await caller.clock.fastForward(20_000);
+    await caller.clock.fastForward(6 * 60_000);
     expect(statusReads).toBe(readsBeforeHidden);
     releaseStatus = true;
     await caller.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); document.dispatchEvent(new Event("visibilitychange")); });
+    await expect.poll(() => statusReads, { timeout: 1500 }).toBe(readsBeforeHidden + 1);
     await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1, { timeout: 120_000 });
     await expect(caller.locator("[data-nushi-status]")).toHaveCount(0);
     const answer = caller.locator("[data-nushi-answer]");
