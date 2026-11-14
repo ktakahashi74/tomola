@@ -33,7 +33,8 @@ export async function action({ request }: Route.ActionArgs) {
 export default function VillageCreate({ actionData, loaderData: { sourceLang, suggestSlug } }: Route.ComponentProps) {
   const [slug, setSlug] = useState("");
   const [suggesting, setSuggesting] = useState(false);
-  const current = useRef({ name: "", managed: true, pending: null as AbortController | null });
+  const current = useRef({ name: "", managed: true, pending: null as AbortController | null,
+    lastSuggestion: null as { name: string; slug: string | null } | null });
   useEffect(() => { const state = current.current; return () => { state.pending?.abort(); }; }, []);
   const cancelSuggestion = () => {
     current.current.pending?.abort();
@@ -48,6 +49,8 @@ export default function VillageCreate({ actionData, loaderData: { sourceLang, su
   const suggestFromName = async () => {
     const name = current.current.name;
     if (!suggestSlug || !current.current.managed || !villageNameNeedsAiSlug(name)) return;
+    const last = current.current.lastSuggestion;
+    if (current.current.pending || (last?.name === name && (last.slug === null || slug === last.slug))) return;
     cancelSuggestion();
     const controller = new AbortController();
     current.current.pending = controller;
@@ -63,7 +66,10 @@ export default function VillageCreate({ actionData, loaderData: { sourceLang, su
       if (!response.ok) return;
       const result: unknown = await response.json();
       if (!controller.signal.aborted && current.current.managed && current.current.name === name
-        && result && typeof result === "object" && "slug" in result && validVillageSlug(result.slug)) setSlug(result.slug);
+        && result && typeof result === "object" && "slug" in result && (result.slug === null || validVillageSlug(result.slug))) {
+        current.current.lastSuggestion = { name, slug: result.slug };
+        if (result.slug !== null) setSlug(result.slug);
+      }
     } catch { /* Leave the editable field available when a suggestion fails. */ }
     finally {
       clearTimeout(timeout);

@@ -23,6 +23,7 @@ import { homeTrialEnabled } from "~/lib/home-trial.server";
 import { testSiteEnabled } from "~/lib/site-stage.server";
 import { assertAiQuestionConfig, postAskAiEnabled } from "./ai-question-config.server";
 import { questionModel } from "./ai-question-answer.server";
+import { assertVillageSlugSuggestConfig } from "./village-slug-suggest-config.server";
 
 // Startup configuration checks, called by app/lib/startup.server.ts. Reject invalid configuration before starting the server instead of waiting for the first request.
 // In production (NODE_ENV is neither development nor test, including unset), also validate the signing secret and site URL:
@@ -139,6 +140,7 @@ export function assertStartupConfig(
   publicReading(env);
   assertAiQuestionConfig(env);
   assertNushiConfig(env);
+  assertVillageSlugSuggestConfig(env);
   if (postAskAiEnabled(env)) questionModel(env);
   operatorOnlyInvitations(env);
   villagesEnabled(env);
