@@ -10,10 +10,67 @@ test("village owners manage Nushi below the village header", async ({ page }) =>
   const form = management.locator('form[action="/nushi/action"]:has(input[value="village"])');
   await expect(form).toHaveCount(1);
   await expect(page.locator('main > form[action="/nushi/action"]')).toHaveCount(0);
-  await expect(page.locator('[data-village-header] ~ p').filter({ hasText: en.nushi_intro })).toHaveCount(1);
+  await expect(page.locator('[data-village-header] ~ p').filter({ hasText: process.env.E2E_CHAT_NUSHI === "1" ? en.nushi_chat_intro : en.nushi_intro })).toHaveCount(1);
   await management.locator(":scope > summary").click();
   await expect(form.locator('input[name="enabled"]')).toBeVisible();
   await expect(form.locator("p")).toHaveText(en.nushi_stop_help);
+});
+
+test("village chat entry prepares a question after consent without sending or replacing a draft", async ({ page }) => {
+  test.skip(process.env.E2E_CHAT_NUSHI !== "1", "Chat Nushi must be enabled");
+  await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.234"));
+  await useMember(page, "zcn_flow_owner@example.com", "/v/chat-nushi-browser?lang=en");
+  await waitForClientRoute(page);
+  await expect(page.getByText(en.nushi_chat_intro, { exact: false })).toBeVisible();
+  await expect(page.getByText(en.nushi_intro, { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: en.nushi_name, exact: true })).toHaveAttribute("href", "/ai-use#nushi");
+  let sends = 0;
+  page.on("request", request => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/v/chat-nushi-browser/chat" && new URLSearchParams(request.postData() ?? "").get("intent") === "send") sends++;
+  });
+  await page.getByRole("link", { name: en.nushi_chat_ask, exact: true }).click();
+  await expect(page).toHaveURL(/\?ask=nushi$/);
+  const field = page.getByLabel(en.village_chat_body, { exact: true });
+  await expect(field).toHaveCount(0);
+  await page.getByRole("button", { name: en.village_chat_consent_accept, exact: true }).click();
+  await expect(field).toHaveValue("@nushi ");
+  await expect(field).toBeFocused();
+  expect(await field.evaluate(element => { const input = element as HTMLTextAreaElement; return [input.selectionStart, input.selectionEnd]; })).toEqual([7, 7]);
+  await expect(page).not.toHaveURL(/[?&]ask=/);
+  await expect(page.locator("[data-chat-pending]")).toHaveCount(0);
+  expect(sends).toBe(0);
+  await page.getByRole("link", { name: en.village_posts_tab, exact: true }).click();
+  await expect(page).toHaveURL(/\/v\/chat-nushi-browser$/);
+  const villageURL = page.url();
+  await page.getByRole("link", { name: en.nushi_chat_ask, exact: true }).click();
+  await expect(field).toHaveValue("@nushi ");
+  await expect(page).not.toHaveURL(/[?&]ask=/);
+  await page.goBack();
+  await expect(page).toHaveURL(villageURL);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/chat$/);
+  await field.fill("");
+  await page.reload();
+  await waitForClientRoute(page);
+  await expect(field).toHaveValue("");
+  await field.fill("An unfinished village question");
+  // A same-page history entry must preserve text already in the composer.
+  await page.evaluate(() => {
+    history.replaceState(history.state, "", "?ask=nushi&lang=en#chat-bottom");
+    dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
+  });
+  await expect(page).toHaveURL(/\/chat\?lang=en#chat-bottom$/);
+  await expect(field).toHaveValue("An unfinished village question");
+  expect(sends).toBe(0);
+});
+
+test("members outside a village keep the post guidance without a chat question entry", async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.235"));
+  await useMember(page, "znushi_flow_caller@example.com", "/v/chat-nushi-browser?lang=en");
+  await waitForClientRoute(page);
+  await expect(page.getByText(en.nushi_intro, { exact: false })).toBeVisible();
+  await expect(page.getByText(en.nushi_chat_intro, { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: en.nushi_chat_ask, exact: true })).toHaveCount(0);
 });
 
 test("Nushi calls produce sourced public AI replies with independent reader and owner controls", async ({ page, browser }) => {

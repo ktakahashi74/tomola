@@ -1,4 +1,4 @@
-import { chatNushiEnabled } from "~/lib/chat-nushi-config.server";
+import { chatNushiEnabled, chatNushiInVillage } from "~/lib/chat-nushi-config.server";
 import { nushiEnabled, nushiInVillage } from "~/lib/nushi-config.server";
 import { villageWriters } from "~/lib/village-writers.server";
 import { AuthorLink } from "~/components/author-link";
@@ -101,7 +101,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...(resolveReportId !== null ? { resolveReportId } : {}),
     ...(villageChatEnabled() ? { chat: { joined: membership?.joined ?? false, unread: user && membership?.joined ? await chatUnreadCount(db, user.id, village.id) : 0 } } : {}),
     ...(user && profile ? { reported: await openVillageReportTargets(db, village.id, user.id) } : {}),
-    nushi: { available: nushiInVillage(village), setting: (nushiEnabled() || chatNushiEnabled()) && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
+    nushi: { available: nushiInVillage(village), chatAvailable: chatNushiInVillage(village), setting: (nushiEnabled() || chatNushiEnabled()) && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
     reader: !user,
     village: { ...localized, iconUrl: villageIconUrl(village), hasIcon: !!village.iconMediaId },
     source: { name: village.name, description: village.description, lang: village.sourceLang ?? (user && (membership?.owner || operator) ? (await decideVillageLangOf(db, village)).lang : null) },
@@ -190,6 +190,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
   const location = useLocation();
   const membershipControl = useDismissibleDetails();
   const owner = membership?.owner ?? false;
+  const canAskChat = loaderData.nushi.chatAvailable && loaderData.chat?.joined;
   const search = new URLSearchParams(location.search);
   const managementOpen = search.get("manage") === "1" || confirmingEnd || "resolveReportId" in loaderData || search.has("invitesPage") || location.hash === "#village-invites";
   const canManage = owner || operator && !!village.language;
@@ -228,7 +229,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {village.translation && <VillageTranslationNote info={village.translation} />}
       {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
     </>} />
-    {loaderData.nushi.available && <p className="ui-help">{m.nushi_intro()} <Link to="/ai-use#nushi" className="underline">{m.nushi_name()}</Link></p>}
+    {(loaderData.nushi.available || canAskChat) && <p className="ui-help">{canAskChat ? <>{m.nushi_chat_intro()} <Link to={`/v/${village.slug}/chat?ask=nushi`} className="underline">{m.nushi_chat_ask()}</Link></> : m.nushi_intro()} <Link to="/ai-use#nushi" className="underline">{m.nushi_name()}</Link></p>}
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
     {actionData && "error" in actionData && <p role="alert">{villageError(String(actionData.error))}</p>}
     {ended && <p role="status">{m.village_ended()}</p>}

@@ -29,6 +29,32 @@ const post = (as: string, intent: string, slug = "join-open") => h.outcome(() =>
 const html = async (page: Awaited<ReturnType<typeof load>>) => (await renderInRouter(() => createElement(Village, { loaderData: page } as never), `/v/${page.village.slug}`)).replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
 const head = (rendered: string) => rendered.split("</header>")[0];
 
+it.each([
+  { as: "zjoin_owner", chat: "1", chatNushi: "1", postNushi: "1", ask: true },
+  { as: "zjoin_owner", chat: "1", chatNushi: "1", postNushi: "", ask: true },
+  { as: "zjoin_guidance", chat: "1", chatNushi: "1", postNushi: "1", ask: false },
+  { as: undefined, chat: "1", chatNushi: "1", postNushi: "1", ask: false },
+  { as: "zjoin_owner", chat: "", chatNushi: "1", postNushi: "1", ask: false },
+  { as: "zjoin_owner", chat: "1", chatNushi: "", postNushi: "1", ask: false },
+])("offers chat guidance only when the member can call Nushi: %j", async ({ as, chat, chatNushi, postNushi, ask }) => {
+  vi.stubEnv("VILLAGE_CHAT", chat);
+  vi.stubEnv("VILLAGE_CHAT_NUSHI", chatNushi);
+  vi.stubEnv("VILLAGE_NUSHI", postNushi);
+  try {
+    const rendered = await html(await load(as));
+    expect(rendered.includes(m.nushi_chat_intro())).toBe(ask);
+    expect(rendered.includes(m.nushi_chat_ask())).toBe(ask);
+    expect(rendered.includes('href="/v/join-open/chat?ask=nushi"')).toBe(ask);
+    expect(rendered.includes(m.nushi_intro())).toBe(!ask);
+    expect(rendered).toContain('href="/ai-use#nushi"');
+    expect(head(rendered)).not.toContain(m.nushi_chat_intro());
+  } finally {
+    vi.stubEnv("VILLAGE_CHAT", "1");
+    vi.stubEnv("VILLAGE_CHAT_NUSHI", undefined);
+    vi.stubEnv("VILLAGE_NUSHI", undefined);
+  }
+});
+
 it("puts joined state and departure in the header, hides follows, and retains an existing follow after departure", async () => {
   expect(await post("zjoin_reader", "follow")).toMatchObject({ status: 200 });
   await post("zjoin_reader", "join");
