@@ -2331,6 +2331,8 @@
   "nushi_name": "Nushi",
   "nushi_label": "AI · 來自此村的貼文 · 由 @{handle} 呼叫",
   "nushi_intro": "在話題或回覆中輸入 @nushi，即可詢問有關此村公開貼文的內容。回答將以公開回覆形式提供並附上來源。",
+  "nushi_chat_intro": "在聊天中輸入 @nushi，即可根據此村的公開貼文在聊天中獲得解答，並附上來源。",
+  "nushi_chat_ask": "詢問 Nushi",
   "nushi_description": "Nushi 會搜尋村的公開貼文，並為您指出來源。營運方提供此共享服務並對其回答負責。每個回答都會顯示其有限的參考範圍。未找到內容並不代表沒有人寫過。Nushi 不代表居民或擁有者發言。此名稱源自日語中指稱某處長住者的詞彙，例如民間故事中池塘或森林的古老生靈，或是店家、論壇的老前輩。",
   "nushi_call_notice": "此貼文會呼叫 Nushi。其回答將會是一則公開回覆。",
   "nushi_suggestion": "Nushi — 根據此村貼文回答的 AI",
