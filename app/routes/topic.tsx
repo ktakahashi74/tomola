@@ -867,6 +867,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                     <AuthorLink handle={topic.authorHandle} name={topic.authorName} latin={topic.authorNameLatin} reader={loaderData.reader} byline handleClassName="article-author-handle" />
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 ui-meta text-muted-foreground">
+                    {loaderData.village && loaderData.village.kind !== "personal" && !loaderData.village.language && <Link to={`/v/${loaderData.village.slug}`} title={villageNameTitle(loaderData.village)} className="link-ui underline">{villageName(loaderData.village)}</Link>}
                     <LocalTime iso={topic.createdAt.toISOString()} style="date" />
                     {info && info.minutes >= 3 && <span data-reading-time="">{m.reading_minutes({ minutes: info.minutes })}</span>}
                     {languageMenu}

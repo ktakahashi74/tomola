@@ -7,6 +7,49 @@ import { openVillageMembership, allListIds, captureScreenshot, clientHeaders, en
 
 const name = (lang: string) => m.village_language_name.replace("{language}", new Intl.DisplayNames(["en"], { type: "language", languageDisplay: "standard" }).of(lang)!);
 
+test("article date rows link to shared villages and omit personal and language villages", async ({ browser }) => {
+  const { rich, plain }: { rich: number; plain: number } = JSON.parse(fs.readFileSync(path.join(state().dir, "meta-separators.json"), "utf8"));
+  const { topics }: { topics: { id: number }[] } = JSON.parse(fs.readFileSync(path.join(state().dir, "villages.json"), "utf8"));
+  const href = "/v/meta-separators";
+  for (const member of [false, true]) {
+    const context = await browser.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders(member ? "192.0.2.184" : "192.0.2.183") });
+    try {
+      const page = await context.newPage();
+      if (member) await useMember(page, "listmeta_reader@example.com");
+      for (const width of [390, 1366]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`/t/${rich}?lang=en&tr=${rich}`);
+        await waitForClientRoute(page);
+        const byline = page.locator("[data-reading-byline]");
+        await expect(byline.locator(":scope > div")).toHaveCount(3);
+        const dateRow = byline.locator(":scope > div").nth(1);
+        const village = dateRow.locator(":scope > a:first-child");
+        const endVillage = page.locator(`[data-article-details] a[href="${href}"]`);
+        await expect(village).toBeVisible();
+        await expect(village).toHaveAttribute("href", href);
+        await expect(village).toHaveAccessibleName(/\S/);
+        await expect(dateRow.locator(":scope > time")).toBeVisible();
+        await expect(byline.locator(":scope > div").first()).toHaveClass("article-author");
+        await expect(byline.locator(":scope > div").last()).toHaveAttribute("data-reading-language", "");
+        await expect(endVillage).toHaveCount(1);
+        await expect(village).toHaveText(await endVillage.innerText());
+        expect(await village.getAttribute("title")).toBe(await endVillage.getAttribute("title"));
+        await expect(page.locator(`[data-topic-continuation] a[href="${href}"]`)).toHaveCount(1);
+        if (width === 1366) await expect(page.locator(".reading-toc-sidebar")).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await captureScreenshot(page, { path: `article-village-${member ? "member" : "public"}-${width}.png` }, "article-village-link");
+        await village.click();
+        await expect(page).toHaveURL(new RegExp(`${href}$`));
+        for (const id of [plain, topics[1].id]) {
+          await page.goto(`/t/${id}?lang=en`);
+          await expect(page.locator("[data-reading-byline]")).toBeVisible();
+          await expect(page.locator('[data-reading-byline] a[href^="/v/"]')).toHaveCount(0);
+        }
+      }
+    } finally { await context.close(); }
+  }
+});
+
 test("villages show public reading, placement, ordering and member join/leave", async ({ browser }) => {
   test.setTimeout(180_000);
   const fixture = JSON.parse(fs.readFileSync(path.join(state().dir, "villages.json"), "utf8")) as { topics: { id: number; title: string }[] };
@@ -83,10 +126,12 @@ test("hidden topic village metadata follows the reader's screen visibility", asy
   const { hiddenId, hiddenPlace } = JSON.parse(fs.readFileSync(path.join(state().dir, "villages.json"), "utf8"));
   const url = `/t/${hiddenId}?lang=en`;
   await page.goto(url);
+  await expect(page.locator('[data-reading-byline] a[href^="/v/"]')).toHaveCount(0);
   await expect(page.locator('[data-article-details]').getByRole("link", { name: hiddenPlace.name, exact: true })).toHaveCount(0);
   expect(await (await page.request.get(`/t/${hiddenId}.md`)).text()).not.toContain("village:");
   await useMember(page, "villages_member@example.com");
   await page.goto(url);
+  await expect(page.locator(`[data-reading-byline] a[href="/v/${hiddenPlace.slug}"]`)).toBeVisible();
   await expect(page.locator('[data-article-details]').getByRole("link", { name: hiddenPlace.name, exact: true })).toBeVisible();
   const markdown = await (await page.request.get(`/t/${hiddenId}.md`)).text();
   expect(markdown).toContain(`village: ${hiddenPlace.slug}`);
