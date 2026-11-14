@@ -8,8 +8,9 @@ import { addMember, createTestDb } from "./helpers/db";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { EMBEDDING_DIM, entries, entryEmbeddings, jobs, llmUsage, moderationActions, notifications, nushiAnswers, nushiReports, nushiRequests, nushiReservations, nushiSources, nushiTranslations, profiles, translations, villageMembers, villages } from "~/lib/db/schema";
 import { callsNushi } from "~/lib/nushi-call.server";
-import { nushiEnabled, nushiInVillage, nushiLimits, nushiMonthlyBudgetMicro } from "~/lib/nushi-config.server";
-import { expireNushiRequests, processNushiRequest, readNushiAnswer, threadNushi, requestNushi, resolveNushiCompleter } from "~/lib/nushi.server";
+import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiInVillage, nushiLimits, nushiMonthlyBudgetMicro } from "~/lib/nushi-config.server";
+import { expireNushiRequests, nushiPrompt, processNushiRequest, readNushiAnswer, threadNushi, requestNushi, resolveNushiCompleter } from "~/lib/nushi.server";
+import { questionPrompt } from "~/lib/ai-question-answer.server";
 import { nushiMaterials } from "~/lib/nushi-materials.server";
 import { setTopicNushi, setVillageNushi } from "~/lib/nushi-settings.server";
 import { listNushiReports, reportNushi, resolveNushiReport } from "~/lib/nushi-reports.server";
@@ -46,6 +47,7 @@ it("publishes one sourced AI reply without adding a member, human reply, ranking
   const f = await nushiFixture();
   const [before] = await f.db.select().from(entries).where(eq(entries.id, f.topic));
   const answer = await published(f);
+  expect(answer.promptVersion).toBe(NUSHI_PROMPT_VERSION);
   await processNushiRequest(f.db, f.request.id);
   await requestNushi(f.db, f.topic);
   expect(await f.db.select().from(nushiAnswers)).toHaveLength(1);
@@ -283,6 +285,24 @@ it("merges citation notices within a UTC day and honors the cited member's opt-o
   }
   const rows = await f.db.select().from(notifications).where(eq(notifications.kind, "nushi_cited"));
   expect(rows).toHaveLength(1); expect(rows[0].mergedCount).toBe(2);
+});
+it("adds quotation context, reply counterarguments and concrete reading details only to Nushi", async () => {
+  const f = await nushiFixture();
+  const input = await nushiMaterials(f.db, f.request, { env: process.env, now: new Date(), clock: () => new Date() });
+  if (!input) throw new Error("Missing Nushi materials");
+  const nushi = nushiPrompt(input);
+  const post = questionPrompt(input.materials, "What does this post say?", input.language);
+  expect(nushi.system).toContain(`Prompt version: ${NUSHI_PROMPT_VERSION}`);
+  const rules = [
+    /cut a quotation.*conditions, reservations and limitations.*same post/,
+    /topic post.*replies.*conditions, objections or opposition.*own author/,
+    /dates, numbers, scope and subjects.*reading text.*language differs/,
+  ];
+  for (const rule of rules) {
+    expect(nushi.system).toMatch(rule);
+    expect(post.system).not.toMatch(rule);
+  }
+  expect(nushi.maxOutputTokens).toBe(post.maxOutputTokens);
 });
 it("shows the limited-range result for a fixed current-belief refusal", async () => {
   const f = await nushiFixture(), fake = resolveNushiCompleter();

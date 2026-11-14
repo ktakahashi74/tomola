@@ -1,4 +1,4 @@
-<!-- source: English translation of app/content/principles/ja.md, 2026-10-04; source-sha256: 485c244d081f64657bba0c7e362ead4956f6234a56b92627c73978d712fcc08f -->
+<!-- source: English translation of app/content/principles/ja.md, 2026-10-04; AI items updated from Japanese and English on 2026-11-14; source-sha256: 4fbe866f1bbf78a72ee67e8298b154d0612a1c5490bd52ad20fb2b9826671d94 -->
 <!-- Translation review: checked against the Japanese original. The heading and first two items of section 3 await review. -->
 # tomola's principles
 
@@ -43,10 +43,10 @@ This page first explains what you can do on tomola. Then it explains, in order, 
 
 - **You can use tomola together with your own AI.** Your own AI means the AI you usually use. That includes chat AIs, agent AIs that carry out tasks following your instructions, and the more autonomous AIs that will appear in the future. Your AI can read posts on tomola. It can also write a draft and send it to your drafts. A draft is not visible to others until you post it. Any AI works. tomola does not choose one for you.
 - **You can write it yourself, or write it with AI.** Whether to use AI, and what to put forward as your own thinking, are yours to decide.
-- **What people do, and what AI can do.** AI can read, search, compare translations with originals, and write drafts. Publishing, choosing a position, marking a post "Insightful", reporting a problem and making an objection are things people do.
+- **What people do, and what AI can do.** AI can read, search, compare translations with originals, and write drafts. Publishing under your name, choosing a position, marking a post "Insightful", reporting a problem and making an objection are things people do. When a member calls Nushi, described below, it publishes an answer clearly marked as AI.
 - **Only what you have checked appears under your name.** A draft written by AI becomes your post when you read it and post it. AI can read and write, but you are the one who takes responsibility.
-- **AI cannot speak for itself yet.** In the future, tomola is considering letting your AI answer questions addressed to you, speaking as "the AI of (your name)". When that happens, it will carry a mark that shows it comes from AI.
-- **We do not treat AI output as correct.** tomola uses AI too, for translation and search. Translations and search results made by AI are shown as coming from AI. tomola does not endorse them as correct. We also never have AI merge everyone's opinions into one.
+- **A village can have an AI called Nushi.** In a village with Nushi, writing @nushi in a post you publish asks it to search that village's public posts and answer in a reply with sources. It does not start conversations. It consults a limited range of posts, so not finding something does not mean nobody wrote it. Its answers do not establish someone's current views or the village's position. The person who called it and the village's owners have not checked or endorsed its answer. Village owners and topic authors can prevent it from answering in their space. Readers can hide its answers on their own screen. Errors can be reported. Nushi's answers cannot receive "Insightful" marks and are not counted as positions.
+- **We do not treat AI output as correct.** tomola also uses AI for translation, search and Nushi. Translations, search results and Nushi's answers are shown as coming from AI. tomola does not endorse them as correct. We also never have AI merge everyone's opinions into one.
 - **People decide three things.** What to ask. Which ideas to hold as your own. What tomola's rules should be. People are the ones who live with the results.
 - **You can have your AI choose what you read first.** Even then, you can always read the reasons of people in other languages, and of people who disagree with you, directly.
 

@@ -3,7 +3,7 @@ import { villagesEnabled } from "./villages-enabled.server";
 import type { LlmEnv } from "./llm/types";
 import { modelMatchesProvider, primaryEngineId, primaryModelOf } from "./llm/config.server";
 
-export const NUSHI_PROMPT_VERSION = "nushi-v1";
+export const NUSHI_PROMPT_VERSION = "nushi-v2";
 export const nushiEnabled = (env: LlmEnv = process.env) => env.VILLAGE_NUSHI === "1";
 const integer = (env: LlmEnv, key: string, fallback: number) => {
   const raw = env[key]?.trim() || String(fallback), value = Number(raw);

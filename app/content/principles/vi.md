@@ -1,4 +1,4 @@
-<!-- source: machine translation of app/content/principles/ja.md (2026-10-04), made on 2026-10-04; not yet checked by a native speaker; source-sha256: 485c244d081f64657bba0c7e362ead4956f6234a56b92627c73978d712fcc08f -->
+<!-- source: machine translation of app/content/principles/ja.md (2026-10-04), made on 2026-10-04; not yet checked by a native speaker; AI items updated from Japanese and English on 2026-11-14; source-sha256: 4fbe866f1bbf78a72ee67e8298b154d0612a1c5490bd52ad20fb2b9826671d94 -->
 # Các nguyên tắc của tomola
 
 Unverified machine translation
@@ -44,10 +44,10 @@ Trang này trước hết giải thích những gì bạn có thể làm trên t
 
 - **Bạn có thể dùng tomola cùng với AI của mình.** AI của bạn là AI mà bạn thường dùng. Đó có thể là AI trò chuyện, AI tác nhân (agent, tức là AI nhận chỉ dẫn rồi thực hiện công việc), và cả những AI tự chủ hơn sẽ xuất hiện sau này. AI của bạn có thể đọc các bài đăng trên tomola. AI cũng có thể viết bản nháp và gửi vào nơi lưu bản nháp của bạn. Bản nháp không hiện với người khác cho đến khi bạn đăng. AI nào cũng dùng được. tomola không chỉ định một AI cụ thể nào.
 - **Tự viết hay viết bằng AI đều được.** Có dùng AI hay không, và đưa ra điều gì như suy nghĩ của chính mình, là do bạn quyết định.
-- **Việc con người làm, việc AI có thể làm.** AI có thể đọc, tìm kiếm, so sánh bản dịch với bản gốc và viết bản nháp. Công bố, chọn lập trường, bấm “Có góc nhìn mới”, báo cáo vi phạm và nêu ý kiến phản đối là việc con người làm.
+- **Việc con người làm, việc AI có thể làm.** AI có thể đọc, tìm kiếm, so sánh bản dịch với bản gốc và viết bản nháp. Công bố dưới tên bạn, chọn lập trường, bấm “Có góc nhìn mới”, báo cáo vi phạm và nêu ý kiến phản đối là việc con người làm. Khi một thành viên gọi Nushi, được mô tả bên dưới, Nushi công bố câu trả lời có ghi rõ là của AI.
 - **Bài đăng mang tên bạn chỉ là những gì bạn đã kiểm tra.** Bản nháp do AI viết trở thành bài đăng của bạn khi bạn đã đọc và đăng nó. AI có thể đọc và viết, nhưng người chịu trách nhiệm là bạn.
-- **Hiện nay AI chưa thể tự mình phát biểu.** tomola đang cân nhắc để trong tương lai AI của bạn có thể tự xưng là “AI của (tên của bạn)” và trả lời những thắc mắc gửi đến bạn. Khi đó, phát biểu của AI sẽ được gắn dấu hiệu cho biết đó là phát biểu của AI.
-- **Không coi những gì AI đưa ra là đúng.** tomola cũng dùng AI để dịch và tìm kiếm. Bản dịch và kết quả tìm kiếm do AI đưa ra được hiển thị rõ là của AI. Đó không phải là điều tomola công nhận là đúng. Chúng tôi cũng không để AI gom ý kiến của mọi người thành một.
+- **Một làng có thể có AI tên là Nushi.** Trong một làng có Nushi, viết @nushi trong bài bạn đăng công khai là yêu cầu Nushi tìm trong các bài đăng công khai của làng đó và trả lời bằng bài trả lời kèm nguồn. Nushi không tự bắt đầu cuộc trò chuyện. Phạm vi bài đăng được tham khảo có giới hạn, nên không tìm thấy điều gì không có nghĩa là chưa ai viết điều đó. Câu trả lời của Nushi không xác định suy nghĩ hiện tại của một người hay quan điểm của làng. Người gọi Nushi và chủ làng chưa kiểm tra hay tán thành câu trả lời đó. Chủ làng và tác giả chủ đề có thể ngăn Nushi trả lời trong không gian của mình. Người đọc có thể ẩn câu trả lời trên màn hình của riêng mình. Có thể báo cáo lỗi. Câu trả lời của Nushi không thể nhận dấu “Có góc nhìn mới” và không được tính là lập trường.
+- **Không coi những gì AI đưa ra là đúng.** tomola cũng dùng AI để dịch, tìm kiếm và cho Nushi. Bản dịch, kết quả tìm kiếm và câu trả lời của Nushi được hiển thị rõ là của AI. Đó không phải là điều tomola công nhận là đúng. Chúng tôi cũng không để AI gom ý kiến của mọi người thành một.
 - **Ba điều sau đây do con người quyết định.** Hỏi điều gì. Lấy suy nghĩ nào làm ý kiến của mình. Quy tắc của tomola ra sao. Vì người đón nhận kết quả là con người.
 - **Bạn cũng có thể để AI của mình chọn xem nên đọc gì trước.** Ngay cả khi đó, bạn vẫn có thể đọc trực tiếp lý do của những người thuộc ngôn ngữ khác và những người có lập trường khác.
 
