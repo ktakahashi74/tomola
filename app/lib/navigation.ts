@@ -22,6 +22,7 @@ export function sideNavigationPath(pathname: string): boolean {
   const path = pathname.replace(/\/$/, "") || "/";
   if (["/", "/villages", "/following", "/saved", "/notifications"].includes(path)) return true;
   if (/^\/a\/[^/]+$/.test(path)) return isLang(path.slice(3));
+  if (/^\/u\/[^/]+$/.test(path)) return true;
   return /^\/v\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/chat)?$/i.test(path);
 }
 

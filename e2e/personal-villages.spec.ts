@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { captureScreenshot, clientHeaders, enMessages as m, formatMessage, openPlaces, openPostSettings, useMember, waitForClientRoute } from "./helpers";
+import { captureScreenshot, clientHeaders, closePlaces, enMessages as m, formatMessage, openPlaces, openPostSettings, useMember, waitForClientRoute } from "./helpers";
 
 test("a personal village has its own follow section and delivers only the posts placed there", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.240") });
@@ -21,7 +21,25 @@ test("a personal village has its own follow section and delivers only the posts 
     await expect(village.getByRole("button", { name: `${m.village_following} @pv_author`, exact: true })).toHaveAttribute("aria-pressed", "true");
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/u/pv_author"); await waitForClientRoute(page);
+      await page.goto("/"); await waitForClientRoute(page);
+      const places = width === 1280 ? page.locator("[data-site-navigation]") : await openPlaces(page);
+      await places.locator('a[href="/u/pv_author"]').click();
+      await expect(page).toHaveURL(/\/u\/pv_author$/); await waitForClientRoute(page);
+      const currentPlaces = width === 1280 ? page.locator("[data-site-navigation]") : await openPlaces(page);
+      await expect(currentPlaces).toBeVisible();
+      await expect(currentPlaces.locator('[aria-current="page"]')).toHaveAttribute("href", "/u/pv_author");
+      await expect(currentPlaces.locator('a[href="/u/pv_browser_reader"]')).not.toHaveAttribute("aria-current");
+      if (width === 390) {
+        await expect(page.locator("[data-site-navigation]")).not.toBeVisible();
+        await closePlaces(page);
+      } else {
+        await expect(page.locator("[data-navigation-drawer]:visible")).toHaveCount(0);
+        expect(await currentPlaces.evaluate(element => element.getBoundingClientRect().right <= document.querySelector("main")!.getBoundingClientRect().left)).toBe(true);
+      }
+      await expect(village.getByRole("link", { name: "Personal browser post", exact: true })).toBeVisible();
+      await expect(page.locator("#posts").getByRole("link", { name: "Personal elsewhere post", exact: true })).toBeVisible();
+      expect(await village.evaluate(element => Boolean(element.compareDocumentPosition(document.getElementById("posts")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await captureScreenshot(page, { path: `after-member-${width}.png`, fullPage: true }, "personal-villages");
       await page.goto("/?follow=1"); await waitForClientRoute(page);
       await expect(page.getByRole("link", { name: "Personal browser post", exact: true })).toBeVisible();
@@ -70,7 +88,19 @@ test("members find their own village first in the column, drawer and directory w
     await own.click();
     await expect(page).toHaveURL(new RegExp(`${ownPath}$`));
     await waitForClientRoute(page);
-    await expect((await openPlaces(page)).getByRole("link", { name: m.village_personal, exact: true })).toHaveAttribute("aria-current", "page");
+    const currentPlaces = width === 1280 ? page.locator("[data-site-navigation]") : await openPlaces(page);
+    await expect(currentPlaces).toBeVisible();
+    await expect(currentPlaces.locator('[aria-current="page"]')).toHaveAttribute("href", ownPath);
+    if (width === 390) {
+      await expect(page.locator("[data-site-navigation]")).not.toBeVisible();
+      await closePlaces(page);
+    } else {
+      await expect(page.locator("[data-navigation-drawer]:visible")).toHaveCount(0);
+      expect(await currentPlaces.evaluate(element => element.getBoundingClientRect().right <= document.querySelector("main")!.getBoundingClientRect().left)).toBe(true);
+    }
+    await expect(page.getByRole("heading", { level: 1, name: "@zown_nav_member", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await captureScreenshot(page, { path: `member-${width}.png`, fullPage: true }, "own-village-nav");
 
     await page.goto("/villages"); await waitForClientRoute(page);
     const directory = page.locator("main");

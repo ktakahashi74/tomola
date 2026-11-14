@@ -17,10 +17,10 @@ const joined = { slug: "side-unit", name: "Side unit village", chatAvailable: tr
 const data = { reader: false, userId: "side-unit", handle: "side_unit", hasPasskey: true, passkeyPrompt: false, isOperator: false, isModerator: false, apiDrafts: 0, unreadNotifications: 0, followedUnread: false, villages: [{ ...joined, unread: 102 }] };
 const render = (path: string, loaderData: unknown = data) => renderInRouter(() => createElement(MemberLayout, { loaderData } as never), path);
 
-it.each(["/", "/a/en", "/a/zh-Hant", "/villages", "/v/side-unit", "/v/side-unit/chat", "/following", "/notifications", "/following/"])("allows the browsing surface at %s", path => {
+it.each(["/", "/a/en", "/a/zh-Hant", "/villages", "/v/side-unit", "/v/side-unit/chat", "/u/side_unit", "/u/side_unit/", "/u/chat", "/following", "/notifications", "/following/"])("allows the browsing surface at %s", path => {
   expect(sideNavigationPath(path)).toBe(true);
 });
-it.each(["/t/1", "/t/new", "/t/1/edit", "/settings", "/settings/chat", "/search", "/drafts", "/u/side_unit", "/villages/new", "/villages/invite/key", "/v/side-unit/chat/changes", "/v/side-unit/settings", "/a/en/extra", "/a/unknown", "/admin"])("keeps other surfaces out of the browsing navigation at %s", path => {
+it.each(["/t/1", "/t/new", "/t/1/edit", "/settings", "/settings/chat", "/search", "/drafts", "/u", "/u/", "/u/side_unit/history", "/u/side_unit/history/", "/u/side_unit/settings", "/u/id/member_id", "/villages/new", "/villages/invite/key", "/v/side-unit/chat/changes", "/v/side-unit/settings", "/a/en/extra", "/a/unknown", "/admin"])("keeps other surfaces out of the browsing navigation at %s", path => {
   expect(sideNavigationPath(path)).toBe(false);
 });
 it("renders navigation from layout data before JavaScript: a village row shows a mark to the chat only for news (a dot) and a number only for mentions", async () => {
@@ -36,8 +36,19 @@ it("renders navigation from layout data before JavaScript: a village row shows a
   const following = await render("/following/");
   const side = following.match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(side).toMatch(/<a(?=[^>]*href="\/following")(?=[^>]*aria-current="page")[^>]*>/);
-  const personal = await render("/u/chat", { ...data, handle: "chat", villages: [{ slug: "@chat", name: "", kind: "personal", language: null }] });
-  expect(personal).toMatch(/<a(?=[^>]*href="\/u\/chat")(?=[^>]*aria-current="page")[^>]*>/);
+});
+it.each(["/u/side_unit", "/u/side_unit/", "/u/side_other"])("keeps the places column and drawer with the current personal village at %s", async path => {
+  const html = await render(path, { ...data,
+    villages: [{ slug: "@side_unit", name: "", kind: "personal", language: null }],
+    followedVillages: [{ slug: "@side_other", name: "@side_other", kind: "personal", language: null }],
+  });
+  expect(html).toContain('data-site-navigation="true"');
+  const places = [...html.matchAll(/<nav\b[^>]*>[\s\S]*?<\/nav>/g)].map(match => match[0]);
+  expect(places).toHaveLength(2);
+  for (const list of places) {
+    const current = [...list.matchAll(/<a(?=[^>]*aria-current="page")(?=[^>]*href="([^"]+)")[^>]*>/g)];
+    expect(current.map(match => match[1])).toEqual([path.replace(/\/$/, "")]);
+  }
 });
 it("shows only the village name when nothing is new, and omits the chat mark when chat is unavailable", async () => {
   const quiet = (await render("/", { ...data, villages: [{ ...joined, unread: 0 }] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
@@ -52,7 +63,7 @@ it("shows only the village name when nothing is new, and omits the chat mark whe
 });
 it("keeps the ordinary header without a sidebar for guests, closed villages and article routes", async () => {
   const { villages, ...closed } = data;
-  for (const [path, navigation] of [["/", { reader: true }], ["/", closed], ["/t/1", data], ["/t/new", data], ["/settings", data]] as const) {
+  for (const [path, navigation] of [["/", { reader: true }], ["/", closed], ["/u/side_unit", { reader: true }], ["/u/side_unit", closed], ["/u/side_unit/history", data], ["/t/1", data], ["/t/new", data], ["/settings", data]] as const) {
     const html = await render(path, navigation);
     expect(html).not.toContain("data-site-navigation");
     expect(html).not.toContain("site-navigation-header-links");
