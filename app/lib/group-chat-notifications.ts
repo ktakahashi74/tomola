@@ -1,4 +1,4 @@
-import { isChatNotification } from "./notifications";
+const isChatNotification = (kind: string) => kind === "chat_mention" || kind === "chat_reply";
 type Notice = { id: number; kind: string; read: boolean; actorHandle: string | null; chat?: { slug: string } };
 
 // Keep chronological runs and read states separate. The link opens the oldest addressed message in the run.

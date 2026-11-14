@@ -1,3 +1,4 @@
+import { CHAT_NUSHI_PROMPT_VERSION, chatNushiEnabled } from "./chat-nushi-config.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled } from "./nushi-config.server";
 import { AI_USE_DEFINITIONS, PUBLIC_MODEL_NAME, readAiUseConfigurations, type AiUsePurpose } from "./ai-use-registry.server";
 import { operatorConfig, type AiUseSettings } from "./operator-config.server";
@@ -53,12 +54,12 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
     unrecorded: m.ai_use_unrecorded({}, options),
     rows,
     // Describe the village AI only while it is offered.
-    nushi: nushiEnabled(env) ? { title: m.nushi_name({}, options), text: m.nushi_description({}, options), versions: m.nushi_versions({ version: NUSHI_PROMPT_VERSION }, options) } : null,
+    nushi: nushiEnabled(env) || chatNushiEnabled(env) ? { title: m.nushi_name({}, options), text: [nushiEnabled(env) ? m.nushi_description({}, options) : "", chatNushiEnabled(env) ? m.chat_nushi_description({}, options) : ""].filter(Boolean).join(" "), versions: m.nushi_versions({ version: [nushiEnabled(env) ? NUSHI_PROMPT_VERSION : "", chatNushiEnabled(env) ? CHAT_NUSHI_PROMPT_VERSION : ""].filter(Boolean).join(" / ") }, options) } : null,
     searchTitle: m.ai_use_search({}, options),
     searchText: m.ai_use_search_text({}, options),
     historyTitle: m.ai_use_history({}, options),
     noHistory: m.ai_use_no_history({}, options),
-    history: settings.history.map((change, index) => ({ change, index }))
+    history: settings.history.filter(change => change.purpose !== "chat-nushi" || chatNushiEnabled(env)).map((change, index) => ({ change, index }))
       .sort((a, b) => b.change.date.localeCompare(a.change.date) || b.index - a.index)
       .map(({ change }) => ({
         date: change.date,

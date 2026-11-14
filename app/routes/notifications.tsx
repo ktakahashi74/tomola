@@ -133,8 +133,8 @@ function OpenNotification({ id, target, group, children }: { id: number; target?
 type Item = Route.ComponentProps["loaderData"]["items"][number];
 
 function NotificationText({ n, homeArea, handles, count }: { n: Item & { chatHasReply?: boolean }; homeArea: string; handles: string[]; count: number }) {
-  if (n.kind === "nushi_result") return <>{m.nushi_notification_result()}</>;
-  if (n.kind === "nushi_cited") return <>{m.nushi_notification_cited()}</>;
+  if ((n.kind === "nushi_result" || n.kind === "chat_nushi_result")) return <>{m.nushi_notification_result()}</>;
+  if ((n.kind === "nushi_cited" || n.kind === "chat_nushi_cited")) return <>{m.nushi_notification_cited()}</>;
   if (n.kind === "source_language_mismatch") return <>{n.unavailable ? m.notification_content_unavailable() : <>{m.posted_language_mismatch({ lang: localizedLanguageLabel(n.entryLang ?? "other", getLocale(), n.entryLangCode) })} {m.posted_fix_lang()}</>}</>;
   if (n.kind === "entry_translation_unavailable") return <>{n.unavailable ? m.notification_content_unavailable() : m.posted_untranslatable()}</>;
   if (n.kind === "translation_report_result") return <>{n.unavailable || !n.translationResult ? m.notification_content_unavailable() : translationReportResultText(n.translationResult, n.topicTitle, getLocale())}</>;

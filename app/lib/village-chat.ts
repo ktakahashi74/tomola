@@ -18,6 +18,8 @@ export type ActiveChatMessage = {
   createdSeq: number; changedSeq: number; createdAt: string;
   edited: boolean; deleted: false; hidden: boolean;
   editedAt?: string | null;
+  nushi?: { caller: string | null; edited: boolean; departed?: string[] };
+  nushiCall?: { state: string; failure: string | null };
   topics?: ChatTopicCard[];
   reply?: ChatReply | null;
   translation: ChatTranslation | null;

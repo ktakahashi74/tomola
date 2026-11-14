@@ -73,6 +73,7 @@ export const MEMBER_RATE_LIMITS = {
   "chat-search": { limit: 60, windowSeconds: 3600 },
   "list-seen": { limit: 120, windowSeconds: 60 },
   "chat-changes": { limit: 120, windowSeconds: 60 },
+  "chat-nushi-preview": { limit: 120, windowSeconds: 60 },
   "chat-events": { limit: 120, windowSeconds: 3600 },
   preview: { limit: 300, windowSeconds: 3600 },
   search: { limit: 60, windowSeconds: 3600 },

@@ -139,7 +139,7 @@ it("clears reply notices on village departure and never recreates them after rej
   expect(await w.db.select().from(notifications)).toEqual([]);
 });
 
-it("never reads reply targets beyond the audited moderation context", async () => {
+it("reads only the direct reported reply target beyond the bounded moderation context", async () => {
   const w = await world();
   for (let i = 0; i <= CHAT_CASE_CONTEXT_COUNT; i++) await mutateChat(w.db, "qry_writer", w.slug, "send", { body: `Intervening ${i}` });
   const distant = await w.send();
@@ -147,11 +147,11 @@ it("never reads reply targets beyond the audited moderation context", async () =
   const report = await createChatReport(w.db, "qry_reader", { slug: w.slug, messageId: distant.id, reason: "spam" });
   const actor = { id: "qry_mod", scope: { operator: false, langs: ["en" as const] } };
   const opened = await readChatEvidence(w.db, actor, { kind: "report", id: report.id }, { intent: "open" });
-  expect(opened.snapshot!.reply).toEqual({ outside: true });
+  expect(opened.snapshot!.reply).toMatchObject({ id: w.parent.id, text: "Original reply target" });
   const evidence = await readChatEvidence(w.db, actor, { kind: "report", id: report.id }, { intent: "context" });
-  expect(evidence.context.find(m => m.id === distant.id)!.reply).toEqual({ outside: true });
+  expect(evidence.context.find(m => m.id === distant.id)!.reply).toMatchObject({ id: w.parent.id, text: "Original reply target" });
   expect(evidence.context.find(m => m.id === near.id)!.reply).toMatchObject({ id: distant.id, text: "A reply" });
-  expect(JSON.stringify(evidence)).not.toContain("Original reply target");
+  expect(JSON.stringify(evidence)).toContain("Original reply target");
   expect(evidence.context.length).toBeLessThanOrEqual(CHAT_CASE_CONTEXT_COUNT * 2 + 1);
   expect((await chatChanges(w.db, "qry_writer", w.slug, { since: 0 })).messages.find(m => m.id === near.id)!.reply).toMatchObject({ id: distant.id });
   expect(await w.db.select().from(jobs).where(and(eq(jobs.kind, "translate_chat"), eq(jobs.status, "queued")))).toEqual([]);

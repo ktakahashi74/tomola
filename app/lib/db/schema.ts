@@ -244,9 +244,11 @@ export const chatSequences = pgTable("chat_sequences", {
 export const chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey().default(sql`replace(gen_random_uuid()::text, '-', '')`),
   villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
-  authorId: text("author_id").notNull().references(() => user.id, { onDelete: "no action" }),
+  authorId: text("author_id").references(() => user.id, { onDelete: "no action" }),
+  authorKind: text("author_kind").notNull().default("human"),
   lang: text("lang").notNull(),
   body: text("body").notNull(),
+  nushiShape: jsonb("nushi_shape").$type<{ status: "answered" | "not_confirmed"; ranges: Array<[number, number]> }>(),
   replyToId: text("reply_to_id"),
   createdSeq: bigint("created_seq", { mode: "number" }).notNull(),
   changedSeq: bigint("changed_seq", { mode: "number" }).notNull(),
@@ -255,6 +257,7 @@ export const chatMessages = pgTable("chat_messages", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   hiddenAt: timestamp("hidden_at", { withTimezone: true }),
 }, t => [
+  check("chat_messages_author_check", sql`(${t.authorKind} = 'human' AND ${t.authorId} IS NOT NULL) OR (${t.authorKind} = 'nushi' AND ${t.authorId} IS NULL)`),
   check("chat_messages_id_check", sql`${t.id} ~ '^[a-f0-9]{32}$'`),
   check("chat_messages_lang_check", oneOf(t.lang, LANGS)),
   check("chat_messages_deleted_body_check", sql`${t.deletedAt} IS NULL OR ${t.body} = ''`),
@@ -1534,6 +1537,7 @@ export const notifications = pgTable(
     chatMessageId: text("chat_message_id").references(() => chatMessages.id, { onDelete: "cascade" }),
   },
   (t) => [
+    uniqueIndex("notifications_chat_nushi_citation_day_unique").on(t.userId, t.nushiDay).where(sql`${t.kind} = 'chat_nushi_cited'`),
     uniqueIndex("notifications_nushi_citation_day_unique").on(t.userId, t.nushiDay).where(sql`${t.kind} = 'nushi_cited'`),
     uniqueIndex("notifications_nushi_result_unique").on(t.nushiRequestId).where(sql`${t.kind} = 'nushi_result'`),
     uniqueIndex("notifications_translation_report_unique").on(t.translationReportId),
@@ -1844,3 +1848,33 @@ export const nushiReports = pgTable("nushi_reports", {
   resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex("nushi_reports_member_unique").on(t.answerId, t.reporterId, t.kind), index("nushi_reports_status_idx").on(t.status, t.createdAt), index("nushi_reports_reporter_idx").on(t.reporterId), check("nushi_reports_kind_check", oneOf(t.kind, ["moderation", "error"])), check("nushi_reports_status_check", oneOf(t.status, ["open", "resolved", "dismissed"])), check("nushi_reports_consent_check", sql`(${t.kind} = 'error') = (${t.evidence} is not null)`)]);
+
+// Private requests retain identifiers and revisions, never question or answer text.
+export const chatNushiRequests = pgTable("chat_nushi_requests", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  messageId: text("message_id").notNull().references(() => chatMessages.id, { onDelete: "cascade" }).unique(),
+  villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
+  callerId: text("caller_id").references(() => user.id, { onDelete: "set null" }),
+  state: text("state").notNull().default("pending"),
+  failure: text("failure"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  token: text("token"),
+  attempts: integer("attempts").notNull().default(0),
+  answerMessageId: text("answer_message_id").references(() => chatMessages.id, { onDelete: "set null" }).unique(),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+}, t => [index("chat_nushi_requests_active_idx").on(t.state, t.expiresAt), index("chat_nushi_requests_village_idx").on(t.villageId),
+  check("chat_nushi_requests_state_check", oneOf(t.state, ["pending", "processing", "answered", "failed", "cancelled"]))]);
+export const chatNushiSources = pgTable("chat_nushi_sources", {
+  requestId: text("request_id").notNull().references(() => chatNushiRequests.id, { onDelete: "cascade" }),
+  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id),
+  revision: integer("revision").notNull(),
+  sourceHash: text("source_hash").notNull(),
+  authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+}, t => [primaryKey({ columns: [t.requestId, t.entryId] }), index("chat_nushi_sources_entry_idx").on(t.entryId)]);
+export const chatNushiReservations = pgTable("chat_nushi_reservations", {
+  requestId: text("request_id").notNull().references(() => chatNushiRequests.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  day: text("day").notNull(),
+}, t => [primaryKey({ columns: [t.requestId, t.key] }), index("chat_nushi_reservations_day_idx").on(t.day, t.key)]);

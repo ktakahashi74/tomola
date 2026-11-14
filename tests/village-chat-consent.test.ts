@@ -99,7 +99,7 @@ it.each(["leave", "remove"])("clears consent atomically on %s even while chat is
   else expect(await removeVillageMember(w.db, "cc_owner", w.slug, "cc_member", "Membership reason")).toMatchObject({ ok: true });
   expect(await w.db.select().from(chatConsents).where(and(eq(chatConsents.userId, "cc_member"), eq(chatConsents.villageId, w.village.id)))).toEqual([]);
   expect(await w.db.select().from(chatConsents)).toHaveLength(2);
-  expect((await w.db.select().from(chatMessages).where(eq(chatMessages.villageId, w.village.id))).map(row => row.body)).toEqual(w.messages.map(row => row.body));
+  expect((await w.db.select().from(chatMessages).where(eq(chatMessages.villageId, w.village.id)).orderBy(chatMessages.createdSeq)).map(row => row.body)).toEqual(w.messages.map(row => row.body));
   await w.db.insert(villageMembers).values({ villageId: w.village.id, userId: "cc_member" });
   vi.stubEnv("VILLAGE_CHAT", "1");
   expect(await chatPage(w.db, "cc_member", w.slug)).toHaveProperty("consentRequired", true);

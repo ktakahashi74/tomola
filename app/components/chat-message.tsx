@@ -1,6 +1,6 @@
 import { ChatTranslationReport } from "~/components/chat-translation-report";
 import { ChatReplyLine } from "~/components/chat-reply";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Form, Link } from "react-router";
 import { CHAT_BODY_MAX, chatParts, type ActiveChatMessage } from "~/lib/village-chat";
 import { MentionTextarea } from "~/components/mention-autocomplete";
@@ -35,23 +35,26 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
   // A message that is only the address of a post shows the post's card alone.
   const onlyPostCard = !!message.topics?.length && parts.every(part => part.type === "link" || part.type === "text" && !part.text.trim());
   const cancel = (element: HTMLElement) => { const details = element.closest("details"); if (details) { details.querySelector("form")?.reset(); details.open = false; } };
-  return <article id={`chat-${message.id}`} data-chat-message={message.id} data-chat-seq={message.createdSeq} lang={translated ? message.translation!.lang : message.lang} tabIndex={tabIndex} onFocus={() => onActivate?.(message.id)} aria-labelledby={`chat-byline-${message.id}`} data-mentions-me={mentionsMe || undefined} className={`group/chat relative scroll-mt-28 py-1 outline-offset-2 ${grouped ? "" : "grid grid-cols-1"} ${mentionsMe ? "border-s-2 border-unread bg-unread/10 ps-2" : ""}`} onClick={() => setActionsShown(true)} onBlur={event => {
+  return <article id={`chat-${message.id}`} data-chat-message={message.id} data-chat-seq={message.createdSeq} data-chat-nushi={message.nushi ? "1" : undefined} aria-live={message.nushi ? "polite" : undefined} lang={translated ? message.translation!.lang : message.lang} tabIndex={tabIndex} onFocus={() => onActivate?.(message.id)} aria-labelledby={`chat-byline-${message.id}`} data-mentions-me={mentionsMe || undefined} className={`group/chat relative scroll-mt-28 py-1 outline-offset-2 ${grouped ? "" : "grid grid-cols-1"} ${mentionsMe ? "border-s-2 border-unread bg-unread/10 ps-2" : ""}`} onClick={() => setActionsShown(true)} onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) setActionsShown(false);
   }}>
     <p id={`chat-byline-${message.id}`} className={grouped ? "sr-only" : "flex flex-wrap items-baseline gap-2 ui-meta text-muted-foreground"}>
       {!grouped && message.avatarUrl && <img src={message.avatarUrl} alt="" className="member-avatar self-center rounded" />}
-      <span className="min-w-0 truncate" title={`@${message.author}`}>{message.authorName && <><bdi>{message.authorName}</bdi>{" "}</>}@{message.author}</span><time className="shrink-0 whitespace-nowrap" dateTime={message.createdAt} title={clock.full}>{clock.time}</time>
+      <span className="min-w-0 truncate" title={`@${message.author}`}>{message.nushi ? <>{m.nushi_name()} · {m.chat_nushi_label({ handle: message.nushi.caller ?? "?" })}</> : <>{message.authorName && <><bdi>{message.authorName}</bdi>{" "}</>}@{message.author}</>}</span><time className="shrink-0 whitespace-nowrap" dateTime={message.createdAt} title={clock.full}>{clock.time}</time>
       {message.edited && <span>{m.village_chat_edited()}</span>}
       {!grouped && translated && <TranslationMark tabIndex={interactionTabIndex} />}
     </p>
-    {message.hidden ? <p>{m.village_chat_hidden()}</p> : <>
+    {message.hidden ? <p>{message.nushi ? m.nushi_hidden() : m.village_chat_hidden()}</p> : <>
       <ChatReplyLine reply={message.reply} slug={slug} createdAt={message.createdAt} tabIndex={interactionTabIndex} />
       {grouped && translated && <span className="float-end"><TranslationMark tabIndex={interactionTabIndex} /></span>}
-      {!onlyPostCard && <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>}
+      {message.nushi?.departed?.map(handle => <p key={handle} className="ui-help">@{handle} · {m.nushi_left()}</p>)}
+      {message.nushi?.edited && <p className="ui-help">{m.chat_nushi_call_edited()}</p>}
+      {!onlyPostCard && (message.nushi ? <ChatNushiBody parts={parts} /> : <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>)}
       {message.translation?.state === "pending" && (waiting || wait.kind !== "normal") && <p className="mt-1 ui-help text-muted-foreground">{wait.kind === "normal" ? m.village_chat_translation_pending() : waitText(wait, false)}</p>}
       {message.translation?.state === "failed" && !NEAR_COPY_FLAGS.includes(message.translation.errorCode ?? "") && <p className="mt-1 ui-help text-muted-foreground">{m.village_chat_translation_failed()}</p>}
       {message.translation?.state === "paused" && <p className="mt-1 ui-help text-muted-foreground">{waitText({ kind: "stopped" }, false)}</p>}
     </>}
+    {message.nushiCall && message.nushiCall.state !== "answered" && <p role="status" className="ui-help text-muted-foreground">{["pending", "processing"].includes(message.nushiCall.state) ? m.nushi_pending() : <>{m.nushi_failed()} {message.nushiCall.failure === "limit" ? m.nushi_failure_limit() : message.nushiCall.failure === "budget" ? m.nushi_failure_budget() : message.nushiCall.failure === "expired" ? m.nushi_failure_expired() : ""}</>}</p>}
     {!message.hidden && <ChatTopicCards topics={message.topics} tabIndex={interactionTabIndex} />}
     {/* Anchor overlays below the visible byline and reply link, without moving later messages. */}
     <div data-chat-actions data-shown={actionsShown} className={`pointer-events-none absolute end-0 z-10 flex max-w-full flex-nowrap items-start gap-x-3 gap-y-1 rounded bg-background ui-meta opacity-0 ${grouped ? "-top-4" : message.reply && !message.hidden ? "top-0 row-start-3" : "top-0 row-start-2"}
@@ -76,11 +79,24 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
         </Form></details>
       </>}
     </div>
-    {!message.own && <span data-chat-read-seq={message.createdSeq} className="block h-px" aria-hidden="true" />}
+    {!message.own && <span data-chat-read-seq={message.nushi ? undefined : message.createdSeq} className="block h-px" aria-hidden="true" />}
   </article>;
 });
 
 // The small mark of a message shown by its machine translation. "Unverified machine translation" stays as its name (read out, and on hover); the page says it once in words.
 function TranslationMark({ tabIndex }: { tabIndex?: number }) {
   return <a href="/ai-use" tabIndex={tabIndex} title={m.village_chat_translation_machine()} className="shrink-0 rounded border px-1 text-[0.7rem] leading-4"><span aria-hidden="true">{m.village_chat_translation_badge()}</span><span className="sr-only">{m.village_chat_translation_machine()}</span></a>;
+}
+
+function ChatNushiBody({ parts }: { parts: ActiveChatMessage["parts"] }) {
+  const ref = useRef<HTMLParagraphElement>(null), [long, setLong] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => { if (element.scrollHeight > parseFloat(getComputedStyle(element).lineHeight) * 8 + 1) setLong(true); };
+    const observer = new ResizeObserver(measure); observer.observe(element); measure();
+    return () => observer.disconnect();
+  }, [parts]);
+  const body = <p ref={ref} dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{part.text}</a>)}</p>;
+  return long ? <details className="space-y-2"><summary className="cursor-pointer underline">{m.chat_nushi_read()}</summary>{body}</details> : body;
 }

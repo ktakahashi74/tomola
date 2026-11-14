@@ -12,14 +12,14 @@ test("current chat consent protects version-one readers and must be renewed afte
   await expect(details).not.toHaveAttribute("open");
   await expect(notice.getByRole("heading", { name: m.village_chat_changes_title, exact: true })).toBeVisible();
   await expect(notice.locator("#chat-consent-changes + ul").getByRole("listitem")).toHaveText([
-    m.village_chat_changes_v2_readers, m.village_chat_changes_v2_review, m.village_chat_changes_v2_spam, m.village_chat_changes_v3_provider,
+    m.village_chat_changes_v2_readers, m.village_chat_changes_v2_review, m.village_chat_changes_v2_spam, m.village_chat_changes_v3_provider, m.chat_consent_v4_replies, m.chat_consent_v4_nushi,
   ]);
   for (const key of ["village_chat_summary_readers", "village_chat_summary_translation", "village_chat_summary_reports"] as const) await expect(notice.getByText(m[key], { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: m.village_chat_consent_accept, exact: true })).toHaveCount(1);
   await expect(details.getByRole("button")).toHaveCount(0);
   await details.locator("summary").click();
   await expect(details).toHaveAttribute("open", "");
-  await expect(details.getByRole("listitem")).toHaveCount(privacyAvailable ? 10 : 9);
+  await expect(details.getByRole("listitem")).toHaveCount(privacyAvailable ? 12 : 11);
   await expect(notice.getByText(m.village_chat_consent_readers, { exact: true })).toBeVisible();
   await expect(notice.getByText(formatMessage(m.village_chat_consent_translation, { count: 2 }), { exact: true })).toBeVisible();
   await expect(notice.getByText(formatMessage(m.village_chat_consent_review, { count: 40 }), { exact: true })).toBeVisible();
@@ -30,7 +30,7 @@ test("current chat consent protects version-one readers and must be renewed afte
   const provider = details.getByRole("listitem").filter({ hasText: providerText });
   await expect(provider).toHaveText(providerText);
   await expect(provider.getByRole("link", { name: m.village_chat_consent_privacy_link, exact: true })).toHaveCount(privacyAvailable ? 1 : 0);
-  await expect(notice.getByRole("link", { name: m.village_chat_consent_privacy_link, exact: true })).toHaveCount(privacyAvailable ? 2 : 0);
+  await expect(notice.getByRole("link", { name: m.village_chat_consent_privacy_link, exact: true })).toHaveCount(privacyAvailable ? 3 : 0);
   await expect(page.locator('input[name="version"]')).toHaveValue(String(CHAT_CONSENT_VERSION));
   await expect(page.getByRole("link", { name: m.village_chat_own_title, exact: true })).toHaveAttribute("href", "/settings/chat");
   await expect(page.getByRole("log")).toHaveCount(0);
@@ -87,7 +87,7 @@ test("current chat consent protects version-one readers and must be renewed afte
   } finally { await context.close(); }
 });
 
-test("version-two members see only the provider change and can use chat after renewing consent", async ({ page }) => {
+test("version-two members see provider and reply-context changes and can use chat after renewing consent", async ({ page }) => {
   await useMember(page, "ccn_v2@example.com");
   await page.setViewportSize({ width: 390, height: 900 });
   for (const lang of ["ja", "en"]) {
@@ -96,7 +96,7 @@ test("version-two members see only the provider change and can use chat after re
     await expect(page.locator("html")).toHaveAttribute("lang", lang);
     const messages = await uiMessages(page);
     const notice = page.getByRole("region", { name: messages.village_chat_consent_title });
-    await expect(notice.locator("#chat-consent-changes + ul").getByRole("listitem")).toHaveText([messages.village_chat_changes_v3_provider]);
+    await expect(notice.locator("#chat-consent-changes + ul").getByRole("listitem")).toHaveText([messages.village_chat_changes_v3_provider, messages.chat_consent_v4_replies, messages.chat_consent_v4_nushi]);
     await expect(page.getByRole("log")).toHaveCount(0);
     await notice.locator("summary").click();
     await expect(notice.getByText(formatMessage(messages.village_chat_consent_provider, { privacy: messages.village_chat_consent_privacy_link }), { exact: true })).toBeVisible();

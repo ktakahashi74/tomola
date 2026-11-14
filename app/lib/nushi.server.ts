@@ -1,9 +1,10 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { enabledTargetLangs } from "./enabled-langs.server";
 import { notificationEmailDedupeKey, enqueueImmediateEmails } from "./notifications.server";
 import { randomUUID } from "node:crypto";
 import { and, asc, count, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
-import { entries, jobs, nushiAnswers, nushiQuotaLock, nushiRequests, nushiReservations, nushiSources, nushiTranslations, notifications, profiles, villages } from "./db/schema";
+import { chatNushiRequests, chatNushiReservations, entries, jobs, nushiAnswers, nushiQuotaLock, nushiRequests, nushiReservations, nushiSources, nushiTranslations, notifications, profiles, villages } from "./db/schema";
 import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
 import { nushiCaller, nushiMaterials, nushiPlace, nushiPlaces, nushiSourceLabels, snapshotsCurrent, nushiMaterialIndex, reconstructNushiMaterials, type NushiMaterials } from "./nushi-materials.server";
@@ -58,16 +59,17 @@ async function finish(db: Db, id: string, failure: string, now: Date, token?: st
   });
 }
 
-async function quotaLock(db: Db) {
+export async function quotaLock(db: Db) {
   await db.insert(nushiQuotaLock).values({ id: 1 }).onConflictDoNothing();
   await db.select().from(nushiQuotaLock).where(eq(nushiQuotaLock.id, 1)).for("update");
 }
-async function reserveDaily(db: Db, requestId: string, limits: Array<[string, number]>, now: Date) {
+async function reserveDaily(db: Db, requestId: string, limits: Array<[string, number]>, now: Date, env: LlmEnv = process.env) {
   const day = dayOf(now);
   for (const [key, cap] of limits) {
     const [own] = await db.select().from(nushiReservations).where(and(eq(nushiReservations.requestId, requestId), eq(nushiReservations.key, key)));
     const [used] = await db.select({ n: count() }).from(nushiReservations).where(and(eq(nushiReservations.day, day), eq(nushiReservations.key, key)));
-    if (used.n + (own?.day === day ? 0 : 1) > cap) return false;
+    const [chatUsed] = chatNushiEnabled(env) ? await db.select({ n: count() }).from(chatNushiReservations).where(and(eq(chatNushiReservations.day, day), eq(chatNushiReservations.key, key))) : [{ n: 0 }];
+    if (used.n + chatUsed.n + (own?.day === day ? 0 : 1) > cap) return false;
   }
   for (const [key] of limits) await db.insert(nushiReservations).values({ requestId, key, day }).onConflictDoUpdate({ target: [nushiReservations.requestId, nushiReservations.key], set: { day } });
   return true;
@@ -84,8 +86,9 @@ async function claim(db: Db, id: string, now: Date, env: LlmEnv) {
     if (request.attempts >= 3) { await finish(tx, id, "unavailable", now); return null; }
     const limits = nushiLimits(env);
     const [running] = await tx.select({ n: count() }).from(nushiRequests).where(and(eq(nushiRequests.state, "processing"), gt(nushiRequests.leaseUntil, now)));
-    if (running.n >= limits.concurrent) throw new DeferJob(new Date(now.getTime() + 5000), "Nushi is busy");
-    if (!await reserveDaily(tx, id, [[`member:${request.callerId}`, limits.member], [`topic:${request.threadId}`, limits.topic], [`village:${request.villageId}`, limits.village]], now)) {
+    const [chatRunning] = chatNushiEnabled(env) ? await tx.select({ n: count() }).from(chatNushiRequests).where(and(eq(chatNushiRequests.state, "processing"), gt(chatNushiRequests.leaseUntil, now))) : [{ n: 0 }];
+    if (running.n + chatRunning.n >= limits.concurrent) throw new DeferJob(new Date(now.getTime() + 5000), "Nushi is busy");
+    if (!await reserveDaily(tx, id, [[`member:${request.callerId}`, limits.member], [`topic:${request.threadId}`, limits.topic], [`village:${request.villageId}`, limits.village]], now, env)) {
       await finish(tx, id, "limit", now); return null;
     }
     const token = randomUUID();
@@ -94,10 +97,10 @@ async function claim(db: Db, id: string, now: Date, env: LlmEnv) {
   });
 }
 
-export function nushiPrompt(input: NushiMaterials) {
+export function nushiPrompt(input: NushiMaterials, destination: "public-reply" | "chat" = "public-reply") {
   const prompt = questionPrompt(input.materials, "", input.language);
   return { ...prompt, system: prompt.system.replace(/^.*\n/, `Guide readers to the supplied public posts. Answer in ${input.answerLanguage === "other" ? input.answerLangCode ?? "the calling post’s original language" : input.answerLanguage}.\n`) + `
-You are Nushi, a public source guide for posts in ONE village. This answer will be a public AI reply; the server alone fixes the destination, materials and publication. Never claim to represent the residents, owner, operator, a consensus or a majority. Do not evaluate people or reconstruct their overall beliefs. Do not give advice beyond the supplied posts, impersonate anyone, use their voice or infer intentions. Summarize posts briefly, point to exact passages, preserve qualifications and describe differences between supplied posts when they exist. Do not invent disagreement. Search results are partial: status not_confirmed means only not found in this consulted range, never absent from the village.
+You are Nushi, a public source guide for posts in ONE village. This answer will be a ${destination === "chat" ? "private chat" : "public"} AI reply; the server alone fixes the destination, materials and publication. Never claim to represent the residents, owner, operator, a consensus or a majority. Do not evaluate people or reconstruct their overall beliefs. Do not give advice beyond the supplied posts, impersonate anyone, use their voice or infer intentions. Summarize posts briefly, point to exact passages, preserve qualifications and describe differences between supplied posts when they exist. Do not invent disagreement. Search results are partial: status not_confirmed means only not found in this consulted range, never absent from the village.
 Do not cut a quotation at the one sentence that matches the question: include the conditions, reservations and limitations attached to that claim in the same post, since dropping them can misrepresent the author's position.
 Even when the question points to a topic post, also present any supplied replies in that topic that add conditions, objections or opposition on the issue, attributing each reply to its own author.
 State the key details (dates, numbers, scope and subjects) in the reading text itself rather than leaving them only in quotations, especially when the quotation's language differs from the question's language.
@@ -146,7 +149,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
       const authors = [...new Set(input.snapshots.filter(source => cited.has(source.id)).map(source => source.authorId))].filter(author => author !== current.callerId);
       const limits = nushiLimits(env);
       const quotas: Array<[string, number]> = [[`member:${current.callerId}`, limits.member], [`topic:${current.threadId}`, limits.topic], [`village:${current.villageId}`, limits.village], ...authors.map(author => [`author:${author}`, limits.author] as [string, number])];
-      if (!await reserveDaily(tx, id, quotas, clock())) { await finish(tx, id, "limit", clock(), request.token!); return; }
+      if (!await reserveDaily(tx, id, quotas, clock(), env)) { await finish(tx, id, "limit", clock(), request.token!); return; }
       const [published] = await tx.insert(nushiAnswers).values({ requestId: id, answer, scope: { posts: new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, ...input.dates, truncated: input.materials.scope.truncated, materialIndex: nushiMaterialIndex(input.materials.sources), materialLanguage: input.language, answerLangCode: input.answerLangCode },
         lang: input.answerLanguage, engine: completer.engine, model: completer.model, promptVersion: NUSHI_PROMPT_VERSION, createdAt: clock() }).onConflictDoNothing().returning();
       if (!published) return;
@@ -157,6 +160,8 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
       if (authors.length) {
         const recipients = await tx.select({ id: profiles.userId }).from(profiles).where(and(inArray(profiles.userId, authors), eq(profiles.nushiCitationNotifications, true)));
         for (const recipient of recipients) {
+          const [chatNotice] = chatNushiEnabled(env) ? await tx.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.userId, recipient.id), eq(notifications.kind, "chat_nushi_cited"), eq(notifications.nushiDay, dayOf(clock())))) : [];
+          if (chatNotice) continue;
           const rows = await tx.insert(notifications).values({ userId: recipient.id, kind: "nushi_cited", nushiRequestId: id, nushiDay: dayOf(clock()), threadId: current.threadId, createdAt: clock() }).onConflictDoUpdate({
           target: [notifications.userId, notifications.nushiDay], targetWhere: sql`${notifications.kind} = 'nushi_cited'`,
           set: { mergedCount: sql`${notifications.mergedCount} + 1`, nushiRequestId: id, threadId: current.threadId },

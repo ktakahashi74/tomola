@@ -17,6 +17,15 @@ import { villageChatEnabled } from "../app/lib/village-chat-enabled.server";
 
 export async function seedVillages(db: Db, dir: string) {
   if (!villagesEnabled()) return;
+  const chatNushiMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
+  const chatNushiId = (handle: string) => chatNushiMembers.find(member => member.handle === handle)!.id;
+  const [chatNushiVillage] = await db.insert(villages).values({ slug: "chat-nushi-browser", kind: "open", name: "Chat AI browser village" }).returning();
+  await db.insert(villageMembers).values(["zcn_flow_owner", "zcn_flow_caller", "zcn_flow_reader"].map(handle => ({ villageId: chatNushiVillage.id, userId: chatNushiId(handle), role: handle.endsWith("owner") ? "owner" : "member" })));
+  const chatNushiSource = await createTopic(db, chatNushiId("zcn_flow_owner"), { title: "Orchard evidence", body: "The orchard needs public review. Some growers disagree about the planting date.", lang: "en", village: chatNushiVillage.slug });
+  if (!chatNushiSource.ok) throw new Error(chatNushiSource.error);
+  await db.insert(chatMessages).values(Array.from({ length: 35 }, (_, index) => ({ villageId: chatNushiVillage.id, authorId: chatNushiId("zcn_flow_owner"), lang: "en", body: `Chat AI history ${index + 1}\nA quiet reading fixture.\nAnother line for a stable reading position.`, createdSeq: index + 1, changedSeq: index + 1 })));
+  await db.insert(chatSequences).values({ villageId: chatNushiVillage.id, seq: 35 });
+
   const joinMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
   const joinId = (handle: string) => joinMembers.find(member => member.handle === handle)!.id;
   for (const [slug, kind, owner] of [["join-state-open", "open", "zjoin_owner"], ["join-state-invite", "invite_public", "zjoin_owner"], ["join-state-ended", "invite_public", "zjoin_ended"], ["join-state-native", "open", "zjoin_native"]] as const) {
@@ -225,7 +234,7 @@ export async function seedVillages(db: Db, dir: string) {
   if (villageChatEnabled()) {
     const existing = await db.select({ slug: villages.slug, userId: villageMembers.userId }).from(villageMembers)
       .innerJoin(villages, eq(villages.id, villageMembers.villageId));
-    for (const row of existing) await acceptChatConsent(db, row.userId, row.slug!);
+    for (const row of existing) if (row.slug !== "chat-nushi-browser") await acceptChatConsent(db, row.userId, row.slug!);
     // Sent through the chat itself, so that the mention is resolved and told.
     const navAuthor = byHandle.get("uxnav_author")!;
     const navIds: string[] = [];

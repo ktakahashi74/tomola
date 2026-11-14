@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "~/lib/chat-nushi-config.server";
 import { nushiPreferences } from "~/lib/nushi-settings.server";
 import { nushiEnabled } from "~/lib/nushi-config.server";
 import { personalVillage } from "~/lib/personal-villages.server";
@@ -81,7 +82,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const [avatar] = await db.select({ publicId: profiles.publicId, avatarMediaId: profiles.avatarMediaId }).from(profiles).where(eq(profiles.userId, user.id));
   return {
     ...(villageChatEnabled() ? { chatOwn: true } : {}),
-    nushi: nushiEnabled() ? { ...await nushiPreferences(db, user.id, request), personal: await personalVillage(db, user.id).then(village => village ? { id: village.id, enabled: village.nushiEnabled === true } : null) } : null,
+    nushi: nushiEnabled() || chatNushiEnabled() ? { ...await nushiPreferences(db, user.id, request), personal: await personalVillage(db, user.id).then(village => village ? { id: village.id, enabled: village.nushiEnabled === true } : null) } : null,
     avatarUrl: memberAvatarUrl(avatar)!,
     avatarUploaded: !!avatar?.avatarMediaId,
     returnTo: settingsReturnFromRequest(request),

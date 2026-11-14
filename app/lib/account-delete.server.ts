@@ -97,7 +97,7 @@ async function detachMember(tx: Db, userId: string) {
       if (ref.columns.length !== 1) throw new Error("Unsupported account reference");
       const column = ref.columns[0];
       // Chat appeals still need an affected author while their evidence exists.
-      const required = column.notNull || table === moderationActions || (table === chatReportSnapshots && column === chatReportSnapshots.authorId) || (table === reports && (column === reports.displayNameUserId || column === reports.avatarUserId));
+      const required = column.notNull || (table === chatMessages && column === chatMessages.authorId) || table === moderationActions || (table === chatReportSnapshots && column === chatReportSnapshots.authorId) || (table === reports && (column === reports.displayNameUserId || column === reports.avatarUserId));
       await tx.execute(sql`update ${table} set ${sql.identifier(column.name)} = ${required ? DELETED_MEMBER_ID : null} where ${column} = ${userId}`);
     }
   }

@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "~/lib/chat-nushi-config.server";
 import { nushiEnabled, nushiInVillage } from "~/lib/nushi-config.server";
 import { villageWriters } from "~/lib/village-writers.server";
 import { AuthorLink } from "~/components/author-link";
@@ -100,7 +101,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...(resolveReportId !== null ? { resolveReportId } : {}),
     ...(villageChatEnabled() ? { chat: { joined: membership?.joined ?? false, unread: user && membership?.joined ? await chatUnreadCount(db, user.id, village.id) : 0 } } : {}),
     ...(user && profile ? { reported: await openVillageReportTargets(db, village.id, user.id) } : {}),
-    nushi: { available: nushiInVillage(village), setting: nushiEnabled() && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
+    nushi: { available: nushiInVillage(village), setting: (nushiEnabled() || chatNushiEnabled()) && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
     reader: !user,
     village: { ...localized, iconUrl: villageIconUrl(village), hasIcon: !!village.iconMediaId },
     source: { name: village.name, description: village.description, lang: village.sourceLang ?? (user && (membership?.owner || operator) ? (await decideVillageLangOf(db, village)).lang : null) },

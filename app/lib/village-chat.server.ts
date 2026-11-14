@@ -1,3 +1,6 @@
+import { requestChatNushi } from "./chat-nushi.server";
+import { chatNushiEnabled, chatNushiInVillage } from "./chat-nushi-config.server";
+import { presentChatNushi } from "./chat-nushi-read.server";
 import { chatRepliesFor, withChatReply } from "./village-chat-replies.server";
 import { memberAvatarUrl } from "./member-avatar.server";
 import { selectDisplayName } from "./display-names.server";
@@ -79,7 +82,7 @@ async function advanceRead(db: Db, villageId: string, userId: string, seq: numbe
   return cleared.length;
 }
 
-export async function mutateChat(db: Db, userId: string, slug: string, intent: "send" | "edit" | "delete", input: { body?: unknown; id?: unknown; replyToId?: unknown }) {
+export async function mutateChat(db: Db, userId: string, slug: string, intent: "send" | "edit" | "delete", input: { body?: unknown; id?: unknown; replyToId?: unknown; suppressNushi?: boolean }) {
   const body = intent === "delete" ? null : bodySchema.safeParse(input.body);
   if (body && !body.success) throw new ChatError("invalid");
   const result = await db.transaction(async tx => {
@@ -121,7 +124,7 @@ export async function mutateChat(db: Db, userId: string, slug: string, intent: "
     if (intent === "send") {
       const [sent] = await tx.insert(chatMessages).values({ id, villageId: village.id, authorId: userId, lang: lang!, body: text, replyToId: reply?.id ?? null, createdSeq: seq, changedSeq: seq }).returning();
       const hidden = await inspectChatSpam(tx, sent, now);
-      if (!hidden) await enqueueChatTranslations(tx, sent);
+      if (!hidden) { await enqueueChatTranslations(tx, sent); await requestChatNushi(tx, sent, input.suppressNushi); }
       return { villageId: village.id, seq, id };
     }
     const [edited] = await tx.update(chatMessages).set({ body: text, lang, editedAt: new Date(), changedSeq: seq }).where(eq(chatMessages.id, message!.id)).returning();
@@ -142,7 +145,7 @@ export async function markChatRead(db: Db, userId: string, slug: string, seq: nu
     const village = await lockAccess(tx, slug, userId);
     // A forged cursor cannot mark future messages as read.
     const [last] = await tx.select({ seq: chatMessages.createdSeq }).from(chatMessages)
-      .where(and(eq(chatMessages.villageId, village.id), lte(chatMessages.createdSeq, seq))).orderBy(desc(chatMessages.createdSeq)).limit(1);
+      .where(and(eq(chatMessages.villageId, village.id), eq(chatMessages.authorKind, "human"), lte(chatMessages.createdSeq, seq))).orderBy(desc(chatMessages.createdSeq)).limit(1);
     await lockRead(tx, village.id, userId);
     return advanceRead(tx, village.id, userId, last?.seq ?? 0);
   });
@@ -155,10 +158,11 @@ function messagesQuery(db: Db) {
 function present(row: { message: typeof chatMessages.$inferSelect; author: string | null; publicId: string | null; avatarMediaId: string | null; displayName: string | null; displayNameLatin: string | null; homeArea: string | null }, userId: string, targets?: ReadonlyMap<string, ChatMentionTarget>): ChatMessage {
   const m = row.message;
   if (m.deletedAt) return { id: m.id, createdSeq: m.createdSeq, changedSeq: m.changedSeq, deleted: true };
-  const name = selectDisplayName(row), handle = row.author ?? "";
+  const name = selectDisplayName(row), handle = m.authorKind === "nushi" ? "nushi" : row.author ?? "";
+  const hidden = !!m.hiddenAt || m.authorKind === "nushi" && !chatNushiEnabled();
   return { id: m.id, author: handle, authorName: name, avatarUrl: memberAvatarUrl(row), own: m.authorId === userId, lang: m.lang,
-    parts: m.hiddenAt ? [] : chatParts(m.body, targets), createdSeq: m.createdSeq, changedSeq: m.changedSeq,
-    createdAt: m.createdAt.toISOString(), edited: !!m.editedAt, editedAt: m.editedAt?.toISOString() ?? null, deleted: false, hidden: !!m.hiddenAt, translation: null };
+    parts: hidden ? [] : chatParts(m.body, targets), createdSeq: m.createdSeq, changedSeq: m.changedSeq,
+    createdAt: m.createdAt.toISOString(), edited: !!m.editedAt, editedAt: m.editedAt?.toISOString() ?? null, deleted: false, hidden, ...(m.authorKind === "nushi" ? { nushi: { caller: null, edited: false } } : {}), translation: null };
 }
 
 async function hasLaterMessages(db: Db, villageId: string, after: number): Promise<boolean> {
@@ -172,7 +176,7 @@ async function windowUnread(db: Db, villageId: string, userId: string, after: nu
   const countAfter = (cursor: number) => sql<number>`(select count(*)::int from
     (select 1 from chat_messages cm where cm.village_id = ${villageId}
       and cm.created_seq > greatest(${cursor}, coalesce((select cr.seq from chat_reads cr where cr.village_id = ${villageId} and cr.user_id = ${userId}), 0))
-      and cm.author_id <> ${userId} and cm.deleted_at is null and cm.hidden_at is null limit 100) capped)`;
+      and cm.author_kind = 'human' and cm.author_id <> ${userId} and cm.deleted_at is null and cm.hidden_at is null limit 100) capped)`;
   const [row] = await db.select({ unread: countAfter(0), unreadAfter: countAfter(after) }).from(villages).where(eq(villages.id, villageId));
   return { unread: Number(row?.unread ?? 0), unreadAfter: Number(row?.unreadAfter ?? 0) };
 }
@@ -187,7 +191,7 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
   const [read] = await db.select({ seq: chatReads.seq }).from(chatReads).where(and(eq(chatReads.villageId, village.id), eq(chatReads.userId, userId)));
   const visible = and(eq(chatMessages.villageId, village.id), isNull(chatMessages.deletedAt));
   const firstUnread = async () => (await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(visible,
-    isNull(chatMessages.hiddenAt), sql`${chatMessages.authorId} <> ${userId}`, gt(chatMessages.createdSeq, read?.seq ?? 0),
+    isNull(chatMessages.hiddenAt), eq(chatMessages.authorKind, "human"), sql`${chatMessages.authorId} <> ${userId}`, gt(chatMessages.createdSeq, read?.seq ?? 0),
   )).orderBy(asc(chatMessages.createdSeq)).limit(1))[0];
   let target: { seq: number } | undefined = opts.at ? (await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(visible, isNull(chatMessages.hiddenAt), eq(chatMessages.id, opts.at))))[0] : undefined;
   const targetUnavailable = !!opts.at && !target;
@@ -222,12 +226,12 @@ export async function chatPage(db: Db, userId: string, slug: string, opts: { bef
   const targets = await chatMentionTargets(db, rows.filter(row => !row.message.hiddenAt).map(row => row.message.id));
   const translations = await chatTranslationsFor(db, village.id, userId, rows.map(row => row.message));
   const replies = await chatRepliesFor(db, village.id, userId, rows.map(row => row.message));
-  const messages = await addChatTopicCards(db, rows.map(row => {
+  const messages = await presentChatNushi(db, userId, await addChatTopicCards(db, rows.map(row => {
     const message = present(row, userId, targets.get(row.message.id));
     return withChatReply(message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null }, row.message.replyToId, replies);
-  }), opts.topics);
+  }), opts.topics));
   const { unreadAfter } = await windowUnread(db, village.id, userId, rows.at(-1)?.message.createdSeq ?? opts.after ?? 0);
-  return { readers, consentRequired: false as const, targetUnavailable, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
+  return { readers, consentRequired: false as const, targetUnavailable, historical, hasNewer, unreadAfter, village: publicVillage(village), ended: !!village.endedAt, chatNushiAvailable: chatNushiInVillage(village), messages, seq, readSeq: read?.seq ?? 0, readFrom, before: previous.length ? first : null };
 }
 
 export async function chatChanges(db: Db, userId: string, slug: string, opts: { since: number; before?: number; after?: number; forward?: number; counts?: boolean; topics?: ChatTopicOptions }) {
@@ -253,10 +257,10 @@ export async function chatChanges(db: Db, userId: string, slug: string, opts: { 
   const counts = await windowUnread(db, village.id, userId, end ?? horizon);
   const allCounts = opts.counts ? { unreadCounts: Object.fromEntries(await chatUnreadCounts(db, userId, { excludeEnded: true })) } : {};
   const replies = await chatRepliesFor(db, village.id, userId, selected.map(row => row.message));
-  const messages = await addChatTopicCards(db, (older ? [...selected].reverse() : selected).map(row => {
+  const messages = await presentChatNushi(db, userId, await addChatTopicCards(db, (older ? [...selected].reverse() : selected).map(row => {
     const message = present(row, userId, targets.get(row.message.id));
     return withChatReply(message.deleted ? message : { ...message, translation: translations.get(message.id) ?? null }, row.message.replyToId, replies);
-  }), opts.topics);
+  }), opts.topics));
   return { ...hasNewer, messages, ...counts, ...allCounts,
     next: older || forward ? opts.since : more ? selected.at(-1)!.message.changedSeq : Math.max(opts.since, horizon),
     more, before: older && more ? selected.at(-1)?.message.createdSeq ?? null : null, ended: !!village.endedAt };
@@ -268,7 +272,7 @@ async function loadChatUnreadCounts(db: Db, userId: string, options: { excludeEn
   const rows = await db.select({ slug: villages.slug, unread: sql<number>`(select count(*)::int from
     (select 1 from chat_messages cm where cm.village_id = ${villages.id}
       and cm.created_seq > coalesce((select cr.seq from chat_reads cr where cr.village_id = ${villages.id} and cr.user_id = ${userId}), 0)
-      and cm.author_id <> ${userId} and cm.deleted_at is null and cm.hidden_at is null limit 100) capped)` })
+      and cm.author_kind = 'human' and cm.author_id <> ${userId} and cm.deleted_at is null and cm.hidden_at is null limit 100) capped)` })
     .from(villageMembers).innerJoin(villages, eq(villages.id, villageMembers.villageId))
     .innerJoin(chatConsents, and(eq(chatConsents.villageId, villages.id), eq(chatConsents.userId, villageMembers.userId), eq(chatConsents.version, CHAT_CONSENT_VERSION)))
     .where(and(eq(villageMembers.userId, userId), chatVillageCondition(), options.villageId !== undefined ? eq(villages.id, options.villageId) : undefined, options.excludeEnded ? isNull(villages.endedAt) : undefined));

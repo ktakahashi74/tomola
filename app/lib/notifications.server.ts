@@ -64,9 +64,9 @@ export async function enqueueImmediateEmails(
   opts: { now?: Date } = {},
 ): Promise<number> {
   if (created.length === 0) return 0;
-  await enqueuePush(db, created, opts.now);
+  await enqueuePush(db, created.filter(item => item.kind !== "chat_nushi_result" && item.kind !== "chat_nushi_cited"), opts.now);
   // Result notices describe the outcome and use available topic titles; they do not need new excerpt translations.
-  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_result" && item.kind !== "nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
+  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_result" && item.kind !== "nushi_cited" && item.kind !== "chat_nushi_result" && item.kind !== "chat_nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
   const runAt = new Date((opts.now ?? new Date()).getTime() + notificationEmailDelaySeconds() * 1000);
   const prefOf = new Map<string, EmailPref>();
   for (const ids of notificationBatches([...new Set(created.map(c => c.userId))])) {
@@ -426,7 +426,7 @@ export async function listNotifications(
 ): Promise<{ items: NotificationItem[]; page: number; hasNext: boolean }> {
   const page = opts.page ?? 1;
   const limit = opts.limit ?? NOTIFICATIONS_PER_PAGE;
-  const condition = and(eq(notifications.userId, userId), opts.ids ? inArray(notifications.id, opts.ids) : undefined, opts.id === undefined ? undefined : eq(notifications.id, opts.id), villagesEnabled() ? undefined : notInArray(notifications.kind, ["village_invite", "village_added", "village_removed", "village_owner_changed"]), villageChatEnabled() ? chatNotificationCondition() : notInArray(notifications.kind, ["chat_mention", "chat_reply"]));
+  const condition = and(eq(notifications.userId, userId), opts.ids ? inArray(notifications.id, opts.ids) : undefined, opts.id === undefined ? undefined : eq(notifications.id, opts.id), villagesEnabled() ? undefined : notInArray(notifications.kind, ["village_invite", "village_added", "village_removed", "village_owner_changed"]), chatNotificationCondition());
   const offset = (page - 1) * limit;
   const boundary = offset ? db.select({ createdAt: notifications.createdAt, id: notifications.id }).from(notifications)
     .where(condition).orderBy(desc(notifications.createdAt), desc(notifications.id)).limit(1).offset(offset - 1) : undefined;
@@ -460,7 +460,7 @@ export async function listNotifications(
     .where(and(inArray(translationReports.id, resultIds), eq(translationReports.reporterId, userId))) : [];
   const results = new Map(resultRows.map(row => [row.id, row]));
   const chatRows = pageRows.filter(row => isChatNotification(row.kind));
-  const chatLocations = chatRows.length ? await chatNotificationLocations(db, chatRows.map(row => ({ id: row.id, villageId: row.villageId ?? null, chatMessageId: row.chatMessageId ?? null })), userId) : new Map<number, ChatNotificationLocation>();
+  const chatLocations = chatRows.length ? await chatNotificationLocations(db, chatRows.map(row => ({ id: row.id, kind: row.kind, villageId: row.villageId ?? null, chatMessageId: row.chatMessageId ?? null })), userId) : new Map<number, ChatNotificationLocation>();
   const chatAuthors = chatLocations.size ? await db.select({ id: chatMessages.id, handle: profiles.handle }).from(chatMessages)
     .leftJoin(profiles, eq(profiles.userId, chatMessages.authorId)).where(inArray(chatMessages.id, [...chatLocations.values()].map(location => location.id))) : [];
   const chatHandles = new Map(chatAuthors.map(row => [row.id, row.handle]));

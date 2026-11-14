@@ -31,6 +31,17 @@ it("recognizes exact calls outside Markdown quotes, code, links and escapes", as
   for (const body of ["@nushi orchard", "@village-ai orchard", "＠ｎｕｓｈｉ orchard", "> @nushi\n\n@nushi", "**@nushi**"]) expect(await callsNushi(body), body).toBe(true);
   for (const body of ["> @nushi", "`@nushi`", "```\n@nushi\n```", "    @nushi", "[go](https://example.org/@nushi)", "\\@nushi", "&#64;nushi", "a@nushi", "@nushix", "@nushi-more"]) expect(await callsNushi(body), body).toBe(false);
 });
+it("keeps the public prompt as the default while selecting a private chat destination explicitly", async () => {
+  const f = await nushiFixture();
+  const input = (await nushiMaterials(f.db, f.request, { env: process.env, now: new Date(), clock: () => new Date() }))!;
+  const publicPrompt = nushiPrompt(input);
+  expect(publicPrompt).toEqual(nushiPrompt(input, "public-reply"));
+  expect(publicPrompt.system).toContain("This answer will be a public AI reply");
+  const chatPrompt = nushiPrompt(input, "chat");
+  expect(chatPrompt.user).toBe(publicPrompt.user);
+  expect(chatPrompt.system).toContain("This answer will be a private chat AI reply");
+  expect(chatPrompt.system.replace("private chat AI reply", "public AI reply")).toBe(publicPrompt.system);
+});
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
   expect(nushiEnabled({})).toBe(false); expect(nushiMonthlyBudgetMicro({})).toBe(10_000_000);
   expect(nushiLimits({})).toMatchObject({ member: 5, topic: 10, village: 30, author: 10, concurrent: 2, ttlSeconds: 3600 });

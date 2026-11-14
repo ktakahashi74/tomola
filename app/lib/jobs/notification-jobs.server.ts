@@ -217,11 +217,11 @@ async function buildItems(db: Db, rows: readonly NotificationRow[], recipient: R
     });
   }
   // Recheck chat after any asynchronous post excerpt work, immediately before delivery.
-  const chatLocations = chatRows.length ? await chatNotificationLocations(db, chatRows.map(row => ({ id: row.id, villageId: row.villageId, chatMessageId: row.chatMessageId ?? null })), profile.userId, now) : new Map<number, ChatNotificationLocation>();
+  const chatLocations = chatRows.length ? await chatNotificationLocations(db, chatRows.map(row => ({ id: row.id, kind: row.kind, villageId: row.villageId, chatMessageId: row.chatMessageId ?? null })), profile.userId, now) : new Map<number, ChatNotificationLocation>();
   for (const row of chatRows) {
     const location = chatLocations.get(row.id);
     if (!location) { suppressed.add(row.id); continue; }
-    items.set(row.id, { kind: row.kind as "chat_mention" | "chat_reply", url: siteUrl(`/v/${location.slug}/chat?at=${location.id}#chat-${location.id}`), villageName: chatMailVillageName(await localizeVillage(db, location, mailReader), localeOf(profile)) });
+    items.set(row.id, { kind: row.kind as "chat_mention" | "chat_reply" | "chat_nushi_result" | "chat_nushi_cited", url: siteUrl(`/v/${location.slug}/chat?at=${location.id}#chat-${location.id}`), villageName: chatMailVillageName(await localizeVillage(db, location, mailReader), localeOf(profile)) });
   }
   // Recheck invitations after asynchronous content work, immediately before delivery.
   const inviteRows = rows.filter(row => row.kind === "village_invite");

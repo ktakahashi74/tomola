@@ -1,3 +1,5 @@
+import { CHAT_NUSHI_PROMPT_VERSION } from "../chat-nushi-config.server";
+import { translateChatNushi } from "../chat-nushi-translation.server";
 import { loadGlossary, matchGlossary } from "../translations.server";
 import { createChatTranslationReportHandlers } from "./chat-translation-report-jobs.server";
 import { z } from "zod";
@@ -25,7 +27,9 @@ export function createChatTranslationHandlers(opts: LlmOptions = {}): JobHandler
     const save = (update: Parameters<typeof saveChatTranslation>[2]) => saveChatTranslation(ctx.db, payload, update, { preserveSettled: true });
     let fallbackReason: string | undefined;
     try {
-      const result = await translateChat(ctx.db, { text: source.message.body, from: source.message.lang, to: payload.lang,
+      const result = source.message.authorKind === "nushi"
+        ? await translateChatNushi(ctx.db, source.message, payload.lang, { clock: ctx.clock ?? (() => ctx.now), signal: ctx.signal })
+        : await translateChat(ctx.db, { text: source.message.body, from: source.message.lang, to: payload.lang,
         glossary: matchGlossary(await loadGlossary(ctx.db, source.message.lang, payload.lang), source.message.body),
         chat: { context: source.context }, mentions: mentionCandidates(source.message.body).map(m => source.message.body.slice(m.start, m.end)),
       }, { ...jobLlmOptions(ctx, opts), beforeTranslate: async () => {
@@ -40,7 +44,7 @@ export function createChatTranslationHandlers(opts: LlmOptions = {}): JobHandler
         if (result.flags.every(flag => NEAR_COPY_FLAGS.includes(flag))) fallbackReason = result.flags[0];
         throw Object.assign(new LlmError("invalid_output", "Chat translation checks failed"), { retryable: false });
       }
-      await save({ state: "ready", text: result.text, model: result.model, promptVersion: CHAT_PROMPT_VERSION, errorCode: null });
+      await save({ state: "ready", text: result.text, model: result.model, promptVersion: source.message.authorKind === "nushi" ? CHAT_NUSHI_PROMPT_VERSION : CHAT_PROMPT_VERSION, errorCode: null });
     } catch (error) {
       if (error instanceof SettledTranslation) return;
       if (error instanceof BudgetPausedError) {

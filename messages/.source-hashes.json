@@ -2165,7 +2165,21 @@
   "ai_use_nushi": "3d850268c6b84818",
   "ai_use_sent_nushi": "c95d0c27cce73bd3",
   "nushi_versions": "57cd27c27e55d900",
-  "nushi_saved": "9d4af6906a17b743"
+  "nushi_saved": "9d4af6906a17b743",
+  "chat_nushi_call_notice": "a3ff4ecbaabada2d",
+  "chat_nushi_label": "3d6205b9c83c27b3",
+  "chat_nushi_call_edited": "6f70760a9dd8d736",
+  "chat_nushi_read": "e060b5a35275794b",
+  "chat_nushi_clarify": "cd5d0502af348efe",
+  "chat_consent_reply_translation": "d827f95c75351865",
+  "chat_consent_reply_review": "73eaadb2b1a4d98a",
+  "chat_consent_nushi": "7ded7cfd32ef7e47",
+  "chat_consent_nushi_hide": "d5c0bc1ddb96ce39",
+  "chat_consent_v4_replies": "9fca9b0ebf4fbb75",
+  "chat_consent_v4_nushi": "32faa7f4e6508d58",
+  "ai_use_chat_nushi": "6b414c6b5bbeec2c",
+  "ai_use_sent_chat_nushi": "e29fa44788fff079",
+  "chat_nushi_description": "a42c34fa8eb8f7e4"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",

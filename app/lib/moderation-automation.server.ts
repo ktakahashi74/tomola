@@ -55,7 +55,7 @@ export async function inspectEntrySpam(db: Db, entry: { id: number; authorId: st
 // No AI calls or AI jobs: private chat spam uses only local signals.
 // Called inside the writing transaction. Remove pending mention notifications before commit.
 export async function inspectChatSpam(db: Db, message: typeof chatMessages.$inferSelect, now: Date) {
-  if (!spamEnabled()) return false;
+  if (!spamEnabled() || !message.authorId || message.authorKind !== "human") return false;
   const since = new Date(now.getTime() - ABUSE_THRESHOLDS.windowMs);
   const duplicateSince = new Date(now.getTime() - ABUSE_THRESHOLDS.duplicateWindowMs);
   const previous = await db.select({ body: chatMessages.body, createdAt: chatMessages.createdAt }).from(chatMessages).where(and(eq(chatMessages.authorId, message.authorId), ne(chatMessages.id, message.id), gte(chatMessages.createdAt, duplicateSince))).orderBy(desc(chatMessages.createdAt), desc(chatMessages.createdSeq)).limit(ABUSE_THRESHOLDS.history);

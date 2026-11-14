@@ -29,10 +29,12 @@ export function ChatConsentNotice({ privacyAvailable, previousVersion }: { priva
       <summary className="cursor-pointer underline">{m.village_chat_read_full()}</summary>
       <ul className="list-disc space-y-3 pl-6">
         <li>{m.village_chat_consent_readers()}</li>
-        <li>{m.village_chat_consent_translation({ count: CHAT_TRANSLATION_CONTEXT_COUNT })}</li>
+        <li><span>{m.village_chat_consent_translation({ count: CHAT_TRANSLATION_CONTEXT_COUNT })}</span> <span>{m.chat_consent_reply_translation()}</span></li>
         <li>{providerBefore}{privacy}{providerAfter}</li>
-        <li>{m.village_chat_consent_review({ count: CHAT_CASE_CONTEXT_COUNT * (1 + CHAT_CASE_EXPAND_LIMIT) })}</li>
+        <li><span>{m.village_chat_consent_review({ count: CHAT_CASE_CONTEXT_COUNT * (1 + CHAT_CASE_EXPAND_LIMIT) })}</span> <span>{m.chat_consent_reply_review()}</span></li>
         <li>{m.village_chat_consent_ai_review()}</li>
+        <li>{m.chat_consent_nushi()} {privacy}</li>
+        <li>{m.chat_consent_nushi_hide()}</li>
         <li>{m.village_chat_consent_spam()}</li>
         <li>{m.village_chat_consent_retention({ days: CHAT_REPORT_RETAIN_DAYS })}</li>
         <li>{ownBefore}<Link to="/settings/chat" className="underline">{m.village_chat_own_title()}</Link>{ownAfter}</li>

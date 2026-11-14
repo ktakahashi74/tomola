@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { and, asc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { chatAccessLog, chatConsents, chatMessages, chatMessageTranslations, chatTranslationReports, profiles, villageMembers, villages } from "./db/schema";
@@ -49,7 +50,7 @@ export async function createChatTranslationReport(db: Db, reporterId: string, in
     const [consent] = await tx.select().from(chatConsents).where(and(eq(chatConsents.villageId, village.id), eq(chatConsents.userId, reporterId), eq(chatConsents.version, CHAT_CONSENT_VERSION)));
     if (!member || !consent) throw new ChatTranslationReportError("not_found");
     const [message] = await tx.select().from(chatMessages).where(and(eq(chatMessages.id, input.messageId), eq(chatMessages.villageId, village.id))).for("update");
-    if (!message || message.deletedAt || message.hiddenAt) throw new ChatTranslationReportError("not_found");
+    if (!message || message.deletedAt || message.hiddenAt || message.authorKind === "nushi" && !chatNushiEnabled()) throw new ChatTranslationReportError("not_found");
     if (message.authorId === reporterId || message.lang === lang) throw new ChatTranslationReportError("forbidden");
     const sourceHash = chatSourceHash(message.body);
     const [translation] = await tx.select().from(chatMessageTranslations).where(and(eq(chatMessageTranslations.messageId, message.id), eq(chatMessageTranslations.lang, lang), eq(chatMessageTranslations.sourceHash, sourceHash), eq(chatMessageTranslations.state, "ready")));
@@ -60,7 +61,7 @@ export async function createChatTranslationReport(db: Db, reporterId: string, in
     const rate = await hitRateLimit(tx, { key: `chat-translation-report:${reporterId}`, ...CHAT_TRANSLATION_REPORT_LIMIT, now });
     if (!rate.allowed) throw new ChatTranslationReportError("limit");
     const [previous] = await tx.select({ id: chatTranslationReports.id }).from(chatTranslationReports).where(and(eq(chatTranslationReports.messageId, message.id), eq(chatTranslationReports.lang, lang))).limit(1);
-    const retry = !previous;
+    const retry = !previous && message.authorKind === "human";
     const [report] = await tx.insert(chatTranslationReports).values({ messageId: message.id, reporterId, lang, sourceLang: message.lang, sourceHash, translationHash, original: message.body, translation: translation.text, note, createdSeq: message.createdSeq, changedSeq: message.changedSeq, status: retry ? "retry" : "open", createdAt: now }).returning({ id: chatTranslationReports.id });
     if (retry) await enqueue(tx, CHAT_TRANSLATION_REPORT_JOB, { reportId: report.id }, { dedupeKey: `chat-translation-report:${report.id}`, maxAttempts: 1 });
     return { id: report.id, retry };
@@ -73,7 +74,7 @@ export async function listChatTranslationReports(db: Db, actor: Actor, page = 1,
   if (!actor.scope.operator && !actor.scope.langs.length) return { items: [], page, hasNext: false };
   const rows = await db.select({ id: chatTranslationReports.id, lang: chatTranslationReports.lang, sourceLang: chatTranslationReports.sourceLang, createdAt: chatTranslationReports.createdAt }).from(chatTranslationReports)
     .innerJoin(chatMessages, eq(chatMessages.id, chatTranslationReports.messageId))
-    .where(and(eq(chatTranslationReports.status, "open"), ne(chatMessages.authorId, actor.id), actor.scope.operator ? undefined : inArray(chatTranslationReports.lang, [...actor.scope.langs])))
+    .where(and(eq(chatTranslationReports.status, "open"), sql`${chatMessages.authorId} is distinct from ${actor.id}`, actor.scope.operator ? undefined : inArray(chatTranslationReports.lang, [...actor.scope.langs])))
     .orderBy(asc(chatTranslationReports.createdAt), asc(chatTranslationReports.id)).limit(limit + 1).offset((page - 1) * limit);
   return { items: rows.slice(0, limit), page, hasNext: rows.length > limit };
 }

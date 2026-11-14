@@ -3,7 +3,7 @@ import { createChatTranslationReport, ChatTranslationReportError } from "~/lib/c
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { ChatReportError, createChatReport } from "~/lib/village-chat-reports.server";
 import { ChatReportForm } from "~/components/chat-report-form";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { data, Form, isRouteErrorResponse, Link, redirect, replace, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
 import type { Route } from "./+types/village-chat";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
@@ -38,6 +38,8 @@ import { ChatConsentNotice } from "~/components/chat-consent-notice";
 import { noticesAvailable } from "~/lib/notices.server";
 import { chatSearchTargetAvailable } from "~/lib/village-chat-search.server";
 import { RouteError } from "~/components/route-error";
+
+const ChatNushiComposer = lazy(() => import("~/components/chat-nushi-composer").then(module => ({ default: module.ChatNushiComposer })));
 
 export const middleware = [privateCacheMiddleware];
 export function headers({ actionHeaders }: Route.HeadersArgs) {
@@ -126,7 +128,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         } });
       }
     } else {
-      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId") });
+      const result = await mutateChat(db, user.id, params.slug, intent as "send" | "edit" | "delete", { body: form.get("body"), id: form.get("id"), replyToId: form.get("replyToId"), suppressNushi: form.get("suppressNushi") === "1" });
       if (intent === "send") return redirect(`/v/${params.slug}/chat?latest=1#chat-${result.id}`);
       if (intent === "delete" && new URL(request.url).searchParams.get("at") === result.id) {
         const linkLang = langQueryParam(request);
@@ -173,7 +175,7 @@ function ConsentedChat({ loaderData, actionData }: {
   const initialUnread = Object.fromEntries(member && !member.reader && "villages" in member ? member.villages.map(v => [v.slug!, v.unread ?? 0]) : []);
   const snapshot = useMemo(() => ({ ...loaderData, unreadCounts: initialUnread }), [loaderData, member]);
   const { noteSend, reconnecting, messages, deleted, readLimit, gaps, loadGap, loadingGap, gapError, ended, hasNewer, before, loadOlder, loadingOlder, historyError, unreadAfter, loadNewer, loadingNewer, unreadCounts, updateUnreadCounts, refresh } = useVillageChat(slug, snapshot, loaderData.linkLang);
-  const [boundary] = useState(() => loaderData.messages.filter(message => !message.deleted).find(message => !message.own && !message.hidden && message.createdSeq > loaderData.readSeq)?.createdSeq);
+  const [boundary] = useState(() => loaderData.messages.filter(message => !message.deleted).find(message => !message.nushi && !message.own && !message.hidden && message.createdSeq > loaderData.readSeq)?.createdSeq);
   const lastSeq = messages.at(-1)?.createdSeq ?? 0;
   const windowHref = (key: "before" | "after" | "latest", seq: number) => `?${new URLSearchParams({ [key]: String(seq), ...(loaderData.linkLang ? { lang: loaderData.linkLang } : {}) })}`;
   const composer = useRef<HTMLDivElement>(null);
@@ -385,7 +387,7 @@ function ConsentedChat({ loaderData, actionData }: {
         <p className="min-w-0 flex-1 truncate">{deleted[replyTarget.id] || replyTarget.hidden ? m.village_chat_reply_unavailable() : m.village_chat_replying({ handle: replyTarget.author, text: chatReplyExcerpt(replyTarget.translation?.state === "ready" && replyTarget.translation.text !== null ? replyTarget.translation.text : replyTarget.parts.map(part => part.text).join("")) })}</p>
         <button type="button" className="shrink-0 underline" onClick={() => { setReply(null); sendForm.current?.querySelector("textarea")?.focus(); }}>{m.village_chat_reply_cancel()}</button>
       </div>}
-      {ended ? <p role="status">{m.village_chat_read_only()}</p> : <Form ref={sendForm} method="post" preventScrollReset className="flex items-end gap-2" onSubmit={event => {
+      {ended ? <p role="status">{m.village_chat_read_only()}</p> : <Form ref={sendForm} method="post" preventScrollReset className={loaderData.chatNushiAvailable ? "flex flex-wrap items-end gap-2" : "flex items-end gap-2"} onSubmit={event => {
         if (sendingGuard.current) { event.preventDefault(); return; }
         noteSend(); sendingGuard.current = true; setSending(true);
         const field = event.currentTarget.querySelector("textarea");
@@ -407,6 +409,7 @@ function ConsentedChat({ loaderData, actionData }: {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && window.matchMedia("(min-width: 640px)").matches) { event.preventDefault(); sendForm.current?.requestSubmit(); }
         }} /></div>
         <Button type="submit" disabled={sending}>{m.village_chat_send()}</Button>
+        {loaderData.chatNushiAvailable && <Suspense fallback={null}><ChatNushiComposer slug={slug} /></Suspense>}
       </Form>}
     </div>
   </main>;

@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { chatMessages, chatMessageTranslations, profiles } from "./db/schema";
@@ -14,17 +15,17 @@ export async function chatRepliesFor(db: Db, villageId: string, userId: string, 
   const rows = await db.select({ message: chatMessages, handle: profiles.handle, displayName: profiles.displayName, displayNameLatin: profiles.displayNameLatin, homeArea: profiles.homeArea })
     .from(chatMessages).leftJoin(profiles, eq(profiles.userId, chatMessages.authorId))
     .where(and(eq(chatMessages.villageId, villageId), inArray(chatMessages.id, ids)));
-  const [reader] = await db.select({ displayLang: profiles.displayLang, readLangs: profiles.readLangs, uiLocale: profiles.uiLocale }).from(profiles).where(eq(profiles.userId, userId));
+  const [reader] = await db.select({ displayLang: profiles.displayLang, readLangs: profiles.readLangs, uiLocale: profiles.uiLocale, hideNushi: profiles.hideNushi }).from(profiles).where(eq(profiles.userId, userId));
   const translations = await db.select().from(chatMessageTranslations).where(and(inArray(chatMessageTranslations.messageId, ids), eq(chatMessageTranslations.state, "ready")));
   for (const row of rows) {
     const message = row.message;
-    if (message.deletedAt || message.hiddenAt) {
+    if (message.deletedAt || message.hiddenAt || message.authorKind === "nushi" && (!chatNushiEnabled() || reader?.hideNushi)) {
       replies.set(message.id, { id: message.id, changedSeq: message.changedSeq, unavailable: true });
       continue;
     }
     const lang = reader && message.authorId !== userId ? neededChatLanguage(message.lang, reader) : null;
     const translated = lang ? translations.find(t => t.messageId === message.id && t.lang === lang && t.sourceHash === chatSourceHash(message.body) && t.text !== null) : undefined;
-    replies.set(message.id, { id: message.id, changedSeq: message.changedSeq, unavailable: false, author: row.handle ?? "", authorName: selectDisplayName(row), text: chatReplyExcerpt(translated?.text ?? message.body), lang: translated?.lang ?? message.lang, editedAt: message.editedAt?.toISOString() ?? null });
+    replies.set(message.id, { id: message.id, changedSeq: message.changedSeq, unavailable: false, author: row.handle ?? (message.authorKind === "nushi" ? "nushi" : ""), authorName: selectDisplayName(row), text: chatReplyExcerpt(translated?.text ?? message.body), lang: translated?.lang ?? message.lang, editedAt: message.editedAt?.toISOString() ?? null });
   }
   return replies;
 }

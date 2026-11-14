@@ -42,7 +42,7 @@ export function chatSearchQuery(db: Db, villageId: string, query: string, displa
     then case when ${chatMessageTranslations.sourceHash} = encode(sha256(convert_to(${chatMessages.body}, 'UTF8')), 'hex')
       then strpos(lower(${chatMessageTranslations.text}), lower(${query})) else 0 end else 0 end`;
   const visible = and(
-    eq(chatMessages.villageId, villageId), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt),
+    eq(chatMessages.villageId, villageId), eq(chatMessages.authorKind, "human"), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt),
     opts.before === undefined ? undefined : lt(chatMessages.createdSeq, opts.before),
     opts.from === undefined ? undefined : gte(chatMessages.createdSeq, opts.from),
   );
@@ -75,7 +75,7 @@ export function chatSearchQuery(db: Db, villageId: string, query: string, displa
 
 export async function findChatMessages(db: Db, villageId: string, query: string, displayLang: Lang, before?: number) {
   const [newest] = await db.select({ seq: chatMessages.createdSeq }).from(chatMessages).where(and(
-    eq(chatMessages.villageId, villageId), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt),
+    eq(chatMessages.villageId, villageId), eq(chatMessages.authorKind, "human"), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt),
     before === undefined ? undefined : lt(chatMessages.createdSeq, before),
   )).orderBy(desc(chatMessages.createdSeq)).limit(1);
   if (!newest) return { hits: [] as ChatSearchHit[], before: null };

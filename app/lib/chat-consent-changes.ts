@@ -6,6 +6,7 @@ import { m } from "~/paraglide/messages.js";
 const changes = [
   { version: 2, points: (_providerChange: string) => [m.village_chat_changes_v2_readers(), m.village_chat_changes_v2_review(), m.village_chat_changes_v2_spam()] },
   { version: 3, points: (providerChange: string) => [providerChange] },
+  { version: 4, points: (_providerChange: string) => [m.chat_consent_v4_replies(), m.chat_consent_v4_nushi()] },
 ];
 
 export function chatConsentChanges(previousVersion: number | null, providerChange: string): string[] {

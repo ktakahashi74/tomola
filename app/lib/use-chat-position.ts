@@ -51,9 +51,10 @@ export function useChatPosition({ slug, messages, boundary, readSeq, readLimit, 
   }, []);
   useLayoutEffect(() => {
     if (!initialized.current) return;
-    if (following.current && !hasNewer) latest();
+    const humanArrival = messages.some(message => !message.nushi && !seen.current.has(message.id) && message.createdSeq > horizon.current);
+    if (following.current && !hasNewer && humanArrival) latest();
     const added = messages.filter(message => !seen.current.has(message.id) && message.createdSeq > horizon.current);
-    if (!following.current) for (const message of added) if (!message.hidden) unseen.current.add(message.id);
+    if (!following.current) for (const message of added) if (!message.hidden && !message.nushi) unseen.current.add(message.id);
     const present = new Set(messages.filter(message => !message.hidden).map(message => message.id));
     for (const id of unseen.current) if (!present.has(id)) unseen.current.delete(id);
     setNewCount(unseen.current.size);

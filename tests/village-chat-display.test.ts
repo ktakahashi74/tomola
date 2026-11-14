@@ -16,7 +16,9 @@ it.each(["en", "ja"] as const)("shows the current consent as separate disclosure
     expect(html).toMatch(/<details(?![^>]*\bopen)[^>]*>/);
     expect(html).not.toContain('id="chat-consent-changes"');
     expect(html.indexOf("</details>")).toBeLessThan(html.indexOf('value="consent"'));
-    expect(html.match(/<li[ >]/g)).toHaveLength(12);
+    expect(html.match(/<li[ >]/g)).toHaveLength(14);
+    expect(html).toContain(m.chat_consent_nushi());
+    expect(html).toContain(m.chat_consent_nushi_hide());
     expect(html).not.toContain("offshore_report_america");
     expect(html).toContain('href="/settings/chat"');
     expect(html).not.toContain('href="/privacy"');

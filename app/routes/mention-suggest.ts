@@ -1,3 +1,4 @@
+import { chatNushiInVillage } from "~/lib/chat-nushi-config.server";
 import { nushiPlace } from "~/lib/nushi-materials.server";
 import { nushiInVillage } from "~/lib/nushi-config.server";
 import { villageBySlug } from "~/lib/villages.server";
@@ -57,7 +58,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     .orderBy(asc(profiles.handleKey))
     .limit(MAX_SUGGESTIONS);
   const params = new URL(request.url).searchParams;
-  let nushi = false;
+  let nushi = !!village && chatNushiInVillage(village) && ("nushi".startsWith(q) || "village-ai".startsWith(q));
   if (slug === null && (params.has("thread") || params.has("postVillage")) && ("nushi".startsWith(q) || "village-ai".startsWith(q))) {
     const thread = params.get("thread"), selected = params.get("postVillage");
     if (thread && /^\d+$/.test(thread)) nushi = !!await nushiPlace(db, Number(thread));

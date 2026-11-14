@@ -1,3 +1,5 @@
+import { NUSHI_PROMPT_VERSION } from "~/lib/nushi-config.server";
+import { CHAT_NUSHI_PROMPT_VERSION } from "~/lib/chat-nushi-config.server";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AiUse, { headers, loader, meta } from "~/routes/ai-use";
@@ -82,6 +84,8 @@ describe("public AI use", () => {
     expect(aiUsePage("en", fake).nushi).toBeNull();
     expect(aiUseMarkdown(aiUsePage("en", fake))).not.toContain(m.nushi_description());
     expect(aiUsePage("en", { ...fake, VILLAGE_NUSHI: "1" }).nushi?.title).toBe(m.nushi_name());
+    const both = aiUsePage("en", { ...fake, VILLAGE_NUSHI: "1", VILLAGE_CHAT_NUSHI: "1" });
+    expect(both.nushi?.versions).toContain(`${NUSHI_PROMPT_VERSION} / ${CHAT_NUSHI_PROMPT_VERSION}`);
   });
 
   it.each(["en", "ja"] as const)("keeps keys, credentials, internal endpoints and prices out of HTML, Markdown and loader data in %s", async locale => {

@@ -10,6 +10,7 @@ import { loader as page, action } from "~/routes/village-chat";
 import { loader as changes } from "~/routes/village-chat-changes";
 import { loader as events } from "~/routes/village-chat-events";
 import { action as readReceipt } from "~/routes/village-chat-read";
+import { action as nushiPreview } from "~/routes/village-chat-nushi";
 import { loader as header } from "~/routes/member-layout";
 import { loader as navigation } from "~/routes/navigation-header";
 import { stopVillageChat } from "~/lib/village-chat-events.server";
@@ -27,6 +28,27 @@ afterAll(() => h.restore());
 afterEach(() => { stopVillageChat(); vi.unstubAllEnvs(); });
 const args = (as?: string, query = "") => h.args(h.request(`/v/route-chat/chat${query}`, as ? { as } : {}), { slug: "route-chat" });
 const enabled = () => { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_CHAT", "1"); };
+
+it("keeps syntax previews and chat polling in separate member allowances", async () => {
+  enabled(); vi.stubEnv("VILLAGE_CHAT_NUSHI", "1"); vi.stubEnv("PUBLIC_READING", "1");
+  const handle = "chatpreview_member", slug = "route-chat";
+  await h.signIn(handle);
+  const [village] = await h.db.select().from(villages).where(eq(villages.slug, slug));
+  await h.db.insert(villageMembers).values({ villageId: village.id, userId: h.ids[handle] });
+  const preview = (as = handle) => nushiPreview(h.args(h.request(`/v/${slug}/chat/nushi`, { as, form: { body: "@nushi orchard" } }), { slug }));
+  expect(await h.outcome(() => preview())).toMatchObject({ status: 404 });
+  await consentChatMembers(h.db);
+  const response = await preview();
+  expect(await response.json()).toEqual({ calls: true });
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  await seedRateLimit(h.db, `member:chat-nushi-preview:${h.ids[handle]}`, MEMBER_RATE_LIMITS["chat-nushi-preview"]);
+  expect(await h.outcome(() => preview())).toMatchObject({ status: 429 });
+  expect((await changes(args(handle, "?since=0"))).status).toBe(200);
+  await h.db.delete(rateLimits).where(eq(rateLimits.key, `member:chat-nushi-preview:${h.ids[handle]}`));
+  await seedRateLimit(h.db, `member:chat-changes:${h.ids[handle]}`, MEMBER_RATE_LIMITS["chat-changes"]);
+  expect(await h.outcome(() => changes(args(handle, "?since=0")))).toMatchObject({ status: 429 });
+  expect((await preview()).status).toBe(200);
+});
 
 it("accepts an immutable reply parent and rejects forged parents with one public error", async () => {
   enabled();

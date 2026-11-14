@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { recordTranslationGeneration } from "./eval/signals.server";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, not, sql } from "drizzle-orm";
@@ -80,7 +81,7 @@ export async function enqueueChatTranslations(db: Db, message: Message): Promise
   const readers = await db.selectDistinct({ lang: language }).from(villageMembers)
     .innerJoin(profiles, eq(profiles.userId, villageMembers.userId))
     .innerJoin(chatConsents, and(eq(chatConsents.villageId, villageMembers.villageId), eq(chatConsents.userId, villageMembers.userId), eq(chatConsents.version, CHAT_CONSENT_VERSION)))
-    .where(and(eq(villageMembers.villageId, message.villageId), ne(profiles.userId, message.authorId),
+    .where(and(eq(villageMembers.villageId, message.villageId), message.authorId ? ne(profiles.userId, message.authorId) : undefined,
       sql`not (${message.lang} = any(${profiles.readLangs}))`, ne(language, message.lang)));
   const langs = readers.map(row => row.lang).filter(isLang);
   for (const lang of langs) await requestTranslation(db, message, lang, true);
@@ -109,7 +110,7 @@ export async function chatTranslationsFor(db: Db, villageId: string, userId: str
     if (!member) return;
     const [reader] = await tx.select({ profile: profiles }).from(profiles).innerJoin(chatConsents, and(eq(chatConsents.userId, profiles.userId), eq(chatConsents.villageId, villageId), eq(chatConsents.version, CHAT_CONSENT_VERSION))).where(eq(profiles.userId, userId));
     if (!reader) return;
-    const candidates = messages.filter(m => !m.deletedAt && !m.hiddenAt && m.authorId !== userId)
+    const candidates = messages.filter(m => !m.deletedAt && !m.hiddenAt && (m.authorKind !== "nushi" || chatNushiEnabled()) && m.authorId !== userId)
       .flatMap(message => { const lang = neededChatLanguage(message.lang, reader.profile); return lang ? [{ message, lang, sourceHash: chatSourceHash(message.body) }] : []; });
     if (!candidates.length) return;
     const ids = candidates.map(candidate => candidate.message.id);
@@ -178,14 +179,16 @@ export async function chatTranslationSource(db: Db, payload: ChatTranslationPayl
   if (!villageChatEnabled() || !isEnabledLang(payload.lang)) return null;
   const [message] = await db.select({ message: chatMessages }).from(chatMessages).innerJoin(villages, eq(villages.id, chatMessages.villageId))
     .where(and(eq(chatMessages.id, payload.messageId), chatVillageCondition(), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt)));
-  if (!message || chatSourceHash(message.message.body) !== payload.sourceHash) return null;
+  if (!message || message.message.authorKind === "nushi" && !chatNushiEnabled() || chatSourceHash(message.message.body) !== payload.sourceHash) return null;
   const m = message.message;
-  const previous = await db.select({ body: chatMessages.body }).from(chatMessages).where(and(
-    eq(chatMessages.villageId, m.villageId), lt(chatMessages.createdSeq, m.createdSeq),
+  if (m.authorKind === "nushi") return { message: m, context: [] };
+  const previous = await db.select({ id: chatMessages.id, body: chatMessages.body }).from(chatMessages).where(and(
+    eq(chatMessages.villageId, m.villageId), eq(chatMessages.authorKind, "human"), lt(chatMessages.createdSeq, m.createdSeq),
     gte(chatMessages.createdAt, new Date(m.createdAt.getTime() - 10 * 60_000)),
     sql`${chatMessages.createdAt} <= ${m.createdAt}`, isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt),
   )).orderBy(desc(chatMessages.createdSeq)).limit(CHAT_TRANSLATION_CONTEXT_COUNT);
-  return { message: m, context: previous.reverse().map(row => row.body) };
+  const [parent] = m.replyToId ? await db.select({ id: chatMessages.id, body: chatMessages.body }).from(chatMessages).where(and(eq(chatMessages.id, m.replyToId), eq(chatMessages.villageId, m.villageId), eq(chatMessages.authorKind, "human"), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt))) : [];
+  return { message: m, context: [...(parent && !previous.some(row => row.id === parent.id) ? [parent.body] : []), ...previous.reverse().map(row => row.body)] };
 }
 
 type SavedTranslation = Pick<typeof chatMessageTranslations.$inferInsert, "state" | "text" | "model" | "promptVersion" | "errorCode">;

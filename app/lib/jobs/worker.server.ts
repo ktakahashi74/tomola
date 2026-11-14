@@ -1,3 +1,4 @@
+import { expireChatNushiRequests } from "../chat-nushi.server";
 import { expireNushiRequests } from "../nushi.server";
 import { workerDisabledByEnv } from "../../../server/background";
 import { safeErrorText } from "~/lib/error-text.server";
@@ -115,6 +116,7 @@ export function startWorker(opts: WorkerOptions = {}): Worker | null {
         renderCacheChecked = true;
       }
       await expireNushiRequests(db);
+      await expireChatNushiRequests(db);
       await ensureDigestScheduledThrottled(db);
       await ensureCleanupScheduledThrottled(db);
       await ensureTranslationRecoveryScheduledThrottled(db);

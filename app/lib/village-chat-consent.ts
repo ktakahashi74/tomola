@@ -1,1 +1,1 @@
-export const CHAT_CONSENT_VERSION = 3;
+export const CHAT_CONSENT_VERSION = 4;

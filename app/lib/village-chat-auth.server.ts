@@ -6,7 +6,7 @@ import { villageChatEnabled } from "./village-chat-enabled.server";
 import { chatAccess } from "./village-chat.server";
 
 export const CHAT_PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" };
-export async function chatResourceMember(request: Request, slug: string, mode: "chat-changes" | "chat-events") {
+export async function chatResourceMember(request: Request, slug: string, mode: "chat-changes" | "chat-events" | "chat-nushi-preview") {
   if (!villageChatEnabled()) throw new Response("Not found", { status: 404, headers: CHAT_PRIVATE_HEADERS });
   const user = await getSessionUser(request);
   if (!user) throw new Response("Unauthorized", { status: 401, headers: CHAT_PRIVATE_HEADERS });

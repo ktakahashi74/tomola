@@ -135,7 +135,7 @@ describe("how a notification is mailed (effectiveEmailMode)", () => {
   it("`auto` mails replies and mentions immediately, other mailed kinds daily, and author language notices never", () => {
     expect([...AUTO_IMMEDIATE_KINDS]).toEqual(["reply_to_topic", "reply_to_reply", "response_to_topic", "mention", "chat_mention", "chat_reply"]);
     const auto = Object.fromEntries(NOTIFICATION_KINDS.map((k) => [k, effectiveEmailMode("auto", k)]));
-    expect(auto).toEqual({ reply_to_topic: "immediate", reply_to_reply: "immediate", response_to_topic: "immediate", moderation: "daily", appeal_decided: "daily", followed_thread: "daily", mention: "immediate", chat_mention: "immediate", chat_reply: "immediate", village_invite: "daily", village_added: "daily", village_removed: "daily", village_owner_changed: "daily", translation_report_result: "daily", nushi_result: "daily", nushi_cited: "daily", source_language_mismatch: "none", entry_translation_unavailable: "none" });
+    expect(auto).toEqual({ reply_to_topic: "immediate", reply_to_reply: "immediate", response_to_topic: "immediate", moderation: "daily", appeal_decided: "daily", followed_thread: "daily", mention: "immediate", chat_mention: "immediate", chat_reply: "immediate", village_invite: "daily", village_added: "daily", village_removed: "daily", village_owner_changed: "daily", translation_report_result: "daily", nushi_result: "daily", nushi_cited: "daily", chat_nushi_result: "daily", chat_nushi_cited: "daily", source_language_mismatch: "none", entry_translation_unavailable: "none" });
   });
 
   it("preferences override mailed kinds while author language notices stay in-app", () => {

@@ -2942,5 +2942,19 @@
   "ai_use_nushi": "Village Nushi",
   "ai_use_sent_nushi": "The calling post and a bounded set of public posts in that village; earlier AI replies only as context. Answers are saved as public AI replies. Error reports save question, answer and material only after consent.",
   "nushi_versions": "Prompt version: {version}. Quotation checks establish that passages exist, not that an answer is correct or fair.",
-  "nushi_saved": "Saved."
+  "nushi_saved": "Saved.",
+  "chat_nushi_call_notice": "This message will call Nushi and be sent to an external provider’s AI. Its answer will appear in this chat.",
+  "chat_nushi_label": "AI answering from this village’s posts · requested by @{handle}",
+  "chat_nushi_call_edited": "The calling message was edited after this answer.",
+  "chat_nushi_read": "Read the answer and its sources",
+  "chat_nushi_clarify": "Please describe what your question is about. For a person’s current view or new agreement, ask them in a post. For a fuller discussion, ask in a post.",
+  "chat_consent_reply_translation": "A reply is sent together with its directly referenced message to an external provider’s AI as translation context. Deleted or hidden references are excluded.",
+  "chat_consent_reply_review": "The review also includes the reported message’s direct reply target, even outside that range. Deleted or hidden reply targets are not read.",
+  "chat_consent_nushi": "When Nushi is available in this village, calling @nushi or @village-ai in a message sends only that message of yours to an external provider’s AI to interpret your question. Other people’s messages are not sent. Nushi answers from this village’s public posts, never from chat messages. Its answer appears here for people who can read this chat: village members who have accepted this consent. The privacy explanation describes the provider’s retention and use.",
+  "chat_consent_nushi_hide": "Hiding Nushi’s answers changes only their display on your screen.",
+  "chat_consent_v4_replies": "Translation context and report review now include the directly referenced message.",
+  "chat_consent_v4_nushi": "You can call the village AI in chat. Only your calling message is sent for the question; its answer is visible only within this chat.",
+  "ai_use_chat_nushi": "Village AI in chat",
+  "ai_use_sent_chat_nushi": "only the calling member’s message, projected to visible text, plus bounded public posts from the same village; no reply target or surrounding chat messages",
+  "chat_nushi_description": "In chat, only the calling member’s message is used to interpret the question. Replies and surrounding messages are excluded. Answers draw on the same village’s public posts and are readable only by consenting village members. Questions, answers and provider errors are not copied into request or generation records."
 }

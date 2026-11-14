@@ -57,7 +57,9 @@ export function itemText(item: MailItem, locale: Locale): string {
   const o = { locale };
   const reason = reasonLabelFor(item.reason ?? "other", locale);
   switch (item.kind) {
+    case "chat_nushi_result":
     case "nushi_result": return `${m.nushi_notification_result({}, o)}\n${item.url}`;
+    case "chat_nushi_cited":
     case "nushi_cited": return `${m.nushi_notification_cited({}, o)}\n${item.url}`;
     case "translation_report_result":
       return `${item.translationResult ? translationReportResultText(item.translationResult, item.title, locale) : m.notification_content_unavailable({}, o)}\n${item.url}`;
@@ -118,7 +120,9 @@ export function itemText(item: MailItem, locale: Locale): string {
 function subjectFor(item: MailItem, locale: Locale): string {
   const o = { locale };
   switch (item.kind) {
+    case "chat_nushi_result":
     case "nushi_result": return m.nushi_notification_result({}, o);
+    case "chat_nushi_cited":
     case "nushi_cited": return m.nushi_notification_cited({}, o);
     case "translation_report_result": return m.mail_subject_translation_report_result({}, o);
     case "chat_reply":

@@ -1,3 +1,4 @@
+import { createChatNushiHandlers } from "../chat-nushi.server";
 import { createNushiTranslationHandlers } from "../nushi-translations.server";
 import { createNushiHandlers } from "../nushi.server";
 import { createSourceLanguageHandlers } from "./source-language-jobs.server";
@@ -25,4 +26,4 @@ import type { JobHandlers } from "./queue.server";
 // cleanup_jobs (remove jobs finished over 30 days ago, daily UTC 03:00): jobs/maintenance-jobs.server.ts.
 // rebuild_render_cache rebuilds saved body and card HTML at the current version, newest topics first (render-cache.server.ts).
 // Handlers throw on failure for retry; throw DeferJob when temporarily unable to run, such as a budget limit.
-export const jobHandlers: JobHandlers = { ...createNushiHandlers(), ...createNushiTranslationHandlers(), ...createSourceLanguageHandlers(), ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() };
+export const jobHandlers: JobHandlers = { ...createChatNushiHandlers(), ...createNushiHandlers(), ...createNushiTranslationHandlers(), ...createSourceLanguageHandlers(), ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() };

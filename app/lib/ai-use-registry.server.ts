@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { nushiEnabled, nushiModel } from "./nushi-config.server";
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
 import { judgeThinking, primaryEngineId, resolveEmbeddingEngine, resolveEngines, sourceLanguageConfig, type EngineSet } from "./llm/config.server";
@@ -36,6 +37,7 @@ export const AI_USE_DEFINITIONS = {
   "translation-secondary": { label: "ai_use_secondary", sent: "ai_use_sent_post", current: (c: Context) => translation(c.engines.secondary) },
   "translation-retry": { label: "ai_use_retry", sent: "ai_use_sent_retry", current: (c: Context) => translation(c.engines.retry) },
   "chat-translation": { label: "ai_use_chat", sent: "ai_use_sent_chat", current: (c: Context) => translation(c.engines.chat) },
+  "chat-nushi": { label: "ai_use_chat_nushi", sent: "ai_use_sent_chat_nushi", current: (c: Context): ModelConfig | null => chatNushiEnabled(c.env) ? { id: primaryEngineId(c.env), model: nushiModel(c.env) } : null },
   "village-nushi": { label: "ai_use_nushi", sent: "ai_use_sent_nushi", current: (c: Context): ModelConfig | null => nushiEnabled(c.env) ? { id: primaryEngineId(c.env), model: nushiModel(c.env) } : null },
   "post-ask": { label: "ai_use_post_ask", sent: "ai_use_sent_post_ask", current: (c: Context): ModelConfig | null => postAskAiEnabled(c.env) ? { id: primaryEngineId(c.env), model: questionModel(c.env) } : null },
   "translation-check": { label: "ai_use_judge", sent: "ai_use_sent_judge", current: (c: Context): ModelConfig | null => {
@@ -68,7 +70,7 @@ export function readAiUseConfigurations(env: LlmEnv = process.env) {
       figure: figureTranslationEnabled(env) ? createFigureReader(env) : null,
       sampleRate: currentDivergenceSampleRate(env),
     };
-    return AI_USE_PURPOSES.map(purpose => ({ purpose, definition: AI_USE_DEFINITIONS[purpose], config: AI_USE_DEFINITIONS[purpose].current(context) }));
+    return AI_USE_PURPOSES.filter(purpose => purpose !== "chat-nushi" || chatNushiEnabled(env)).map(purpose => ({ purpose, definition: AI_USE_DEFINITIONS[purpose], config: AI_USE_DEFINITIONS[purpose].current(context) }));
   } catch {
     // Resolver errors can contain a supplied value. Never echo them through a public route.
     throw new Error("AI configuration is unavailable");

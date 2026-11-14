@@ -38,6 +38,7 @@ export function nushiInVillage(village: { kind: string; language: string | null;
 
 export function assertNushiConfig(env: LlmEnv = process.env) {
   if (![undefined, "", "0", "1"].includes(env.VILLAGE_NUSHI)) throw new Error("VILLAGE_NUSHI must be 1, 0 or empty");
-  if (!nushiEnabled(env)) return;
+  if (![undefined, "", "0", "1"].includes(env.VILLAGE_CHAT_NUSHI)) throw new Error("VILLAGE_CHAT_NUSHI must be 1, 0 or empty");
+  if (!nushiEnabled(env) && env.VILLAGE_CHAT_NUSHI !== "1") return;
   nushiLimits(env); nushiMonthlyBudgetMicro(env); nushiModel(env);
 }

@@ -1,3 +1,4 @@
+import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { chatReplyExcerpt, type ChatReply } from "./village-chat";
 import { RETENTION, RETENTION_BATCH_SIZE, daysBefore } from "./retention";
 import { recordRetentionResult, drainRetentionBatches, updateRetentionRows, type RetentionResults } from "./retention-batch.server";
@@ -60,9 +61,9 @@ export async function createChatReport(db: Db, reporterId: string, input: { slug
       const [consent] = await tx.select({ version: chatConsents.version }).from(chatConsents).where(and(eq(chatConsents.villageId, village.id), eq(chatConsents.userId, reporterId)));
       if (consent?.version !== CHAT_CONSENT_VERSION) throw new ChatReportError("not_found");
       const [message] = await tx.select().from(chatMessages).where(and(eq(chatMessages.id, input.messageId), eq(chatMessages.villageId, village.id))).for("update");
-      if (!message || message.deletedAt || message.hiddenAt) throw new ChatReportError("not_found");
+      if (!message || message.deletedAt || message.hiddenAt || message.authorKind === "nushi" && !chatNushiEnabled()) throw new ChatReportError("not_found");
       if (message.authorId === reporterId) throw new ChatReportError("forbidden");
-      const [author] = await tx.select({ handle: profiles.handle }).from(profiles).where(eq(profiles.userId, message.authorId));
+      const [author] = message.authorId ? await tx.select({ handle: profiles.handle }).from(profiles).where(eq(profiles.userId, message.authorId)) : [{ handle: "nushi" }];
       await tx.insert(chatReportSnapshots).values({ messageId: message.id, body: message.body, lang: message.lang, authorId: message.authorId, authorHandle: author?.handle ?? "", messageCreatedAt: message.createdAt, createdSeq: message.createdSeq, changedSeq: message.changedSeq, capturedAt: now }).onConflictDoNothing();
       const [snapshot] = await tx.select({ lang: chatReportSnapshots.lang, authorId: chatReportSnapshots.authorId }).from(chatReportSnapshots).where(eq(chatReportSnapshots.messageId, message.id));
       const [row] = await tx.insert(reports).values({ chatMessageId: message.id, chatLang: snapshot.lang, chatAuthorId: snapshot.authorId, reporterId, reason, note, createdAt: now }).onConflictDoNothing().returning({ id: reports.id });
@@ -147,10 +148,18 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
       const caseFilter = target.kind === "report" ? eq(chatAccessLog.reportId, target.id) : eq(chatAccessLog.appealId, target.id);
       let from = metadata.anchor, to = metadata.anchor;
       const versions: typeof chatAccessLog.$inferInsert.versions = [];
-      let snapshot: { body: string | null; lang: string; author: string; createdAt: string; changedSeq: number; reply: { outside: true } | null } | null = null;
+      let snapshot: { body: string | null; lang: string; author: string; createdAt: string; changedSeq: number; reply: ChatReply | { outside: true } | null } | null = null;
       let current: ChatEvidenceMessage | null = null, deleted = false;
       let context: ChatEvidenceMessage[] = [];
       let statement: string | null = null, explanation: string | null = null;
+      const directReply = async (replyToId: string | null): Promise<ChatReply | null> => {
+        if (!replyToId) return null;
+        const [parent] = await tx.select({ message: chatMessages, handle: profiles.handle }).from(chatMessages).leftJoin(profiles, eq(profiles.userId, chatMessages.authorId))
+          .where(and(eq(chatMessages.id, replyToId), eq(chatMessages.villageId, metadata.villageId), isNull(chatMessages.deletedAt), isNull(chatMessages.hiddenAt)));
+        if (!parent || parent.message.authorKind === "nushi" && !chatNushiEnabled()) return { id: replyToId, changedSeq: 0, unavailable: true };
+        versions.push({ id: parent.message.id, createdSeq: parent.message.createdSeq, changedSeq: parent.message.changedSeq });
+        return { id: replyToId, changedSeq: parent.message.changedSeq, unavailable: false, author: parent.handle ?? "nushi", text: chatReplyExcerpt(parent.message.body), lang: parent.message.lang, editedAt: parent.message.editedAt?.toISOString() ?? null };
+      };
       if (input.intent === "open") {
         if (target.kind === "appeal") {
           const [argument] = await tx.select({ text: appeals.text, note: moderationActions.note }).from(appeals).innerJoin(moderationActions, eq(moderationActions.id, appeals.actionId)).where(eq(appeals.id, target.id));
@@ -158,11 +167,11 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
         }
         const [saved] = await tx.select().from(chatReportSnapshots).where(eq(chatReportSnapshots.messageId, metadata.messageId));
         const [live] = await tx.select({ message: chatMessages, handle: profiles.handle }).from(chatMessages).leftJoin(profiles, eq(profiles.userId, chatMessages.authorId)).where(eq(chatMessages.id, metadata.messageId));
-        snapshot = { body: saved.body, lang: saved.lang, author: saved.authorHandle, createdAt: saved.messageCreatedAt.toISOString(), changedSeq: saved.changedSeq, reply: live?.message.replyToId ? { outside: true } : null };
+        snapshot = { body: saved.body, lang: saved.lang, author: saved.authorHandle, createdAt: saved.messageCreatedAt.toISOString(), changedSeq: saved.changedSeq, reply: await directReply(live?.message.replyToId ?? null) };
         if (saved.body !== null) versions.push({ id: saved.messageId, createdSeq: saved.createdSeq, changedSeq: saved.changedSeq, snapshot: true });
         deleted = !!live?.message.deletedAt;
         if (live && !deleted && (live.message.body !== saved.body || live.message.lang !== saved.lang)) {
-          current = evidenceMessage(live.message, live.handle); versions.push({ id: current.id, createdSeq: current.createdSeq, changedSeq: current.changedSeq });
+          current = { ...evidenceMessage(live.message, live.handle), reply: await directReply(live.message.replyToId) }; versions.push({ id: current.id, createdSeq: current.createdSeq, changedSeq: current.changedSeq });
         }
       } else {
         if (input.intent === "expand") {
@@ -179,16 +188,17 @@ export async function readChatEvidence(db: Db, actor: Actor, target: ChatCase, i
         const newer = await select().where(and(visible, sql`${chatMessages.createdSeq} > ${to}`)).orderBy(asc(chatMessages.createdSeq)).limit(CHAT_CASE_CONTEXT_COUNT);
         const anchor = input.intent === "context" ? await select().where(and(visible, eq(chatMessages.id, metadata.messageId))) : [];
         const bounded = [...older.reverse(), ...anchor, ...newer];
-        context = bounded.map(row => {
+        context = await Promise.all(bounded.map(async row => {
           const shown = evidenceMessage(row.message, row.handle);
           if (!row.message.replyToId) return shown;
+          if (row.message.id === metadata.messageId) return { ...shown, reply: await directReply(row.message.replyToId) };
           const parent = bounded.find(candidate => candidate.message.id === row.message.replyToId);
           // Never fetch a parent outside the audited context, even for an operator.
           const reply: ChatEvidenceMessage["reply"] = !parent ? { outside: true }
             : parent.message.hiddenAt ? { id: parent.message.id, changedSeq: parent.message.changedSeq, unavailable: true }
             : { id: parent.message.id, changedSeq: parent.message.changedSeq, unavailable: false, author: parent.handle ?? "", text: chatReplyExcerpt(parent.message.body), lang: parent.message.lang, editedAt: parent.message.editedAt?.toISOString() ?? null };
           return { ...shown, reply };
-        });
+        }));
         from = Math.min(from, context.at(0)?.createdSeq ?? from); to = Math.max(to, context.at(-1)?.createdSeq ?? to);
         versions.push(...context.map(message => ({ id: message.id, createdSeq: message.createdSeq, changedSeq: message.changedSeq })));
       }

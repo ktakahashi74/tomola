@@ -145,7 +145,7 @@ it("bounds context by village, creation order, age, visibility, and two original
   expect((await chatTranslationSource(w.db, payload))!.context).toEqual(["First original"]);
 });
 
-it("passes only chronological preceding context to the fake engine when replying to an older message", async () => {
+it("passes the direct reply target and chronological preceding context to the fake engine", async () => {
   const w = await world();
   const parent = await w.send("古い返信先の秘密。");
   await w.send("直前の発言その一。"); await w.send("直前の発言その二。");
@@ -157,8 +157,8 @@ it("passes only chronological preceding context to the fake engine when replying
   expect(translate).toHaveBeenCalled();
   for (const [request] of translate.mock.calls) {
     expect(request.text).toBe("日本語で返信します。");
-    expect(request.chat?.context).toEqual(["直前の発言その一。", "直前の発言その二。"]);
-    expect(JSON.stringify(request)).not.toContain("古い返信先の秘密");
+    expect(request.chat?.context).toEqual(["古い返信先の秘密。", "直前の発言その一。", "直前の発言その二。"]);
+    expect(JSON.stringify(request)).toContain("古い返信先の秘密");
   }
   expect((await w.db.select().from(chatMessages).where(eq(chatMessages.id, sent.id)))[0].replyToId).toBe(parent.id);
 });
