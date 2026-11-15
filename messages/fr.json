@@ -3016,5 +3016,7 @@
   "village_slug_ai_help": "Pour les noms comportant des caractères non latins, l’IA reçoit le nom afin de suggérer une adresse en anglais. Vérifiez et modifiez la suggestion avant de créer le village ; vous ne pourrez plus modifier l’adresse ultérieurement.",
   "village_slug_suggesting": "Suggestion d’une adresse…",
   "ai_use_village_slug": "Suggestions d’adresses de village",
-  "ai_use_sent_village_slug": "Le nom saisi lors de la création d’un village, afin de suggérer un slug d’URL en anglais."
+  "ai_use_sent_village_slug": "Le nom saisi lors de la création d’un village, afin de suggérer un slug d’URL en anglais.",
+  "nushi_sources": "Sources :",
+  "nushi_quotes": "Voir les citations"
 }

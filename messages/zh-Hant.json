@@ -2391,5 +2391,7 @@
   "village_slug_ai_help": "若名稱包含非拉丁字母，AI 會接收該名稱以建議英文網址。建立村前請先檢查並編輯該建議；網址建立後將無法變更。",
   "village_slug_suggesting": "正在建議網址…",
   "ai_use_village_slug": "村網址建議",
-  "ai_use_sent_village_slug": "建立村時輸入的名稱，用於建議英文 URL 別名。"
+  "ai_use_sent_village_slug": "建立村時輸入的名稱，用於建議英文 URL 別名。",
+  "nushi_sources": "來源：",
+  "nushi_quotes": "查看引用"
 }
