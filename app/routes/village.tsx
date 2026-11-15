@@ -145,7 +145,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (intent === "flag") {
     const rate = await hitMemberLimit(db, "report", user.id);
     if (!rate.allowed) return data({ reportError: "rate_limited", reported: false }, { status: 429, headers: rateLimitHeaders(rate) });
-    const res = await createVillageReport(db, user.id, { slug: params.slug.toLowerCase(), reason: form.get("reason"), note: form.get("note"), target: form.get("target") });
+    const res = await createVillageReport(db, user.id, { slug: params.slug.toLowerCase(), reason: form.get("reason"), note: form.get("note"), target: form.get("target"), voiceEventId: form.get("voiceEventId") });
     if (res.ok) return { reportError: null, reported: true };
     return data({ reportError: res.error, reported: false }, { status: res.error === "duplicate" ? 409 : res.error === "not_found" ? 404 : res.error === "forbidden" ? 403 : 400 });
   }
@@ -302,6 +302,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     </PersistentDetails>}
     {operator && !owner && !village.language && <Link className="link-ui inline-block" to={`/mod/village/${village.slug}`}>{m.village_mod_link()}</Link>}
     {"reportError" in (actionData ?? {}) && <p role="status">{actionData && "reportError" in actionData ? actionData.reportError === null ? m.flag_thanks() : actionData.reportError === "rate_limited" ? m.error_rate_limited() : actionData.reportError === "duplicate" ? m.flag_error_duplicate() : m.flag_error_invalid() : ""}</p>}
-    {!owner && "reported" in loaderData && <VillageReportForm hasVoice={"voice" in loaderData && !!loaderData.voice?.text} hasIcon={village.hasIcon} reported={loaderData.reported ?? []} />}
+    {!owner && "reported" in loaderData && <VillageReportForm voiceHistory={"voice" in loaderData ? loaderData.voice?.history : undefined} hasIcon={village.hasIcon} reported={loaderData.reported ?? []} />}
   </main>;
 }

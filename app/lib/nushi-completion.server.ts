@@ -44,8 +44,9 @@ function boundedAnswer(answer: AiQuestionAnswer) {
 }
 
 export async function completeNushiAnswer(db: Db, completer: JsonCompleter, prompt: CompleteRequest, materials: AiQuestionMaterials,
-  options: { destination?: "public-reply" | "chat"; clock: () => Date; env: LlmEnv }) {
+  options: { destination?: "public-reply" | "chat"; voiceApplied?: boolean; clock: () => Date; env: LlmEnv }) {
   const { destination = "public-reply", clock, env } = options;
+  const verification = { voiceApplied: options.voiceApplied };
   const complete = async (request: CompleteRequest) => {
     const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask",
       estimateMicro: completionEstimate(completer.engine, completer.model, request.system, request.user, request.maxOutputTokens, env), now: clock(), clock, env, signal: request.signal },
@@ -53,20 +54,20 @@ export async function completeNushiAnswer(db: Db, completer: JsonCompleter, prom
     return result.text;
   };
   let raw = await complete(prompt);
-  let verified = verifyNushiAnswerResult(raw, materials, destination);
+  let verified = verifyNushiAnswerResult(raw, materials, destination, verification);
   if (verified.ok || !limitReasons.has(verified.reason)) return { ...verified, truncated: false };
   // A size failure must never conceal an invalid quote, source or extra field.
-  const content = verifyNushiAnswerResult(raw, materials, destination, { ignoreCounts: true, ignoreLengths: true });
+  const content = verifyNushiAnswerResult(raw, materials, destination, { ...verification, ignoreCounts: true, ignoreLengths: true });
   if (!content.ok) return { ...content, truncated: false };
   const exceeded = excesses(raw);
   if (!exceeded.length) return { ...verified, truncated: false };
   console.info("Nushi answer regeneration", { limits: exceeded });
   raw = await complete({ ...prompt, system: prompt.system + `\nThe previous answer exceeded these limits: ${exceeded.map(item => `${item.reason}: ${item.actual}, limit ${item.limit}`).join("; ")}. Return a shorter answer in the same JSON shape using the same supplied materials. Preserve attribution, conditions and reservations. This is the only regeneration.` });
-  verified = verifyNushiAnswerResult(raw, materials, destination);
+  verified = verifyNushiAnswerResult(raw, materials, destination, verification);
   if (verified.ok || !["citations_count", "readings_count"].includes(verified.reason)) return { ...verified, truncated: false };
-  const countOnly = verifyNushiAnswerResult(raw, materials, destination, { ignoreCounts: true });
+  const countOnly = verifyNushiAnswerResult(raw, materials, destination, { ...verification, ignoreCounts: true });
   if (!countOnly.ok) return { ...countOnly, truncated: false };
-  const bounded = verifyNushiAnswerResult(boundedAnswer(countOnly.answer), materials, destination);
+  const bounded = verifyNushiAnswerResult(boundedAnswer(countOnly.answer), materials, destination, verification);
   if (!bounded.ok) return { ...bounded, truncated: false };
   console.info("Nushi answer bounded", { reason: verified.reason, before: verified.counts, after: { readings: bounded.answer.readings.length, citations: bounded.answer.citations.length } });
   return { ...bounded, truncated: true };

@@ -25,7 +25,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const village = await personalVoiceVillage(db, params.handle);
   if (!village) throw data("Not found", { status: 404 });
   const owner = user?.id === village.ownerId;
-  return { voice: (await publicNushiVoice(db, village.id))!, handle: village.slug.slice(1), owner, ended: !!village.endedAt,
+  const voice = (await publicNushiVoice(db, village.id))!;
+  if (!owner && !voice.history.length) throw data("Not found", { status: 404 });
+  return { voice, handle: village.slug.slice(1), owner, ended: !!village.endedAt,
     setting: owner && (nushiEnabled() || chatNushiEnabled()) ? { id: village.id, enabled: village.nushiEnabled === true } : null,
     operator: user ? (await getViewer(db, user)).scope.operator : false,
     reported: user ? await openVillageReportTargets(db, village.id, user.id) : null };
@@ -40,7 +42,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const form = await request.formData(), intent = form.get("intent");
   if (intent === "flag") {
     await enforceMemberLimit(db, "report", user.id);
-    const result = await createVillageReport(db, user.id, { slug: village.slug, target: form.get("target"), reason: form.get("reason"), note: form.get("note") });
+    const result = await createVillageReport(db, user.id, { slug: village.slug, target: form.get("target"), voiceEventId: form.get("voiceEventId"), reason: form.get("reason"), note: form.get("note") });
     if (!result.ok) return data({ error: result.error }, { status: result.error === "forbidden" ? 403 : 400 });
     return { reported: true };
   }
@@ -63,6 +65,6 @@ export default function PersonalVillageVoice({ loaderData: value, actionData }: 
       <NushiVoiceSetting text={value.voice.text} />
     </details>}
     {value.operator && !value.owner && <Link className="underline" to={`/mod/village/@${value.handle}`}>{m.village_mod_link()}</Link>}
-    {!value.owner && value.reported && <VillageReportForm reported={value.reported} voiceOnly hasVoice={!!value.voice.text} />}
+    {!value.owner && value.reported && <VillageReportForm reported={value.reported} voiceOnly voiceHistory={value.voice.history} />}
   </main>;
 }

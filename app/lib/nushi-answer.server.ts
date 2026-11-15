@@ -12,7 +12,7 @@ export function logNushiVerificationFailure(requestId: string, result: AnswerVer
   console.warn("Nushi answer verification failed", { requestId, reason: result.reason, counts: { readings: result.counts.readings, citations: result.counts.citations } });
 }
 
-export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMaterials, destination: "public-reply" | "chat" = "public-reply", options: AnswerVerificationOptions = {}) {
+export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMaterials, destination: "public-reply" | "chat" = "public-reply", options: AnswerVerificationOptions & { voiceApplied?: boolean } = {}) {
   if (!options.ignoreLengths && raw.length > AI_QUESTION_LIMITS.outputChars) return answerVerificationFailure("output_too_long");
   let value: unknown;
   try { value = parseQuestionJson(raw); }
@@ -30,8 +30,11 @@ export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMateri
   const result = verifyQuestionAnswerResult(JSON.stringify(answerData), materials, options);
   if (!result.ok) return result;
   const authors = new Set(materials.sources.map(source => source.author.normalize("NFKC").toLowerCase()).filter(author => author.startsWith("@")));
+  // Match whole URLs so a supplied address never authorizes a longer, different address.
+  const urls = (text: string) => text.match(/(?:https?:\/\/|www\.)[^\s<>"'`\[\]{}]+/giu)?.map(url => url.replace(/[.,;:!?。、）)]+$/u, "")) ?? [];
+  const allowedUrls = new Set(options.voiceApplied ? materials.sources.flatMap(source => urls(source.original)) : []);
   for (const reading of result.answer.readings) {
-    if (/(?:https?:\/\/|www\.)/iu.test(reading.text)) return answerVerificationFailure("unexpected_url", answerData);
+    if (options.voiceApplied && urls(reading.text).some(url => !allowedUrls.has(url))) return answerVerificationFailure("unexpected_url", answerData);
     if (mentionCandidates(reading.text).some(({ start, end }) => !authors.has(reading.text.slice(start, end).normalize("NFKC").toLowerCase())
       || HANDLE_REST.test((reading.text[end] ?? "").normalize("NFKC").toLowerCase()))) return answerVerificationFailure("unknown_author", answerData);
   }

@@ -126,7 +126,7 @@ export async function action({ request }: Pick<Route.ActionArgs, "request">) {
     if (reportId === null || reportId === undefined && !slugTarget) throw data("Bad request", { status: 400 });
     if (intent === "village-end" && formString(form, "confirm") !== "1") return data({ error: "confirm_required" as const, id: reportId ?? slugTarget }, { status: 400 });
     const res = await moderateVillage(db, actor, { ...(reportId === undefined ? { slugTarget } : { reportId }), version: formString(form, "villageVersion"), intent: intent === "village-clear-voice" ? "clear-voice" : intent === "village-clear-icon" ? "clear-icon" : intent === "village-fix" ? "fix" : intent === "village-end" ? "end" : "dismiss", reason, note,
-      ...(form.has("name") ? { name: formString(form, "name") } : {}), ...(form.has("slug") ? { slug: formString(form, "slug") } : {}), ...(form.has("description") ? { description: formString(form, "description") } : {}) });
+      voiceEventId: form.get("voiceEventId"), ...(form.has("name") ? { name: formString(form, "name") } : {}), ...(form.has("slug") ? { slug: formString(form, "slug") } : {}), ...(form.has("description") ? { description: formString(form, "description") } : {}) });
     if (res.ok) throw done();
     return fail(res.error, reportId ?? slugTarget);
   }

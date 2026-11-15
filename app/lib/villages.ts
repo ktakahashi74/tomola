@@ -22,7 +22,7 @@ export type VillageInviteKind = typeof VILLAGE_INVITE_KINDS[number];
 // Reserve supported language tags even when that language is currently disabled.
 const reserved = new Set([
   ...PRINCIPLES_LANGS.map(lang => lang.toLowerCase()),
-  "home", "villages", "v", "new", "create", "edit", "end", "invite", "invites", "join", "leave",
+  "home", "villages", "v", "personal", "new", "create", "edit", "end", "invite", "invites", "join", "leave",
   "login", "logout", "auth", "onboarding", "navigation-header", "api", "mcp", "signing", "passkeys",
   "preview", "media", "open-in-ai", "drafts", "vote", "mentions", "stance", "follow", "following",
   "latest", "search", "changes", "manifest", "glossary", "llms", "ai", "help", "offline",

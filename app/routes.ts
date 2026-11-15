@@ -25,7 +25,6 @@ export default [
   route("preview", "routes/preview.ts"),
   route("avatars/:file", "routes/avatar-file.ts"),
   route("settings/avatar", "routes/settings-avatar.ts"),
-  route("v/:slug/icon", "routes/village-icon.ts"),
   route("settings/save", "routes/settings-save.ts"),
   route("media", "routes/media-upload.ts"),
   route("media/:file", "routes/media-file.ts"),
@@ -82,7 +81,6 @@ export default [
   route("manifest.json", "routes/manifest.ts"),
   // RSS feeds of public topics: the whole site and one village (app/routes/feed.ts).
   route("feed.xml", "routes/feed.ts", { id: "feed-all" }),
-  route("v/:slug/feed.xml", "routes/feed.ts", { id: "feed-village" }),
   // Glossary: authenticated Markdown versions and export download.
   route("glossary.md", "routes/glossary-md.ts", { id: "glossary-md" }),
   route("glossary.txt", "routes/glossary-md.ts", { id: "glossary-txt" }),
@@ -188,5 +186,7 @@ export default [
       route("suspended", "routes/suspended.tsx"),
     ]),
   ]),
+  route("v/:slug/icon", "routes/village-icon.ts"),
+  route("v/:slug/feed.xml", "routes/feed.ts", { id: "feed-village" }),
   route("*", "routes/not-found.tsx"),
 ] satisfies RouteConfig;

@@ -2201,6 +2201,7 @@
   "nushi_voice_public_help": "この文と変更履歴（いつ、だれが、どんな文に変えたか）は公開されます。公開の閲覧が開いていれば、ログインしていない人も読めます。",
   "nushi_voice_owner_label": "ビレッジのオーナーが決めた話し方",
   "nushi_voice_default": "いつものヌシ（話し方の指定なし）。",
+  "nushi_voice_hidden": "運営者が外した文",
   "nushi_voice_history": "話し方の変更履歴",
   "nushi_voice_clear": "いつものヌシに戻す",
   "nushi_voice_invalid": "500 字以内で、制御文字を使わずに書いてください。",

@@ -338,6 +338,7 @@ export const villageEvents = pgTable("village_events", {
   actorHandle: text("actor_handle").notNull(),
   action: text("action").notNull(),
   detail: jsonb("detail").$type<Record<string, string | null>>().notNull(),
+  nushiVoiceHidden: boolean("nushi_voice_hidden").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   index("village_events_village_idx").on(t.villageId, t.id),
@@ -1295,6 +1296,7 @@ export const reports = pgTable(
     avatarMediaId: text("avatar_media_id").references(() => media.id, { onDelete: "set null" }),
     iconMediaId: text("icon_media_id").references(() => media.id, { onDelete: "set null" }),
     villageTarget: text("village_target").$type<"information" | "icon" | "nushi_voice">().notNull().default("information"),
+    voiceEventId: bigint("voice_event_id", { mode: "number" }).references(() => villageEvents.id),
     displayNameUserId: text("display_name_user_id").references(() => user.id),
     displayNamesReported: jsonb("display_names_reported").$type<{ displayName: string | null; displayNameLatin: string | null }>(),
     // Frozen routing metadata avoids reading private evidence while selecting queue pages.

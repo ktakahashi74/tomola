@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { nushiFixture } from "./helpers/nushi";
 import { getProfile } from "~/lib/profiles.server";
-import { setNushiVoice } from "~/lib/nushi-voice.server";
+import { personalVoiceVillage, setNushiVoice } from "~/lib/nushi-voice.server";
 
 const auth = vi.hoisted(() => ({ getReader: vi.fn(), requireWriter: vi.fn() }));
 vi.mock("~/lib/auth/session.server", () => ({ getReader: auth.getReader, requireWriter: auth.requireWriter }));
@@ -28,8 +28,18 @@ it("exposes only public style information on a personal village page and gates i
   const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
   auth.getReader.mockResolvedValue({ db: f.db });
   const args = { request: request("/v/personal/znushi_owner"), params: { handle: "znushi_owner" } } as never;
+  await expect(personalLoader(args)).rejects.toMatchObject({ init: { status: 404 } });
+  auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-caller", email: "caller@example.com" } });
+  await expect(personalLoader(args)).rejects.toMatchObject({ init: { status: 404 } });
+  auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-owner", email: "owner@example.com" } });
+  expect(await personalLoader(args)).toMatchObject({ owner: true, voice: { history: [] } });
+  const village = (await personalVoiceVillage(f.db, "znushi_owner"))!;
+  await setNushiVoice(f.db, "nushi-owner", village.id, "A public personal style.");
+  await setNushiVoice(f.db, "nushi-owner", village.id, "");
+  auth.getReader.mockResolvedValue({ db: f.db });
   const view = await personalLoader(args);
-  expect(view).toMatchObject({ owner: false, operator: false, setting: null, reported: null, voice: { text: "", history: [] } });
+  expect(view).toMatchObject({ owner: false, operator: false, setting: null, reported: null, voice: { text: "", history: expect.any(Array) } });
+  expect(view.voice.history).toHaveLength(2);
   expect(view).not.toHaveProperty("userId");
   expect(view).not.toHaveProperty("topics");
   vi.stubEnv("VILLAGE_NUSHI_VOICE", "0"); auth.getReader.mockClear();
@@ -42,11 +52,11 @@ it.each([false, true])("enforces writer ownership, length and origin at the acti
   const action = personal ? personalAction : villageAction;
   const params = personal ? { handle: "znushi_owner" } : { slug: "nushi-test" };
   const path = personal ? "/v/personal/znushi_owner" : "/v/nushi-test";
-  auth.requireWriter.mockResolvedValue({ db: f.db, user: { id: "nushi-caller" }, profile: await getProfile(f.db, "nushi-caller") });
+  auth.requireWriter.mockResolvedValue({ db: f.db, user: { id: "nushi-caller", email: "caller@example.com" }, profile: await getProfile(f.db, "nushi-caller") });
   const blocked = await action({ params, request: request(path, { intent: "nushi-voice", voice: "Warm." }) } as never);
   expect(blocked).toMatchObject({ init: { status: 403 } });
   await expect(action({ params, request: request(path, { intent: "nushi-voice", voice: "Warm." }, "https://elsewhere.example") } as never)).rejects.toMatchObject({ init: { status: 403 } });
-  auth.requireWriter.mockResolvedValue({ db: f.db, user: { id: "nushi-owner" }, profile: await getProfile(f.db, "nushi-owner") });
+  auth.requireWriter.mockResolvedValue({ db: f.db, user: { id: "nushi-owner", email: "owner@example.com" }, profile: await getProfile(f.db, "nushi-owner") });
   expect(await action({ params, request: request(path, { intent: "nushi-voice", voice: "a".repeat(501) }) } as never)).toMatchObject({ data: { error: "invalid_voice" }, init: { status: 400 } });
   await expect(action({ params, request: request(path, { intent: "nushi-voice", voice: "Warm." }) } as never)).rejects.toMatchObject({ status: 302 });
   await expect(action({ params, request: request(path, { intent: "nushi-voice-clear" }) } as never)).rejects.toMatchObject({ status: 302 });

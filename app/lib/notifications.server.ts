@@ -26,6 +26,8 @@ import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
 import { chatNotificationCondition, chatNotificationLocations, type ChatNotificationLocation } from "~/lib/village-chat-notifications.server";
 import { markdownToPlainText } from "~/lib/plain-text.server";
 import { parseResponsePost } from "~/lib/response-post.server";
+import { nushiVoiceEnabled } from "./nushi-config.server";
+import { m } from "~/paraglide/messages.js";
 
 // In-app notifications.
 // - Reply notifications, created in createReply's transaction: reply_to_topic to topic author; reply_to_reply to parent-reply author.
@@ -467,14 +469,21 @@ export async function listNotifications(
   const villageIds = [...new Set(pageRows.filter(row => !isChatNotification(row.kind)).map(row => row.villageId).filter((id): id is string => !!id))];
   const inviteIds = [...new Set(pageRows.map(row => row.villageInviteId).filter((id): id is string => !!id))];
   const [villageRows, inviteRows] = await Promise.all([
-    villageIds.length ? db.select({ id: villages.id, slug: villages.slug, name: villages.name, language: villages.language, endedAt: villages.endedAt }).from(villages).where(and(inArray(villages.id, villageIds), sharedVillageCondition())) : [],
+    villageIds.length ? db.select({ id: villages.id, slug: villages.slug, name: villages.name, language: villages.language, endedAt: villages.endedAt,
+      personalHandle: sql<string | null>`case when ${villages.kind} = 'personal' then (select handle from profiles where user_id = ${villages.ownerId}) end` })
+      .from(villages).where(and(inArray(villages.id, villageIds), or(sharedVillageCondition(),
+        villagesEnabled() && nushiVoiceEnabled() ? and(eq(villages.kind, "personal"), eq(villages.ownerId, userId)) : undefined))) : [],
     inviteIds.length ? db.select({ id: villageInvites.id, state: villageInvites.state, kind: villageInvites.kind }).from(villageInvites).where(and(inArray(villageInvites.id, inviteIds), eq(villageInvites.userId, userId))) : [],
   ]);
   // Village names are shown in the reader's language when the village was named in another (the page's reader; mail has its own).
   const translatedNames = new Map((await localizeVillages(db, [...villageRows, ...[...chatLocations.values()].map(location => ({ slug: location.slug, name: location.name, language: location.language }))], opts.display)).flatMap(row => row.slug ? [[row.slug, row.name] as const] : []));
   // `originalName` is set only when the name shown is a translation, for a tooltip with the original.
   const originalIfTranslated = (shown: string, original: string) => ({ originalName: shown !== original ? original : undefined });
-  const villageById = new Map(villageRows.map(row => { const name = row.slug ? translatedNames.get(row.slug) ?? row.name : row.name; return [row.id, { ...row, name, ...originalIfTranslated(name, row.name) }]; }));
+  const villageById = new Map(villageRows.map(row => {
+    if (row.personalHandle) return [row.id, { ...row, slug: `personal/${row.personalHandle}`, name: m.village_personal_destination({ handle: row.personalHandle }, { locale: opts.display?.displayLang ?? "en" }), originalName: undefined }];
+    const name = row.slug ? translatedNames.get(row.slug) ?? row.name : row.name;
+    return [row.id, { ...row, name, ...originalIfTranslated(name, row.name) }];
+  }));
   const invitesById = new Map(inviteRows.map(row => [row.id, row]));
   const followedHrefs = await followedThreadHrefs(db, pageRows.filter(r => r.kind === "followed_thread"));
   const entryIds = [...new Set(pageRows.map((r) => r.entryId).filter((v): v is number => v !== null))];

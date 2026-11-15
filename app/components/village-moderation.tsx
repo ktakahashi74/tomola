@@ -13,8 +13,9 @@ import { villageName } from "~/lib/village-name";
 import type { VillageMetadata, VillageReportCard, VillageReportTarget } from "~/lib/village-moderation.server";
 import { m } from "~/paraglide/messages.js";
 
-export function VillageReportForm({ reported, hasIcon = false, hasVoice = false, voiceOnly = false }: { reported: VillageReportTarget[]; hasIcon?: boolean; hasVoice?: boolean; voiceOnly?: boolean }) {
-  const available: VillageReportTarget[] = [...(voiceOnly ? [] : ["information" as const]), ...(hasIcon ? ["icon" as const] : []), ...(hasVoice ? ["nushi_voice" as const] : [])];
+export function VillageReportForm({ reported, hasIcon = false, voiceHistory = [], voiceOnly = false }: { reported: VillageReportTarget[]; hasIcon?: boolean; voiceHistory?: Array<{ id: number; text: string; hidden: boolean; date: string }>; voiceOnly?: boolean }) {
+  const voices = voiceHistory.filter(event => event.text && !event.hidden);
+  const available: VillageReportTarget[] = [...(voiceOnly ? [] : ["information" as const]), ...(hasIcon ? ["icon" as const] : []), ...(voices.length ? ["nushi_voice" as const] : [])];
   const targets = available.filter(target => !reported.includes(target));
   return <>
     {reported.length > 0 && <p role="status" className="ui-help text-muted-foreground">{m.village_reported()}</p>}
@@ -22,6 +23,7 @@ export function VillageReportForm({ reported, hasIcon = false, hasVoice = false,
     <Form method="post" className="mt-2 max-w-xl space-y-3 rounded border p-3 text-sm">
       <input type="hidden" name="intent" value="flag" />
       {targets.length > 1 ? <label className="block space-y-1"><span>{m.village_report_target()}</span><select name="target" className="rounded border bg-background p-2">{targets.map(target => <option key={target} value={target}>{target === "nushi_voice" ? m.nushi_voice_title() : target === "icon" ? m.village_icon_label() : m.village_report_information()}</option>)}</select></label> : <input type="hidden" name="target" value={targets[0]} />}
+      {targets.includes("nushi_voice") && <label className="block space-y-1"><span>{m.nushi_voice_history()}</span><select name="voiceEventId" className="w-full rounded border bg-background p-2">{voices.map(event => <option key={event.id} value={event.id}>{event.date.slice(0, 10)} · {event.text.slice(0, 80)}</option>)}</select></label>}
       <ReportReasonSelect appearance="plain" />
       <label className="block space-y-1"><span>{m.flag_note()}</span><Textarea name="note" rows={3} maxLength={1000} /></label>
       <p className="ui-help text-muted-foreground">{m.flag_privacy()}</p>
@@ -45,7 +47,7 @@ export function VillageAppealDetails({ village, before }: { village: VillageMeta
   </div>;
 }
 type Card = Omit<VillageReportCard, "reports"> & { reports: Array<Omit<VillageReportCard["reports"][number], "createdAt"> & { createdAt: string }> };
-export function VillageModerationCard({ card: c, handled, returnTo }: { card: Card; handled: boolean; returnTo: string }) {
+export function VillageModerationCard({ card: c, handled, returnTo, direct = false }: { card: Card; handled: boolean; returnTo: string; direct?: boolean }) {
   const descriptionId = useId();
   return <section id={`v-report-${c.reportId ?? c.village.slug}`} className="space-y-3 rounded border p-4 [overflow-wrap:anywhere]">
     <div className="flex flex-wrap gap-2 ui-meta"><span>{m.mod_kind_village()}</span><span>{c.village.kind === "personal" ? m.village_personal() : c.village.kind === "invite_public" ? m.village_invite_public() : m.village_open()}</span>{c.village.ended && <span>{m.village_ended()}</span>}
@@ -73,11 +75,27 @@ export function VillageModerationCard({ card: c, handled, returnTo }: { card: Ca
       <div className="space-y-1"><label htmlFor={descriptionId}>{m.village_description_field()}</label><Textarea id={descriptionId} name="description" defaultValue={c.village.description} maxLength={VILLAGE_DESCRIPTION_MAX} disabled={!!c.village.language || c.village.kind === "personal"} /></div>
       <ReportReasonSelect appearance="plain" defaultValue={c.reports[0]?.reason ?? "other"} />
       <label className="block space-y-1"><span>{m.village_mod_note()}</span><Textarea name="note" maxLength={500} /></label>
-      <div className="flex flex-wrap gap-3">{c.village.nushiVoice && <Button type="submit" name="intent" value="village-clear-voice" variant="outline">{m.nushi_voice_remove()}</Button>}{c.iconUrl && <Button type="submit" name="intent" value="village-clear-icon" variant="outline">{m.village_icon_clear()}</Button>}{!c.village.language && c.village.kind !== "personal" && <Button type="submit" name="intent" value="village-fix">{m.village_mod_fix()}</Button>}{c.reportId !== null && <Button type="submit" name="intent" value="village-dismiss" variant="outline">{m.mod_dismiss()}</Button>}</div>
+      <div className="flex flex-wrap gap-3">{c.iconUrl && <Button type="submit" name="intent" value="village-clear-icon" variant="outline">{m.village_icon_clear()}</Button>}{!c.village.language && c.village.kind !== "personal" && <Button type="submit" name="intent" value="village-fix">{m.village_mod_fix()}</Button>}{c.reportId !== null && <Button type="submit" name="intent" value="village-dismiss" variant="outline">{m.mod_dismiss()}</Button>}</div>
       {!c.village.language && c.village.kind !== "personal" && !c.village.ended && <div className="space-y-2 border-t pt-2">
         <label className="flex items-center gap-2 text-sm"><Checkbox name="confirm" value="1" />{m.village_mod_end_confirm()}</label>
         <Button type="submit" name="intent" value="village-end" variant="destructive">{m.village_mod_end()}</Button>
       </div>}
     </Form>}
+    {!!c.voiceHistory?.length && <details><summary className="cursor-pointer underline">{m.nushi_voice_history()}</summary>
+      <ol className="space-y-3">{c.voiceHistory.filter(event => event.text).map(event => {
+        const report = c.reports.find(r => r.target === "nushi_voice" && r.voiceEventId === event.id);
+        return <li key={event.id} data-voice-event={event.id} className="space-y-2 rounded border p-2">
+          <time className="ui-meta" dateTime={event.date}>{event.date.slice(0, 10)}</time>
+          <p className="whitespace-pre-wrap">{event.text}</p>
+          {event.hidden ? <p>{m.nushi_voice_hidden()}</p> : !handled && !c.owned && (direct || report) && <Form method="post" className="space-y-2">
+            {report ? <input type="hidden" name="reportId" value={report.id} /> : <input type="hidden" name="slugTarget" value={c.village.slug ?? ""} />}
+            <input type="hidden" name="voiceEventId" value={event.id} /><input type="hidden" name="villageVersion" value={c.version} /><input type="hidden" name="returnTo" value={returnTo} />
+            <ReportReasonSelect appearance="plain" defaultValue={report?.reason ?? "other"} />
+            <label className="block space-y-1"><span>{m.village_mod_note()}</span><Textarea name="note" maxLength={500} /></label>
+            <Button type="submit" name="intent" value="village-clear-voice" variant="outline">{m.nushi_voice_remove()}</Button>
+          </Form>}
+        </li>;
+      })}</ol>
+    </details>}
   </section>;
 }

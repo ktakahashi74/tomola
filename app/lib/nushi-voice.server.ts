@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { profiles, villageEvents, villages } from "./db/schema";
 import { isVillageOwner, lockModeratedVillage, lockVillageActor } from "./village-moderation.server";
@@ -7,8 +7,8 @@ import { villagesEnabled } from "./villages-enabled.server";
 import { nushiVoiceEnabled } from "./nushi-config.server";
 import { NUSHI_VOICE_MAX, nushiVoiceHref } from "./nushi-voice";
 import type { LlmEnv } from "./llm/types";
+import { nushiVoiceHistory } from "./nushi-voice-history.server";
 
-const voiceActions = ["nushi_voice", "moderation_nushi_voice"];
 export type NushiVoice = { text: string; eventId: number | null };
 
 export { personalVoiceVillage } from "./personal-villages.server";
@@ -18,7 +18,7 @@ export async function readNushiVoice(db: Db, villageId: string, env: LlmEnv = pr
   const [village] = await db.select({ text: villages.nushiVoice, kind: villages.kind, language: villages.language }).from(villages).where(eq(villages.id, villageId));
   if (!village || village.language || !["personal", "open", "invite_public"].includes(village.kind)) return;
   const [event] = await db.select({ id: villageEvents.id }).from(villageEvents)
-    .where(and(eq(villageEvents.villageId, villageId), inArray(villageEvents.action, voiceActions)))
+    .where(and(eq(villageEvents.villageId, villageId), eq(villageEvents.action, "nushi_voice")))
     .orderBy(desc(villageEvents.id)).limit(1);
   return { text: village.text, eventId: event?.id ?? null };
 }
@@ -49,13 +49,12 @@ export async function setNushiVoice(db: Db, userId: string, villageId: string, r
 export async function publicNushiVoice(db: Db, villageId: string, env: LlmEnv = process.env) {
   const voice = await readNushiVoice(db, villageId, env);
   if (!voice) return;
-  const rows = await db.select({ id: villageEvents.id, actor: villageEvents.actorHandle, action: villageEvents.action, detail: villageEvents.detail, date: villageEvents.createdAt })
-    .from(villageEvents).where(and(eq(villageEvents.villageId, villageId), inArray(villageEvents.action, voiceActions))).orderBy(desc(villageEvents.id));
-  return { text: voice.text, history: rows.map(row => ({ id: row.id, actor: row.actor, removed: row.action === "moderation_nushi_voice", text: row.detail.text ?? "", date: row.date.toISOString() })) };
+  const rows = await nushiVoiceHistory(db, [villageId]);
+  return { text: voice.text, history: rows.map(({ villageId: _, ...row }) => ({ ...row, text: row.hidden ? "" : row.text })) };
 }
 
 export async function nushiVoiceLink(db: Db, villageId: string, eventId: number | null, env: LlmEnv = process.env) {
-  if (!nushiVoiceEnabled(env)) return;
+  if (!nushiVoiceEnabled(env) || !eventId) return;
   const [row] = await db.select({ slug: villages.slug, kind: villages.kind, handle: profiles.handle }).from(villages)
     .leftJoin(profiles, eq(profiles.userId, villages.ownerId)).where(eq(villages.id, villageId));
   const slug = row?.kind === "personal" ? row.handle && `@${row.handle}` : row?.slug;

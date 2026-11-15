@@ -137,7 +137,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
     const completer = options.completer ?? resolveNushiCompleter(env);
     const voice = await readNushiVoice(db, request.villageId, env);
     const prompt = { ...nushiPrompt(input, "public-reply", voice), signal };
-    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { clock, env });
+    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { voiceApplied: !!voice?.text, clock, env });
     if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer } = verified;
     await db.transaction(async tx => {

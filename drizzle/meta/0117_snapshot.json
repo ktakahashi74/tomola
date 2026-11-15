@@ -9153,6 +9153,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "voice_event_id": {
+          "name": "voice_event_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -9490,6 +9496,19 @@
           "tableTo": "user",
           "columnsFrom": [
             "handled_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_voice_event_id_village_events_id_fk": {
+          "name": "reports_voice_event_id_village_events_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "village_events",
+          "columnsFrom": [
+            "voice_event_id"
           ],
           "columnsTo": [
             "id"
@@ -11747,6 +11766,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "nushi_voice_hidden": {
+          "name": "nushi_voice_hidden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {

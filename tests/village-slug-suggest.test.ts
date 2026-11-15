@@ -16,7 +16,7 @@ describe("local village addresses", () => {
     expect(villageSlugFromName("Cafe\u0301 — 2026 / reading")).toBe("cafe-2026-reading");
     expect(villageSlugFromName("a".repeat(58) + " short word")).toBe("a".repeat(58));
     expect(villageSlugFromName("x".repeat(64))).toBeNull();
-    for (const name of ["NEW", "ja", "API", "---", "a".repeat(32)]) expect(villageSlugFromName(name)).toBeNull();
+    for (const name of ["NEW", "personal", "ja", "API", "---", "a".repeat(32)]) expect(villageSlugFromName(name)).toBeNull();
   });
   it("keeps non-Latin and mixed-script names on the AI path", () => {
     for (const name of ["京都の集い", "中文 2026", "한국어 모임", "English 日本語", "Русский", "Ελληνικά", "العربية", "Ƶebra Club"]) {
@@ -100,7 +100,7 @@ it("charges address suggestions to the shared budget under their own purpose", a
 });
 
 it("rejects malformed, reserved, hexadecimal and explanatory provider output", async () => {
-  for (const text of ["new", "a".repeat(32), "hello--world", "Here is your slug: reading-circle", "京都の集い", "reading-circle\nother-circle", "word-".repeat(20), "```\nreading-circle\nother-circle\n```", "reading.circle", "reading-circle!", "```text\nreading-circle\n```", "```\nhello--world\n```", "```\n京都の集い\n```", "one-two-three-four-five-six"]) {
+  for (const text of ["new", "personal", "a".repeat(32), "hello--world", "Here is your slug: reading-circle", "京都の集い", "reading-circle\nother-circle", "word-".repeat(20), "```\nreading-circle\nother-circle\n```", "reading.circle", "reading-circle!", "```text\nreading-circle\n```", "```\nhello--world\n```", "```\n京都の集い\n```", "one-two-three-four-five-six"]) {
     fakeCompletion(text);
     expect(await (await post()).json()).toEqual({ slug: null });
     vi.restoreAllMocks();

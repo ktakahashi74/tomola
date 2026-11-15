@@ -51,6 +51,37 @@ test("owners publish a speaking style and readers follow answer labels to its hi
     await expect(page.locator("[data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
     await reader.goto(href!);
     await expect(reader.locator(new URL(reader.url()).hash)).toContainText(text);
+    const eventId = href!.match(/nushi-voice-(\d+)$/)![1];
+    await useMember(reader, "zcn_flow_caller@example.com", "/v/chat-nushi-browser?lang=en");
+    await waitForClientRoute(reader);
+    const report = reader.locator('form:has(input[name="intent"][value="flag"])');
+    await report.locator("..").locator(":scope > summary").click();
+    await report.locator('select[name="target"]').selectOption("nushi_voice");
+    await report.locator('select[name="voiceEventId"]').selectOption(eventId);
+    await report.getByLabel(en.flag_reason, { exact: true }).click();
+    await reader.getByRole("listbox").getByRole("option", { name: en.reason_other, exact: true }).click();
+    await report.getByRole("button", { name: en.flag_submit, exact: true }).click();
+    await expect(reader.getByRole("status").filter({ hasText: en.flag_thanks })).toBeVisible();
+    await useMember(reader, "zcn_flow_mod@example.com", "/mod/village/chat-nushi-browser?lang=en");
+    await waitForClientRoute(reader);
+    const row = reader.locator(`[data-voice-event="${eventId}"]`);
+    await row.locator("..").locator("..").locator(":scope > summary").click();
+    await row.getByLabel(en.flag_reason, { exact: true }).click();
+    await reader.getByRole("listbox").getByRole("option", { name: en.reason_other, exact: true }).click();
+    await row.locator('textarea[name="note"]').fill("Please use a different speaking style.");
+    await row.getByRole("button", { name: en.nushi_voice_remove, exact: true }).click();
+    await expect(reader).toHaveURL(/\/mod(?:\?|$)/);
+    await reader.goto(href!);
+    const hidden = reader.locator(new URL(reader.url()).hash);
+    await expect(hidden).toContainText(en.nushi_voice_hidden);
+    await expect(hidden).not.toContainText(text);
+    await reader.locator("#nushi-voice summary").click();
+    await expect(reader.locator("#nushi-voice li").first()).toContainText(en.admin_roles_operator);
+    await expect(reader.locator("#nushi-voice")).not.toContainText("@zcn_flow_mod");
+    await page.goto("/notifications?lang=en");
+    await expect(page.locator("main")).toContainText("Chat AI browser village");
+    await expect(page.locator("main")).toContainText("Please use a different speaking style.");
+    await expect(page.locator("main")).toContainText(en.nushi_voice_removed);
   } finally { await guest.close(); }
 });
 
@@ -66,6 +97,7 @@ test("a personal village's holder edits a style without exposing the member page
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.244") });
   try {
     const reader = await guest.newPage();
+    for (const handle of ["zcn_flow_caller", "unknown_voice_handle"]) expect((await reader.request.get(`/v/personal/${handle}`)).status()).toBe(404);
     await reader.goto("/v/personal/znushi_flow_owner?lang=en");
     await expect(reader.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
     await expect(reader.locator("#village-management")).toHaveCount(0);

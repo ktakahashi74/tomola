@@ -21,7 +21,6 @@ export const OPERATOR_ONLY_KEYS: ReadonlySet<string> = new Set([
   "admin_roles_intro",
   "admin_roles_no_hits",
   "admin_roles_none",
-  "admin_roles_operator",
   "admin_roles_reactions_excluded",
   "admin_roles_revoke",
   "admin_roles_revoke_short",

@@ -4,6 +4,7 @@ import { Textarea } from "./ui/textarea";
 import { NUSHI_VOICE_MAX } from "~/lib/nushi-voice";
 import type { publicNushiVoice } from "~/lib/nushi-voice.server";
 import { m } from "~/paraglide/messages.js";
+import { authorLabel } from "~/lib/deleted-member";
 
 export function NushiVoiceSetting({ text }: { text: string }) {
   return <Form method="post" className="max-w-xl space-y-2" data-nushi-voice-setting aria-label={m.nushi_voice_title()}>
@@ -22,8 +23,8 @@ export function NushiVoicePublic({ voice }: { voice: NonNullable<Awaited<ReturnT
     <p className="whitespace-pre-wrap" dir="auto" data-nushi-voice-text>{voice.text || m.nushi_voice_default()}</p>
     {voice.history.length > 0 && <details><summary className="cursor-pointer underline">{m.nushi_voice_history()}</summary>
       <ol className="space-y-3 py-2">{voice.history.map(event => <li key={event.id} id={`nushi-voice-${event.id}`} className="space-y-1">
-        <p className="ui-meta"><time dateTime={event.date}>{event.date}</time> · {event.actor ? `@${event.actor}` : m.nushi_left()}{event.removed && <> · {m.nushi_voice_removed()}</>}</p>
-        <p className="whitespace-pre-wrap" dir="auto">{event.text || m.nushi_voice_default()}</p>
+        <p className="ui-meta"><time dateTime={event.date}>{event.date.slice(0, 10)}</time> · {event.removed ? m.admin_roles_operator() : authorLabel(event.actor)}{event.removed && <> · {m.nushi_voice_removed()}</>}</p>
+        {!event.removed && <p className="whitespace-pre-wrap" dir="auto">{event.hidden ? m.nushi_voice_hidden() : event.text || m.nushi_voice_default()}</p>}
       </li>)}</ol>
     </details>}
   </section>;

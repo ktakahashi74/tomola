@@ -12,6 +12,19 @@ const citation = { sourceId: "e-1-body", quote: "An orchard needs public review.
 const reading = { text: "The supplied post requests public review.", citations: [citation] };
 const answer = (readings: unknown = [reading], extra = {}) => JSON.stringify({ status: "answered", readings, ...extra });
 
+it.each(["public-reply", "chat"] as const)("restricts URLs only for styled %s answers and allows exact original-material URLs", destination => {
+  const supplied = { ...materials, sources: [{ ...materials.sources[0], original: "An orchard needs public review. See https://example.org/orchard and www.example.org/review.", translation: undefined }] };
+  const withUrl = (url: string) => answer([{ text: `See ${url}.`, citations: [{ sourceId: "e-1-body", quote: "An orchard needs public review." }] }]);
+  for (const url of ["https://example.org/orchard", "www.example.org/review"]) expect(verifyNushiAnswerResult(withUrl(url), supplied, destination, { voiceApplied: true })).toMatchObject({ ok: true });
+  for (const url of ["https://example.org/orchard/other", "https://example.org/orchard.evil", "https://another.example.org"]) {
+    expect(verifyNushiAnswerResult(withUrl(url), supplied, destination)).toMatchObject({ ok: true });
+    expect(verifyNushiAnswerResult(withUrl(url), supplied, destination, { voiceApplied: true })).toMatchObject({ ok: false, reason: "unexpected_url" });
+  }
+  const translated = { ...supplied, sources: [{ ...supplied.sources[0], translation: { text: "See https://translation.example.org.", lang: "ja" as const, stale: false } }] };
+  const raw = answer([{ text: "See https://translation.example.org.", citations: [{ sourceId: "e-1-body", quote: "An orchard needs public review.", translatedQuote: "See https://translation.example.org." }] }]);
+  expect(verifyNushiAnswerResult(raw, translated, destination, { voiceApplied: true })).toMatchObject({ ok: false, reason: "unexpected_url" });
+});
+
 const invalid: Array<[AnswerVerificationReason, string]> = [
   ["not_json", "PRIVATE_PROVIDER_TEXT"],
   ["output_too_long", "x".repeat(limits.outputChars + 1)],

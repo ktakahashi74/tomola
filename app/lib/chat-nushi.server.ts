@@ -142,7 +142,7 @@ This is a PRIVATE chat answer. The only question context is callingMessage, supp
 For status not_confirmed, including when clarification is needed, return {"status":"not_confirmed","readings":[]} in the exact shape required above. Never omit required fields. You may add clarificationNeeded as a JSON boolean. Only when the question is too short to identify its subject or its subject is unclear, set clarificationNeeded to true; the server then asks the caller to describe the subject. Missing evidence alone never needs clarification. Otherwise omit clarificationNeeded or set it false.
 Keep readings short in every language. You may reduce the number of readings for brevity, but preserve each retained reading's attribution, conditions, reservations and relevant disagreements, along with the consulted scope.
 Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
-    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { destination: "chat", clock, env });
+    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { destination: "chat", voiceApplied: !!voice?.text, clock, env });
     if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer, clarificationNeeded } = verified;
     const published = await db.transaction(async tx => {

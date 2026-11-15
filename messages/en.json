@@ -2979,6 +2979,7 @@
   "nushi_voice_public_help": "The text and its change history, including when and who changed it, are public. They can also be read without signing in when public reading is enabled.",
   "nushi_voice_owner_label": "Speaking style set by the village owner",
   "nushi_voice_default": "The usual Nushi (no speaking style specified).",
+  "nushi_voice_hidden": "Text removed by an operator",
   "nushi_voice_history": "Speaking style history",
   "nushi_voice_clear": "Use the usual Nushi",
   "nushi_voice_invalid": "Use up to 500 characters, without control characters.",

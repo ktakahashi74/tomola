@@ -1,4 +1,5 @@
 import { nushiVoiceEnabled } from "./nushi-config.server";
+import { nushiVoiceHistory } from "./nushi-voice-history.server";
 import { personalVoiceVillage } from "./personal-villages.server";
 import { media } from "./db/schema";
 import { mediaPath } from "./media";
@@ -34,7 +35,8 @@ export type VillageReportCard = {
   village: VillageMetadata & { kind: string; ended: boolean };
   creatorHandle: string | null;
   ownerHandles: string[];
-  reports: Array<ReportSummary & { target: VillageReportTarget; iconUrl?: string | null; snapshot: Omit<VillageMetadata, "language"> | null }>;
+  voiceHistory?: Array<{ id: number; text: string; hidden: boolean; date: string }>;
+  reports: Array<ReportSummary & { target: VillageReportTarget; voiceEventId?: number | null; iconUrl?: string | null; snapshot: Omit<VillageMetadata, "language"> | null }>;
 };
 
 export async function lockVillageActor(db: Db, id: string) {
@@ -50,7 +52,7 @@ export async function isVillageOwner(db: Db, id: string, userId: string): Promis
   return !!owner;
 }
 
-export async function createVillageReport(db: Db, reporterId: string, input: { slug: string; reason: unknown; note?: unknown; target?: unknown }, opts: { now?: Date } = {}) {
+export async function createVillageReport(db: Db, reporterId: string, input: { slug: string; reason: unknown; note?: unknown; target?: unknown; voiceEventId?: unknown }, opts: { now?: Date } = {}) {
   if (!villagesEnabled()) return { ok: false as const, error: "not_found" as const };
   if (!isReason(input.reason)) return { ok: false as const, error: "invalid_reason" as const };
   const target = input.target ?? "information";
@@ -65,11 +67,17 @@ export async function createVillageReport(db: Db, reporterId: string, input: { s
     const personal = input.slug.startsWith("@") ? await personalVoiceVillage(tx, input.slug.slice(1)) : null;
     const [village] = await tx.select().from(villages).where(personal ? eq(villages.id, personal.id) : eq(villages.slug, input.slug)).for("update");
     if (!village || !(isSharedVillageKind(village.kind) || village.kind === "personal" && target === "nushi_voice")) return { ok: false as const, error: "not_found" as const };
-    if (target === "nushi_voice" && (!nushiVoiceEnabled() || !village.nushiVoice || village.language)) return { ok: false as const, error: "not_found" as const };
+    let voiceEvent: Awaited<ReturnType<typeof nushiVoiceHistory>>[number] | undefined;
+    if (target === "nushi_voice") {
+      if (!nushiVoiceEnabled() || village.language) return { ok: false as const, error: "not_found" as const };
+      const history = await nushiVoiceHistory(tx, [village.id]);
+      voiceEvent = history.find(event => !event.removed && !event.hidden && !!event.text && (!input.voiceEventId || String(event.id) === String(input.voiceEventId)));
+      if (!voiceEvent) return { ok: false as const, error: "not_found" as const };
+    }
     if (target === "icon" && !village.iconMediaId) return { ok: false as const, error: "not_found" as const };
-    const [row] = await tx.insert(reports).values({ villageId: village.id, villageTarget: target, iconMediaId: target === "icon" ? village.iconMediaId : null, reporterId, reason, note, createdAt: now }).onConflictDoNothing().returning({ id: reports.id });
+    const [row] = await tx.insert(reports).values({ villageId: village.id, villageTarget: target, voiceEventId: voiceEvent?.id, iconMediaId: target === "icon" ? village.iconMediaId : null, reporterId, reason, note, createdAt: now }).onConflictDoNothing().returning({ id: reports.id });
     if (!row) return { ok: false as const, error: "duplicate" as const };
-    await tx.insert(villageReportSnapshots).values({ reportId: row.id, name: village.name, description: village.description, nushiVoice: target === "nushi_voice" ? village.nushiVoice : null, slug: personal?.slug ?? village.slug });
+    await tx.insert(villageReportSnapshots).values({ reportId: row.id, name: village.name, description: village.description, nushiVoice: voiceEvent?.text ?? null, slug: personal?.slug ?? village.slug });
     await enqueueReportTriage(tx, row.id);
     return { ok: true as const, id: row.id };
   });
@@ -78,10 +86,11 @@ export async function createVillageReport(db: Db, reporterId: string, input: { s
 // Only call for village targets selected onto the current queue page.
 export async function loadVillageReportCards(db: Db, ids: string[], handled: boolean, viewerId?: string): Promise<Map<string, VillageReportCard>> {
   if (!ids.length) return new Map();
-  const [villageRows, reportRows, owners] = await Promise.all([
+  const [villageRows, reportRows, owners, history] = await Promise.all([
     db.select({ id: villages.id, name: villages.name, description: villages.description, ...(nushiVoiceEnabled() ? { nushiVoice: villages.nushiVoice } : {}), slug: villages.slug, ownerId: villages.ownerId, ownerHandle: sql<string | null>`(select handle from profiles where user_id = ${villages.ownerId})`, language: villages.language, kind: villages.kind, endedAt: villages.endedAt, iconMediaId: villages.iconMediaId, version: sql<string>`coalesce((select max(id) from village_events where village_id = ${villages.id}), 0)::text`, creatorHandle: profiles.handle }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.createdBy)).where(inArray(villages.id, ids)),
-    db.select({ id: reports.id, target: reports.villageTarget, iconMediaId: reports.iconMediaId, villageId: reports.villageId, reason: reports.reason, note: reports.note, createdAt: reports.createdAt, aiPriority: reports.aiPriority, aiAssessment: reports.aiAssessment, name: villageReportSnapshots.name, description: villageReportSnapshots.description, ...(nushiVoiceEnabled() ? { nushiVoice: villageReportSnapshots.nushiVoice } : {}), slug: villageReportSnapshots.slug, prunedAt: villageReportSnapshots.prunedAt }).from(reports).leftJoin(villageReportSnapshots, eq(villageReportSnapshots.reportId, reports.id)).where(and(inArray(reports.villageId, ids), handled ? ne(reports.status, "open") : eq(reports.status, "open"))).orderBy(asc(reports.createdAt), asc(reports.id)),
+    db.select({ id: reports.id, target: reports.villageTarget, iconMediaId: reports.iconMediaId, villageId: reports.villageId, reason: reports.reason, note: reports.note, createdAt: reports.createdAt, aiPriority: reports.aiPriority, aiAssessment: reports.aiAssessment, name: villageReportSnapshots.name, description: villageReportSnapshots.description, ...(nushiVoiceEnabled() ? { nushiVoice: villageReportSnapshots.nushiVoice, voiceEventId: reports.voiceEventId } : {}), slug: villageReportSnapshots.slug, prunedAt: villageReportSnapshots.prunedAt }).from(reports).leftJoin(villageReportSnapshots, eq(villageReportSnapshots.reportId, reports.id)).where(and(inArray(reports.villageId, ids), handled ? ne(reports.status, "open") : eq(reports.status, "open"))).orderBy(asc(reports.createdAt), asc(reports.id)),
     db.select({ villageId: villageMembers.villageId, userId: villageMembers.userId, handle: profiles.handle }).from(villageMembers).innerJoin(profiles, eq(profiles.userId, villageMembers.userId)).where(and(inArray(villageMembers.villageId, ids), eq(villageMembers.role, "owner"))).orderBy(asc(profiles.handle)),
+    nushiVoiceEnabled() ? nushiVoiceHistory(db, ids) : [],
   ]);
   const imageIds = [...new Set([...villageRows.flatMap(v => v.iconMediaId ? [v.iconMediaId] : []), ...reportRows.flatMap(r => r.iconMediaId ? [r.iconMediaId] : [])])];
   const available = new Set(imageIds.length ? (await db.select({ id: media.id }).from(media).where(and(inArray(media.id, imageIds), isNull(media.deletedAt)))).map(row => row.id) : []);
@@ -90,7 +99,8 @@ export async function loadVillageReportCards(db: Db, ids: string[], handled: boo
     kind: "village", reportId: reportRows.find(r => r.villageId === v.id)!.id, version: v.version, owned: v.ownerId === viewerId || owners.some(o => o.villageId === v.id && o.userId === viewerId),
     village: { name: v.name, description: v.description, ...(nushiVoiceEnabled() ? { nushiVoice: v.nushiVoice } : {}), slug: v.kind === "personal" && v.ownerHandle ? `@${v.ownerHandle}` : v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt },
     iconUrl: imageUrl(v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: v.kind === "personal" && v.ownerHandle ? [v.ownerHandle] : owners.filter(o => o.villageId === v.id).map(o => o.handle),
-    reports: reportRows.filter(r => r.villageId === v.id).map(r => ({ id: r.id, target: r.target, iconUrl: imageUrl(r.iconMediaId), reason: r.reason as ReportReason, note: r.note, createdAt: r.createdAt, aiPriority: r.aiPriority, aiAssessment: r.aiAssessment, snapshot: r.prunedAt || r.name === null || r.description === null ? null : { name: r.name, description: r.description, ...(nushiVoiceEnabled() ? { nushiVoice: r.nushiVoice ?? undefined } : {}), slug: r.slug } })),
+    ...(nushiVoiceEnabled() ? { voiceHistory: history.filter(event => event.villageId === v.id).map(({ id, text, hidden, date }) => ({ id, text, hidden, date })) } : {}),
+    reports: reportRows.filter(r => r.villageId === v.id).map(r => ({ id: r.id, target: r.target, ...(nushiVoiceEnabled() ? { voiceEventId: r.voiceEventId } : {}), iconUrl: imageUrl(r.iconMediaId), reason: r.reason as ReportReason, note: r.note, createdAt: r.createdAt, aiPriority: r.aiPriority, aiAssessment: r.aiAssessment, snapshot: r.prunedAt || r.name === null || r.description === null ? null : { name: r.name, description: r.description, ...(nushiVoiceEnabled() ? { nushiVoice: r.nushiVoice ?? undefined } : {}), slug: r.slug } })),
   }]));
 }
 
@@ -105,7 +115,7 @@ function uniqueViolation(error: unknown): boolean {
 }
 
 // Existing cases remain actionable when new village reports are disabled.
-export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: number; slugTarget?: string; version: unknown; intent: "fix" | "end" | "dismiss" | "clear-icon" | "clear-voice"; reason: unknown; note?: unknown; name?: unknown; description?: unknown; slug?: unknown }, opts: { now?: Date } = {}): Promise<{ ok: true; actionId: number } | { ok: false; error: VillageModerationError }> {
+export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: number; slugTarget?: string; voiceEventId?: unknown; version: unknown; intent: "fix" | "end" | "dismiss" | "clear-icon" | "clear-voice"; reason: unknown; note?: unknown; name?: unknown; description?: unknown; slug?: unknown }, opts: { now?: Date } = {}): Promise<{ ok: true; actionId: number } | { ok: false; error: VillageModerationError }> {
   if (!actor.scope.operator) return { ok: false, error: "forbidden" };
   if ((input.reportId === undefined) === (input.slugTarget === undefined)) return { ok: false, error: "not_found" };
   const checked = checkInput(input, input.intent !== "dismiss");
@@ -121,7 +131,7 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
       const personal = input.slugTarget?.startsWith("@") ? await personalVoiceVillage(tx, input.slugTarget.slice(1)) : null;
       const [target] = input.slugTarget !== undefined
         ? await tx.select({ villageId: villages.id }).from(villages).where(personal ? eq(villages.id, personal.id) : eq(villages.slug, input.slugTarget))
-        : input.reportId !== undefined ? await tx.select({ villageId: reports.villageId }).from(reports).where(eq(reports.id, input.reportId)) : [];
+        : input.reportId !== undefined ? await tx.select({ villageId: reports.villageId }).from(reports).where(and(eq(reports.id, input.reportId), eq(reports.status, "open"))) : [];
       if (!target?.villageId) return { ok: false as const, error: "not_found" as const };
       await lockVillageSlugClaims(tx);
       const village = await lockModeratedVillage(tx, target.villageId);
@@ -132,11 +142,22 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
       const [open] = await tx.select({ id: reports.id }).from(reports).where(and(eq(reports.villageId, village.id), eq(reports.status, "open"))).limit(1);
       if (!open && (input.intent === "dismiss" || input.slugTarget === undefined)) return { ok: false as const, error: "invalid_state" as const };
       let eventId: number | undefined;
+      let hiddenVoiceIds: number[] = [];
       if (input.intent === "clear-icon" && (village.language || !village.iconMediaId)) return { ok: false as const, error: "invalid_state" as const };
       if (input.intent === "clear-voice") {
-        if (!nushiVoiceEnabled() || !village.nushiVoice || village.language) return { ok: false as const, error: "invalid_state" as const };
-        await tx.update(villages).set({ nushiVoice: "" }).where(eq(villages.id, village.id));
-        const [event] = await tx.insert(villageEvents).values({ villageId: village.id, actorId: actor.id, actorHandle: member.handle, action: "moderation_nushi_voice", detail: { text: "", oldText: village.nushiVoice }, createdAt: now }).returning({ id: villageEvents.id });
+        if (!nushiVoiceEnabled() || village.language) return { ok: false as const, error: "invalid_state" as const };
+        const [report] = input.reportId === undefined ? [] : await tx.select().from(reports).where(and(eq(reports.id, input.reportId), eq(reports.status, "open")));
+        if (input.reportId !== undefined && (!report || report.villageTarget !== "nushi_voice" || report.villageId !== village.id
+          || input.voiceEventId && String(input.voiceEventId) !== String(report.voiceEventId))) return { ok: false as const, error: "invalid_state" as const };
+        const selectedId = report?.voiceEventId ?? input.voiceEventId;
+        const history = await nushiVoiceHistory(tx, [village.id]);
+        const selected = history.find(event => !event.removed && !event.hidden && !!event.text && (selectedId ? String(event.id) === String(selectedId) : event.text === village.nushiVoice));
+        if (!selected) return { ok: false as const, error: "invalid_state" as const };
+        hiddenVoiceIds = history.filter(event => !event.removed && event.text === selected.text).map(event => event.id);
+        await tx.update(villageEvents).set({ nushiVoiceHidden: true }).where(inArray(villageEvents.id, hiddenVoiceIds));
+        const clearsCurrent = village.nushiVoice === selected.text;
+        if (clearsCurrent) await tx.update(villages).set({ nushiVoice: "" }).where(eq(villages.id, village.id));
+        const [event] = await tx.insert(villageEvents).values({ villageId: village.id, actorId: actor.id, actorHandle: member.handle, action: "moderation_nushi_voice", detail: { text: "", oldText: selected.text, voiceEventId: String(selected.id), clearedCurrent: String(clearsCurrent) }, createdAt: now }).returning({ id: villageEvents.id });
         eventId = event.id;
       } else if (input.intent === "fix") {
         const description = villageDescriptionText(input.description === undefined ? village.description : input.description);
@@ -164,7 +185,7 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
         await tx.update(villages).set({ iconMediaId: null, iconActionId: action.id }).where(eq(villages.id, village.id));
         await tx.insert(villageEvents).values({ villageId: village.id, actorId: actor.id, actorHandle: member.handle, action: "moderation_icon", detail: {}, createdAt: now });
       }
-      await tx.update(reports).set({ status: input.intent === "dismiss" ? "dismissed" : "resolved", handledBy: actor.id, handledAt: now }).where(and(eq(reports.villageId, village.id), eq(reports.status, "open"), input.intent === "clear-voice" ? eq(reports.villageTarget, "nushi_voice") : undefined));
+      await tx.update(reports).set({ status: input.intent === "dismiss" ? "dismissed" : "resolved", handledBy: actor.id, handledAt: now }).where(and(eq(reports.villageId, village.id), eq(reports.status, "open"), input.intent === "clear-voice" ? and(eq(reports.villageTarget, "nushi_voice"), inArray(reports.voiceEventId, hiddenVoiceIds)) : undefined));
       if (input.intent !== "dismiss") await notifyOwners(tx, village.id, action.id, now);
       return { ok: true as const, actionId: action.id };
     });
@@ -182,6 +203,7 @@ export async function villageAppealMetadata(db: Db, id: string, eventId: number 
   if (eventId !== null) {
     const [event] = await db.select({ detail: villageEvents.detail }).from(villageEvents).where(and(eq(villageEvents.id, eventId), eq(villageEvents.villageId, id)));
     if (event && typeof event.detail.oldName === "string" && typeof event.detail.oldDescription === "string") before = { name: event.detail.oldName, description: event.detail.oldDescription, slug: event.detail.oldSlug ?? null, language: village?.language ?? null };
+    if (event && nushiVoiceEnabled() && typeof event.detail.oldText === "string" && village) before = { ...village, nushiVoice: event.detail.oldText };
   }
   return { village: village ?? null, villageBefore: before };
 }
@@ -247,7 +269,7 @@ export async function loadVillageModerationView(db: Db, slug: string, viewerId: 
   const reported = (await loadVillageReportCards(db, [v.id], false, viewerId)).get(v.id);
   if (reported) return personal ? { ...reported, owned: personal.ownerId === viewerId, village: { ...reported.village, slug: personal.slug }, ownerHandles: [personal.slug.slice(1)] } : reported;
   const owners = await db.select({ userId: villageMembers.userId, handle: profiles.handle }).from(villageMembers).innerJoin(profiles, eq(profiles.userId, villageMembers.userId)).where(and(eq(villageMembers.villageId, v.id), eq(villageMembers.role, "owner")));
-  return { kind: "village", reportId: null, version: v.version, owned: v.ownerId === viewerId || owners.some(o => o.userId === viewerId), village: { name: v.name, description: v.description, ...(nushiVoiceEnabled() ? { nushiVoice: v.nushiVoice } : {}), slug: personal?.slug ?? v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt }, iconUrl: await avatarAppealUrl(db, v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: personal ? [personal.slug.slice(1)] : owners.map(o => o.handle), reports: [] };
+  return { kind: "village", reportId: null, version: v.version, owned: v.ownerId === viewerId || owners.some(o => o.userId === viewerId), village: { name: v.name, description: v.description, ...(nushiVoiceEnabled() ? { nushiVoice: v.nushiVoice } : {}), slug: personal?.slug ?? v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt }, ...(nushiVoiceEnabled() ? { voiceHistory: (await nushiVoiceHistory(db, [v.id])).map(({ id, text, hidden, date }) => ({ id, text, hidden, date })) } : {}), iconUrl: await avatarAppealUrl(db, v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: personal ? [personal.slug.slice(1)] : owners.map(o => o.handle), reports: [] };
 }
 
 export async function openVillageReportTargets(db: Db, villageId: string, reporterId: string): Promise<VillageReportTarget[]> {

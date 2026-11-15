@@ -33,6 +33,6 @@ export default function ModVillage({ loaderData, actionData }: Route.ComponentPr
     <h1 className="text-2xl font-bold">{m.village_mod_link()}</h1>
     <Link className="underline" to="/mod">{m.mod_title()}</Link>
     {actionData?.error && <p role="alert">{errorText(actionData.error)}</p>}
-    <VillageModerationCard card={loaderData.card} handled={false} returnTo="/mod" />
+    <VillageModerationCard card={loaderData.card} handled={false} returnTo="/mod" direct />
   </main>;
 }
