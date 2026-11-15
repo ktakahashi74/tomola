@@ -2408,6 +2408,7 @@
   "nushi_voice_public_help": "此文字及其變更記錄（包含變更時間與變更者）皆為公開。若啟用了公開閱讀，未登入的使用者亦可瀏覽。",
   "nushi_voice_owner_label": "由村的擁有者設定的說話風格",
   "nushi_voice_default": "一般的 Nushi（未指定說話風格）。",
+  "nushi_voice_hidden": "營運者已移除的文字",
   "nushi_voice_history": "說話風格變更記錄",
   "nushi_voice_clear": "使用一般的 Nushi",
   "nushi_voice_invalid": "請輸入 500 個字元以內，且不含控制字元。",

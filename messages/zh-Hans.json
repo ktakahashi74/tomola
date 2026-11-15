@@ -2408,6 +2408,7 @@
   "nushi_voice_public_help": "文本及其变更历史（包括变更时间和变更者）均公开。当启用公开阅读时，无需登录也可阅读。",
   "nushi_voice_owner_label": "由村的所有者设定的说话风格",
   "nushi_voice_default": "通常的 Nushi（未指定说话风格）。",
+  "nushi_voice_hidden": "运营者已移除的文本",
   "nushi_voice_history": "说话风格历史记录",
   "nushi_voice_clear": "使用通常的 Nushi",
   "nushi_voice_invalid": "最多使用 500 个字符，且不包含控制字符。",

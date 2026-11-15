@@ -2926,6 +2926,7 @@
   "nushi_voice_public_help": "본문과 변경 일시, 변경자를 포함한 변경 내역은 공개됩니다. 공개 읽기가 활성화된 경우 로그인하지 않은 사용자도 읽을 수 있습니다.",
   "nushi_voice_owner_label": "빌리지 소유자가 설정한 말투",
   "nushi_voice_default": "평소의 Nushi(지정된 말투 없음).",
+  "nushi_voice_hidden": "운영자가 삭제한 텍스트",
   "nushi_voice_history": "말투 변경 내역",
   "nushi_voice_clear": "평소의 Nushi 사용",
   "nushi_voice_invalid": "제어 문자 없이 500자 이내로 입력해 주세요.",

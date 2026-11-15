@@ -3033,6 +3033,7 @@
   "nushi_voice_public_help": "Ce texte et l’historique de ses modifications, y compris la date et l’auteur du changement, sont publics. Ils peuvent aussi être consultés sans se connecter lorsque la lecture publique est activée.",
   "nushi_voice_owner_label": "Style d’élocution défini par le propriétaire du village",
   "nushi_voice_default": "Le Nushi habituel (aucun style d’élocution spécifié).",
+  "nushi_voice_hidden": "Texte retiré par un opérateur",
   "nushi_voice_history": "Historique du style d’élocution",
   "nushi_voice_clear": "Utiliser le Nushi habituel",
   "nushi_voice_invalid": "Utilisez jusqu’à 500 caractères, sans caractères de contrôle.",
