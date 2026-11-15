@@ -75,6 +75,9 @@ it.each([
 it.each([
   ["quote_not_found", raw([{ ...reading(), citations: [{ ...cite(1), quote: "INVENTED" }] }])],
   ["unknown_source", raw([{ ...reading(), citations: [{ ...cite(1), sourceId: "unknown" }] }])],
+  ["unknown_author", raw([reading([1], "@outsider asks for review.")])],
+  ["unknown_author", raw(Array.from({ length: 5 }, () => reading([1], "@outsider asks for review.")))],
+  ["unknown_author", raw([reading([1], "@outsider " + "x".repeat(limits.readingChars))])],
   ["extra_field", raw([reading()], { extra: "INVENTED" })],
   ["extra_field", raw(Array.from({ length: 5 }, () => reading()), { extra: "INVENTED" })],
   ["quote_not_found", raw([reading([1, 2, 3, 4, 5]), { ...reading([6, 7, 8, 9]), citations: [cite(6), cite(7), cite(8), { ...cite(9), quote: "INVENTED" }] }])],

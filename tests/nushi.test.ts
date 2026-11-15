@@ -59,7 +59,8 @@ it("keeps the public prompt as the default while selecting a private chat destin
     expect(prompt.system).toContain("choose representative supplied posts");
     expect(prompt.system).toMatch(/contradict a premise.*without adopting that premise/);
     expect(prompt.system).toMatch(/Do not return not_confirmed merely because an answer available/);
-    expect(prompt.system).toMatch(/Name each cited post's author by @handle in the reading text/);
+    expect(prompt.system).toMatch(/Name each cited post's author.*exactly as given in that material's author field/);
+    expect(prompt.system).toContain("Never add @ to an author field that does not contain it");
   }
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
@@ -153,14 +154,16 @@ it("publishes translated Markdown evidence and saves exactly the projected model
   expect(evidence.question).toBe(modelQuestion);
   expect(JSON.stringify(evidence)).not.toContain("SECRET");
 });
-it("rejects invented quotes and untrusted output fields without publishing", async () => {
+it.each(["quote_not_found", "unknown_author"])("rejects %s without publishing or regenerating", async reason => {
   const log = vi.spyOn(console, "warn").mockImplementation(() => {});
   const f = await nushiFixture();
   const fake = resolveNushiCompleter();
-  await processNushiRequest(f.db, f.request.id, { completer: { ...fake, async complete() { return { text: JSON.stringify({ status: "answered", readings: [{ text: "Invented evidence", citations: [{ sourceId: `e-${f.source}-body`, quote: "THIS DOES NOT EXIST" }] }] }), inputTokens: 1, outputTokens: 1 }; } } });
+  const complete = vi.fn(async () => ({ text: JSON.stringify({ status: "answered", readings: [{ text: reason === "unknown_author" ? "@outsider asks for review." : "Invented evidence", citations: [{ sourceId: `e-${f.source}-body`, quote: reason === "unknown_author" ? "The orchard plan needs public review." : "THIS DOES NOT EXIST" }] }] }), inputTokens: 1, outputTokens: 1 }));
+  await processNushiRequest(f.db, f.request.id, { completer: { ...fake, complete } });
+  expect(complete).toHaveBeenCalledTimes(1);
   expect(await f.db.select().from(nushiAnswers)).toHaveLength(0);
   expect((await f.db.select().from(nushiRequests))[0]).toMatchObject({ state: "failed", failure: "unverified" });
-  expect(log.mock.calls).toEqual([["Nushi answer verification failed", { requestId: f.request.id, reason: "quote_not_found", counts: { readings: 1, citations: 1 } }]]);
+  expect(log.mock.calls).toEqual([["Nushi answer verification failed", { requestId: f.request.id, reason, counts: { readings: 1, citations: 1 } }]]);
 });
 it.each(["source", "caller", "village", "topic", "switch"])("does not publish across a concurrent %s change", async kind => {
   const f = await nushiFixture(), fake = resolveNushiCompleter();

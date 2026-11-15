@@ -84,7 +84,7 @@ export function verifyQuestionAnswer(raw: string, materials: AiQuestionMaterials
   return result.ok ? result.answer : null;
 }
 
-export type AnswerVerificationReason = "output_too_long" | "not_json" | "schema" | "readings_count" | "citations_count" | "reading_too_long" | "quote_too_long" | "extra_field" | "unstructured_quote" | "unknown_source" | "quote_not_found" | "translated_quote_not_found" | "unexpected_translation";
+export type AnswerVerificationReason = "output_too_long" | "not_json" | "schema" | "readings_count" | "citations_count" | "reading_too_long" | "quote_too_long" | "extra_field" | "unstructured_quote" | "unknown_source" | "unknown_author" | "quote_not_found" | "translated_quote_not_found" | "unexpected_translation";
 export type AnswerVerificationFailure = { ok: false; reason: AnswerVerificationReason; counts: { readings: number; citations: number } };
 export type AnswerVerificationResult = { ok: true; answer: AiQuestionAnswer } | AnswerVerificationFailure;
 

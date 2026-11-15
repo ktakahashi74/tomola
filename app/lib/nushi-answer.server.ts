@@ -1,6 +1,7 @@
 import { parseQuestionJson, answerVerificationFailure, verifyQuestionAnswerResult, type AnswerVerificationFailure, type AnswerVerificationOptions } from "./ai-question-answer.server";
 import type { AiQuestionMaterials } from "./ai-question-materials.server";
 import { AI_QUESTION_LIMITS } from "./ai-questions";
+import { HANDLE_REST, mentionCandidates } from "./mention-syntax";
 
 export function verifyNushiAnswer(raw: string, materials: AiQuestionMaterials, destination: "public-reply" | "chat" = "public-reply") {
   const result = verifyNushiAnswerResult(raw, materials, destination);
@@ -28,6 +29,11 @@ export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMateri
   if (answerData.status === "not_confirmed" && answerData.readings === undefined) answerData.readings = [];
   const result = verifyQuestionAnswerResult(JSON.stringify(answerData), materials, options);
   if (!result.ok) return result;
+  const authors = new Set(materials.sources.map(source => source.author).filter(author => author.startsWith("@")));
+  for (const reading of result.answer.readings) {
+    if (mentionCandidates(reading.text).some(({ start, end }) => !authors.has(reading.text.slice(start, end))
+      || HANDLE_REST.test((reading.text[end] ?? "").normalize("NFKC").toLowerCase()))) return answerVerificationFailure("unknown_author", answerData);
+  }
   if (result.answer.status === "not_confirmed") result.answer.askPerson = askPerson === true;
   return { ...result, clarificationNeeded: result.answer.status === "not_confirmed" && clarificationNeeded };
 }

@@ -2185,7 +2185,7 @@
   "village_slug_suggesting": "アドレスの案を作っています…",
   "ai_use_village_slug": "ビレッジのアドレス案",
   "ai_use_sent_village_slug": "英語のアドレス（URL のスラッグ）の案を作るために、ビレッジを作る画面で入力した名前。",
-  "nushi_truncated": "一部の材料は答えに使っていません。",
+  "nushi_truncated": "材料の一部を省いています。",
   "nushi_sources": "出典：",
   "nushi_quotes": "引用を見る"
 }

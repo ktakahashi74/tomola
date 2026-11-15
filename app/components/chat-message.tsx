@@ -145,7 +145,7 @@ export function ChatNushiBody({ parts, sources, truncated, tabIndex }: { parts: 
     const readingChars = sources.readingChars === undefined ? readings.reduce((length, reading) => length + reading.text.length, 0) : sources.readingChars + delta;
     const fold = readingChars > NUSHI_READINGS_FOLD_CHARS;
     return <div className="space-y-2">
-      {fold ? <><p>{readings[0]?.text.slice(0, 180)}…</p><details data-nushi-readings className="space-y-3"><summary tabIndex={tabIndex} className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : content}
+      {fold ? <><p dir="auto">{readings[0]?.text.slice(0, 180)}…</p><details data-nushi-readings className="space-y-3"><summary tabIndex={tabIndex} className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : content}
       <NushiSources sources={citations} tabIndex={tabIndex} />
       <p data-nushi-scope className="ui-meta">{text.slice(sources.scopeStart + delta)}{notice && <> · {notice}</>}</p>
     </div>;

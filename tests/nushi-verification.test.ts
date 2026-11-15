@@ -45,6 +45,38 @@ it("counts supplied readings and citation occurrences without copying their cont
   expect(verifyNushiAnswerResult(answer([reading, reading], { extra: "private" }), materials)).toEqual({ ok: false, reason: "extra_field", counts: { readings: 2, citations: 2 } });
 });
 
+it.each(["public-reply", "chat"] as const)("checks named handles against material authors in %s readings", destination => {
+  const supplied = { ...materials, sources: [
+    { ...materials.sources[0], author: "@writer" },
+    { ...materials.sources[0], id: "e-2-body", author: "@another_writer" },
+  ] };
+  for (const text of ["@writer asks for review.", "@another_writer disagrees with @writer.", "投稿では@writerが検討を求める。", "Email reader@example.org for context."]) {
+    expect(verifyNushiAnswerResult(answer([{ ...reading, text }]), supplied, destination)).toMatchObject({ ok: true });
+  }
+  for (const text of ["@outsider asks for review.", "@writer_suffix asks for review.", "@Writer asks for review."]) {
+    const raw = answer([{ ...reading, text }]);
+    expect(verifyNushiAnswerResult(raw, supplied, destination)).toEqual({ ok: false, reason: "unknown_author", counts: { readings: 1, citations: 1 } });
+    expect(verifyNushiAnswer(raw, supplied, destination)).toBeNull();
+    expect(verifyQuestionAnswerResult(raw, supplied)).toMatchObject({ ok: true });
+  }
+});
+
+it("does not treat departed labels or names inside source prose as named authors", () => {
+  for (const author of ["Departed member", "退会した会員"]) {
+    const supplied = { ...materials, sources: [{ ...materials.sources[0], author, original: "@outsider requests public review.", translation: undefined }] };
+    const citations = [{ sourceId: "e-1-body", quote: supplied.sources[0].original }];
+    expect(verifyNushiAnswerResult(answer([{ text: `${author} requests public review.`, citations }]), supplied)).toMatchObject({ ok: true });
+    expect(verifyNushiAnswerResult(answer([{ text: "@outsider requests public review.", citations }]), supplied)).toMatchObject({ ok: false, reason: "unknown_author" });
+    expect(verifyNushiAnswerResult(answer([{ text: "@Departed requests public review.", citations }]), supplied)).toMatchObject({ ok: false, reason: "unknown_author" });
+  }
+});
+
+it("rejects an unknown handle after a maximum-length author spelling", () => {
+  const author = "@" + "a".repeat(30), supplied = { ...materials, sources: [{ ...materials.sources[0], author }] };
+  expect(verifyNushiAnswerResult(answer([{ ...reading, text: `${author} asks for review.` }]), supplied)).toMatchObject({ ok: true });
+  expect(verifyNushiAnswerResult(answer([{ ...reading, text: `${author}b asks for review.` }]), supplied)).toMatchObject({ ok: false, reason: "unknown_author" });
+});
+
 it("rejects too many distinct citations across individually bounded readings", () => {
   const sources = Array.from({ length: limits.citations + 1 }, (_, i) => ({ ...materials.sources[0], id: `e-${i + 1}-body` }));
   const citations = sources.map(source => ({ ...citation, sourceId: source.id }));

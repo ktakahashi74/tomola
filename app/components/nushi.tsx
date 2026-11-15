@@ -16,7 +16,7 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
   </div>;
   const sources = value.answer.citations.map(citation => {
     const label = value.labels.find(source => source.id === Number(/^e-(\d+)-/.exec(citation.sourceId)![1]));
-    return { author: citation.author, date: label?.date.slice(0, 10) ?? "", href: citation.original.href, quote: <>
+    return { author: citation.author, date: label?.date.slice(0, 10) ?? "", href: citation.original.href, left: label?.left, quote: <>
       {label?.left && <p className="ui-meta">{m.nushi_left()}</p>}
       <blockquote className="border-s ps-3" lang={citation.original.lang}><a className="underline" href={citation.original.href}>{citation.original.quote}</a></blockquote>
       {citation.translation && <blockquote className="border-s ps-3" lang={citation.translation.lang}><a className="underline" href={citation.translation.href}>{citation.translation.quote}</a></blockquote>}

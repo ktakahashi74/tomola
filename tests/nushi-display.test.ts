@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { ChatNushiBody } from "~/components/chat-message";
-import { NushiCallStatus } from "~/components/nushi";
+import { NushiAnswer, NushiCallStatus, type NushiAnswerView } from "~/components/nushi";
 import { NushiSources } from "~/components/nushi-sources";
 import { chatParts } from "~/lib/village-chat";
 import { m } from "~/paraglide/messages.js";
@@ -74,18 +74,25 @@ it.each(["/v/orchard", "/settings/profile", "/t/word", "/t/7/extra"])("preserves
   expect(html).not.toContain(m.nushi_open_post());
 });
 
-it.each(["en", "ja", "fr", "ko", "zh-Hans", "zh-Hant"] as const)("formats the source list for %s readers with quotations closed", locale => {
+it.each([
+  ["en", ["4/2", "4/3", "4/4"]], ["ja", ["4/2", "4/3", "4/4"]],
+  ["fr", ["02/04", "03/04", "04/04"]], ["ko", ["4. 2.", "4. 3.", "4. 4."]],
+  ["zh-Hans", ["4/2", "4/3", "4/4"]], ["zh-Hant", ["4/2", "4/3", "4/4"]],
+] as const)("formats the source list for %s readers with visible separators and quotations closed", (locale, dates) => {
   setTestLocale(locale);
   const sources = [
     { author: "@a", date: "2026-04-02", href: "/t/1?orig=1#p-1", quote: "Original passage" },
     { author: "@c", date: "2026-04-03", href: "/t/3?orig=3#p-3", quote: "Another passage" },
+    { author: "@d", date: "2026-04-04", href: "/t/4?orig=4#p-4", quote: "Third passage" },
   ];
   const html = renderToStaticMarkup(createElement(NushiSources, { sources }));
   const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
-  const dates = sources.map(source => new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(new Date(`${source.date}T00:00:00Z`)));
   const labels = sources.map((source, i) => `${source.author} ${dates[i]}`);
   expect(tags(line.html, "a").map(node => ({ href: node.attrs.href, text: node.text }))).toEqual(sources.map((source, i) => ({ href: source.href, text: labels[i] })));
-  expect(line.text).toBe(m.nushi_sources() + (/^(ja|zh)/.test(locale) ? "" : " ") + new Intl.ListFormat(locale, { type: "unit" }).format(labels));
+  const separators = [...line.html.matchAll(/<\/a>(.*?)<a\b/gs)].map(match => match[1]);
+  expect(separators).toHaveLength(sources.length - 1);
+  for (const separator of separators) expect(separator).toMatch(/\S/u);
+  expect(line.text.startsWith(m.nushi_sources() + (/^(ja|zh)/.test(locale) ? "" : " ") + "@a")).toBe(true);
   const quotes = tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!;
   expect(quotes.attrs).not.toHaveProperty("open");
   expect(tags(quotes.html, "summary")[0].text).toBe(m.nushi_quotes());
@@ -112,6 +119,23 @@ it.each([false, true])("links inline numbers and folds only quotations after tra
   expect(tags(quotes.html, "a").find(node => node.text === m.nushi_open_post())?.attrs.href).toBe(href);
 });
 
+it.each([false, true])("shows former membership beside the public source with left=%s before quotations open", left => {
+  const answer: NushiAnswerView = {
+    id: 1, requestId: "request", entryId: 1, threadId: 1, hidden: false,
+    answer: { status: "answered", readings: [{ text: "@writer asks for review.", citations: [1] }], citations: [{
+      sourceId: "e-7-body", kind: "post", field: "body", author: "@writer", original: { quote: "Original passage", lang: "en", href: "/t/7" },
+    }] }, lang: "en", langCode: null, originalLang: "en", translated: false, translationEngine: "fake", translationModel: "fake",
+    scope: { posts: 1, from: "2026-04-02", to: "2026-04-02", truncated: false }, engine: "fake", model: "fake", promptVersion: "nushi-v7", date: "2026-04-02",
+    caller: "reader", personal: false, villageId: "village", villageSlug: "orchard",
+    labels: [{ id: 7, author: "@writer", authorHref: "/u/writer", date: "2026-04-02", left }],
+  };
+  const html = renderToStaticMarkup(createElement(NushiAnswer, { answer }));
+  const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
+  expect(line.text).toContain("@writer");
+  expect(line.text.includes(m.nushi_left())).toBe(left);
+  expect(tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!.attrs).not.toHaveProperty("open");
+});
+
 it.each([undefined, -1])("keeps every new chat control in the message tab order with tabIndex=%s", tabIndex => {
   const { body, sources } = chatAnswer("Reading. ".repeat(300));
   const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources, tabIndex }));
@@ -122,6 +146,7 @@ it.each([2200, 2201])("folds chat readings at the public-answer threshold for %s
   const { body, sources } = chatAnswer("a".repeat(length));
   const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources }));
   expect(html.includes("data-nushi-readings")).toBe(length > 2200);
+  if (length > 2200) expect(tags(html, "p")[0].attrs.dir).toBe("auto");
   expect(tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)).toBeDefined();
 });
 
