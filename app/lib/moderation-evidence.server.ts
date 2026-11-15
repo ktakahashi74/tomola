@@ -35,8 +35,8 @@ export async function reportEvidence(db: Db, reportId: number, model: string, no
     return { report: reported, target: { id: target.id, title: target.title, body: target.body, lang: target.lang }, context: { topicTitle: topic.title, parent: parent ?? null, before: before.reverse(), after } };
   }
   if (report.villageId !== null) {
-    const [snapshot] = await db.select({ name: villageReportSnapshots.name, description: villageReportSnapshots.description, slug: villageReportSnapshots.slug }).from(villageReportSnapshots).where(and(eq(villageReportSnapshots.reportId, report.id), isNull(villageReportSnapshots.prunedAt)));
-    const [current] = await db.select({ name: villages.name, description: villages.description, slug: villages.slug }).from(villages).where(eq(villages.id, report.villageId));
+    const [snapshot] = await db.select({ name: villageReportSnapshots.name, description: villageReportSnapshots.description, ...(report.villageTarget === "nushi_voice" ? { nushiVoice: villageReportSnapshots.nushiVoice } : {}), slug: villageReportSnapshots.slug }).from(villageReportSnapshots).where(and(eq(villageReportSnapshots.reportId, report.id), isNull(villageReportSnapshots.prunedAt)));
+    const [current] = await db.select({ name: villages.name, description: villages.description, ...(report.villageTarget === "nushi_voice" ? { nushiVoice: villages.nushiVoice } : {}), slug: villages.slug }).from(villages).where(eq(villages.id, report.villageId));
     return snapshot && snapshot.name !== null ? { report: reported, target: snapshot, context: { current } } : null;
   }
   if (!report.chatMessageId) return null;

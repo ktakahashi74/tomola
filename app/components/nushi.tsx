@@ -30,6 +30,7 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
   return <article id={`nushi-${value.id}`} data-nushi-answer className="min-w-0 space-y-3 rounded border bg-muted/30 p-3 [overflow-wrap:anywhere]">
     <header className="space-y-1">
       <p><a href="/ai-use#nushi" className="font-semibold underline">{m.nushi_name()}</a> · {m.nushi_label({ handle: value.caller ?? "?" })}</p>
+      {value.voiceHref && <p className="ui-meta"><a data-nushi-voice-link href={value.voiceHref} className="underline">{m.nushi_voice_owner_label()}</a></p>}
       {value.personal && <p className="ui-help text-muted-foreground">{m.nushi_personal_notice()}</p>}
       {value.translated && <p className="ui-meta"><TranslationLabel kind="primary" engine={value.translationEngine} model={value.translationModel} /> <a className="underline" href={`/nushi/${value.id}?lang=${value.originalLang}`}>{m.show_original()}</a></p>}
       <a className="ui-meta underline" href={`/nushi/${value.id}`}><time dateTime={value.date}>{value.date.slice(0, 10)}</time></a>

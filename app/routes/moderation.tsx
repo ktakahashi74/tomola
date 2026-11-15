@@ -27,6 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 function actionLabel(action: ModerationAction): string {
   switch (action) {
+    case "clear_nushi_voice": return m.nushi_voice_removed();
     case "clear_village_icon": return m.log_village_icon_removed();
     case "restore_village_icon": return m.log_village_icon_restored();
     case "clear_avatar": return m.log_avatar_removed();

@@ -49,6 +49,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
     {message.hidden ? <p>{message.nushi ? m.nushi_hidden() : m.village_chat_hidden()}</p> : <>
       <ChatReplyLine reply={message.reply} slug={slug} createdAt={message.createdAt} tabIndex={interactionTabIndex} />
       {grouped && translated && <span className="float-end"><TranslationMark tabIndex={interactionTabIndex} /></span>}
+      {message.nushi?.voiceHref && <p className="ui-meta"><a data-nushi-voice-link href={message.nushi.voiceHref} tabIndex={interactionTabIndex} className="underline">{m.nushi_voice_owner_label()}</a></p>}
       {message.nushi?.departed?.map(handle => <p key={handle} className="ui-help">@{handle} · {m.nushi_left()}</p>)}
       {message.nushi?.edited && <p className="ui-help">{m.chat_nushi_call_edited()}</p>}
       {!onlyPostCard && (message.nushi ? <ChatNushiBody parts={parts} sources={message.nushi.sources} truncated={message.nushi.truncated} tabIndex={interactionTabIndex} /> : <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>)}

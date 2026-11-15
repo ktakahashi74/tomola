@@ -3,6 +3,7 @@
 export const publicOnly = [
   ["post-ai-materials", "public readers read supplements"],
   ["village-nushi", ".*"],
+  ["nushi-voice", ".*"],
   ["post-ask-ai", "anonymous readers"],
   ["chat-search", ".*"],
   ["color-scheme", "signed-out readers"],

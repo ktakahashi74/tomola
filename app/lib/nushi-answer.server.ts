@@ -31,6 +31,7 @@ export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMateri
   if (!result.ok) return result;
   const authors = new Set(materials.sources.map(source => source.author.normalize("NFKC").toLowerCase()).filter(author => author.startsWith("@")));
   for (const reading of result.answer.readings) {
+    if (/(?:https?:\/\/|www\.)/iu.test(reading.text)) return answerVerificationFailure("unexpected_url", answerData);
     if (mentionCandidates(reading.text).some(({ start, end }) => !authors.has(reading.text.slice(start, end).normalize("NFKC").toLowerCase())
       || HANDLE_REST.test((reading.text[end] ?? "").normalize("NFKC").toLowerCase()))) return answerVerificationFailure("unknown_author", answerData);
   }

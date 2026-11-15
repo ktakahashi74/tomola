@@ -2195,5 +2195,17 @@
   "ai_use_sent_village_slug": "英語のアドレス（URL のスラッグ）の案を作るために、ビレッジを作る画面で入力した名前。",
   "nushi_truncated": "材料の一部を省いています。",
   "nushi_sources": "出典：",
-  "nushi_quotes": "引用を見る"
+  "nushi_quotes": "引用を見る",
+  "nushi_voice_title": "ヌシの話し方",
+  "nushi_voice_help": "500 字まで。丁寧かくだけているか、語尾、あいさつ、詳しさ、このビレッジでの言葉の言い方だけを書いてください。空欄なら、いつものヌシです。根拠や引用、人の見解、異論の扱いは、ヌシの決まりに従います。",
+  "nushi_voice_public_help": "この文と変更履歴（いつ、だれが、どんな文に変えたか）は公開されます。公開の閲覧が開いていれば、ログインしていない人も読めます。",
+  "nushi_voice_owner_label": "ビレッジのオーナーが決めた話し方",
+  "nushi_voice_default": "いつものヌシ（話し方の指定なし）。",
+  "nushi_voice_history": "話し方の変更履歴",
+  "nushi_voice_clear": "いつものヌシに戻す",
+  "nushi_voice_invalid": "500 字以内で、制御文字を使わずに書いてください。",
+  "nushi_voice_remove": "話し方の指定を外す",
+  "nushi_voice_removed": "運営者が話し方の指定を外した",
+  "mail_nushi_voice_removed": "運営者が、あなたのビレッジのヌシの話し方の指定を外しました（{reason}）。いつものヌシに戻りました。{url}",
+  "nushi_voice_disclosure": "話し方の設定が有効なときは、オーナーが公開した話し方の文もヌシの提供者へ送ります。使うのは口調と言い回しだけで、根拠と引用などのヌシの決まりを優先します。"
 }

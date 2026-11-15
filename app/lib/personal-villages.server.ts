@@ -29,3 +29,10 @@ export async function endPersonalVillage(db: Db, userId: string, now: Date) {
     .where(and(eq(villages.kind, "personal"), eq(villages.ownerId, userId))).returning({ id: villages.id });
   for (const row of rows) await db.delete(villageFollows).where(eq(villageFollows.villageId, row.id));
 }
+
+export async function personalVoiceVillage(db: Db, handle: string) {
+  const [row] = await db.select({ village: villages, handle: profiles.handle }).from(villages)
+    .innerJoin(profiles, eq(profiles.userId, villages.ownerId))
+    .where(and(eq(villages.kind, "personal"), eq(profiles.handle, handle.toLowerCase())));
+  return row ? { ...row.village, slug: `@${row.handle}` } : null;
+}

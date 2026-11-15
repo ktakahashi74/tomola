@@ -180,6 +180,7 @@ function NotificationText({ n, homeArea, handles, count }: { n: Item & { chatHas
   }
   if (n.kind === "moderation" && n.automatic) return <>{m.notification_moderation_automatic()}</>;
   if (n.kind === "moderation" && (n.action === "hide_chat" || n.action === "unhide_chat")) return <>{n.action === "hide_chat" ? m.notification_moderation_hide_chat() : m.notification_moderation_unhide_chat()}{n.reason && <> {m.notification_reason({ reason: reasonLabel(n.reason) })}</>}</>;
+  if (n.kind === "moderation" && n.action === "clear_nushi_voice") return <>{m.nushi_voice_removed()}</>;
   if (n.kind === "moderation" && (n.action === "fix_village" || n.action === "end_village" || n.action === "unfix_village" || n.action === "reopen_village")) {
     return <>{n.action === "fix_village" ? m.notification_moderation_fix_village() : n.action === "end_village" ? m.notification_moderation_end_village() : n.action === "unfix_village" ? m.notification_moderation_unfix_village() : m.notification_moderation_reopen_village()}
       {n.village && <> {villageName(n.village)}</>}

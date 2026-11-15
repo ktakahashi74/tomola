@@ -165,6 +165,7 @@ export const villages = pgTable("villages", {
   iconMediaId: text("icon_media_id").references((): AnyPgColumn => media.id, { onDelete: "set null" }),
   iconActionId: bigint("icon_action_id", { mode: "number" }).references((): AnyPgColumn => moderationActions.id, { onDelete: "set null" }),
   nushiEnabled: boolean("nushi_enabled"),
+  nushiVoice: text("nushi_voice").notNull().default(""),
   system: boolean("system").notNull().default(false),
   // Retain the immutable account ID after deletion; never reassign it to the shared deleted identity.
   ownerId: text("owner_id").unique(),
@@ -174,6 +175,7 @@ export const villages = pgTable("villages", {
 }, t => [
   index("villages_icon_media_idx").on(t.iconMediaId).where(sql`${t.iconMediaId} IS NOT NULL`),
   check("villages_icon_kind_check", sql`(${t.kind} <> 'personal' AND ${t.language} IS NULL) OR (${t.iconMediaId} IS NULL AND ${t.iconActionId} IS NULL)`),
+  check("villages_nushi_voice_check", sql`char_length(${t.nushiVoice}) <= 500`),
   check("villages_id_check", sql`${t.id} ~ '^[a-f0-9]{32}$'`),
   check("villages_slug_check", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
   check("villages_kind_check", oneOf(t.kind, VILLAGE_KINDS)),
@@ -328,7 +330,7 @@ export const villageInvites = pgTable("village_invites", {
   index("village_invites_pair_idx").on(t.invitedBy, t.userId, t.responseEventId),
 ]);
 
-// Management history is internal. Handles are scrubbed when the account is deleted.
+// Only speaking-style events are projected publicly; other management history stays internal. Handles are scrubbed when the account is deleted.
 export const villageEvents = pgTable("village_events", {
   id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
   villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
@@ -1292,7 +1294,7 @@ export const reports = pgTable(
     avatarUserId: text("avatar_user_id").references(() => user.id),
     avatarMediaId: text("avatar_media_id").references(() => media.id, { onDelete: "set null" }),
     iconMediaId: text("icon_media_id").references(() => media.id, { onDelete: "set null" }),
-    villageTarget: text("village_target").$type<"information" | "icon">().notNull().default("information"),
+    villageTarget: text("village_target").$type<"information" | "icon" | "nushi_voice">().notNull().default("information"),
     displayNameUserId: text("display_name_user_id").references(() => user.id),
     displayNamesReported: jsonb("display_names_reported").$type<{ displayName: string | null; displayNameLatin: string | null }>(),
     // Frozen routing metadata avoids reading private evidence while selecting queue pages.
@@ -1329,7 +1331,7 @@ export const reports = pgTable(
     index("reports_icon_media_idx").on(t.iconMediaId).where(sql`${t.iconMediaId} IS NOT NULL`),
     index("reports_avatar_media_idx").on(t.avatarMediaId).where(sql`${t.avatarMediaId} IS NOT NULL`),
     check("reports_target_check", sql`(${t.entryId} IS NOT NULL)::int + (${t.villageId} IS NOT NULL)::int + (${t.chatMessageId} IS NOT NULL)::int + (${t.displayNameUserId} IS NOT NULL)::int + (${t.avatarUserId} IS NOT NULL)::int = 1`),
-    check("reports_village_target_check", oneOf(t.villageTarget, ["information", "icon"])),
+    check("reports_village_target_check", oneOf(t.villageTarget, ["information", "icon", "nushi_voice"])),
     check("reports_chat_lang_check", sql`(${t.chatMessageId} IS NULL AND ${t.chatLang} IS NULL AND ${t.chatAuthorId} IS NULL) OR (${t.chatMessageId} IS NOT NULL AND ${t.chatLang} IS NOT NULL AND ${oneOf(t.chatLang, LANGS)})`),
     check("reports_ai_priority_check", sql`${t.aiPriority} is null or ${oneOf(t.aiPriority, ["urgent", "normal", "low"])}`),
     check("reports_reason_check", oneOf(t.reason, REPORT_REASONS)),
@@ -1342,6 +1344,7 @@ export const villageReportSnapshots = pgTable("village_report_snapshots", {
   reportId: bigint("report_id", { mode: "number" }).primaryKey().references(() => reports.id, { onDelete: "cascade" }),
   name: text("name"),
   description: text("description"),
+  nushiVoice: text("nushi_voice"),
   slug: text("slug"),
   prunedAt: timestamp("pruned_at", { withTimezone: true }),
 });
@@ -1798,6 +1801,7 @@ export const nushiRequests = pgTable("nushi_requests", {
   check("nushi_requests_state_check", oneOf(t.state, ["pending", "processing", "answered", "failed", "cancelled"])),
 ]);
 export const nushiAnswers = pgTable("nushi_answers", {
+  voiceEventId: bigint("voice_event_id", { mode: "number" }).references(() => villageEvents.id),
   id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
   requestId: text("request_id").notNull().references(() => nushiRequests.id, { onDelete: "cascade" }).unique(),
   answer: jsonb("answer").$type<import("../ai-questions").AiQuestionAnswer>().notNull(),
@@ -1851,6 +1855,7 @@ export const nushiReports = pgTable("nushi_reports", {
 
 // Private requests retain identifiers and revisions, never question or answer text.
 export const chatNushiRequests = pgTable("chat_nushi_requests", {
+  voiceEventId: bigint("voice_event_id", { mode: "number" }).references(() => villageEvents.id),
   id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
   messageId: text("message_id").notNull().references(() => chatMessages.id, { onDelete: "cascade" }).unique(),
   villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),

@@ -1,3 +1,5 @@
+import { nushiVoiceEnabled } from "./nushi-config.server";
+import { personalVoiceVillage } from "./personal-villages.server";
 import { media } from "./db/schema";
 import { mediaPath } from "./media";
 import { AVATAR_EDGE } from "./avatar-image.server";
@@ -17,8 +19,8 @@ import { requestVillageTranslations } from "~/lib/village-translations.server";
 import { RETENTION, daysBefore } from "~/lib/retention";
 import { drainRetentionRows, type RetentionResults } from "~/lib/retention-batch.server";
 
-export type VillageMetadata = { name: string; description: string; slug: string | null; language: string | null };
-export type VillageReportTarget = "information" | "icon";
+export type VillageMetadata = { name: string; description: string; nushiVoice?: string; slug: string | null; language: string | null };
+export type VillageReportTarget = "information" | "icon" | "nushi_voice";
 export type VillageModerationError = ModerationError | "invalid_village" | "slug_taken" | "stale";
 export type VillageReportCard = {
   kind: "village";
@@ -52,7 +54,7 @@ export async function createVillageReport(db: Db, reporterId: string, input: { s
   if (!villagesEnabled()) return { ok: false as const, error: "not_found" as const };
   if (!isReason(input.reason)) return { ok: false as const, error: "invalid_reason" as const };
   const target = input.target ?? "information";
-  if (target !== "information" && target !== "icon") return { ok: false as const, error: "invalid_state" as const };
+  if (target !== "information" && target !== "icon" && target !== "nushi_voice") return { ok: false as const, error: "invalid_state" as const };
   const reason = input.reason;
   const note = villageText(input.note ?? "", MAX_REPORT_NOTE);
   if (note === null) return { ok: false as const, error: "invalid_note" as const };
@@ -60,12 +62,14 @@ export async function createVillageReport(db: Db, reporterId: string, input: { s
   return db.transaction(async tx => {
     const actor = await lockVillageActor(tx, reporterId);
     if (!actor || actor.suspendedUntil && actor.suspendedUntil > now) return { ok: false as const, error: "forbidden" as const };
-    const [village] = await tx.select().from(villages).where(eq(villages.slug, input.slug)).for("update");
-    if (!village || !isSharedVillageKind(village.kind)) return { ok: false as const, error: "not_found" as const };
+    const personal = input.slug.startsWith("@") ? await personalVoiceVillage(tx, input.slug.slice(1)) : null;
+    const [village] = await tx.select().from(villages).where(personal ? eq(villages.id, personal.id) : eq(villages.slug, input.slug)).for("update");
+    if (!village || !(isSharedVillageKind(village.kind) || village.kind === "personal" && target === "nushi_voice")) return { ok: false as const, error: "not_found" as const };
+    if (target === "nushi_voice" && (!nushiVoiceEnabled() || !village.nushiVoice || village.language)) return { ok: false as const, error: "not_found" as const };
     if (target === "icon" && !village.iconMediaId) return { ok: false as const, error: "not_found" as const };
     const [row] = await tx.insert(reports).values({ villageId: village.id, villageTarget: target, iconMediaId: target === "icon" ? village.iconMediaId : null, reporterId, reason, note, createdAt: now }).onConflictDoNothing().returning({ id: reports.id });
     if (!row) return { ok: false as const, error: "duplicate" as const };
-    await tx.insert(villageReportSnapshots).values({ reportId: row.id, name: village.name, description: village.description, slug: village.slug });
+    await tx.insert(villageReportSnapshots).values({ reportId: row.id, name: village.name, description: village.description, nushiVoice: target === "nushi_voice" ? village.nushiVoice : null, slug: personal?.slug ?? village.slug });
     await enqueueReportTriage(tx, row.id);
     return { ok: true as const, id: row.id };
   });
@@ -75,23 +79,25 @@ export async function createVillageReport(db: Db, reporterId: string, input: { s
 export async function loadVillageReportCards(db: Db, ids: string[], handled: boolean, viewerId?: string): Promise<Map<string, VillageReportCard>> {
   if (!ids.length) return new Map();
   const [villageRows, reportRows, owners] = await Promise.all([
-    db.select({ id: villages.id, name: villages.name, description: villages.description, slug: villages.slug, language: villages.language, kind: villages.kind, endedAt: villages.endedAt, iconMediaId: villages.iconMediaId, version: sql<string>`coalesce((select max(id) from village_events where village_id = ${villages.id}), 0)::text`, creatorHandle: profiles.handle }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.createdBy)).where(inArray(villages.id, ids)),
-    db.select({ id: reports.id, target: reports.villageTarget, iconMediaId: reports.iconMediaId, villageId: reports.villageId, reason: reports.reason, note: reports.note, createdAt: reports.createdAt, aiPriority: reports.aiPriority, aiAssessment: reports.aiAssessment, name: villageReportSnapshots.name, description: villageReportSnapshots.description, slug: villageReportSnapshots.slug, prunedAt: villageReportSnapshots.prunedAt }).from(reports).leftJoin(villageReportSnapshots, eq(villageReportSnapshots.reportId, reports.id)).where(and(inArray(reports.villageId, ids), handled ? ne(reports.status, "open") : eq(reports.status, "open"))).orderBy(asc(reports.createdAt), asc(reports.id)),
+    db.select({ id: villages.id, name: villages.name, description: villages.description, ...(nushiVoiceEnabled() ? { nushiVoice: villages.nushiVoice } : {}), slug: villages.slug, ownerId: villages.ownerId, ownerHandle: sql<string | null>`(select handle from profiles where user_id = ${villages.ownerId})`, language: villages.language, kind: villages.kind, endedAt: villages.endedAt, iconMediaId: villages.iconMediaId, version: sql<string>`coalesce((select max(id) from village_events where village_id = ${villages.id}), 0)::text`, creatorHandle: profiles.handle }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.createdBy)).where(inArray(villages.id, ids)),
+    db.select({ id: reports.id, target: reports.villageTarget, iconMediaId: reports.iconMediaId, villageId: reports.villageId, reason: reports.reason, note: reports.note, createdAt: reports.createdAt, aiPriority: reports.aiPriority, aiAssessment: reports.aiAssessment, name: villageReportSnapshots.name, description: villageReportSnapshots.description, ...(nushiVoiceEnabled() ? { nushiVoice: villageReportSnapshots.nushiVoice } : {}), slug: villageReportSnapshots.slug, prunedAt: villageReportSnapshots.prunedAt }).from(reports).leftJoin(villageReportSnapshots, eq(villageReportSnapshots.reportId, reports.id)).where(and(inArray(reports.villageId, ids), handled ? ne(reports.status, "open") : eq(reports.status, "open"))).orderBy(asc(reports.createdAt), asc(reports.id)),
     db.select({ villageId: villageMembers.villageId, userId: villageMembers.userId, handle: profiles.handle }).from(villageMembers).innerJoin(profiles, eq(profiles.userId, villageMembers.userId)).where(and(inArray(villageMembers.villageId, ids), eq(villageMembers.role, "owner"))).orderBy(asc(profiles.handle)),
   ]);
   const imageIds = [...new Set([...villageRows.flatMap(v => v.iconMediaId ? [v.iconMediaId] : []), ...reportRows.flatMap(r => r.iconMediaId ? [r.iconMediaId] : [])])];
   const available = new Set(imageIds.length ? (await db.select({ id: media.id }).from(media).where(and(inArray(media.id, imageIds), isNull(media.deletedAt)))).map(row => row.id) : []);
   const imageUrl = (id: string | null) => id && available.has(id) ? mediaPath(id, AVATAR_EDGE, AVATAR_EDGE) : null;
   return new Map(villageRows.filter(v => reportRows.some(r => r.villageId === v.id)).map(v => [v.id, {
-    kind: "village", reportId: reportRows.find(r => r.villageId === v.id)!.id, version: v.version, owned: owners.some(o => o.villageId === v.id && o.userId === viewerId),
-    village: { name: v.name, description: v.description, slug: v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt },
-    iconUrl: imageUrl(v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: owners.filter(o => o.villageId === v.id).map(o => o.handle),
-    reports: reportRows.filter(r => r.villageId === v.id).map(r => ({ id: r.id, target: r.target, iconUrl: imageUrl(r.iconMediaId), reason: r.reason as ReportReason, note: r.note, createdAt: r.createdAt, aiPriority: r.aiPriority, aiAssessment: r.aiAssessment, snapshot: r.prunedAt || r.name === null || r.description === null ? null : { name: r.name, description: r.description, slug: r.slug } })),
+    kind: "village", reportId: reportRows.find(r => r.villageId === v.id)!.id, version: v.version, owned: v.ownerId === viewerId || owners.some(o => o.villageId === v.id && o.userId === viewerId),
+    village: { name: v.name, description: v.description, ...(nushiVoiceEnabled() ? { nushiVoice: v.nushiVoice } : {}), slug: v.kind === "personal" && v.ownerHandle ? `@${v.ownerHandle}` : v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt },
+    iconUrl: imageUrl(v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: v.kind === "personal" && v.ownerHandle ? [v.ownerHandle] : owners.filter(o => o.villageId === v.id).map(o => o.handle),
+    reports: reportRows.filter(r => r.villageId === v.id).map(r => ({ id: r.id, target: r.target, iconUrl: imageUrl(r.iconMediaId), reason: r.reason as ReportReason, note: r.note, createdAt: r.createdAt, aiPriority: r.aiPriority, aiAssessment: r.aiAssessment, snapshot: r.prunedAt || r.name === null || r.description === null ? null : { name: r.name, description: r.description, ...(nushiVoiceEnabled() ? { nushiVoice: r.nushiVoice ?? undefined } : {}), slug: r.slug } })),
   }]));
 }
 
 async function notifyOwners(db: Db, villageId: string, actionId: number, now: Date) {
   const owners = await db.select({ userId: villageMembers.userId }).from(villageMembers).where(and(eq(villageMembers.villageId, villageId), eq(villageMembers.role, "owner"))).orderBy(asc(villageMembers.userId));
+  const [personal] = await db.select({ userId: profiles.userId }).from(villages).innerJoin(profiles, eq(profiles.userId, villages.ownerId)).where(and(eq(villages.id, villageId), eq(villages.kind, "personal")));
+  if (personal && !owners.some(owner => owner.userId === personal.userId)) owners.push(personal);
   for (const owner of owners) await createModerationNotification(db, { userId: owner.userId, entryId: null, villageId, actionId, now });
 }
 function uniqueViolation(error: unknown): boolean {
@@ -99,7 +105,7 @@ function uniqueViolation(error: unknown): boolean {
 }
 
 // Existing cases remain actionable when new village reports are disabled.
-export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: number; slugTarget?: string; version: unknown; intent: "fix" | "end" | "dismiss" | "clear-icon"; reason: unknown; note?: unknown; name?: unknown; description?: unknown; slug?: unknown }, opts: { now?: Date } = {}): Promise<{ ok: true; actionId: number } | { ok: false; error: VillageModerationError }> {
+export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: number; slugTarget?: string; version: unknown; intent: "fix" | "end" | "dismiss" | "clear-icon" | "clear-voice"; reason: unknown; note?: unknown; name?: unknown; description?: unknown; slug?: unknown }, opts: { now?: Date } = {}): Promise<{ ok: true; actionId: number } | { ok: false; error: VillageModerationError }> {
   if (!actor.scope.operator) return { ok: false, error: "forbidden" };
   if ((input.reportId === undefined) === (input.slugTarget === undefined)) return { ok: false, error: "not_found" };
   const checked = checkInput(input, input.intent !== "dismiss");
@@ -112,21 +118,27 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
       if (!member || member.suspendedUntil && member.suspendedUntil > now) return { ok: false as const, error: "forbidden" as const };
       // Direct actions are new entry points; existing report cases remain actionable when disabled.
       if (input.slugTarget !== undefined && !villagesEnabled()) return { ok: false as const, error: "not_found" as const };
+      const personal = input.slugTarget?.startsWith("@") ? await personalVoiceVillage(tx, input.slugTarget.slice(1)) : null;
       const [target] = input.slugTarget !== undefined
-        ? await tx.select({ villageId: villages.id }).from(villages).where(eq(villages.slug, input.slugTarget))
+        ? await tx.select({ villageId: villages.id }).from(villages).where(personal ? eq(villages.id, personal.id) : eq(villages.slug, input.slugTarget))
         : input.reportId !== undefined ? await tx.select({ villageId: reports.villageId }).from(reports).where(eq(reports.id, input.reportId)) : [];
       if (!target?.villageId) return { ok: false as const, error: "not_found" as const };
       await lockVillageSlugClaims(tx);
       const village = await lockModeratedVillage(tx, target.villageId);
-      if (!village || !isSharedVillageKind(village.kind)) return { ok: false as const, error: "not_found" as const };
-      if (await isVillageOwner(tx, village.id, actor.id)) return { ok: false as const, error: "forbidden" as const };
+      if (!village || !(isSharedVillageKind(village.kind) || village.kind === "personal" && ["clear-voice", "dismiss"].includes(input.intent))) return { ok: false as const, error: "not_found" as const };
+      if (village.ownerId === actor.id || await isVillageOwner(tx, village.id, actor.id)) return { ok: false as const, error: "forbidden" as const };
       if (input.intent === "fix" && village.language) return { ok: false as const, error: "forbidden" as const };
       if (String(input.version) !== await villageModerationVersion(tx, village.id)) return { ok: false as const, error: "stale" as const };
       const [open] = await tx.select({ id: reports.id }).from(reports).where(and(eq(reports.villageId, village.id), eq(reports.status, "open"))).limit(1);
       if (!open && (input.intent === "dismiss" || input.slugTarget === undefined)) return { ok: false as const, error: "invalid_state" as const };
       let eventId: number | undefined;
       if (input.intent === "clear-icon" && (village.language || !village.iconMediaId)) return { ok: false as const, error: "invalid_state" as const };
-      if (input.intent === "fix") {
+      if (input.intent === "clear-voice") {
+        if (!nushiVoiceEnabled() || !village.nushiVoice || village.language) return { ok: false as const, error: "invalid_state" as const };
+        await tx.update(villages).set({ nushiVoice: "" }).where(eq(villages.id, village.id));
+        const [event] = await tx.insert(villageEvents).values({ villageId: village.id, actorId: actor.id, actorHandle: member.handle, action: "moderation_nushi_voice", detail: { text: "", oldText: village.nushiVoice }, createdAt: now }).returning({ id: villageEvents.id });
+        eventId = event.id;
+      } else if (input.intent === "fix") {
         const description = villageDescriptionText(input.description === undefined ? village.description : input.description);
         const name = villageNameText(input.name === undefined ? village.name : input.name);
         const slug = input.slug === undefined ? village.slug : input.slug;
@@ -147,12 +159,12 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
         await tx.update(villageInvites).set({ state: "cancelled", respondedAt: now }).where(and(eq(villageInvites.villageId, village.id), eq(villageInvites.state, "pending")));
         endedId = village.id;
       }
-      const [action] = await tx.insert(moderationActions).values({ iconMediaIdBefore: input.intent === "clear-icon" ? village.iconMediaId : null, action: input.intent === "clear-icon" ? "clear_village_icon" : input.intent === "fix" ? "fix_village" : input.intent === "end" ? "end_village" : "dismiss_village_report", targetVillageId: village.id, villageEventId: eventId, actorId: actor.id, reportId: input.reportId ?? null, ...checked, createdAt: now }).returning({ id: moderationActions.id });
+      const [action] = await tx.insert(moderationActions).values({ iconMediaIdBefore: input.intent === "clear-icon" ? village.iconMediaId : null, action: input.intent === "clear-voice" ? "clear_nushi_voice" : input.intent === "clear-icon" ? "clear_village_icon" : input.intent === "fix" ? "fix_village" : input.intent === "end" ? "end_village" : "dismiss_village_report", targetVillageId: village.id, villageEventId: eventId, actorId: actor.id, reportId: input.reportId ?? null, ...checked, createdAt: now }).returning({ id: moderationActions.id });
       if (input.intent === "clear-icon") {
         await tx.update(villages).set({ iconMediaId: null, iconActionId: action.id }).where(eq(villages.id, village.id));
         await tx.insert(villageEvents).values({ villageId: village.id, actorId: actor.id, actorHandle: member.handle, action: "moderation_icon", detail: {}, createdAt: now });
       }
-      await tx.update(reports).set({ status: input.intent === "dismiss" ? "dismissed" : "resolved", handledBy: actor.id, handledAt: now }).where(and(eq(reports.villageId, village.id), eq(reports.status, "open")));
+      await tx.update(reports).set({ status: input.intent === "dismiss" ? "dismissed" : "resolved", handledBy: actor.id, handledAt: now }).where(and(eq(reports.villageId, village.id), eq(reports.status, "open"), input.intent === "clear-voice" ? eq(reports.villageTarget, "nushi_voice") : undefined));
       if (input.intent !== "dismiss") await notifyOwners(tx, village.id, action.id, now);
       return { ok: true as const, actionId: action.id };
     });
@@ -165,7 +177,7 @@ export async function moderateVillage(db: Db, actor: Actor, input: { reportId?: 
 }
 
 export async function villageAppealMetadata(db: Db, id: string, eventId: number | null) {
-  const [village] = await db.select({ name: villages.name, description: villages.description, slug: villages.slug, language: villages.language }).from(villages).where(eq(villages.id, id));
+  const [village] = await db.select({ name: villages.name, description: villages.description, ...(nushiVoiceEnabled() ? { nushiVoice: villages.nushiVoice } : {}), slug: villages.slug, ownerId: villages.ownerId, ownerHandle: sql<string | null>`(select handle from profiles where user_id = ${villages.ownerId})`, language: villages.language }).from(villages).where(eq(villages.id, id));
   let before: VillageMetadata | null = null;
   if (eventId !== null) {
     const [event] = await db.select({ detail: villageEvents.detail }).from(villageEvents).where(and(eq(villageEvents.id, eventId), eq(villageEvents.villageId, id)));
@@ -219,7 +231,7 @@ export async function pruneVillageReportSnapshots(db: Db, now: Date, results?: R
   return (await drainRetentionRows(db, "village_report_snapshots", villageReportSnapshots,
     sql`${villageReportSnapshots.prunedAt} is null and ${villageReportSnapshots.reportId} in
       (select ${reports.id} from ${reports} where ${reports.villageId} is not null and ${reports.status} <> 'open' and ${reports.handledAt} < ${daysBefore(now, RETENTION.villageReportDays)})`,
-    results, sql`name = null, description = null, slug = null, pruned_at = ${now}`)).removed;
+    results, sql`name = null, description = null, nushi_voice = null, slug = null, pruned_at = ${now}`)).removed;
 }
 
 export async function villageModerationVersion(db: Db, villageId: string): Promise<string> {
@@ -229,12 +241,13 @@ export async function villageModerationVersion(db: Db, villageId: string): Promi
 
 // Operator-only route callers supply the authenticated account. No village IDs leave here.
 export async function loadVillageModerationView(db: Db, slug: string, viewerId: string): Promise<VillageReportCard | null> {
-  const [v] = await db.select({ id: villages.id, name: villages.name, description: villages.description, slug: villages.slug, language: villages.language, kind: villages.kind, endedAt: villages.endedAt, iconMediaId: villages.iconMediaId, version: sql<string>`coalesce((select max(id) from village_events where village_id = ${villages.id}), 0)::text`, creatorHandle: profiles.handle }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.createdBy)).where(eq(villages.slug, slug));
-  if (!v || !isSharedVillageKind(v.kind)) return null;
+  const personal = nushiVoiceEnabled() && slug.startsWith("@") ? await personalVoiceVillage(db, slug.slice(1)) : null;
+  const [v] = await db.select({ id: villages.id, name: villages.name, description: villages.description, ...(nushiVoiceEnabled() ? { nushiVoice: villages.nushiVoice } : {}), slug: villages.slug, ownerId: villages.ownerId, ownerHandle: sql<string | null>`(select handle from profiles where user_id = ${villages.ownerId})`, language: villages.language, kind: villages.kind, endedAt: villages.endedAt, iconMediaId: villages.iconMediaId, version: sql<string>`coalesce((select max(id) from village_events where village_id = ${villages.id}), 0)::text`, creatorHandle: profiles.handle }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.createdBy)).where(personal ? eq(villages.id, personal.id) : eq(villages.slug, slug));
+  if (!v || !(isSharedVillageKind(v.kind) || personal)) return null;
   const reported = (await loadVillageReportCards(db, [v.id], false, viewerId)).get(v.id);
-  if (reported) return reported;
+  if (reported) return personal ? { ...reported, owned: personal.ownerId === viewerId, village: { ...reported.village, slug: personal.slug }, ownerHandles: [personal.slug.slice(1)] } : reported;
   const owners = await db.select({ userId: villageMembers.userId, handle: profiles.handle }).from(villageMembers).innerJoin(profiles, eq(profiles.userId, villageMembers.userId)).where(and(eq(villageMembers.villageId, v.id), eq(villageMembers.role, "owner")));
-  return { kind: "village", reportId: null, version: v.version, owned: owners.some(o => o.userId === viewerId), village: { name: v.name, description: v.description, slug: v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt }, iconUrl: await avatarAppealUrl(db, v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: owners.map(o => o.handle), reports: [] };
+  return { kind: "village", reportId: null, version: v.version, owned: v.ownerId === viewerId || owners.some(o => o.userId === viewerId), village: { name: v.name, description: v.description, ...(nushiVoiceEnabled() ? { nushiVoice: v.nushiVoice } : {}), slug: personal?.slug ?? v.slug, language: v.language, kind: v.kind, ended: !!v.endedAt }, iconUrl: await avatarAppealUrl(db, v.iconMediaId), creatorHandle: v.creatorHandle, ownerHandles: personal ? [personal.slug.slice(1)] : owners.map(o => o.handle), reports: [] };
 }
 
 export async function openVillageReportTargets(db: Db, villageId: string, reporterId: string): Promise<VillageReportTarget[]> {

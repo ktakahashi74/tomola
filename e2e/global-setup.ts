@@ -78,6 +78,7 @@ export default async function globalSetup(config: FullConfig) {
     VILLAGE_CHAT: config.metadata.publicReading ? "1" : "",
     POST_ASK_AI: "1",
     VILLAGE_NUSHI: "1",
+    VILLAGE_NUSHI_VOICE: process.env.VILLAGE_NUSHI_VOICE === "1" ? "1" : "",
     VILLAGE_SLUG_SUGGEST: "1",
     VILLAGE_SLUG_SUGGEST_MODEL: "",
     VILLAGE_CHAT_NUSHI: config.metadata.publicReading && process.env.E2E_CHAT_NUSHI === "1" ? "1" : "",

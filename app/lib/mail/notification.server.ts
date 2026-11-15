@@ -91,6 +91,7 @@ export function itemText(item: MailItem, locale: Locale): string {
     case "moderation":
       if (item.automatic) return m.mail_moderation_automatic({ url: item.url }, o);
       if (item.action === "restore_village_icon") return m.mail_village_icon_restored({ url: item.url }, o);
+      if (item.action === "clear_nushi_voice") return m.mail_nushi_voice_removed({ reason, url: item.url }, o);
       if (item.action === "clear_village_icon") return m.mail_village_icon_removed({ reason, url: item.url }, o);
       if (item.action === "clear_avatar") return m.mail_avatar_removed({ reason, url: item.url }, o);
       if (item.action === "clear_display_name") return m.mail_display_name_removed({ reason, url: item.url }, o);

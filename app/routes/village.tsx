@@ -1,3 +1,5 @@
+import { NushiVoicePublic, NushiVoiceSetting } from "~/components/nushi-voice";
+import { publicNushiVoice, setNushiVoice } from "~/lib/nushi-voice.server";
 import { chatNushiEnabled } from "~/lib/chat-nushi-config.server";
 import { nushiEnabled } from "~/lib/nushi-config.server";
 import { villageWriters } from "~/lib/village-writers.server";
@@ -96,12 +98,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const result = await listTopics(db, { kind: "village", villageId: village.id }, { page: parsePage(request), viewer, order, asksOnly, titledOnly });
   const peekId = user ? readPeekParam(url) : null;
   // The name and description in the reader's language when they were written in another; ?vorig=1 keeps the original. `source` is always the original, for the owner's form.
+  const voice = await publicNushiVoice(db, village.id);
   const localized = await localizeVillage(db, publicVillage(village), villageReaderFor(request, profile), { original: url.searchParams.get(VILLAGE_ORIGINAL_PARAM) === "1" });
   return {
     ...(resolveReportId !== null ? { resolveReportId } : {}),
     ...(villageChatEnabled() ? { chat: { joined: membership?.joined ?? false, unread: user && membership?.joined ? await chatUnreadCount(db, user.id, village.id) : 0 } } : {}),
     ...(user && profile ? { reported: await openVillageReportTargets(db, village.id, user.id) } : {}),
     nushi: { setting: (nushiEnabled() || chatNushiEnabled()) && !village.language && membership?.owner ? village.nushiEnabled !== false : null, id: village.id },
+    ...(voice ? { voice } : {}),
     reader: !user,
     village: { ...localized, iconUrl: villageIconUrl(village), hasIcon: !!village.iconMediaId },
     source: { name: village.name, description: village.description, lang: village.sourceLang ?? (user && (membership?.owner || operator) ? (await decideVillageLangOf(db, village)).lang : null) },
@@ -130,6 +134,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   const form = await request.formData();
   const intent = form.get("intent");
   const text = (key: string) => typeof form.get(key) === "string" ? String(form.get(key)) : "";
+  if (intent === "nushi-voice" || intent === "nushi-voice-clear") {
+    await enforceMemberLimit(db, "edit", user.id);
+    const village = await villageBySlug(db, params.slug);
+    if (!village) throw data("Not found", { status: 404 });
+    const changed = await setNushiVoice(db, user.id, village.id, intent === "nushi-voice-clear" ? "" : form.get("voice"));
+    if (!changed.ok) return data({ error: changed.error }, { status: changed.error === "forbidden" ? 403 : changed.error === "not_found" ? 404 : 400 });
+    throw redirect(`/v/${params.slug}?manage=1#nushi-voice`);
+  }
   if (intent === "flag") {
     const rate = await hitMemberLimit(db, "report", user.id);
     if (!rate.allowed) return data({ reportError: "rate_limited", reported: false }, { status: 429, headers: rateLimitHeaders(rate) });
@@ -229,7 +241,8 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
     </>} />
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
-    {actionData && "error" in actionData && <p role="alert">{villageError(String(actionData.error))}</p>}
+    {actionData && "error" in actionData && <p role="alert">{actionData.error === "invalid_voice" ? m.nushi_voice_invalid() : villageError(String(actionData.error))}</p>}
+    {"voice" in loaderData && loaderData.voice && <NushiVoicePublic voice={loaderData.voice} />}
     {ended && <p role="status">{m.village_ended()}</p>}
     {!ended && <VillageInvites invites={incoming} />}
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -255,6 +268,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     {canManage && <PersistentDetails key={village.slug} id="village-management" open={managementOpen} className="space-y-3">
       <summary className="link-ui cursor-pointer">{m.village_manage()}</summary>
       {loaderData.nushi.setting !== null && <Form method="post" action="/nushi/action" className="space-y-2 ui-help"><input type="hidden" name="intent" value="village" /><input type="hidden" name="villageId" value={loaderData.nushi.id} /><input type="hidden" name="returnTo" value={location.pathname + location.search} /><label><input type="checkbox" name="enabled" value="1" defaultChecked={loaderData.nushi.setting} /> {m.nushi_enable()}</label><p>{m.nushi_stop_help()}</p><Button type="submit" variant="outline">{m.settings_email_save()}</Button></Form>}
+      {owner && !ended && "voice" in loaderData && loaderData.voice && <NushiVoiceSetting text={loaderData.voice.text} />}
       {notice && search.get("notice") !== "remove-member" && <p role="status">{notice}</p>}
       {owner && !ended && !village.language && <AvatarSettings village action={`/v/${village.slug}/icon`} url={village.iconUrl} uploaded={village.hasIcon} />}
       {(owner || operator && !!village.language) && <section className="space-y-4">
@@ -288,6 +302,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     </PersistentDetails>}
     {operator && !owner && !village.language && <Link className="link-ui inline-block" to={`/mod/village/${village.slug}`}>{m.village_mod_link()}</Link>}
     {"reportError" in (actionData ?? {}) && <p role="status">{actionData && "reportError" in actionData ? actionData.reportError === null ? m.flag_thanks() : actionData.reportError === "rate_limited" ? m.error_rate_limited() : actionData.reportError === "duplicate" ? m.flag_error_duplicate() : m.flag_error_invalid() : ""}</p>}
-    {!owner && "reported" in loaderData && <VillageReportForm hasIcon={village.hasIcon} reported={loaderData.reported ?? []} />}
+    {!owner && "reported" in loaderData && <VillageReportForm hasVoice={"voice" in loaderData && !!loaderData.voice?.text} hasIcon={village.hasIcon} reported={loaderData.reported ?? []} />}
   </main>;
 }

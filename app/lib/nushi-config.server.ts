@@ -3,7 +3,8 @@ import { villagesEnabled } from "./villages-enabled.server";
 import type { LlmEnv } from "./llm/types";
 import { modelMatchesProvider, primaryEngineId, primaryModelOf } from "./llm/config.server";
 
-export const NUSHI_PROMPT_VERSION = "nushi-v8";
+export const NUSHI_PROMPT_VERSION = "nushi-v9";
+export const nushiVoiceEnabled = (env: LlmEnv = process.env) => env.VILLAGE_NUSHI_VOICE === "1";
 export const nushiEnabled = (env: LlmEnv = process.env) => env.VILLAGE_NUSHI === "1";
 const integer = (env: LlmEnv, key: string, fallback: number) => {
   const raw = env[key]?.trim() || String(fallback), value = Number(raw);
@@ -43,6 +44,7 @@ export function nushiInVillage(village: { kind: string; language: string | null;
 }
 
 export function assertNushiConfig(env: LlmEnv = process.env) {
+  if (![undefined, "", "0", "1"].includes(env.VILLAGE_NUSHI_VOICE)) throw new Error("VILLAGE_NUSHI_VOICE must be 1, 0 or empty");
   if (![undefined, "", "0", "1"].includes(env.VILLAGE_NUSHI)) throw new Error("VILLAGE_NUSHI must be 1, 0 or empty");
   if (![undefined, "", "0", "1"].includes(env.VILLAGE_CHAT_NUSHI)) throw new Error("VILLAGE_CHAT_NUSHI must be 1, 0 or empty");
   if (!nushiEnabled(env) && env.VILLAGE_CHAT_NUSHI !== "1") return;

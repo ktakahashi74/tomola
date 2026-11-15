@@ -6,6 +6,7 @@ import { mdBlock } from "./md/frontmatter.server";
 export function nushiBody(value: NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>) {
   if (value.hidden) return "AI (Nushi) answer — currently not displayed.";
   const lines = ["AI (Nushi) answer", `Called by @${value.caller ?? "?"}. From this village’s public posts.`];
+  if (value.voiceHref) lines.push(`Speaking style set by the village owner: ${value.voiceHref}`);
   if (value.personal) lines.push("This is not the owner's answer. The owner has not checked it.");
   if (value.answer.status === "not_confirmed") {
     const askPerson = value.answer.askPerson !== false;

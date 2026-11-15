@@ -2973,5 +2973,17 @@
   "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug.",
   "nushi_truncated": "Some material was left out.",
   "nushi_sources": "Sources:",
-  "nushi_quotes": "View quotations"
+  "nushi_quotes": "View quotations",
+  "nushi_voice_title": "Nushi speaking style",
+  "nushi_voice_help": "Up to 500 characters. Describe only formality, sentence endings, greetings, level of detail and local wording. Leave empty for the usual Nushi. Nushi’s rules about sources, quotations, people’s views and disagreements take priority.",
+  "nushi_voice_public_help": "The text and its change history, including when and who changed it, are public. They can also be read without signing in when public reading is enabled.",
+  "nushi_voice_owner_label": "Speaking style set by the village owner",
+  "nushi_voice_default": "The usual Nushi (no speaking style specified).",
+  "nushi_voice_history": "Speaking style history",
+  "nushi_voice_clear": "Use the usual Nushi",
+  "nushi_voice_invalid": "Use up to 500 characters, without control characters.",
+  "nushi_voice_remove": "Remove the speaking style",
+  "nushi_voice_removed": "Speaking style removed by an operator",
+  "mail_nushi_voice_removed": "An operator removed your village’s Nushi speaking style ({reason}). It now uses the usual Nushi. {url}",
+  "nushi_voice_disclosure": "When enabled, the village owner’s public speaking-style text is also sent to Nushi’s provider. It controls only tone and wording; Nushi’s source and quotation rules take priority."
 }

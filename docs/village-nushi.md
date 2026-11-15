@@ -10,6 +10,16 @@ Turning off a village or topic setting cancels pending requests and permanently 
 
 Readers can hide answers on their own screen. Members save this preference in their account; visitors save it in a device cookie. This does not stop generation or affect other readers.
 
+## Village speaking style
+
+`VILLAGE_NUSHI_VOICE=1` lets current village owners, including co-owners, set up to 500 Unicode characters describing formality, sentence endings, greetings, level of detail and local wording. The default is empty, which keeps the usual Nushi. Owners edit or clear it beside the Nushi setting in village management. A personal village's holder uses its speaking-style page, linked from account settings and the member page. That page exposes only the village's style and history; it does not make the member page public.
+
+The style and its history (time, editor's handle and resulting text) are public on the village page, including to signed-out readers when public reading is enabled. Each answer links to that page; answers generated with a saved style link to the particular history entry used. Changes and operator removal retain that provenance. Only speaking-style events are exposed from management history; other management details stay private. Account deletion scrubs editor handles using the existing deletion policy. Members can report the style through village reporting, with a frozen copy for review. Operators can clear it, returning to the default and recording a public removal event. Other open village report targets remain open after a style removal.
+
+The text is sent to the configured Nushi provider only as a separate, untrusted style field after materials have been selected. All common and Nushi instructions take priority. Commands about scope, sources, quotations, evaluations, representation, disagreements or conditions are ignored; source selection and quotation checks remain server-controlled. This applies to both posting and chat answers. A style change during generation cancels publication. The switch defaults off: controls, public style/history, answer links and prompt insertion disappear, while saved settings remain.
+
+Before enabling this feature with real models, assess deliberately hostile styles with the actual configured model, including commands to omit objections, emit URLs and search other villages. Fake completions verify data boundaries and server checks; they do not establish that a model will preserve context or resist every instruction.
+
 ## Calls and material
 
 A member publishes `@nushi` or `@village-ai` in a new topic or reply. The composer explains that the answer will be public when a call is present. Quotes, fenced and indented code, inline code, escaped mentions, links, drafts, edits and translations do not invoke Nushi. Repeated calls in one post create one request. Both names are reserved, without creating an AI member account. Posting suggestions appear only in an eligible context. Chat calls use the separate switch described below.

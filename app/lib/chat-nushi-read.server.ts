@@ -1,3 +1,4 @@
+import { nushiVoiceLink } from "./nushi-voice.server";
 import { alias } from "drizzle-orm/pg-core";
 import { chatParts } from "./village-chat";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -19,18 +20,21 @@ export async function presentChatNushi(db: Db, userId: string, messages: ChatMes
   if (!ids.length) return withCalls;
   const [preference] = await db.select({ hide: profiles.hideNushi }).from(profiles).where(eq(profiles.userId, userId));
   const answerRow = alias(chatMessages, "chat_nushi_answer");
-  const rows = await db.select({ answer: answerRow, id: chatNushiRequests.answerMessageId, handle: profiles.handle, editedAt: chatMessages.editedAt }).from(chatNushiRequests)
+  const rows = await db.select({ answer: answerRow, id: chatNushiRequests.answerMessageId, handle: profiles.handle, editedAt: chatMessages.editedAt, villageId: chatNushiRequests.villageId, voiceEventId: chatNushiRequests.voiceEventId }).from(chatNushiRequests)
     .innerJoin(answerRow, eq(answerRow.id, chatNushiRequests.answerMessageId)).innerJoin(chatMessages, eq(chatMessages.id, chatNushiRequests.messageId)).leftJoin(profiles, eq(profiles.userId, chatNushiRequests.callerId))
     .where(inArray(chatNushiRequests.answerMessageId, ids));
   const departed = await db.select({ id: chatNushiRequests.answerMessageId, handle: profiles.handle }).from(chatNushiSources)
     .innerJoin(chatNushiRequests, eq(chatNushiRequests.id, chatNushiSources.requestId)).leftJoin(profiles, eq(profiles.userId, chatNushiSources.authorId))
     .where(and(inArray(chatNushiRequests.answerMessageId, ids), sql`not exists (select 1 from ${villageMembers} where ${villageMembers.villageId} = ${chatNushiRequests.villageId} and ${villageMembers.userId} = ${chatNushiSources.authorId})`));
+  const voiceLinks = new Map(await Promise.all([...new Set(rows.map(row => row.villageId))].map(async id => [id, await nushiVoiceLink(db, id, null)] as const)));
   return withCalls.map(message => {
     if (message.deleted || !message.nushi) return message;
     const row = rows.find(row => row.id === message.id);
     const hidden = message.hidden || !!preference?.hide || !row || !!row.answer.hiddenAt || !!row.answer.deletedAt;
     const shape = row?.answer.nushiShape;
     const sources = !hidden && shape?.citationRanges?.length && shape.scopeStart !== undefined ? { citationRanges: shape.citationRanges, scopeStart: shape.scopeStart, bodyLength: row!.answer.body.length, readingChars: shape.ranges.reduce((length, [from, to]) => length + to - from, 0) } : undefined;
-    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { caller: row?.handle ?? null, edited: !!row?.editedAt, sources, truncated: !hidden && shape?.scope?.truncated === true, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
+    const voiceBase = !hidden && row ? voiceLinks.get(row.villageId) : undefined;
+    const voiceHref = voiceBase ? voiceBase + (row?.voiceEventId ? `-${row.voiceEventId}` : "") : undefined;
+    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { ...(voiceHref ? { voiceHref } : {}), caller: row?.handle ?? null, edited: !!row?.editedAt, sources, truncated: !hidden && shape?.scope?.truncated === true, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
   });
 }

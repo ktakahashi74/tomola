@@ -93,6 +93,7 @@ export default defineConfig({
       PREVIEW_LANGS: "",
       PUBLIC_READING: "",
       VILLAGES: "",
+      VILLAGE_NUSHI_VOICE: "",
       VILLAGE_SLUG_SUGGEST: "",
       VILLAGE_SLUG_SUGGEST_MODEL: "",
       VILLAGE_CHAT: "",

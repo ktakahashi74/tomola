@@ -1,3 +1,4 @@
+import { nushiVoiceEnabled } from "~/lib/nushi-config.server";
 import { createAvatarReport } from "~/lib/avatar-moderation.server";
 import { createDisplayNameReport } from "~/lib/display-name-moderation.server";
 import { lazy, Suspense, useState } from "react";
@@ -43,7 +44,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     forceOriginal: parseIdSet(query.getAll("orig")), forceTranslation: parseIdSet(query.getAll("tr")), forceOlder: parseIdSet(query.getAll("old")),
   });
   if ((content.page > 1 && content.topics.length === 0) || (content.personal && content.personal.page > 1 && content.personal.topics.length === 0)) throw data("Not found", { status: 404, headers: privateHeaders });
-  return { ...content, reported: query.get("reported") === "1" };
+  return { ...content, nushiVoiceHref: nushiVoiceEnabled() && content.personal ? `/v/personal/${member.handle}#nushi-voice` : null, reported: query.get("reported") === "1" };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -109,6 +110,7 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
           {!own && <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={personal.following} name="intent" value={personal.following ? "unfollow" : "follow"}>{personal.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>}
         </div>
         {!own && <p className="ui-help text-muted-foreground">{m.member_page_village_follow_hint()}</p>}
+        {loaderData.nushiVoiceHref && <Link className="underline" to={loaderData.nushiVoiceHref}>{m.nushi_voice_title()}</Link>}
         <MemberTopics topics={personal.topics} own={own} />
         <Pagination page={personal.page} hasNext={personal.hasNext} pageParam="vpage" anchor="#village" />
       </section>}

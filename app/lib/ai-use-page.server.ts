@@ -1,5 +1,5 @@
 import { CHAT_NUSHI_PROMPT_VERSION, chatNushiEnabled } from "./chat-nushi-config.server";
-import { NUSHI_PROMPT_VERSION, nushiEnabled } from "./nushi-config.server";
+import { NUSHI_PROMPT_VERSION, nushiVoiceEnabled, nushiEnabled } from "./nushi-config.server";
 import { AI_USE_DEFINITIONS, PUBLIC_MODEL_NAME, readAiUseConfigurations, type AiUsePurpose } from "./ai-use-registry.server";
 import { operatorConfig, type AiUseSettings } from "./operator-config.server";
 import type { Lang } from "./languages";
@@ -54,7 +54,7 @@ export function aiUsePage(locale: Lang, env: LlmEnv = process.env, settings: AiU
     unrecorded: m.ai_use_unrecorded({}, options),
     rows,
     // Describe the village AI only while it is offered.
-    nushi: nushiEnabled(env) || chatNushiEnabled(env) ? { title: m.nushi_name({}, options), text: [nushiEnabled(env) ? m.nushi_description({}, options) : "", chatNushiEnabled(env) ? m.chat_nushi_description({}, options) : ""].filter(Boolean).join(" "), versions: m.nushi_versions({ version: [nushiEnabled(env) ? NUSHI_PROMPT_VERSION : "", chatNushiEnabled(env) ? CHAT_NUSHI_PROMPT_VERSION : ""].filter(Boolean).join(" / ") }, options) } : null,
+    nushi: nushiEnabled(env) || chatNushiEnabled(env) ? { title: m.nushi_name({}, options), text: [nushiEnabled(env) ? m.nushi_description({}, options) : "", chatNushiEnabled(env) ? m.chat_nushi_description({}, options) : "", nushiVoiceEnabled(env) ? m.nushi_voice_disclosure({}, options) : ""].filter(Boolean).join(" "), versions: m.nushi_versions({ version: [nushiEnabled(env) ? NUSHI_PROMPT_VERSION : "", chatNushiEnabled(env) ? CHAT_NUSHI_PROMPT_VERSION : ""].filter(Boolean).join(" / ") }, options) } : null,
     searchTitle: m.ai_use_search({}, options),
     searchText: m.ai_use_search_text({}, options),
     historyTitle: m.ai_use_history({}, options),
