@@ -98,6 +98,7 @@
     }
   ],
   "respond_with_post": "以新帖子回应",
+  "respond_with_post_hint": "“以新帖子回应”会带着您已写的内容打开新帖子页面，并与此帖关联。",
   "response_post_place_hint": "无论发布在哪里，相关讨论都会把它与原帖子关联起来。",
   "response_post_prefill": "对[{title}（@{handle}）]({url})的回应",
   "response_post_untitled": "对[@{handle} 的帖子]({url})的回应",

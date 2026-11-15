@@ -100,6 +100,7 @@
     }
   ],
   "respond_with_post": "Répondre par une nouvelle publication",
+  "respond_with_post_hint": "« Répondre par une nouvelle publication » ouvre l’écran de nouvelle publication avec ce que vous avez écrit, en lien avec celle-ci.",
   "response_post_place_hint": "Où que vous publiiez, les discussions liées la relieront à la publication d’origine.",
   "response_post_prefill": "Réponse à [{title} (@{handle})]({url})",
   "response_post_untitled": "Réponse à [la publication de @{handle}]({url})",
