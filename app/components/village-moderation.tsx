@@ -22,7 +22,7 @@ export function VillageReportForm({ reported, hasIcon = false, voiceHistory = []
     {targets.length > 0 && <details className="ui-meta"><summary className="cursor-pointer underline">{m.village_report()}</summary>
     <Form method="post" className="mt-2 max-w-xl space-y-3 rounded border p-3 text-sm">
       <input type="hidden" name="intent" value="flag" />
-      {targets.length > 1 ? <label className="block space-y-1"><span>{m.village_report_target()}</span><select name="target" className="rounded border bg-background p-2">{targets.map(target => <option key={target} value={target}>{target === "nushi_voice" ? m.nushi_voice_title() : target === "icon" ? m.village_icon_label() : m.village_report_information()}</option>)}</select></label> : <input type="hidden" name="target" value={targets[0]} />}
+      {available.length > 1 ? <label className="block space-y-1"><span>{m.village_report_target()}</span><select name="target" className="rounded border bg-background p-2">{targets.map(target => <option key={target} value={target}>{target === "nushi_voice" ? m.nushi_voice_title() : target === "icon" ? m.village_icon_label() : m.village_report_information()}</option>)}</select></label> : <input type="hidden" name="target" value={targets[0]} />}
       {targets.includes("nushi_voice") && <label className="block space-y-1"><span>{m.nushi_voice_history()}</span><select name="voiceEventId" className="w-full rounded border bg-background p-2">{voices.map(event => <option key={event.id} value={event.id}>{event.date.slice(0, 10)} · {event.text.slice(0, 80)}</option>)}</select></label>}
       <ReportReasonSelect appearance="plain" />
       <label className="block space-y-1"><span>{m.flag_note()}</span><Textarea name="note" rows={3} maxLength={1000} /></label>
