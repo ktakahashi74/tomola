@@ -20,23 +20,92 @@ vi.mock("react", async original => {
 afterEach(() => { setTestLocale("en"); control.origin = "https://example.test"; control.measure = false; control.effects = []; control.setLong.mockClear(); vi.unstubAllGlobals(); });
 
 function tags(html: string, tag: string) {
-  return [...html.matchAll(new RegExp(`<${tag}\\b([^>]*)>([\\s\\S]*?)</${tag}>`, "g"))].map(match => ({
-    attrs: Object.fromEntries([...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(attribute => [attribute[1], attribute[2]])),
-    text: match[2].replace(/<[^>]*>/g, ""), html: match[2],
-  }));
+  const nodes: Array<{ attrs: Record<string, string>; text: string; html: string }> = [];
+  let depth = 0, start = 0, attrs = "";
+  for (const match of html.matchAll(new RegExp(`<(/?)${tag}\\b([^>]*)>`, "g"))) {
+    if (!match[1]) {
+      if (depth++ === 0) { start = match.index + match[0].length; attrs = match[2]; }
+    } else if (--depth === 0) {
+      const content = html.slice(start, match.index);
+      nodes.push({ attrs: Object.fromEntries([...attrs.matchAll(/([\w-]+)="([^"]*)"/g)].map(attribute => [attribute[1].toLowerCase(), attribute[2]])), text: content.replace(/<[^>]*>/g, ""), html: content });
+    }
+  }
+  return nodes;
 }
 
 function chatAnswer(reading = "The post asks for public review.", date = "2026-04-02") {
   const href = "https://example.test/t/7?orig=7#p-7:~:text=An%20orchard";
   const head = `${reading} [1]`;
   const block = `[1] @@writer · ${date}\nOriginal passage\n\nWith context.\n訳の箇所。\n${href}`;
-  const body = `${head}\n\n${block}\n\nConsulted range.`;
+  const body = `${head}\n\n${block}\n\n${m.nushi_scope({ count: 1, from: date, to: date })}`;
   const start = head.length + 2;
   return { href, body, sources: { citationRanges: [[start, start + block.length] as [number, number]], scopeStart: start + block.length + 2, bodyLength: body.length, readingChars: reading.length } };
 }
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 vi.mock("react-router", async original => ({ ...await original<typeof import("react-router")>(), useRouteLoaderData: () => ({ siteOrigin: control.origin }) }));
+
+function postAnswer(): Extract<NushiAnswerView, { hidden: false }> {
+  return {
+    id: 1, requestId: "request", entryId: 1, threadId: 7, hidden: false,
+    answer: { status: "answered", readings: [{ text: "The orchard needs review.", citations: [] }], citations: [] },
+    lang: "en", langCode: null, originalLang: "en", translated: false, translationEngine: "fake", translationModel: "fake",
+    scope: { posts: 3, from: "2026-04-01", to: "2026-04-02", truncated: false }, engine: "fake", model: "fake", promptVersion: "nushi-v8", date: "2026-04-02T12:00:00Z",
+    caller: "reader", personal: false, villageId: "village", villageSlug: "orchard", labels: [],
+  };
+}
+
+it.each(["en", "ja"] as const)("keeps the AI label, caller, date and consulted scope visible in %s", locale => {
+  setTestLocale(locale);
+  const answer = postAnswer();
+  answer.scope.truncated = true;
+  const html = renderToStaticMarkup(createElement(NushiAnswer, { answer }));
+  const header = tags(html, "header")[0];
+  const line = tags(header.html, "p");
+  expect(line).toHaveLength(1);
+  expect(line[0].text).toBe(`${m.nushi_name()} · ${m.nushi_answer_label({ handle: answer.caller! })} · ${answer.date.slice(0, 10)}`);
+  expect(tags(line[0].html, "a").map(node => node.attrs.href)).toEqual(["/ai-use#nushi", `/nushi/${answer.id}`]);
+  expect(tags(line[0].html, "time")[0].attrs.datetime).toBe(answer.date);
+  const scope = tags(html, "p").find(node => "data-nushi-scope" in node.attrs)!;
+  expect(scope.text).toBe(`${m.nushi_answer_scope({ count: answer.scope.posts, from: answer.scope.from!, to: answer.scope.to! })} · ${m.nushi_truncated()}`);
+  expect(tags(html, "details").every(node => !node.html.includes("data-nushi-scope"))).toBe(true);
+  const about = tags(html, "details").find(node => "data-nushi-about" in node.attrs)!;
+  expect(about.attrs).not.toHaveProperty("open");
+  expect(tags(about.html, "summary")[0].text).toBe(m.nushi_answer_about());
+  expect(tags(about.html, "a").map(node => ({ href: node.attrs.href, text: node.text }))).toEqual([
+    { href: "/ai-use#nushi", text: `${answer.model} · ${answer.promptVersion}` },
+    { href: "/principles#s6", text: m.ai_use_objections_link() },
+    { href: "/search?village=orchard", text: m.nushi_search() },
+  ]);
+});
+
+it.each([false, true])("keeps answer details separate from the ordinary actions for member=%s", member => {
+  const answer = postAnswer(), back = "/t/7";
+  const html = renderToStaticMarkup(createElement(NushiAnswer, { answer, member, back }));
+  const about = tags(html, "details").find(node => "data-nushi-about" in node.attrs)!;
+  expect(tags(about.html, "form")).toHaveLength(member ? 1 : 0);
+  expect(about.html.includes('name="kind" value="error"')).toBe(member);
+  if (member) {
+    const error = tags(about.html, "details")[0];
+    expect(tags(error.html, "summary")[0].text).toBe(m.nushi_report_error());
+    expect(error.html).toContain('name="consent" value="1"');
+    const actions = tags(html, "div").at(-1)!;
+    expect(tags(actions.html, "a").map(node => ({ href: node.attrs.href, text: node.text }))).toEqual([{ href: `/t/${answer.threadId}?nushi_reply=${answer.id}#reply`, text: m.reply_to_button() }]);
+    expect(tags(actions.html, "summary").map(node => node.text)).toEqual([m.flag_summary()]);
+    expect(actions.html).toContain('name="kind" value="moderation"');
+    expect(actions.text).not.toContain(m.nushi_report_error());
+    for (const form of tags(html, "form")) {
+      expect(form.attrs).toMatchObject({ method: "post", action: "/nushi/action" });
+      expect(form.html).toContain(`name="answerId" value="${answer.id}"`);
+      expect(form.html).toContain(`name="returnTo" value="${back}"`);
+    }
+  } else {
+    expect(tags(html, "form")).toHaveLength(0);
+    expect(html).not.toContain(m.reply_to_button());
+    expect(html).not.toContain(m.flag_summary());
+    expect(html).not.toContain(m.nushi_report_error());
+  }
+});
 
 it.each(["pending", "processing"])("keeps animated punctuation out of the %s announcement", state => {
   const html = renderToStaticMarkup(createElement(NushiCallStatus, { state, failure: null }));
@@ -114,7 +183,7 @@ it.each([false, true])("links inline numbers and folds only quotations after tra
   const quotes = tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!;
   expect(quotes.attrs).not.toHaveProperty("open");
   expect(quotes.text).toContain("Original passage\n\nWith context.\n訳の箇所。");
-  expect(tags(html, "p").find(node => "data-nushi-scope" in node.attrs)?.text).toBe("Consulted range.");
+  expect(tags(html, "p").find(node => "data-nushi-scope" in node.attrs)?.text).toBe(m.nushi_scope({ count: 1, from: "2026-04-02", to: "2026-04-02" }));
   expect(tags(html, "details")).toHaveLength(1);
   expect(tags(quotes.html, "a").find(node => node.text === m.nushi_open_post())?.attrs.href).toBe(href);
 });

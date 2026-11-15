@@ -1,7 +1,39 @@
-import { expect } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
 import { expectNushiPending } from "./support/nushi-pending";
+
+async function expectAnswerLayout(answer: Locator, member: boolean) {
+  const header = answer.locator("header > p").first();
+  await expect(header).toContainText(en.nushi_answer_label.replace("{handle}", "znushi_flow_caller"));
+  await expect(header.getByRole("link", { name: en.nushi_name, exact: true })).toHaveAttribute("href", "/ai-use#nushi");
+  await expect(header.locator('a[href^="/nushi/"] > time')).toBeVisible();
+  await expect(answer.locator("header > a")).toHaveCount(0);
+  const scope = answer.locator("[data-nushi-scope]");
+  await expect(scope).toBeVisible();
+  await expect(scope.locator("xpath=ancestor::details")).toHaveCount(0);
+  const about = answer.locator("[data-nushi-about]");
+  await expect(about).not.toHaveAttribute("open");
+  const summary = about.locator(":scope > summary");
+  await expect(summary).toHaveText(en.nushi_answer_about);
+  await expect(about.getByRole("link", { name: en.nushi_search, exact: true })).toBeHidden();
+  await summary.click();
+  await expect(about.locator('a[href="/ai-use#nushi"]')).toBeVisible();
+  await expect(about.getByRole("link", { name: en.ai_use_objections_link, exact: true })).toHaveAttribute("href", "/principles#s6");
+  await expect(about.getByRole("link", { name: en.nushi_search, exact: true })).toBeVisible();
+  await expect(about.locator('form:has(input[value="error"])')).toHaveCount(member ? 1 : 0);
+  await expect(about.locator('form:has(input[value="moderation"])')).toHaveCount(0);
+  await summary.click();
+  if (member) {
+    const actions = answer.locator(":scope > div").last();
+    await expect(actions.getByRole("link")).toHaveText(en.reply_to_button);
+    await expect(actions.locator("summary")).toHaveText(en.flag_summary);
+    await expect(actions.locator('form:has(input[value="moderation"])')).toHaveCount(1);
+  } else {
+    await expect(answer.getByRole("link", { name: en.reply_to_button, exact: true })).toHaveCount(0);
+    await expect(answer.locator("form")).toHaveCount(0);
+  }
+}
 
 test("village owners manage Nushi below the village header", async ({ page }) => {
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.217"));
@@ -122,6 +154,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     const answer = caller.locator("[data-nushi-answer]");
     await expect(answer).toContainText("znushi_flow_caller");
     await expect(answer).toContainText(en.nushi_personal_notice);
+    await expectAnswerLayout(answer, true);
     const sources = answer.locator("[data-nushi-sources]");
     await expect(sources).toBeVisible();
     await expect(sources).toContainText("znushi_flow_owner");
@@ -143,6 +176,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await caller.getByRole("button", { name: en.submit_reply, exact: true }).click();
     await expect(caller.locator("#replies")).toContainText("The orchard source needs its seasonal context.");
     const errorForm = caller.locator('[data-nushi-answer] form:has(input[value="error"])');
+    await caller.locator("[data-nushi-about] > summary").click();
     await errorForm.locator("..").locator("summary").click();
     await errorForm.locator('select[name="reason"]').selectOption("lost_context");
     await errorForm.locator('textarea[name="note"]').fill("Please check the seasonal context of the orchard quotation.");
@@ -150,6 +184,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await errorForm.getByRole("button", { name: en.nushi_report_error, exact: true }).click();
     await expect(caller).toHaveURL(new RegExp(`/nushi/${answerId}$`));
     await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1);
+    await expectAnswerLayout(caller.locator("[data-nushi-answer]"), true);
     await caller.goto("/nushi/reports?lang=en");
     await expect(caller.getByRole("heading", { name: en.nushi_report_status, exact: true })).toBeVisible();
     await expect(caller.getByText("Please check the seasonal context of the orchard quotation.", { exact: true })).toBeVisible();
@@ -159,6 +194,10 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     expect(response?.headers()["cache-control"]).toBe("private, no-store");
     expect((await guest.request.get(`${topic}.data?lang=en`)).headers()["cache-control"]).toBe("private, no-store");
     await expect(guest.locator("[data-nushi-answer]")).toHaveCount(1);
+    await expectAnswerLayout(guest.locator("[data-nushi-answer]"), false);
+    await guest.goto(`/nushi/${answerId}?lang=en`);
+    await expectAnswerLayout(guest.locator("[data-nushi-answer]"), false);
+    await guest.goto(`${topic}?lang=en`);
     const markdown = await guest.request.get(`${topic}.md?lang=en`);
     expect(await markdown.text()).toContain("author_kind: ai");
     const json = await guest.request.get(`/nushi/${answerId}.json?lang=en`);

@@ -54,6 +54,9 @@ it("publishes a private source guide without an AI member or human unread/search
   expect(answer).toMatchObject({ nushi: { caller: "zcn_caller", edited: false }, own: false, reply: { id: c.sent.id }, author: "nushi" });
   expect(JSON.stringify(answer)).toContain("zcn_owner");
   expect(answer.nushi?.sources).toMatchObject({ citationRanges: [[expect.any(Number), expect.any(Number)]], scopeStart: expect.any(Number), bodyLength: expect.any(Number), readingChars: expect.any(Number) });
+  const [source] = await w.db.select().from(entries).where(eq(entries.id, w.source));
+  const date = source.createdAt.toISOString().slice(0, 10);
+  expect(answer.parts.map(part => part.text).join("").slice(answer.nushi!.sources!.scopeStart)).toBe(m.nushi_scope({ count: 1, from: date, to: date }));
   expect((await chatUnreadCounts(w.db, "zcn_reader")).get(w.village.slug!)).toBe(0);
   await markChatRead(w.db, "zcn_reader", w.village.slug!, page.seq);
   expect((await w.db.select().from(chatReads).where(eq(chatReads.userId, "zcn_reader")))[0].seq).toBe(c.sent.seq);

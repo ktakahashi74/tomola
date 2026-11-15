@@ -29,16 +29,24 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
   const long = value.answer.readings.reduce((n, reading) => n + reading.text.length, 0) > NUSHI_READINGS_FOLD_CHARS;
   return <article id={`nushi-${value.id}`} data-nushi-answer className="min-w-0 space-y-3 rounded border bg-muted/30 p-3 [overflow-wrap:anywhere]">
     <header className="space-y-1">
-      <p><a href="/ai-use#nushi" className="font-semibold underline">{m.nushi_name()}</a> · {m.nushi_label({ handle: value.caller ?? "?" })}</p>
+      <p><a href="/ai-use#nushi" className="font-semibold underline">{m.nushi_name()}</a> · {m.nushi_answer_label({ handle: value.caller ?? "?" })} · <a className="ui-meta underline" href={`/nushi/${value.id}`}><time dateTime={value.date}>{value.date.slice(0, 10)}</time></a></p>
       {value.voiceHref && <p className="ui-meta"><a data-nushi-voice-link href={value.voiceHref} className="underline">{m.nushi_voice_owner_label()}</a></p>}
       {value.personal && <p className="ui-help text-muted-foreground">{m.nushi_personal_notice()}</p>}
       {value.translated && <p className="ui-meta"><TranslationLabel kind="primary" engine={value.translationEngine} model={value.translationModel} /> <a className="underline" href={`/nushi/${value.id}?lang=${value.originalLang}`}>{m.show_original()}</a></p>}
-      <a className="ui-meta underline" href={`/nushi/${value.id}`}><time dateTime={value.date}>{value.date.slice(0, 10)}</time></a>
     </header>
     {long ? <><p>{value.answer.readings[0]?.text.slice(0, 180)}…</p><details data-nushi-readings className="space-y-3"><summary className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : <div className="space-y-3">{content}</div>}
     <NushiSources sources={sources} />
-    <p data-nushi-scope className="ui-meta text-muted-foreground">{m.nushi_scope({ count: value.scope.posts, from: value.scope.from?.slice(0, 10) ?? "—", to: value.scope.to?.slice(0, 10) ?? "—" })}{value.scope.truncated && <> · <span data-nushi-truncated>{m.nushi_truncated()}</span></>} · <a href={`/search?village=${encodeURIComponent(value.villageSlug ?? value.villageId)}`} className="underline">{m.nushi_search()}</a></p>
-    <p className="ui-meta"><a href="/ai-use#nushi" className="underline">{value.model} · {value.promptVersion}</a> · <a href="/principles#s6" className="underline">{m.ai_use_objections_link()}</a></p>
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 ui-meta">
+      <p data-nushi-scope className="text-muted-foreground">{m.nushi_answer_scope({ count: value.scope.posts, from: value.scope.from?.slice(0, 10) ?? "—", to: value.scope.to?.slice(0, 10) ?? "—" })}{value.scope.truncated && <> · <span data-nushi-truncated>{m.nushi_truncated()}</span></>}</p>
+      <details data-nushi-about className="min-w-0 max-w-full open:basis-full">
+        <summary className="cursor-pointer underline">{m.nushi_answer_about()}</summary>
+        <div className="space-y-2 pt-2">
+          <p><a href="/ai-use#nushi" className="underline">{value.model} · {value.promptVersion}</a> · <a href="/principles#s6" className="underline">{m.ai_use_objections_link()}</a></p>
+          <p><a href={`/search?village=${encodeURIComponent(value.villageSlug ?? value.villageId)}`} className="underline">{m.nushi_search()}</a></p>
+          {member && <NushiErrorReport answerId={value.id} back={back} />}
+        </div>
+      </details>
+    </div>
     {member && <div className="flex flex-wrap items-start gap-3 ui-meta">
       <a href={`/t/${value.threadId}?nushi_reply=${value.id}#reply`} className="underline">{m.reply_to_button()}</a>
       <NushiReport answerId={value.id} back={back} />
@@ -47,18 +55,21 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
 }
 
 function NushiReport({ answerId, back }: { answerId: number; back: string }) {
-  return <><details className="min-w-0 max-w-full open:basis-full"><summary className="cursor-pointer underline">{m.flag_summary()}</summary><form method="post" action="/nushi/action" className="space-y-2">
+  return <details className="min-w-0 max-w-full open:basis-full"><summary className="cursor-pointer underline">{m.flag_summary()}</summary><form method="post" action="/nushi/action" className="space-y-2">
     <input type="hidden" name="intent" value="report" /><input type="hidden" name="answerId" value={answerId} /><input type="hidden" name="kind" value="moderation" /><input type="hidden" name="returnTo" value={back} />
     <ReportReasonSelect appearance="native" />
     <textarea name="note" maxLength={1000} aria-label={m.field_body()} className="w-full rounded border p-2" />
     <Button type="submit" variant="outline">{m.flag_summary()}</Button>
-  </form></details>
-  <details className="min-w-0 max-w-full open:basis-full"><summary className="cursor-pointer underline">{m.nushi_report_error()}</summary><form method="post" action="/nushi/action" className="space-y-2">
+  </form></details>;
+}
+
+function NushiErrorReport({ answerId, back }: { answerId: number; back: string }) {
+  return <details className="min-w-0 max-w-full open:basis-full"><summary className="cursor-pointer underline">{m.nushi_report_error()}</summary><form method="post" action="/nushi/action" className="space-y-2">
     <input type="hidden" name="intent" value="report" /><input type="hidden" name="answerId" value={answerId} /><input type="hidden" name="kind" value="error" /><input type="hidden" name="returnTo" value={back} />
     <select name="reason" aria-label={m.nushi_report_error()} className="w-full max-w-full rounded border p-1"><option value="missing_disagreement">{m.nushi_error_missing_disagreement()}</option><option value="wrong_post">{m.nushi_error_wrong_post()}</option><option value="lost_context">{m.nushi_error_lost_context()}</option><option value="other">{reasonLabel("other")}</option></select>
     <textarea name="note" maxLength={1000} aria-label={m.field_body()} className="w-full rounded border p-2" />
     <label className="block"><input type="checkbox" name="consent" value="1" required /> {m.nushi_report_consent()}</label><Button type="submit" variant="outline">{m.nushi_report_error()}</Button>
-  </form></details></>;
+  </form></details>;
 }
 
 export function NushiCallStatus({ state, failure }: { state: string; failure: string | null }) {
