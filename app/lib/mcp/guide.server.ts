@@ -1,5 +1,5 @@
 import { DRAFT_RESPONSE_GUIDE } from "~/lib/api/draft-response-guide";
-import { accountsRequirement, clientReferencesMarkdown, clientSetupMarkdown, connectPlan } from "~/lib/api/connect.server";
+import { accountsRequirement, clientReferencesMarkdown, clientSetupMarkdown, connectAccountSection, connectManualSection, connectPlan, connectSafetySection, connectVerificationSection } from "~/lib/api/connect.server";
 import { siteUrl } from "~/lib/md/urls.server";
 import { OPEN_IN_AI_TTL_SECONDS } from "~/lib/open-in-ai.server";
 
@@ -9,13 +9,20 @@ export function mcpConnectionGuide() {
   const endpoint = siteUrl("/mcp");
   return `# Connect an AI client to tomola
 
-${plan.publicReading ? `For public reading, use the Streamable HTTP URL ${plan.publicMcpUrl} without authentication. Its only tools are tomola_latest, tomola_thread and tomola_privacy; it never returns member content. Members use only ${endpoint}, with OAuth for reading and drafts.` : `Public reading is disabled: ${plan.publicMcpUrl} is unavailable. Members use ${endpoint} with OAuth.`} For member access: review the client ID, self-reported name and website, then allow read and/or draft; offline_access permits refresh until revocation. Names can impersonate another service. Cancel OAuth connections at ${plan.settingsUrl}. Previously sent data cannot be retrieved from the AI provider. Each PAT must be dedicated to one client; clients sharing a token cannot be distinguished.
+${plan.publicReading ? `For public reading, use the Streamable HTTP URL ${plan.publicMcpUrl} without authentication. Its only tools are tomola_latest, tomola_thread and tomola_privacy; it never returns member content. For member tools, use ${endpoint}, with OAuth for reading and drafts.` : `Public reading is disabled: ${plan.publicMcpUrl} is unavailable. Members use ${endpoint} with OAuth.`} For member access: review the client ID, self-reported name and website, then allow read and/or draft; offline_access permits refresh until revocation. Names can impersonate another service. Cancel OAuth connections at ${plan.settingsUrl}. Previously sent data cannot be retrieved from the AI provider. Each PAT must be dedicated to one client; clients sharing a token cannot be distinguished.
 
 ## Client setup
 
-To connect an AI tool, follow ${plan.connectMdUrl}: the steps are written for the AI tool, which runs them for its user. ${accountsRequirement(plan)} The commands for each client are below.
+To connect an AI tool, follow ${plan.connectMdUrl}: the steps are written for the AI tool, which follows them within its configuration permissions. ${accountsRequirement(plan)} The official app guides and command examples are below.
+
+${connectAccountSection(plan)}
+${connectVerificationSection(plan)}
+${connectManualSection(plan)}
+### Official guides and command examples
 
 ${clientSetupMarkdown(plan)}
+
+${connectSafetySection(plan)}
 
 ## Available actions
 

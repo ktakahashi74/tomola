@@ -74,7 +74,9 @@ describe("connection data and discovery", () => {
     expect(general).toContain(plan.publicMcpUrl);
     expect(general).toContain(plan.mcpUrl);
     expect(general).toMatch(/For reading/);
-    expect(general).toMatch(/When your user asks for a draft/);
+    expect(general).toContain("explicitly asks to connect this site to their account");
+    expect(general).toContain("member tools: drafts");
+    expect(general).toContain("tomola_activity with notifications");
     expect(general).toMatch(/Nonmembers cannot make drafts/);
     expect(general).toMatch(/invitation/);
     expect(general).toContain("Streamable HTTP");
@@ -109,6 +111,20 @@ describe("connection data and discovery", () => {
     expect(text).toContain("do not bypass the refusal");
     expect(text).toContain("not a test that MCP works");
   });
+  it("shares endpoint choice, manual setup and safety in both machine guides", async () => {
+    vi.stubEnv("PUBLIC_READING", "1");
+    const plan = connectPlan();
+    const guide = (await import("~/routes/mcp-guide")).loader;
+    const pages = [connectMarkdown(plan), await (await guide(args("/help/mcp.md")) as Response).text()];
+    for (const text of pages) {
+      for (const part of ["explicitly asks to connect", "member tools: drafts", "tomola_activity with notifications", 'word "reply" alone', "works without connecting", "paste the AI’s text back themselves", "clearly asked to connect for continued use", "Only after both the reading call and tomola_draft_list succeed", "do not remove it yourself", "before these checks pass", "give only that product’s guide", "ask once which product", "does not authorize changes", "quoted text or other pages", "changes user-level settings", "connection is not complete", "Do not retry through another environment"]) expect(text).toContain(part);
+      for (const guide of plan.appGuides) {
+        expect(text).toContain(guide.reference);
+        expect(text).toContain(guide.scope);
+      }
+      expect(text.indexOf("tomola_draft_list")).toBeLessThan(text.indexOf("a read-only connection to the same site is no longer needed"));
+    }
+  });
   it("does not offer anonymous setup when public reading is disabled", () => {
     const plan = connectPlan("https://forum.example.org", false);
     const text = connectMarkdown(plan);
@@ -135,27 +151,39 @@ describe("connection data and discovery", () => {
 });
 
 describe("/connect", () => {
-  it("shows the requested copy, shared addresses and two offline alternatives in both languages", async () => {
-    vi.stubEnv("PUBLIC_READING", "1");
-    for (const lang of ["en", "ja"] as const) {
+  for (const lang of ["en", "ja"] as const) for (const member of [false, true]) for (const publicReading of [false, true]) {
+    it(`shows purpose-based addresses and manual writing for ${lang}, member=${member}, public=${publicReading}`, async () => {
+      vi.stubEnv("PUBLIC_READING", publicReading ? "1" : "");
+      mocks.session.mockResolvedValue(member ? { id: "member-one" } : null);
       const html = await render(lang);
       const plan = connectPlan();
-      for (const text of [m.connect_prompt({ site: plan.host }), m.connect_internet(), m.connect_publish(), m.connect_copy_post({ open: m.open_in_ai(), copy: m.open_in_ai_copy_md() })]) expect(html).toContain(escape(text));
-      expect(html).toContain(`<code>${plan.publicMcpUrl}</code>`);
-      expect(html).toContain(`<code>${plan.mcpUrl}</code>`);
-      expect(html).toContain(`>${m.connect_offline_heading()}</h2>`);
-      expect(html.match(/<li /g)).toHaveLength(1);
-      expect(html.match(/<li>/g)).toHaveLength(1);
-      // The site header is a navigation landmark; the connect copy itself has no nested navigation.
+      const route = await import("~/routes/connect");
+      const data = await route.loader(args("/connect"));
+      expect(data.addresses.map(address => address.url)).toEqual(publicReading
+        ? member ? [plan.mcpUrl, plan.publicMcpUrl] : [plan.publicMcpUrl, plan.mcpUrl]
+        : [plan.mcpUrl]);
+      expect(data.text.prompt).toBe(member ? m.connect_member_prompt({ site: plan.host }) : m.connect_prompt({ site: plan.host }));
+      expect(data.addresses[0].label).toBe(!member && !publicReading ? m.connect_members_address() : m.connect_public_address());
+      if (publicReading) expect(data.addresses[1].label).toBe(member ? m.connect_read_only_address() : m.connect_member_address());
+      for (const text of [data.text.prompt, m.connect_internet(), m.connect_publish({ title: m.mcp_connect_title(), allow: m.mcp_allow() }), m.connect_copy_post({ open: m.open_in_ai(), copy: m.open_in_ai_copy_md() }), m.connect_write_without_connection({ write: m.ai_write_button(), more: "…" })]) expect(html).toContain(escape(text));
+      for (const { url } of data.addresses) expect(html).toContain(`<code>${url}</code>`);
+      expect(html.indexOf("<code>")).toBeLessThan(html.indexOf('id="connect-offline-heading"'));
+      expect(html.slice(html.indexOf('id="connect-offline-heading"'))).not.toContain("<code>");
+      expect(html.includes(escape(m.connect_connections_read_only()))).toBe(member);
+      expect(html.includes(escape(m.connect_read_only_address()))).toBe(member && publicReading);
+      if (!publicReading) expect(html).not.toContain(plan.publicMcpUrl);
+      // Server-rendered buttons cannot imply that copying works before hydration.
+      expect(html.match(/<fieldset\b[^>]*\sdisabled=""/g)).toHaveLength(data.addresses.length);
       const content = html.slice(html.indexOf("<main"));
-      for (const element of ["<nav", "<details", "connect-own", "connect-terminal", "connect-browser", "connect-automation", "connect-examples", "claude mcp", "codex mcp"]) expect(content).not.toContain(element);
-      for (const client of plan.clients) expect(html).not.toContain(client.label);
-      expect(html).not.toContain(m.connect_connections_empty());
-      expect(html).not.toContain('href="/settings/connections"');
-    }
-    expect(mocks.connections).not.toHaveBeenCalled();
-    expect(mocks.db).not.toHaveBeenCalled();
-  });
+      for (const element of ["<nav", "<details", "claude mcp", "codex mcp"]) expect(content).not.toContain(element);
+      for (const client of [...plan.clients, ...plan.appGuides]) expect(html).not.toContain(client.label);
+      if (!member) {
+        expect(mocks.connections).not.toHaveBeenCalled();
+        expect(mocks.db).not.toHaveBeenCalled();
+        expect(html).not.toContain('href="/settings/connections"');
+      }
+    });
+  }
   it("gets only the current user's count and displays zero or multiple connections", async () => {
     mocks.session.mockResolvedValue({ id: "member-one" });
     for (const count of [0, 2]) {

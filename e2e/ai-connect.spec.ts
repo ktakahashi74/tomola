@@ -2,7 +2,7 @@ import { oauthLoopback } from "./support/oauth-loopback";
 import { expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { test } from "./editor-fixture";
-import { enMessages as en, jaMessages as ja, useMember, waitForClientRoute, formatMessage } from "./helpers";
+import { enMessages as en, jaMessages as ja, useMember, waitForClientRoute, formatMessage, captureScreenshot } from "./helpers";
 
 async function checkFooter(page: import("@playwright/test").Page, messages: typeof en) {
   const link = page.getByRole("contentinfo").getByRole("link", { name: messages.footer_connect, exact: true });
@@ -12,8 +12,13 @@ async function checkFooter(page: import("@playwright/test").Page, messages: type
 }
 
 for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]] as const) {
-  test(`a visitor follows the footer to the short connection page (${lang})`, async ({ browser }) => {
+  test(`a visitor follows the footer and copies the connection addresses (${lang})`, async ({ browser }) => {
     const context = await browser.newContext({ locale });
+    await context.addInitScript(() => {
+      const copied: string[] = [];
+      Object.defineProperty(window, "copiedAddresses", { value: copied });
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { copied.push(text); } } });
+    });
     try {
       const page = await context.newPage();
       await page.goto("/");
@@ -21,42 +26,108 @@ for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]
       await (await checkFooter(page, messages)).click();
       await expect(page).toHaveURL(/\/connect$/);
       const main = page.getByRole("main");
+      const publicReading = Boolean(test.info().project.metadata.publicReading);
+      const origin = new URL(page.url()).origin;
+      const urls = publicReading ? [`${origin}/mcp/public`, `${origin}/mcp`] : [`${origin}/mcp`];
       await expect(main.getByRole("heading", { level: 1, name: messages.footer_connect, exact: true })).toBeVisible();
       await expect(main.getByText(formatMessage(messages.connect_prompt, { site: new URL(page.url()).host }), { exact: true })).toBeVisible();
       await expect(main.getByText(messages.connect_internet, { exact: true })).toBeVisible();
-      await expect(main.getByText(messages.connect_publish, { exact: true })).toBeVisible();
+      await expect(main.getByText(formatMessage(messages.connect_publish, { title: messages.mcp_connect_title, allow: messages.mcp_allow }), { exact: true })).toBeVisible();
+      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: "…" }), { exact: true })).toBeVisible();
+      await expect(main.getByRole("group").first()).toHaveAccessibleName(publicReading ? messages.connect_public_address : messages.connect_members_address);
       const offline = main.getByRole("region", { name: messages.connect_offline_heading, exact: true });
-      await expect(offline.getByRole("listitem")).toHaveCount(2);
       await expect(offline.getByText(formatMessage(messages.connect_copy_post, { open: messages.open_in_ai, copy: messages.open_in_ai_copy_md }), { exact: true })).toBeVisible();
-      const publicReading = test.info().project.metadata.publicReading;
-      await expect(offline.locator("code").filter({ hasText: /\/mcp\/public$/ })).toHaveCount(publicReading ? 1 : 0);
-      await expect(offline.locator("code").filter({ hasText: /\/mcp$/ })).toHaveCount(1);
-      for (const role of ["navigation", "button"] as const) await expect(main.getByRole(role)).toHaveCount(0);
+      await expect(offline.locator("code")).toHaveCount(0);
+      await expect(main.locator("code")).toHaveText(urls);
+      await expect(main.getByRole("navigation")).toHaveCount(0);
       await expect(main.locator("details")).toHaveCount(0);
       await expect(main.locator('a[href="/settings/connections"]')).toHaveCount(0);
-      await expect(main.getByText(messages.connect_connections_empty, { exact: true })).toHaveCount(0);
-      for (const id of ["connect-own", "connect-once", "connect-automation", "connect-terminal-heading", "connect-browser-heading", "connect-manual-heading", "connect-examples-heading"]) await expect(main.locator(`[id="${id}"]`)).toHaveCount(0);
+      await expect(main.getByText(messages.connect_connections_read_only, { exact: true })).toHaveCount(0);
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await captureScreenshot(page, { path: `${publicReading ? "A" : "C"}-${lang}-${width}.png`, fullPage: true }, "connect");
+      }
+      const groups = main.getByRole("group");
+      for (let index = 0; index < urls.length; index++) {
+        const group = groups.nth(index);
+        const button = group.getByRole("button");
+        await expect(button).toBeEnabled();
+        await button.focus();
+        await page.keyboard.press(index === 0 ? "Enter" : "Space");
+        await expect(button).toHaveText(messages.connect_address_copied);
+        await expect(group.getByRole("status")).toHaveText(messages.connect_address_copied);
+        await expect(group).toHaveAttribute("aria-live", "polite");
+        expect(await page.evaluate(() => (window as unknown as { copiedAddresses: string[] }).copiedAddresses.at(-1))).toBe(await group.locator("code").textContent());
+        await expect(button).toHaveText(messages.connect_copy_address);
+      }
+      // A refusal or an unavailable API must keep the selectable address and avoid success feedback.
+      for (const unavailable of [false, true]) {
+        await page.evaluate(missing => {
+          Object.defineProperty(navigator, "clipboard", { configurable: true, value: missing ? undefined : { writeText: async () => { throw new Error("Clipboard denied"); } } });
+        }, unavailable);
+        const group = groups.first();
+        const button = group.getByRole("button");
+        await button.click();
+        await expect(group.getByRole("status")).toHaveText(messages.invites_copy_failed);
+        await expect(button).toHaveText(messages.connect_copy_address);
+        await expect(group.locator("pre")).toHaveCSS("user-select", "all");
+        await expect(group.locator("code")).toHaveText(urls[0]);
       }
       const response = await page.request.get("/connect");
       expect(response.headers()["cache-control"]).toContain("no-store");
-      const steps = await (await page.request.get("/connect.md")).text();
-      expect(steps).toContain("Streamable HTTP");
-      expect(steps).toContain("tools/list");
-      expect(steps).toContain("tomola_latest");
-      expect(steps).toContain("/.well-known/oauth-protected-resource/mcp");
-      expect(steps).toContain("Nonmembers cannot make drafts");
-      const guide = await (await page.request.get("/llms.txt")).text();
-      expect(guide).toContain("/connect.md");
+      for (const path of ["/connect.md", "/help/mcp.md"]) {
+        const steps = await (await page.request.get(path)).text();
+        expect(steps).toContain("tomola_draft_list");
+        expect(steps).toContain("Nonmembers cannot make drafts");
+        expect(steps).toContain("does not authorize changes");
+      }
       const next = lang === "en" ? ja : en;
       await page.locator("header").getByRole("combobox", { name: messages.language_select, exact: true }).click();
       await page.getByRole("listbox").getByRole("option", { name: lang === "en" ? "日本語" : "English", exact: true }).click();
       await expect(main.getByText(next.connect_internet, { exact: true })).toBeVisible();
     } finally { await context.close(); }
   });
+
+  test(`a member gets their account address first and a read-only alternative when available (${lang})`, async ({ browser }) => {
+    const context = await browser.newContext({ locale });
+    try {
+      const page = await context.newPage();
+      await useMember(page, `connect_page_${lang}@example.com`, "/connect");
+      await waitForClientRoute(page);
+      const main = page.getByRole("main");
+      const publicReading = Boolean(test.info().project.metadata.publicReading);
+      const origin = new URL(page.url()).origin;
+      await expect(main.getByText(formatMessage(messages.connect_member_prompt, { site: new URL(page.url()).host }), { exact: true })).toBeVisible();
+      await expect(main.locator("code")).toHaveText(publicReading ? [`${origin}/mcp`, `${origin}/mcp/public`] : [`${origin}/mcp`]);
+      await expect(main.getByRole("group").first()).toHaveAccessibleName(messages.connect_public_address);
+      await expect(main.getByRole("group", { name: messages.connect_read_only_address, exact: true })).toHaveCount(publicReading ? 1 : 0);
+      await expect(main.getByText(messages.connect_connections_empty, { exact: true })).toBeVisible();
+      await expect(main.getByText(messages.connect_connections_read_only, { exact: true })).toBeVisible();
+      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: "…" }), { exact: true })).toBeVisible();
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await captureScreenshot(page, { path: `B-${publicReading ? "open" : "closed"}-${lang}-${width}.png`, fullPage: true }, "connect");
+      }
+    } finally { await context.close(); }
+  });
 }
+
+test("copy buttons stay disabled without scripts while addresses remain selectable", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto("/connect");
+    const groups = page.getByRole("main").getByRole("group");
+    expect(await groups.count()).toBeGreaterThan(0);
+    for (const group of await groups.all()) {
+      await expect(group.getByRole("button")).toBeDisabled();
+      await expect(group.locator("code")).toBeVisible();
+      await expect(group.locator("pre")).toHaveCSS("user-select", "all");
+    }
+  } finally { await context.close(); }
+});
 
 test("a member sees the footer link too", async ({ page }) => {
   await useMember(page, "ai_connect_member@example.com");

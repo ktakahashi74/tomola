@@ -9,6 +9,7 @@ import { PostSettings } from "~/components/post-settings";
 import { FieldDescription } from "~/components/ui/field";
 import { LANG_LABELS, isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
+import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
 
 export type ReplyExtrasProps = { error?: string; errorId?: string; defaultLang: SourceLang; selectedLang?: string; autoLang: boolean; invalidatePreviewOnEdit: boolean; aiTools?: AiEditorToolsProps; nushiAvailable?: boolean };
 
@@ -24,7 +25,7 @@ export default function ReplyExtrasContent({ error, errorId, defaultLang, select
     </PostSettings>
     {/* Opened, it takes a row of its own under the buttons. */}
     <PersistentDetails data-reply-more className="min-w-0 max-w-full open:w-full">
-      <summary aria-label={m.reply_more()} className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg border px-2 text-muted-foreground [&::-webkit-details-marker]:hidden">…</summary>
+      <summary aria-label={m.reply_more()} className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg border px-2 text-muted-foreground [&::-webkit-details-marker]:hidden">{REPLY_MORE_SYMBOL}</summary>
       <div className="mt-2 space-y-3 rounded-lg border p-3">
         <EntryPreview kind="reply" pasteFrontmatter={autoLang ? "reply" : undefined} invalidateOnEdit={invalidatePreviewOnEdit} selectedLang={lang} />
         <div className="space-y-2 ui-help text-muted-foreground">
