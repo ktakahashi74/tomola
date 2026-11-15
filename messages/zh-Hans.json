@@ -2402,5 +2402,18 @@
   "ai_use_sent_village_slug": "创建村时输入的名称，用于建议英文 URL 别名。",
   "nushi_truncated": "部分素材已被省略。",
   "nushi_sources": "出处：",
-  "nushi_quotes": "查看引用"
+  "nushi_quotes": "查看引用",
+  "nushi_voice_title": "Nushi 说话风格",
+  "nushi_voice_help": "最多 500 个字符。仅描述正式程度、句尾表达、问候语、详细程度和当地措辞。留空则使用通常的 Nushi。Nushi 关于来源、引用、他人观点和分歧的规则具有优先权。",
+  "nushi_voice_public_help": "文本及其变更历史（包括变更时间和变更者）均公开。当启用公开阅读时，无需登录也可阅读。",
+  "nushi_voice_owner_label": "由村的所有者设定的说话风格",
+  "nushi_voice_default": "通常的 Nushi（未指定说话风格）。",
+  "nushi_voice_history": "说话风格历史记录",
+  "nushi_voice_clear": "使用通常的 Nushi",
+  "nushi_voice_invalid": "最多使用 500 个字符，且不包含控制字符。",
+  "nushi_voice_remove": "移除说话风格",
+  "nushi_voice_removed": "运营者已移除说话风格",
+  "mail_nushi_voice_removed": "运营者已移除您的村的 Nushi 说话风格（{reason}）。现已改用通常的 Nushi。{url}",
+  "nushi_voice_disclosure": "启用后，村的所有者公开的说话风格文本也会发送给 Nushi 的提供商。它仅控制语气和用词；Nushi 的来源和引用规则具有优先权。",
+  "nushi_voice_save": "保存说话风格"
 }
