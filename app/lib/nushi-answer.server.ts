@@ -2,6 +2,7 @@ import { parseQuestionJson, answerVerificationFailure, verifyQuestionAnswerResul
 import type { AiQuestionMaterials } from "./ai-question-materials.server";
 import { AI_QUESTION_LIMITS } from "./ai-questions";
 import { HANDLE_REST, mentionCandidates } from "./mention-syntax";
+import { chatParts } from "./village-chat";
 
 export function verifyNushiAnswer(raw: string, materials: AiQuestionMaterials, destination: "public-reply" | "chat" = "public-reply") {
   const result = verifyNushiAnswerResult(raw, materials, destination);
@@ -32,9 +33,11 @@ export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMateri
   const authors = new Set(materials.sources.map(source => source.author.normalize("NFKC").toLowerCase()).filter(author => author.startsWith("@")));
   // Match whole URLs so a supplied address never authorizes a longer, different address.
   const urls = (text: string) => text.match(/(?:https?:\/\/|www\.)[^\s<>"'`\[\]{}]+/giu)?.map(url => url.replace(/[.,;:!?。、）)]+$/u, "")) ?? [];
-  const allowedUrls = new Set(options.voiceApplied ? materials.sources.flatMap(source => urls(source.original)) : []);
+  // Chat answers render links with chatParts, so check the addresses it would link as well.
+  const addresses = (text: string) => [...urls(text), ...chatParts(text).flatMap(part => part.type === "link" ? [part.href] : [])];
+  const allowedUrls = new Set(options.voiceApplied ? materials.sources.flatMap(source => addresses(source.original)) : []);
   for (const reading of result.answer.readings) {
-    if (options.voiceApplied && urls(reading.text).some(url => !allowedUrls.has(url))) return answerVerificationFailure("unexpected_url", answerData);
+    if (options.voiceApplied && addresses(reading.text).some(url => !allowedUrls.has(url))) return answerVerificationFailure("unexpected_url", answerData);
     if (mentionCandidates(reading.text).some(({ start, end }) => !authors.has(reading.text.slice(start, end).normalize("NFKC").toLowerCase())
       || HANDLE_REST.test((reading.text[end] ?? "").normalize("NFKC").toLowerCase()))) return answerVerificationFailure("unknown_author", answerData);
   }

@@ -16,7 +16,7 @@ it.each(["public-reply", "chat"] as const)("restricts URLs only for styled %s an
   const supplied = { ...materials, sources: [{ ...materials.sources[0], original: "An orchard needs public review. See https://example.org/orchard and www.example.org/review.", translation: undefined }] };
   const withUrl = (url: string) => answer([{ text: `See ${url}.`, citations: [{ sourceId: "e-1-body", quote: "An orchard needs public review." }] }]);
   for (const url of ["https://example.org/orchard", "www.example.org/review"]) expect(verifyNushiAnswerResult(withUrl(url), supplied, destination, { voiceApplied: true })).toMatchObject({ ok: true });
-  for (const url of ["https://example.org/orchard/other", "https://example.org/orchard.evil", "https://another.example.org"]) {
+  for (const url of ["https://example.org/orchard/other", "https://example.org/orchard.evil", "https://another.example.org", "https://example.org/orchard'evil", "https://example.org/orchard[x]"]) {
     expect(verifyNushiAnswerResult(withUrl(url), supplied, destination)).toMatchObject({ ok: true });
     expect(verifyNushiAnswerResult(withUrl(url), supplied, destination, { voiceApplied: true })).toMatchObject({ ok: false, reason: "unexpected_url" });
   }

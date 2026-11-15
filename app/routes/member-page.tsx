@@ -1,4 +1,6 @@
 import { nushiVoiceEnabled } from "~/lib/nushi-config.server";
+import { nushiVoiceHistory } from "~/lib/nushi-voice-history.server";
+import { personalVillage } from "~/lib/personal-villages.server";
 import { createAvatarReport } from "~/lib/avatar-moderation.server";
 import { createDisplayNameReport } from "~/lib/display-name-moderation.server";
 import { lazy, Suspense, useState } from "react";
@@ -44,7 +46,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     forceOriginal: parseIdSet(query.getAll("orig")), forceTranslation: parseIdSet(query.getAll("tr")), forceOlder: parseIdSet(query.getAll("old")),
   });
   if ((content.page > 1 && content.topics.length === 0) || (content.personal && content.personal.page > 1 && content.personal.topics.length === 0)) throw data("Not found", { status: 404, headers: privateHeaders });
-  return { ...content, ...(nushiVoiceEnabled() && content.personal ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
+  // Other readers get the speaking-style link only when its page exists for them.
+  const voiceVillage = nushiVoiceEnabled() && content.personal ? await personalVillage(db, member.userId) : null;
+  const showVoice = !!voiceVillage && (user.id === member.userId || (await nushiVoiceHistory(db, [voiceVillage.id])).length > 0);
+  return { ...content, ...(showVoice ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
