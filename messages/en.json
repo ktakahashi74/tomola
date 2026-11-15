@@ -2908,7 +2908,6 @@
   "ai_material_review_log": "Instruction rule matches (operators only)",
   "ai_material_quote_translation": "AI translation of this quotation",
   "nushi_name": "Nushi",
-  "nushi_label": "AI · from this village’s posts · called by @{handle}",
   "nushi_answer_label": "AI · called by @{handle}",
   "nushi_answer_scope": "From {count} posts in this village ({from}–{to})",
   "nushi_answer_about": "About this answer",

@@ -2130,7 +2130,6 @@
   "ai_material_review_log": "指示らしさの判定記録（運営者のみ）",
   "ai_material_quote_translation": "この引用の AI 訳",
   "nushi_name": "ヌシ",
-  "nushi_label": "AI · このビレッジの投稿から · @{handle} さんの頼み",
   "nushi_answer_label": "AI · @{handle} さんの頼み",
   "nushi_answer_scope": "このビレッジの投稿 {count} 件（{from}〜{to}）から",
   "nushi_answer_about": "この答えについて",
