@@ -41,6 +41,7 @@ it("keeps the public prompt as the default while selecting a private chat destin
     expect(prompt.system).toMatch(/one strongest supporting passage.*at most two/);
     expect(prompt.system).toMatch(/no more than four citations overall/);
     expect(prompt.system).toMatch(/conditions and reservations in the reading text itself/);
+    expect(prompt.system).toContain("In reading text, use @ only for writers supplied in a material's author field; refer to other people mentioned in posts or earlier AI replies, and to terms such as property or 10am, without @.");
   }
   expect(publicPrompt).toEqual(nushiPrompt(input, "public-reply"));
   expect(publicPrompt.system).toContain("This answer will be a public AI reply");
@@ -61,6 +62,7 @@ it("keeps the public prompt as the default while selecting a private chat destin
     expect(prompt.system).toMatch(/Do not return not_confirmed merely because an answer available/);
     expect(prompt.system).toMatch(/Name each cited post's author.*exactly as given in that material's author field/);
     expect(prompt.system).toContain("Never add @ to an author field that does not contain it");
+    expect(prompt.system.split("In reading text, use @ only for writers supplied in a material's author field; refer to other people mentioned in posts or earlier AI replies, and to terms such as property or 10am, without @.")).toHaveLength(3);
   }
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {

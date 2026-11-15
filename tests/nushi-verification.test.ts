@@ -50,14 +50,31 @@ it.each(["public-reply", "chat"] as const)("checks named handles against materia
     { ...materials.sources[0], author: "@writer" },
     { ...materials.sources[0], id: "e-2-body", author: "@another_writer" },
   ] };
-  for (const text of ["@writer asks for review.", "@another_writer disagrees with @writer.", "投稿では@writerが検討を求める。", "Email reader@example.org for context."]) {
+  for (const text of ["@writer asks for review.", "@Writer asks for review.", "＠writer asks for review.", "@ｗｒｉｔｅｒ asks for review.", "＠Ｗｒｉｔｅｒ asks for review.", "@another_writer disagrees with @writer.", "投稿では@writerが検討を求める。", "Email reader@example.org for context."]) {
     expect(verifyNushiAnswerResult(answer([{ ...reading, text }]), supplied, destination)).toMatchObject({ ok: true });
   }
-  for (const text of ["@outsider asks for review.", "@writer_suffix asks for review.", "@Writer asks for review."]) {
+  for (const text of ["@outsider asks for review.", "＠Ｏｕｔｓｉｄｅｒ asks for review.", "@writer_suffix asks for review."]) {
     const raw = answer([{ ...reading, text }]);
     expect(verifyNushiAnswerResult(raw, supplied, destination)).toEqual({ ok: false, reason: "unknown_author", counts: { readings: 1, citations: 1 } });
     expect(verifyNushiAnswer(raw, supplied, destination)).toBeNull();
     expect(verifyQuestionAnswerResult(raw, supplied)).toMatchObject({ ok: true });
+  }
+});
+
+it.each(["public-reply", "chat"] as const)("normalizes supplied author fields as well as named handles in %s readings", destination => {
+  const supplied = { ...materials, sources: [{ ...materials.sources[0], author: "＠Ｗｒｉｔｅｒ" }] };
+  expect(verifyNushiAnswerResult(answer([{ ...reading, text: "@writer asks for review." }]), supplied, destination)).toMatchObject({ ok: true });
+  expect(verifyNushiAnswerResult(answer([{ ...reading, text: "＠ＷＲＩＴＥＲ asks for review." }]), supplied, destination)).toMatchObject({ ok: true });
+});
+
+it.each(["public-reply", "chat"] as const)("reserves handles for material authors while allowing other names and terms without a sigil in %s", destination => {
+  const original = "@carol: Please review @property and @media before @10am.";
+  const supplied = { ...materials, sources: [{ ...materials.sources[0], author: "@writer", original, translation: undefined }] };
+  const citations = [{ sourceId: "e-1-body", quote: original }];
+  const text = "@writer asks carol to review property and media before 10am, following a question about previous_reader.";
+  expect(verifyNushiAnswerResult(answer([{ text, citations }]), supplied, destination)).toMatchObject({ ok: true });
+  for (const name of ["carol", "property", "media", "10am", "previous_reader"]) {
+    expect(verifyNushiAnswerResult(answer([{ text: text.replace(name, `@${name}`), citations }]), supplied, destination)).toMatchObject({ ok: false, reason: "unknown_author" });
   }
 });
 

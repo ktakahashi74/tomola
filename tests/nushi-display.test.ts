@@ -125,7 +125,7 @@ it.each([false, true])("shows former membership beside the public source with le
     answer: { status: "answered", readings: [{ text: "@writer asks for review.", citations: [1] }], citations: [{
       sourceId: "e-7-body", kind: "post", field: "body", author: "@writer", original: { quote: "Original passage", lang: "en", href: "/t/7" },
     }] }, lang: "en", langCode: null, originalLang: "en", translated: false, translationEngine: "fake", translationModel: "fake",
-    scope: { posts: 1, from: "2026-04-02", to: "2026-04-02", truncated: false }, engine: "fake", model: "fake", promptVersion: "nushi-v7", date: "2026-04-02",
+    scope: { posts: 1, from: "2026-04-02", to: "2026-04-02", truncated: false }, engine: "fake", model: "fake", promptVersion: "nushi-v8", date: "2026-04-02",
     caller: "reader", personal: false, villageId: "village", villageSlug: "orchard",
     labels: [{ id: 7, author: "@writer", authorHref: "/u/writer", date: "2026-04-02", left }],
   };
@@ -133,7 +133,23 @@ it.each([false, true])("shows former membership beside the public source with le
   const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
   expect(line.text).toContain("@writer");
   expect(line.text.includes(m.nushi_left())).toBe(left);
+  expect(tags(line.html, "a").every(node => !node.text.includes(m.nushi_left()))).toBe(true);
   expect(tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!.attrs).not.toHaveProperty("open");
+});
+
+it.each(["en", "ja"] as const)("keeps former-membership notes outside unbroken source links in %s", locale => {
+  setTestLocale(locale);
+  const sources = [
+    { author: "@" + "a".repeat(30), date: "2026-04-02", href: "/t/1", quote: "First passage", left: true },
+    { author: "@writer", date: "2026-04-03", href: "/t/2", quote: "Second passage" },
+  ];
+  const html = renderToStaticMarkup(createElement(NushiSources, { sources }));
+  const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
+  expect(tags(line.html, "a").map(node => node.text)).toEqual([`${sources[0].author} 4/2`, "@writer 4/3"]);
+  expect(line.html).toContain(`</a> (${m.nushi_left()})`);
+  expect(line.text).not.toContain("。、");
+  expect(line.attrs.class).not.toContain("whitespace-nowrap");
+  expect(tags(line.html, "span").some(node => node.text.includes(m.nushi_left()) && node.attrs.class?.includes("whitespace-nowrap"))).toBe(false);
 });
 
 it.each([undefined, -1])("keeps every new chat control in the message tab order with tabIndex=%s", tabIndex => {
