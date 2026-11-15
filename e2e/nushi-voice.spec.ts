@@ -13,7 +13,7 @@ test("owners publish a speaking style and readers follow answer labels to its hi
   if (!enabled) {
     await expect(setting).toHaveCount(0);
     await expect(page.locator("#nushi-voice")).toHaveCount(0);
-    expect((await page.request.post("/v/chat-nushi-browser", { form: { intent: "nushi-voice", voice: "Warm." } })).status()).toBe(404);
+    expect((await page.request.post("/v/chat-nushi-browser", { headers: { Origin: state().baseURL }, form: { intent: "nushi-voice", voice: "Warm." } })).status()).toBe(404);
     expect((await page.request.get("/v/personal/zcn_flow_owner")).status()).toBe(404);
     return;
   }
