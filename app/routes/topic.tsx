@@ -961,8 +961,10 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
       </section>
       <section id="reply" className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}>
         {!loaderData.reader && <div className="flex flex-wrap items-center justify-between gap-2" data-reply-heading="">
-          <h2 className="text-lg font-semibold">{m.reply_write_title()}</h2>
-          {loaderData.respondWithPost && <a href={loaderData.respondWithPost.formAction} className="ui-meta underline">{loaderData.respondWithPost.children}</a>}
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold">{m.reply_write_title()}</h2>
+            {loaderData.respondWithPost && <a href={loaderData.respondWithPost.formAction} className="ui-meta underline">{loaderData.respondWithPost.children}</a>}
+          </div>
           {topic.placeholder === null && !topic.hidden && <OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} sourceLang={topic.lang} readingLang={topicReported?.lang ?? topic.lang} showNoScript={false} />}
         </div>}
         {loaderData.reader && topic.placeholder === null && !topic.hidden && <>
