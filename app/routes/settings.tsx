@@ -82,7 +82,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const [avatar] = await db.select({ publicId: profiles.publicId, avatarMediaId: profiles.avatarMediaId }).from(profiles).where(eq(profiles.userId, user.id));
   return {
     ...(villageChatEnabled() ? { chatOwn: true } : {}),
-    nushiVoiceHref: nushiVoiceEnabled() && villagesEnabled() ? `/v/personal/${profile.handle}#nushi-voice` : null,
+    ...(nushiVoiceEnabled() && villagesEnabled() ? { nushiVoiceHref: `/v/personal/${profile.handle}#nushi-voice` } : {}),
     nushi: nushiEnabled() || chatNushiEnabled() ? { ...await nushiPreferences(db, user.id, request), personal: await personalVillage(db, user.id).then(village => village ? { id: village.id, enabled: village.nushiEnabled === true } : null) } : null,
     avatarUrl: memberAvatarUrl(avatar)!,
     avatarUploaded: !!avatar?.avatarMediaId,

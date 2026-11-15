@@ -44,7 +44,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     forceOriginal: parseIdSet(query.getAll("orig")), forceTranslation: parseIdSet(query.getAll("tr")), forceOlder: parseIdSet(query.getAll("old")),
   });
   if ((content.page > 1 && content.topics.length === 0) || (content.personal && content.personal.page > 1 && content.personal.topics.length === 0)) throw data("Not found", { status: 404, headers: privateHeaders });
-  return { ...content, nushiVoiceHref: nushiVoiceEnabled() && content.personal ? `/v/personal/${member.handle}#nushi-voice` : null, reported: query.get("reported") === "1" };
+  return { ...content, ...(nushiVoiceEnabled() && content.personal ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
