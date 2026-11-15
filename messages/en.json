@@ -2962,5 +2962,7 @@
   "village_slug_ai_help": "For names with non-Latin letters, AI receives the name to suggest an English address. Review and edit the suggestion before creating the village; you cannot change the address later.",
   "village_slug_suggesting": "Suggesting an address…",
   "ai_use_village_slug": "Village address suggestions",
-  "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug."
+  "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug.",
+  "nushi_sources": "Sources:",
+  "nushi_quotes": "View quotations"
 }

@@ -10,9 +10,9 @@ import { chatNushiLimits, nushiLimits } from "./nushi-config.server";
 import { collectNushiMaterials, nushiMaterialIndex, reconstructNushiMaterials, snapshotsCurrent } from "./nushi-materials.server";
 import { nushiPrompt, quotaLock, resolveNushiCompleter } from "./nushi.server";
 import { projectQuestionSource } from "./ai-question-materials.server";
-import { logNushiVerificationFailure, verifyNushiAnswerResult } from "./nushi-answer.server";
+import { logNushiVerificationFailure } from "./nushi-answer.server";
+import { completeNushiAnswer } from "./nushi-completion.server";
 import type { AiQuestionAnswer } from "./ai-questions";
-import { completionEstimate, meteredCall } from "./llm/metering.server";
 import { BudgetPausedError } from "./llm/errors.server";
 import type { JsonCompleter } from "./llm/completion.server";
 import type { EmbeddingEngine, LlmEnv } from "./llm/types";
@@ -98,7 +98,7 @@ async function claim(db: Db, id: string, now: Date, env: LlmEnv) {
 
 // The generated record is the private chat message itself. All saved provenance
 // is identifiers/revisions; model prompts, responses and provider errors are not logged.
-function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, language: Lang, dates: Map<number, string>, posts: number, from: string | null, to: string | null) {
+function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, language: Lang, dates: Map<number, string>, posts: number, from: string | null, to: string | null, truncated: boolean) {
   const options = { locale: language };
   if (answer.status === "not_confirmed") return { body: [m.nushi_not_found({}, options), ...(answer.askPerson ? [m.nushi_ask_person({}, options)] : []), ...(clarificationNeeded ? [m.chat_nushi_clarify({}, options)] : [])].join(" "), nushiShape: { status: answer.status, ranges: [], clarificationNeeded, askPerson: answer.askPerson === true } };
   const ranges: Array<[number, number]> = [];
@@ -108,11 +108,17 @@ function answerBody(answer: AiQuestionAnswer, clarificationNeeded: boolean, lang
     ranges.push([body.length, body.length + reading.text.length]);
     body += `${reading.text} ${reading.citations.map(n => `[${n}]`).join(" ")}`;
   }
-  body += "\n\n" + [
-    ...answer.citations.map((citation, index) => `[${index + 1}] @${citation.author} · ${dates.get(Number(/^e-(\d+)-/.exec(citation.sourceId)![1])) ?? ""}\n${citation.original.quote}\n${citation.translation ? citation.translation.quote + "\n" : ""}${siteUrl()}${citation.original.href}`),
-    m.nushi_scope({ count: posts, from: from?.slice(0, 10) ?? "—", to: to?.slice(0, 10) ?? "—" }, options),
-  ].join("\n\n");
-  return { body, nushiShape: { status: answer.status, ranges } };
+  const citationRanges: Array<[number, number]> = [];
+  for (const [index, citation] of answer.citations.entries()) {
+    body += "\n\n";
+    const start = body.length;
+    body += `[${index + 1}] @${citation.author} · ${dates.get(Number(/^e-(\d+)-/.exec(citation.sourceId)![1])) ?? ""}\n${citation.original.quote}\n${citation.translation ? citation.translation.quote + "\n" : ""}${siteUrl()}${citation.original.href}`;
+    citationRanges.push([start, body.length]);
+  }
+  body += "\n\n";
+  const scopeStart = body.length;
+  body += m.nushi_scope({ count: posts, from: from?.slice(0, 10) ?? "—", to: to?.slice(0, 10) ?? "—" }, options);
+  return { body, nushiShape: { status: answer.status, ranges, citationRanges, scopeStart, scope: { truncated } } };
 }
 
 export async function processChatNushiRequest(db: Db, id: string, options: { env?: LlmEnv; now?: Date; clock?: () => Date; completer?: JsonCompleter; embedding?: EmbeddingEngine; signal?: AbortSignal } = {}) {
@@ -134,8 +140,7 @@ This is a PRIVATE chat answer. The only question context is callingMessage, supp
 For status not_confirmed, including when clarification is needed, return {"status":"not_confirmed","readings":[]} in the exact shape required above. Never omit required fields. You may add clarificationNeeded as a JSON boolean. Only when the question is too short to identify its subject or its subject is unclear, set clarificationNeeded to true; the server then asks the caller to describe the subject. Missing evidence alone never needs clarification. Otherwise omit clarificationNeeded or set it false.
 Keep readings short in every language. You may reduce the number of readings for brevity, but preserve each retained reading's attribution, conditions, reservations and relevant disagreements, along with the consulted scope. If supplied posts contradict a premise of the question, such as everyone opposing a proposal, show those posts without adopting that premise. Do not return not_confirmed merely because an answer available in the supplied materials is difficult to shorten.
 Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
-    const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask", estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env), now: clock(), clock, env, signal }, () => completer.complete(prompt), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
-    const verified = verifyNushiAnswerResult(result.text, input.materials, "chat");
+    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { destination: "chat", clock, env });
     if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer, clarificationNeeded } = verified;
     const published = await db.transaction(async tx => {
@@ -156,7 +161,7 @@ Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
       if (!await reserve(tx, current, [[`member:${current.callerId}`, limits.member], [`village:${current.villageId}`, limits.village], ...authors.map(author => [`author:${author}`, limits.author] as [string, number])], clock())) { await finish(tx, id, "limit", clock(), request.token!); return null; }
       const answerId = randomBytes(16).toString("hex");
       const seq = await nextChatSequence(tx, current.villageId);
-      await tx.insert(chatMessages).values({ id: answerId, villageId: current.villageId, authorKind: "nushi", authorId: null, ...answerBody(answer, clarificationNeeded, language, new Map(input.snapshots.map(source => [source.id, source.createdAt.toISOString().slice(0, 10)])), new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, input.dates.from, input.dates.to), lang: language, replyToId: message.id, createdSeq: seq, changedSeq: seq, createdAt: clock() });
+      await tx.insert(chatMessages).values({ id: answerId, villageId: current.villageId, authorKind: "nushi", authorId: null, ...answerBody(answer, clarificationNeeded, language, new Map(input.snapshots.map(source => [source.id, source.createdAt.toISOString().slice(0, 10)])), new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, input.dates.from, input.dates.to, input.materials.scope.truncated || verified.truncated), lang: language, replyToId: message.id, createdSeq: seq, changedSeq: seq, createdAt: clock() });
       if (input.snapshots.length) await tx.insert(chatNushiSources).values(input.snapshots.map(source => ({ requestId: id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, authorId: source.authorId })));
       const [done] = await tx.update(chatNushiRequests).set({ state: "answered", leaseUntil: null, answerMessageId: answerId }).where(eq(chatNushiRequests.id, id)).returning();
       await resultNotice(tx, done, clock());

@@ -29,6 +29,8 @@ export async function presentChatNushi(db: Db, userId: string, messages: ChatMes
     if (message.deleted || !message.nushi) return message;
     const row = rows.find(row => row.id === message.id);
     const hidden = message.hidden || !!preference?.hide || !row || !!row.answer.hiddenAt || !!row.answer.deletedAt;
-    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { caller: row?.handle ?? null, edited: !!row?.editedAt, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
+    const shape = row?.answer.nushiShape;
+    const sources = !hidden && shape?.citationRanges?.length && shape.scopeStart !== undefined ? { citationRanges: shape.citationRanges, scopeStart: shape.scopeStart, bodyLength: row!.answer.body.length } : undefined;
+    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { caller: row?.handle ?? null, edited: !!row?.editedAt, sources, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
   });
 }

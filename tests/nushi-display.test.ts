@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { ChatNushiBody } from "~/components/chat-message";
 import { NushiCallStatus } from "~/components/nushi";
+import { NushiSources } from "~/components/nushi-sources";
 import { chatParts } from "~/lib/village-chat";
 import { m } from "~/paraglide/messages.js";
 
@@ -42,4 +43,36 @@ it.each(["/v/orchard", "/settings/profile", "/t/word", "/t/7/extra"])("preserves
   const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(url) }));
   expect(html).toContain(`>${url}</a>`);
   expect(html).not.toContain(m.nushi_open_post());
+});
+
+it("shows source authors and dates on one metadata line with quotations closed", () => {
+  const html = renderToStaticMarkup(createElement(NushiSources, { sources: [
+    { author: "@a", date: "2026-04-02", href: "/t/1?orig=1#p-1", quote: "Original passage" },
+    { author: "@c", date: "2026-04-03", href: "/t/3?orig=3#p-3", quote: "Another passage" },
+  ] }));
+  expect(html).toMatch(/<p data-nushi-sources="true" class="ui-meta">.*@a 4\/2.*@c 4\/3<\/a><\/span><\/p>/);
+  expect(html).toContain('href="/t/1?orig=1#p-1"');
+  expect(html).toContain(`<summary class="cursor-pointer underline">${m.nushi_quotes()}</summary>`);
+  expect(html).toMatch(/<details data-nushi-quotes="true" class="space-y-3 ui-help">/);
+  expect(html).not.toContain(" open=");
+  expect(html.indexOf("Original passage")).toBeGreaterThan(html.indexOf("<details"));
+});
+
+it.each([false, true])("links inline numbers and folds only quotations after translated=%s readings", translated => {
+  const href = "https://example.test/t/7?orig=7#p-7:~:text=An%20orchard";
+  const reading = "The post asks for public review. [1]";
+  const block = `[1] @@writer · 2026-04-02\nOriginal passage\n\nWith context.\n訳の箇所。\n${href}`;
+  const body = `${reading}\n\n${block}\n\nConsulted range.`;
+  const start = reading.length + 2;
+  const sources = { citationRanges: [[start, start + block.length] as [number, number]], scopeStart: start + block.length + 2, bodyLength: body.length };
+  const shown = translated ? body.replace("The post asks for public review.", "公開の検討を求める投稿。") : body;
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(shown), sources }));
+  expect(html).toContain(`<a class="ui-meta underline" href="${href}">[1]</a>`);
+  expect(html).toContain(`<a class="whitespace-nowrap underline" href="${href}">@writer 4/2</a>`);
+  expect(html).toContain("Original passage\n\nWith context.\n訳の箇所。");
+  expect(html).toContain(`<p class="ui-meta">Consulted range.</p>`);
+  expect(html).not.toContain(" open=");
+  expect(html).not.toContain(m.chat_nushi_read());
+  expect(html.split("<details")).toHaveLength(2);
+  expect(html).toContain(`>${m.nushi_open_post()}</a>`);
 });

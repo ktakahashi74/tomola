@@ -125,13 +125,24 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   await readerContext.close();
   const answer = page.locator("[data-chat-nushi]");
   await expect(answer).toContainText("zcn_flow_caller");
-  if (await answer.locator("details").count()) await answer.locator("details > summary").first().click();
-  await expect(answer).toContainText("zcn_flow_owner");
+  const sources = answer.locator("[data-nushi-sources]");
+  await expect(sources).toBeVisible();
+  await expect(sources).toContainText("zcn_flow_owner");
+  await expect(sources).toHaveClass(/ui-meta/);
+  const quotes = answer.locator("[data-nushi-quotes]");
+  await expect(quotes).not.toHaveAttribute("open");
+  await expect(quotes.locator("blockquote")).toBeHidden();
+  const href = await sources.getByRole("link").first().getAttribute("href");
+  await expect(answer.getByRole("link", { name: "[1]", exact: true })).toHaveAttribute("href", href!);
+  await expect(answer.getByText(en.chat_nushi_read, { exact: true })).toHaveCount(0);
+  await quotes.getByText(en.nushi_quotes, { exact: true }).click();
+  await expect(quotes.locator("blockquote")).toBeVisible();
   const sourceLinks = answer.getByRole("link", { name: en.nushi_open_post, exact: true });
   await expect(sourceLinks.first()).toBeVisible();
-  const href = await sourceLinks.first().getAttribute("href");
+  await expect(sourceLinks.first()).toHaveAttribute("href", href!);
   expect(href).toMatch(/\/t\/\d+.*#(?:p|c)-\d+:~:text=/);
   expect(new URL(href!).origin).toBe(new URL(state().baseURL).origin);
+  await quotes.getByText(en.nushi_quotes, { exact: true }).click();
   await expect(answer.locator("[data-chat-reply]")).toContainText("@nushi orchard planting date");
   await expect(answer.locator("[data-chat-read-seq]")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -182,7 +193,7 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
         await expect(async () => {
           await page.reload();
           const status = page.locator("[data-chat-message]").filter({ hasText: question }).locator("[data-nushi-status]");
-          await expect(status).toContainText(en.nushi_failure_interval);
+          await expect(status).toContainText(en.nushi_failure_interval, { timeout: 1000 });
           await expect(status).not.toContainText(en.nushi_failure_limit);
         }).toPass({ timeout: 20_000 });
         await expect(page.locator("[data-chat-nushi]")).toHaveCount(before + 2);

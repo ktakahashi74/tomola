@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
 import { consentChatMembers } from "./helpers/chat-consent";
-import { chatConsents, chatMessages, chatMessageTranslations, chatNushiRequests, chatNushiSources, chatNushiReservations, chatReads, entries, jobs, notifications, profiles, villageMembers, villages } from "~/lib/db/schema";
+import { chatConsents, chatMessages, chatMessageTranslations, chatNushiRequests, chatNushiSources, chatNushiReservations, chatReads, entries, jobs, llmUsage, notifications, profiles, villageMembers, villages } from "~/lib/db/schema";
 import { chatChanges, chatPage, chatUnreadCounts, markChatRead, mutateChat } from "~/lib/village-chat.server";
 import { processChatNushiRequest, expireChatNushiRequests } from "~/lib/chat-nushi.server";
 import { createTopic } from "~/lib/entries.server";
@@ -50,8 +50,10 @@ it("publishes a private source guide without an AI member or human unread/search
   const page = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
   if (page.consentRequired) throw new Error("Consent missing");
   const answer = page.messages.at(-1)!;
+  if (answer.deleted) throw new Error("Unexpected deleted answer");
   expect(answer).toMatchObject({ nushi: { caller: "zcn_caller", edited: false }, own: false, reply: { id: c.sent.id }, author: "nushi" });
   expect(JSON.stringify(answer)).toContain("zcn_owner");
+  expect(answer.nushi?.sources).toMatchObject({ citationRanges: [[expect.any(Number), expect.any(Number)]], scopeStart: expect.any(Number), bodyLength: expect.any(Number) });
   expect((await chatUnreadCounts(w.db, "zcn_reader")).get(w.village.slug!)).toBe(0);
   await markChatRead(w.db, "zcn_reader", w.village.slug!, page.seq);
   expect((await w.db.select().from(chatReads).where(eq(chatReads.userId, "zcn_reader")))[0].seq).toBe(c.sent.seq);
@@ -65,6 +67,33 @@ it("publishes a private source guide without an AI member or human unread/search
   expect(notices.filter(n => n.kind === "chat_nushi_cited")).toMatchObject([{ userId: "zcn_owner" }]);
   const reply = await mutateChat(w.db, "zcn_reader", w.village.slug!, "send", { body: "Thank you", replyToId: answer.id });
   expect((await w.db.select().from(notifications)).filter(n => n.chatMessageId === reply.id)).toEqual([]);
+});
+
+it.each([false, true])("publishes a chat size retry with bounded=%s scope and unchanged message storage", async bounded => {
+  const w = await world(), c = await w.call(), fake = resolveNushiCompleter();
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  const complete = vi.fn(async (req: Parameters<typeof fake.complete>[0]) => {
+    expect(req.system).toContain(CHAT_NUSHI_PROMPT_VERSION);
+    const source = JSON.parse(req.user).materials.find((s: { id: string }) => s.id === `e-${w.source}-body`);
+    const quotes = [...new Set(Array.from({ length: source.original.length }, (_, i) => source.original.slice(0, i + 1).trim()))].filter(Boolean).slice(0, complete.mock.calls.length === 1 || bounded ? 9 : 8);
+    return { text: JSON.stringify({ status: "answered", readings: [{ text: "The orchard needs public review.", citations: quotes.map(quote => ({ sourceId: source.id, quote })) }] }), inputTokens: 10, outputTokens: 10 };
+  });
+  await processChatNushiRequest(w.db, c.request.id, { completer: { ...fake, complete } });
+  expect(complete).toHaveBeenCalledTimes(2);
+  const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
+  expect(answer.nushiShape?.scope?.truncated).toBe(bounded);
+  expect(answer.nushiShape?.citationRanges).toHaveLength(8);
+  expect(answer.body).toContain("[1] @@zcn_owner ·");
+  expect((await w.db.select().from(chatNushiReservations)).filter(row => row.key === "member:zcn_caller")).toHaveLength(1);
+  expect((await w.db.select().from(llmUsage)).filter(row => row.model === fake.model)).toHaveLength(2);
+  const shape = answer.nushiShape!;
+  await w.db.update(chatMessages).set({ nushiShape: { status: shape.status, ranges: shape.ranges } }).where(eq(chatMessages.id, answer.id));
+  const page = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
+  if (page.consentRequired) throw new Error("Consent missing");
+  const legacy = page.messages.find(message => message.id === answer.id)!;
+  if (legacy.deleted) throw new Error("Unexpected deleted answer");
+  expect(legacy.nushi?.sources).toBeUndefined();
+  expect(legacy.parts.map(part => part.text).join("")).toBe(answer.body);
 });
 
 it("ignores person and clarification flags on a sourced chat answer", async () => {

@@ -36,6 +36,12 @@ it("keeps the public prompt as the default while selecting a private chat destin
   const f = await nushiFixture();
   const input = (await nushiMaterials(f.db, f.request, { env: process.env, now: new Date(), clock: () => new Date() }))!;
   const publicPrompt = nushiPrompt(input);
+  const postPrompt = questionPrompt(input.materials, "What is supported?", input.language);
+  for (const prompt of [publicPrompt, postPrompt]) {
+    expect(prompt.system).toMatch(/one strongest supporting passage.*at most two/);
+    expect(prompt.system).toMatch(/no more than four citations overall/);
+    expect(prompt.system).toMatch(/conditions and reservations in the reading text itself/);
+  }
   expect(publicPrompt).toEqual(nushiPrompt(input, "public-reply"));
   expect(publicPrompt.system).toContain("This answer will be a public AI reply");
   const chatPrompt = nushiPrompt(input, "chat");
@@ -282,7 +288,26 @@ it("escapes generated text in native server-rendered cards and forms", async () 
   expect(html.entries[f.topic]).toContain("&lt;img");
   expect(html.entries[f.topic]).not.toContain("<img");
   expect(html.entries[f.topic]).toContain('action="/nushi/action"');
+  expect(html.entries[f.topic]).toMatch(/class="ui-meta underline" href="\/t\/\d+[^"\s]+">\[1\]<\/a>/);
+  expect(html.entries[f.topic]).toContain("data-nushi-sources");
+  expect(html.entries[f.topic]).toMatch(/<details data-nushi-quotes="true" class="space-y-3 ui-help">/);
   expect(html.controls).toContain('method="post"');
+});
+
+it.each([false, true])("publishes a size retry with bounded=%s scope and one daily reservation per key", async bounded => {
+  const f = await nushiFixture(), fake = resolveNushiCompleter();
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  const complete = vi.fn(async (req: Parameters<typeof fake.complete>[0]) => {
+    const source = JSON.parse(req.user).materials.find((s: { id: string }) => s.id === `e-${f.source}-body`);
+    const quotes = [...new Set(Array.from({ length: source.original.length }, (_, i) => source.original.slice(0, i + 1).trim()))].filter(Boolean).slice(0, complete.mock.calls.length === 1 || bounded ? 9 : 8);
+    return { text: JSON.stringify({ status: "answered", readings: [{ text: "The orchard needs public review.", citations: quotes.map(quote => ({ sourceId: source.id, quote })) }] }), inputTokens: 10, outputTokens: 10 };
+  });
+  const answer = await published(f, { ...fake, complete });
+  expect(complete).toHaveBeenCalledTimes(2);
+  expect(answer.answer.citations).toHaveLength(8);
+  expect(answer.scope.truncated).toBe(bounded);
+  expect((await f.db.select().from(nushiReservations)).filter(row => row.key === "member:nushi-caller")).toHaveLength(1);
+  expect((await f.db.select().from(llmUsage)).filter(row => row.model === fake.model)).toHaveLength(2);
 });
 it("withdraws a chain of AI contexts while preserving human replies", async () => {
   const f = await nushiFixture(), first = await published(f);

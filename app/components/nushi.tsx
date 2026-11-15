@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import type { readNushiAnswer } from "~/lib/nushi.server";
 import { m } from "~/paraglide/messages.js";
 import { NushiPending } from "./nushi-pending";
+import { NushiSources } from "./nushi-sources";
 
 export type NushiAnswerView = NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>;
 export function NushiAnswer({ answer: value, hide = false, member = false, back }: { answer: NushiAnswerView; hide?: boolean; member?: boolean; back?: string }) {
@@ -15,19 +16,9 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
   </div>;
   const content = <>
     {value.answer.status === "not_confirmed" && <p>{m.nushi_not_found()}{value.answer.askPerson !== false && <> {m.nushi_ask_person()}</>}</p>}
-    {value.answer.readings.map((reading, index) => <p key={index} lang={value.lang === "other" ? value.langCode ?? undefined : value.lang}>{reading.text} {reading.citations.map(number => <a key={number} className="underline" href={`#nushi-${value.id}-source-${number}`}>[{number}]</a>)}</p>)}
-    <ol className="space-y-3">
-      {value.answer.citations.map((citation, index) => {
-        const id = Number(/^e-(\d+)-/.exec(citation.sourceId)![1]), label = value.labels.find(source => source.id === id);
-        return <li key={index} id={`nushi-${value.id}-source-${index + 1}`}>
-          <p className="ui-meta">[{index + 1}] <a href={label?.authorHref ?? citation.original.href} className="underline">{citation.author}</a> · {label?.date.slice(0, 10)}{label?.left && <> · {m.nushi_left()}</>}</p>
-          <blockquote className="border-s ps-3" lang={citation.original.lang}><a className="underline" href={citation.original.href}>{citation.original.quote}</a></blockquote>
-          {citation.translation && <blockquote className="border-s ps-3" lang={citation.translation.lang}><a className="underline" href={citation.translation.href}>{citation.translation.quote}</a></blockquote>}
-        </li>;
-      })}
-    </ol>
+    {value.answer.readings.map((reading, index) => <p key={index} lang={value.lang === "other" ? value.langCode ?? undefined : value.lang}>{reading.text} {reading.citations.map(number => <a key={number} className="ui-meta underline" href={value.answer.citations[number - 1].original.href}>[{number}]</a>)}</p>)}
   </>;
-  const long = value.answer.readings.reduce((n, reading) => n + reading.text.length, 0) + value.answer.citations.reduce((n, citation) => n + citation.original.quote.length + (citation.translation?.quote.length ?? 0), 0) > 2200;
+  const long = value.answer.readings.reduce((n, reading) => n + reading.text.length, 0) > 2200;
   return <article id={`nushi-${value.id}`} data-nushi-answer className="min-w-0 space-y-3 rounded border bg-muted/30 p-3 [overflow-wrap:anywhere]">
     <header className="space-y-1">
       <p><a href="/ai-use#nushi" className="font-semibold underline">{m.nushi_name()}</a> · {m.nushi_label({ handle: value.caller ?? "?" })}</p>
@@ -36,6 +27,14 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
       <a className="ui-meta underline" href={`/nushi/${value.id}`}><time dateTime={value.date}>{value.date.slice(0, 10)}</time></a>
     </header>
     {long ? <><p>{value.answer.readings[0]?.text.slice(0, 180)}…</p><details className="space-y-3"><summary className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : <div className="space-y-3">{content}</div>}
+    <NushiSources sources={value.answer.citations.map(citation => {
+      const label = value.labels.find(source => source.id === Number(/^e-(\d+)-/.exec(citation.sourceId)![1]));
+      return { author: citation.author, date: label?.date.slice(0, 10) ?? "", href: citation.original.href, quote: <>
+        {label?.left && <p className="ui-meta">{m.nushi_left()}</p>}
+        <blockquote className="border-s ps-3" lang={citation.original.lang}><a className="underline" href={citation.original.href}>{citation.original.quote}</a></blockquote>
+        {citation.translation && <blockquote className="border-s ps-3" lang={citation.translation.lang}><a className="underline" href={citation.translation.href}>{citation.translation.quote}</a></blockquote>}
+      </> };
+    })} />
     <p className="ui-meta text-muted-foreground">{m.nushi_scope({ count: value.scope.posts, from: value.scope.from?.slice(0, 10) ?? "—", to: value.scope.to?.slice(0, 10) ?? "—" })} · <a href={`/search?village=${encodeURIComponent(value.villageSlug ?? value.villageId)}`} className="underline">{m.nushi_search()}</a></p>
     <p className="ui-meta"><a href="/ai-use#nushi" className="underline">{value.model} · {value.promptVersion}</a> · <a href="/principles#s6" className="underline">{m.ai_use_objections_link()}</a></p>
     {member && <div className="flex flex-wrap items-start gap-3 ui-meta">

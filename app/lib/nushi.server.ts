@@ -9,11 +9,11 @@ import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
 import { nushiCaller, nushiMaterials, nushiPlace, nushiPlaces, nushiSourceLabels, snapshotsCurrent, nushiMaterialIndex, reconstructNushiMaterials, type NushiMaterials } from "./nushi-materials.server";
 import { questionPrompt } from "./ai-question-answer.server";
-import { logNushiVerificationFailure, verifyNushiAnswerResult } from "./nushi-answer.server";
+import { logNushiVerificationFailure } from "./nushi-answer.server";
+import { completeNushiAnswer } from "./nushi-completion.server";
 import { clipQuestionText, type AiQuestionAnswer } from "./ai-questions";
 import { createJsonCompleter, type JsonCompleter } from "./llm/completion.server";
 import { primaryEngineId } from "./llm/config.server";
-import { completionEstimate, meteredCall } from "./llm/metering.server";
 import { BudgetPausedError } from "./llm/errors.server";
 import { enqueue, DeferJob, type JobHandlers } from "./jobs/queue.server";
 import type { EmbeddingEngine, LlmEnv } from "./llm/types";
@@ -102,7 +102,7 @@ export function nushiPrompt(input: NushiMaterials, destination: "public-reply" |
   const prompt = questionPrompt(input.materials, "", input.language);
   return { ...prompt, system: prompt.system.replace(/^.*\n/, `Guide readers to the supplied public posts. Answer in ${input.answerLanguage === "other" ? input.answerLangCode ?? "the calling post’s original language" : input.answerLanguage}.\n`) + `
 You are Nushi, a public source guide for posts in ONE village. This answer will be a ${destination === "chat" ? "private chat" : "public"} AI reply; the server alone fixes the destination, materials and publication. Never claim to represent the residents, owner, operator, a consensus or a majority. Do not evaluate people or reconstruct their overall beliefs. Do not give advice beyond the supplied posts, impersonate anyone, use their voice or infer intentions. Summarize posts briefly, point to exact passages, preserve qualifications and describe differences between supplied posts when they exist. Do not invent disagreement. Search results are partial: status not_confirmed means only not found in this consulted range, never absent from the village.
-Do not cut a quotation at the one sentence that matches the question: include the conditions, reservations and limitations attached to that claim in the same post, since dropping them can misrepresent the author's position.
+Do not cut a quotation at the one sentence that matches the question: include the conditions, reservations and limitations attached to that claim in the same post, since dropping them can misrepresent the author's position. Prefer one strongest supporting passage per reading, at most two, and aim for no more than four citations overall. State conditions and reservations in the reading text itself as well.
 For broad questions, such as the characteristics of this village's posts, choose representative supplied posts and introduce them briefly within these reading and citation limits. State the range you selected; do not imply complete coverage.
 Always include the required status and readings fields. For status not_confirmed, return "readings":[] even when nothing is found; never omit required fields. For status not_confirmed, you may add askPerson as a JSON boolean; set it true only when the question asks about a person's current belief, a new promise, permission or agreement, so the site can suggest asking that person directly. Otherwise omit askPerson or set it false; it has no effect for status answered.
 ${destination === "public-reply" ? "When the question refers to the calling topic itself, such as a request for a summary or objections to that topic, use that topic and its replies among the supplied materials to give a brief introduction and cite the supporting passages. Do not summarize the full text or explain beyond the supplied materials.\n" : ""}Even when the question points to a topic post, also present any supplied replies in that topic that add conditions, objections or opposition on the issue, attributing each reply to its own author.
@@ -133,10 +133,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
     if (!await nushiCaller(db, request, env) || !await snapshotsCurrent(db, input.snapshots, request.villageId)) { await finish(db, id, "changed", clock(), request.token!); return; }
     const completer = options.completer ?? resolveNushiCompleter(env);
     const prompt = { ...nushiPrompt(input), signal };
-    const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask",
-      estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env), now: clock(), clock, env, signal },
-    () => completer.complete(prompt), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
-    const verified = verifyNushiAnswerResult(result.text, input.materials);
+    const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { clock, env });
     if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
     const { answer } = verified;
     await db.transaction(async tx => {
@@ -154,7 +151,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
       const limits = nushiLimits(env);
       const quotas: Array<[string, number]> = [[`member:${current.callerId}`, limits.member], [`topic:${current.threadId}`, limits.topic], [`village:${current.villageId}`, limits.village], ...authors.map(author => [`author:${author}`, limits.author] as [string, number])];
       if (!await reserveDaily(tx, id, quotas, clock(), env)) { await finish(tx, id, "limit", clock(), request.token!); return; }
-      const [published] = await tx.insert(nushiAnswers).values({ requestId: id, answer, scope: { posts: new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, ...input.dates, truncated: input.materials.scope.truncated, materialIndex: nushiMaterialIndex(input.materials.sources), materialLanguage: input.language, answerLangCode: input.answerLangCode },
+      const [published] = await tx.insert(nushiAnswers).values({ requestId: id, answer, scope: { posts: new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, ...input.dates, truncated: input.materials.scope.truncated || verified.truncated, materialIndex: nushiMaterialIndex(input.materials.sources), materialLanguage: input.language, answerLangCode: input.answerLangCode },
         lang: input.answerLanguage, engine: completer.engine, model: completer.model, promptVersion: NUSHI_PROMPT_VERSION, createdAt: clock() }).onConflictDoNothing().returning();
       if (!published) return;
       await tx.insert(nushiSources).values(input.snapshots.map(source => ({ answerId: published.id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, authorId: source.authorId, author: source.author, createdAt: source.createdAt })));
