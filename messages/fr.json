@@ -100,7 +100,6 @@
     }
   ],
   "respond_with_post": "Répondre par une nouvelle publication",
-  "respond_with_post_hint": "Transforme ce que vous avez écrit en une nouvelle publication liée à celle-ci.",
   "response_post_place_hint": "Où que vous publiiez, les discussions liées la relieront à la publication d’origine.",
   "response_post_prefill": "Réponse à [{title} (@{handle})]({url})",
   "response_post_untitled": "Réponse à [la publication de @{handle}]({url})",

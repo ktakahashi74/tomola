@@ -98,7 +98,6 @@
     }
   ],
   "respond_with_post": "以新貼文回應",
-  "respond_with_post_hint": "將你所撰寫的內容轉化為與此貼文連結的新貼文。",
   "response_post_place_hint": "無論發布在哪裡，相關討論都會將它與原貼文連結起來。",
   "response_post_prefill": "對[{title}（@{handle}）]({url})的回應",
   "response_post_untitled": "對[@{handle} 的貼文]({url})的回應",

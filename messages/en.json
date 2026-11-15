@@ -99,7 +99,7 @@
     }
   ],
   "respond_with_post": "Respond with a new post",
-  "respond_with_post_hint": "Turns what you have written into a new post linked to this one.",
+  "respond_with_post_hint": "“Respond with a new post” opens the new post screen with what you have written, linked to this one.",
   "response_post_place_hint": "Wherever you publish, related discussions will connect it to the original post.",
   "response_post_prefill": "Response to [{title} (@{handle})]({url})",
   "response_post_untitled": "Response to [@{handle}’s post]({url})",

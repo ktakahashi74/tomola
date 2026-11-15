@@ -98,7 +98,6 @@
     }
   ],
   "respond_with_post": "새 게시물로 응답하기",
-  "respond_with_post_hint": "작성한 내용을 이 게시물과 연결된 새 게시물로 만듭니다.",
   "response_post_place_hint": "어디에 게시하든 관련 토론으로 원래 게시물과 연결됩니다.",
   "response_post_prefill": "[{title} (@{handle})]({url})에 대한 응답",
   "response_post_untitled": "[@{handle}님의 게시물]({url})에 대한 응답",

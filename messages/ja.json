@@ -85,7 +85,7 @@
   "home_empty": "まだ投稿がありません。",
   "home_replies": "返信 {count}",
   "respond_with_post": "新しい投稿で応答する",
-  "respond_with_post_hint": "この投稿とつながる新しい投稿にします。",
+  "respond_with_post_hint": "『新しい投稿で応答する』を押すと、書きかけの文を引き継いで、この投稿とつながる新しい投稿の画面が開きます。",
   "response_post_place_hint": "どこに置いても、元の投稿とは関連する議論でつながります。",
   "response_post_prefill": "[{title}（@{handle}）]({url})への応答",
   "response_post_untitled": "[@{handle} の投稿]({url})への応答",

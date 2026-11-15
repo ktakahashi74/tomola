@@ -29,11 +29,17 @@ for (const locale of ["en", "ja"] as const) test(`responds with an ordinary post
   const source = await publish(page, "The source material for a longer response.", sourceTitle);
   await useMember(page, `zrespond_writer_${locale}@example.com`, source);
   const messages = await uiMessages(page);
-  const entry = page.locator("#reply").getByRole("button", { name: messages.respond_with_post, exact: true });
-  await expect(entry).toHaveAttribute("formaction", `/t/new?respond=${source.split("/").at(-1)}`);
+  const destination = `/t/new?respond=${source.split("/").at(-1)}`;
+  const entry = page.locator("[data-reply-heading]").getByRole("link", { name: messages.respond_with_post, exact: true });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveAttribute("href", destination);
+  await ready(page);
+  await expect(body(page)).toBeEmpty();
+  const transfer = page.locator("#reply").getByRole("button", { name: messages.respond_with_post, exact: true });
+  await expect(transfer).toHaveAttribute("formaction", destination);
   const hint = page.locator("#respond-with-post-hint");
   await expect(hint).toBeVisible();
-  await expect(entry).toHaveAccessibleDescription(await hint.innerText());
+  await expect(transfer).toHaveAccessibleDescription(await hint.innerText());
   await pictures(page, locale, "entry");
   await entry.click();
   await expect(page).toHaveURL(/\/t\/new\?respond=\d+$/);
@@ -66,12 +72,15 @@ for (const locale of ["en", "ja"] as const) test(`responds with an ordinary post
   if (process.env.E2E_EVIDENCE_DIR) await captureScreenshot(page, { path: `response-notice-unavailable-${locale}.png`, fullPage: true }, "respond-with-post");
 
   if (test.info().config.metadata.publicReading) {
+    await useMember(page, "villages_suspended@example.com", source);
+    await expect(page.locator("[data-reply-heading]")).toBeVisible();
+    await expect(page.locator('#reply a[href*="respond="], #reply button[formaction*="respond="]')).toHaveCount(0);
     const anonymous = await browser.newContext();
     try {
       const reader = await anonymous.newPage();
       await reader.goto(source);
       await expect(reader.locator("#reply")).toBeVisible();
-      await expect(reader.locator('#reply button[formaction*="respond="]')).toHaveCount(0);
+      await expect(reader.locator('#reply a[href*="respond="], #reply button[formaction*="respond="]')).toHaveCount(0);
     } finally { await anonymous.close(); }
   }
 });
@@ -103,6 +112,11 @@ test("carries long reply writing to a new post and retains the local reply copy"
   const native = await browser.newContext({ javaScriptEnabled: false, storageState: await page.context().storageState() });
   try {
     const plain = await native.newPage();
+    await plain.goto(source);
+    await expect(body(plain)).toBeEmpty();
+    await plain.locator("[data-reply-heading]").getByRole("link", { name: (await uiMessages(plain)).respond_with_post, exact: true }).click();
+    await expect(plain).toHaveURL(/\/t\/new\?respond=\d+$/);
+    await expect(body(plain)).toHaveValue(new RegExp(`^.+\\]\\(${source}\\).*\\n\\n$`));
     await plain.goto(source);
     await body(plain).fill(writing);
     await plain.getByRole("button", { name: (await uiMessages(page)).respond_with_post, exact: true }).click();
