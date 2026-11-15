@@ -101,3 +101,9 @@ it("checks the budget again before the regeneration call", async () => {
   expect(complete).toHaveBeenCalledTimes(1);
   expect(await db.select().from(llmUsage)).toHaveLength(1);
 });
+
+it.each(["public-reply", "chat"] as const)("accepts fenced JSON through both %s size checks", async destination => {
+  const r = await run(["```json\n" + nine + "\n```", "```\n" + raw() + "\n```"], destination);
+  expect(r.result).toMatchObject({ ok: true, truncated: false });
+  expect(r.complete).toHaveBeenCalledTimes(2);
+});

@@ -1,4 +1,4 @@
-import { answerVerificationFailure, verifyQuestionAnswerResult, type AnswerVerificationFailure, type AnswerVerificationOptions } from "./ai-question-answer.server";
+import { parseQuestionJson, answerVerificationFailure, verifyQuestionAnswerResult, type AnswerVerificationFailure, type AnswerVerificationOptions } from "./ai-question-answer.server";
 import type { AiQuestionMaterials } from "./ai-question-materials.server";
 import { AI_QUESTION_LIMITS } from "./ai-questions";
 
@@ -14,7 +14,7 @@ export function logNushiVerificationFailure(requestId: string, result: AnswerVer
 export function verifyNushiAnswerResult(raw: string, materials: AiQuestionMaterials, destination: "public-reply" | "chat" = "public-reply", options: AnswerVerificationOptions = {}) {
   if (!options.ignoreLengths && raw.length > AI_QUESTION_LIMITS.outputChars) return answerVerificationFailure("output_too_long");
   let value: unknown;
-  try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")); }
+  try { value = parseQuestionJson(raw); }
   catch { return answerVerificationFailure("not_json"); }
   if (!value || typeof value !== "object" || Array.isArray(value)) return answerVerificationFailure("schema");
   const { askPerson, ...answerData } = value as Record<string, unknown>;

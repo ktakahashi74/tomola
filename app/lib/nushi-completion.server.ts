@@ -1,6 +1,6 @@
 import type { Db } from "./db/client.server";
 import type { AiQuestionMaterials } from "./ai-question-materials.server";
-import { normalizeQuestionQuote, type AnswerVerificationReason } from "./ai-question-answer.server";
+import { parseQuestionJson, normalizeQuestionQuote, type AnswerVerificationReason } from "./ai-question-answer.server";
 import { AI_QUESTION_LIMITS as limits, type AiQuestionAnswer } from "./ai-questions";
 import { verifyNushiAnswerResult } from "./nushi-answer.server";
 import type { CompleteRequest, JsonCompleter } from "./llm/completion.server";
@@ -13,7 +13,7 @@ type RawAnswer = { readings: Array<{ text: string; citations: RawCitation[] }> }
 
 // Called only after checking the full structure and content with relaxed limits.
 function excesses(raw: string) {
-  const value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")) as RawAnswer;
+  const value = parseQuestionJson(raw) as RawAnswer;
   const readings = value.readings ?? [];
   const citations = readings.flatMap(reading => reading.citations);
   const distinct = new Set(citations.map(c => JSON.stringify([c.sourceId, normalizeQuestionQuote(c.quote), c.translatedQuote ? normalizeQuestionQuote(c.translatedQuote) : undefined]))).size;

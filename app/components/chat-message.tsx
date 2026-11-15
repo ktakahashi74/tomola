@@ -11,7 +11,7 @@ import { m } from "~/paraglide/messages.js";
 import { chatClock, type ChatCalendar } from "~/lib/chat-calendar";
 import { useTranslationWait, waitText } from "~/lib/translation-wait";
 import { NushiPending } from "~/components/nushi-pending";
-import { NushiSources, type NushiSource } from "~/components/nushi-sources";
+import { NushiSources, nushiSourceLabel, NUSHI_READINGS_FOLD_CHARS, type NushiSource } from "~/components/nushi-sources";
 
 export const ChatMessageView = memo(function ChatMessageView({ message, ended, slug, originals, grouped, calendar, self, onReport, onReply, tabIndex = 0, onActivate }: {
   message: ActiveChatMessage; ended: boolean; slug: string; originals: boolean; grouped: boolean; calendar: ChatCalendar; self: string; onReport: (id: string) => void; onReply?: (message: ActiveChatMessage) => void; tabIndex?: number; onActivate?: (id: string) => void;
@@ -51,7 +51,7 @@ export const ChatMessageView = memo(function ChatMessageView({ message, ended, s
       {grouped && translated && <span className="float-end"><TranslationMark tabIndex={interactionTabIndex} /></span>}
       {message.nushi?.departed?.map(handle => <p key={handle} className="ui-help">@{handle} · {m.nushi_left()}</p>)}
       {message.nushi?.edited && <p className="ui-help">{m.chat_nushi_call_edited()}</p>}
-      {!onlyPostCard && (message.nushi ? <ChatNushiBody parts={parts} sources={message.nushi.sources} /> : <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>)}
+      {!onlyPostCard && (message.nushi ? <ChatNushiBody parts={parts} sources={message.nushi.sources} truncated={message.nushi.truncated} tabIndex={interactionTabIndex} /> : <p dir="auto" className="whitespace-pre-wrap">{parts.map((part, i) => part.type === "text" ? part.text : <a key={i} tabIndex={interactionTabIndex} href={part.href} className={part.type === "mention" ? "mention" : "underline"} rel="nofollow noopener noreferrer">{part.text}</a>)}</p>)}
       {message.translation?.state === "pending" && (waiting || wait.kind !== "normal") && <p className="mt-1 ui-help text-muted-foreground">{wait.kind === "normal" ? m.village_chat_translation_pending() : waitText(wait, false)}</p>}
       {message.translation?.state === "failed" && !NEAR_COPY_FLAGS.includes(message.translation.errorCode ?? "") && <p className="mt-1 ui-help text-muted-foreground">{m.village_chat_translation_failed()}</p>}
       {message.translation?.state === "paused" && <p className="mt-1 ui-help text-muted-foreground">{waitText({ kind: "stopped" }, false)}</p>}
@@ -90,16 +90,9 @@ function TranslationMark({ tabIndex }: { tabIndex?: number }) {
   return <a href="/ai-use" tabIndex={tabIndex} title={m.village_chat_translation_machine()} className="shrink-0 rounded border px-1 text-[0.7rem] leading-4"><span aria-hidden="true">{m.village_chat_translation_badge()}</span><span className="sr-only">{m.village_chat_translation_machine()}</span></a>;
 }
 
-export function ChatNushiBody({ parts, sources }: { parts: ActiveChatMessage["parts"]; sources?: ChatNushiSourceRanges }) {
+export function ChatNushiBody({ parts, sources, truncated, tabIndex }: { parts: ActiveChatMessage["parts"]; sources?: ChatNushiSourceRanges; truncated?: boolean; tabIndex?: number }) {
   const root = useRouteLoaderData("root") as { siteOrigin?: string | null } | undefined;
   const ref = useRef<HTMLParagraphElement>(null), [long, setLong] = useState(false);
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || sources) return;
-    const measure = () => { if (element.scrollHeight > parseFloat(getComputedStyle(element).lineHeight) * 8 + 1) setLong(true); };
-    const observer = new ResizeObserver(measure); observer.observe(element); measure();
-    return () => observer.disconnect();
-  }, [parts, sources]);
   const renderParts = (parts: ActiveChatMessage["parts"]) => parts.map((part, i) => {
     if (part.type === "text") return part.text;
     let source = false;
@@ -110,13 +103,13 @@ export function ChatNushiBody({ parts, sources }: { parts: ActiveChatMessage["pa
         && (i === parts.length - 1 || parts[i + 1].text.startsWith("\n"));
     }
     catch { /* Preserve the existing label for an unrecognized destination. */ }
-    return <a key={i} href={part.href} className="underline" rel="nofollow noopener noreferrer">{source ? m.nushi_open_post() : part.text}</a>;
+    return <a key={i} tabIndex={tabIndex} href={part.href} className="underline" rel="nofollow noopener noreferrer">{source ? m.nushi_open_post() : part.text}</a>;
   });
+  const text = parts.map(part => part.text).join("");
+  const citations: NushiSource[] = [];
   if (sources) {
-    const text = parts.map(part => part.text).join("");
     // Translations replace readings only; the citation and scope suffix is unchanged.
     const delta = text.length - sources.bodyLength;
-    const citations: NushiSource[] = [];
     for (const [from, to] of sources.citationRanges) {
       const block = text.slice(from + delta, to + delta);
       const first = block.indexOf("\n"), last = block.lastIndexOf("\n");
@@ -126,20 +119,37 @@ export function ChatNushiBody({ parts, sources }: { parts: ActiveChatMessage["pa
       try { const url = new URL(href); valid = url.origin === root?.siteOrigin && /^\/t\/\d+$/.test(url.pathname); } catch { /* Fall back to the saved message. */ }
       if (!label || last <= first || !valid) break;
       citations.push({ author: label[1].replace(/^@@/, "@"), date: label[2], href,
-        quote: <><blockquote dir="auto" className="whitespace-pre-wrap border-s ps-3">{renderParts(chatParts(block.slice(first + 1, last)))}</blockquote><a className="underline" href={href}>{m.nushi_open_post()}</a></> });
+        quote: <><blockquote dir="auto" className="whitespace-pre-wrap border-s ps-3">{renderParts(chatParts(block.slice(first + 1, last)))}</blockquote><a tabIndex={tabIndex} className="underline" href={href}>{m.nushi_open_post()}</a></> });
     }
-    if (citations.length === sources.citationRanges.length && citations.length) return <div className="space-y-2">
-      {text.slice(0, sources.citationRanges[0][0] + delta).trimEnd().split("\n\n").map((reading, index) => {
-        const match = /^(.*?)( (?:\[\d+\] ?)+)$/s.exec(reading);
-        return <p key={index} dir="auto" className="whitespace-pre-wrap">{renderParts(chatParts(match ? match[1] : reading))}{match && <> {match[2].trim().split(" ").map((reference, i) => {
-          const source = citations[Number(reference.slice(1, -1)) - 1];
-          return source ? <a key={i} className="ui-meta underline" href={source.href}>{reference}</a> : reference;
-        })}</>}</p>;
-      })}
-      <NushiSources sources={citations} />
-      <p className="ui-meta">{text.slice(sources.scopeStart + delta)}</p>
+  }
+  const structured = !!sources && citations.length === sources.citationRanges.length && citations.length > 0;
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || structured) return;
+    const measure = () => { if (element.scrollHeight > parseFloat(getComputedStyle(element).lineHeight) * 8 + 1) setLong(true); };
+    const observer = new ResizeObserver(measure); observer.observe(element); measure();
+    return () => observer.disconnect();
+  }, [parts, structured]);
+  const notice = truncated && <span data-nushi-truncated>{m.nushi_truncated()}</span>;
+  if (structured) {
+    const delta = text.length - sources.bodyLength;
+    const readings = text.slice(0, sources.citationRanges[0][0] + delta).trimEnd().split("\n\n").map(reading => {
+      const match = /^(.*?)( (?:\[\d+\] ?)+)$/s.exec(reading);
+      return { text: match ? match[1] : reading, references: match?.[2].trim().split(" ") ?? [] };
+    });
+    const content = readings.map((reading, index) => <p key={index} dir="auto" className="whitespace-pre-wrap">{renderParts(chatParts(reading.text))} {reading.references.map((reference, i) => {
+      const source = citations[Number(reference.slice(1, -1)) - 1];
+      return source ? <a key={i} data-nushi-reference tabIndex={tabIndex} aria-label={`${reference} ${nushiSourceLabel(source)}`} className="ui-meta underline" href={source.href}>{reference}</a> : reference;
+    })}</p>);
+    // Saved ranges count paragraph breaks; translation changes only reading text.
+    const readingChars = sources.readingChars === undefined ? readings.reduce((length, reading) => length + reading.text.length, 0) : sources.readingChars + delta;
+    const fold = readingChars > NUSHI_READINGS_FOLD_CHARS;
+    return <div className="space-y-2">
+      {fold ? <><p>{readings[0]?.text.slice(0, 180)}…</p><details data-nushi-readings className="space-y-3"><summary tabIndex={tabIndex} className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : content}
+      <NushiSources sources={citations} tabIndex={tabIndex} />
+      <p data-nushi-scope className="ui-meta">{text.slice(sources.scopeStart + delta)}{notice && <> · {notice}</>}</p>
     </div>;
   }
   const body = <p ref={ref} dir="auto" className="whitespace-pre-wrap">{renderParts(parts)}</p>;
-  return long ? <details className="space-y-2"><summary className="cursor-pointer underline">{m.chat_nushi_read()}</summary>{body}</details> : body;
+  return <>{long ? <details data-nushi-fallback className="space-y-2"><summary tabIndex={tabIndex} className="cursor-pointer underline">{m.chat_nushi_read()}</summary>{body}</details> : body}{notice && <p data-nushi-scope className="ui-meta">{notice}</p>}</>;
 }

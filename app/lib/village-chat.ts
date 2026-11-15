@@ -6,7 +6,7 @@ export class ChatError extends Error {
   constructor(public code: "not_found" | "forbidden" | "ended" | "invalid" | "invalid_reply") { super(code); }
 }
 export type ChatPart = { type: "text"; text: string } | { type: "link"; text: string; href: string } | { type: "mention"; text: string; href: string };
-export type ChatNushiSourceRanges = { citationRanges: Array<[number, number]>; scopeStart: number; bodyLength: number };
+export type ChatNushiSourceRanges = { citationRanges: Array<[number, number]>; scopeStart: number; bodyLength: number; readingChars?: number };
 export type ChatMentionTarget = { prefix: string; href: string };
 export type ChatTopicCard = { id: number; title: string; lang: string; fromBody: boolean; replyCount: number; href: string; replyHref: string };
 export type ChatTranslation = { text: string | null; lang: string; state: "pending" | "ready" | "failed" | "paused"; errorCode?: string | null };
@@ -19,7 +19,7 @@ export type ActiveChatMessage = {
   createdSeq: number; changedSeq: number; createdAt: string;
   edited: boolean; deleted: false; hidden: boolean;
   editedAt?: string | null;
-  nushi?: { caller: string | null; edited: boolean; departed?: string[]; sources?: ChatNushiSourceRanges };
+  nushi?: { caller: string | null; edited: boolean; departed?: string[]; sources?: ChatNushiSourceRanges; truncated?: boolean };
   nushiCall?: { state: string; failure: string | null };
   topics?: ChatTopicCard[];
   reply?: ChatReply | null;

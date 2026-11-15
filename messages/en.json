@@ -2963,6 +2963,7 @@
   "village_slug_suggesting": "Suggesting an address…",
   "ai_use_village_slug": "Village address suggestions",
   "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug.",
+  "nushi_truncated": "Some material was left out of this answer.",
   "nushi_sources": "Sources:",
   "nushi_quotes": "View quotations"
 }

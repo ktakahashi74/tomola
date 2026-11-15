@@ -1,4 +1,4 @@
-import { renderNushiThread } from "~/lib/nushi-html.server";
+import { renderNushiThread, renderNushiAnswerPage } from "~/lib/nushi-html.server";
 import { createNushiTranslationHandlers } from "~/lib/nushi-translations.server";
 import { runRetentionCleanup } from "~/lib/retention.server";
 import { nushiFixture } from "./helpers/nushi";
@@ -57,6 +57,9 @@ it("keeps the public prompt as the default while selecting a private chat destin
     expect(prompt.system).toContain(`quote and translatedQuote must be at most ${AI_QUESTION_LIMITS.quoteChars} characters`);
     expect(prompt.system).toContain("verbatim contiguous excerpt");
     expect(prompt.system).toContain("choose representative supplied posts");
+    expect(prompt.system).toMatch(/contradict a premise.*without adopting that premise/);
+    expect(prompt.system).toMatch(/Do not return not_confirmed merely because an answer available/);
+    expect(prompt.system).toMatch(/Name each cited post's author by @handle in the reading text/);
   }
 });
 it("defaults off, separates its budget, and excludes language and closed villages", () => {
@@ -288,9 +291,9 @@ it("escapes generated text in native server-rendered cards and forms", async () 
   expect(html.entries[f.topic]).toContain("&lt;img");
   expect(html.entries[f.topic]).not.toContain("<img");
   expect(html.entries[f.topic]).toContain('action="/nushi/action"');
-  expect(html.entries[f.topic]).toMatch(/class="ui-meta underline" href="\/t\/\d+[^"\s]+">\[1\]<\/a>/);
+  expect(html.entries[f.topic]).toMatch(/<a[^>]*data-nushi-reference[^>]*href="\/t\/\d+[^"\s]+"[^>]*>\[1\]<\/a>/);
   expect(html.entries[f.topic]).toContain("data-nushi-sources");
-  expect(html.entries[f.topic]).toMatch(/<details data-nushi-quotes="true" class="space-y-3 ui-help">/);
+  expect(html.entries[f.topic]).toMatch(/<details[^>]*data-nushi-quotes[^>]*>/);
   expect(html.controls).toContain('method="post"');
 });
 
@@ -306,6 +309,10 @@ it.each([false, true])("publishes a size retry with bounded=%s scope and one dai
   expect(complete).toHaveBeenCalledTimes(2);
   expect(answer.answer.citations).toHaveLength(8);
   expect(answer.scope.truncated).toBe(bounded);
+  const view = await readNushiAnswer(f.db, answer.id);
+  expect(view).not.toBeNull();
+  const html = renderNushiAnswerPage(view!, { hide: false, citations: true }, false);
+  expect(html.includes("data-nushi-truncated")).toBe(bounded);
   expect((await f.db.select().from(nushiReservations)).filter(row => row.key === "member:nushi-caller")).toHaveLength(1);
   expect((await f.db.select().from(llmUsage)).filter(row => row.model === fake.model)).toHaveLength(2);
 });

@@ -128,12 +128,11 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
   const sources = answer.locator("[data-nushi-sources]");
   await expect(sources).toBeVisible();
   await expect(sources).toContainText("zcn_flow_owner");
-  await expect(sources).toHaveClass(/ui-meta/);
   const quotes = answer.locator("[data-nushi-quotes]");
   await expect(quotes).not.toHaveAttribute("open");
   await expect(quotes.locator("blockquote")).toBeHidden();
   const href = await sources.getByRole("link").first().getAttribute("href");
-  await expect(answer.getByRole("link", { name: "[1]", exact: true })).toHaveAttribute("href", href!);
+  await expect(answer.getByRole("link", { name: /^\[1\] @/ })).toHaveAttribute("href", href!);
   await expect(answer.getByText(en.chat_nushi_read, { exact: true })).toHaveCount(0);
   await quotes.getByText(en.nushi_quotes, { exact: true }).click();
   await expect(quotes.locator("blockquote")).toBeVisible();

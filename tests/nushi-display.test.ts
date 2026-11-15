@@ -1,20 +1,49 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { ChatNushiBody } from "~/components/chat-message";
 import { NushiCallStatus } from "~/components/nushi";
 import { NushiSources } from "~/components/nushi-sources";
 import { chatParts } from "~/lib/village-chat";
 import { m } from "~/paraglide/messages.js";
+import { setTestLocale } from "./stubs/paraglide-runtime";
+
+const control = vi.hoisted(() => ({ origin: "https://example.test" as string | null, measure: false, effects: [] as Array<() => unknown>, setLong: vi.fn() }));
+vi.mock("react", async original => {
+  const react = await original<typeof import("react")>();
+  return { ...react,
+    useEffect: (effect: import("react").EffectCallback, deps: unknown[]) => control.measure ? control.effects.push(effect) : react.useEffect(effect, deps),
+    useRef: (value: unknown) => control.measure ? { current: { scrollHeight: 400 } } : react.useRef(value),
+    useState: (value: unknown) => control.measure ? [value, control.setLong] : react.useState(value),
+  };
+});
+afterEach(() => { setTestLocale("en"); control.origin = "https://example.test"; control.measure = false; control.effects = []; control.setLong.mockClear(); vi.unstubAllGlobals(); });
+
+function tags(html: string, tag: string) {
+  return [...html.matchAll(new RegExp(`<${tag}\\b([^>]*)>([\\s\\S]*?)</${tag}>`, "g"))].map(match => ({
+    attrs: Object.fromEntries([...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(attribute => [attribute[1], attribute[2]])),
+    text: match[2].replace(/<[^>]*>/g, ""), html: match[2],
+  }));
+}
+
+function chatAnswer(reading = "The post asks for public review.", date = "2026-04-02") {
+  const href = "https://example.test/t/7?orig=7#p-7:~:text=An%20orchard";
+  const head = `${reading} [1]`;
+  const block = `[1] @@writer · ${date}\nOriginal passage\n\nWith context.\n訳の箇所。\n${href}`;
+  const body = `${head}\n\n${block}\n\nConsulted range.`;
+  const start = head.length + 2;
+  return { href, body, sources: { citationRanges: [[start, start + block.length] as [number, number]], scopeStart: start + block.length + 2, bodyLength: body.length, readingChars: reading.length } };
+}
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
-vi.mock("react-router", async original => ({ ...await original<typeof import("react-router")>(), useRouteLoaderData: () => ({ siteOrigin: "https://example.test" }) }));
+vi.mock("react-router", async original => ({ ...await original<typeof import("react-router")>(), useRouteLoaderData: () => ({ siteOrigin: control.origin }) }));
 
 it.each(["pending", "processing"])("keeps animated punctuation out of the %s announcement", state => {
   const html = renderToStaticMarkup(createElement(NushiCallStatus, { state, failure: null }));
-  expect(html).toContain('role="status"');
-  expect(html).toContain(`${m.nushi_pending()}<span aria-hidden="true" class="nushi-pending-dots"><span>.</span><span>.</span><span>.</span></span>`);
-  expect(html.replace(/<span aria-hidden="true"[\s\S]*<\/span>/, "").replace(/<[^>]*>/g, "")).toBe(m.nushi_pending());
+  const status = tags(html, "p").find(node => node.attrs.role === "status")!;
+  expect(status).toBeDefined();
+  expect(tags(status.html, "span").some(node => node.attrs["aria-hidden"] === "true")).toBe(true);
+  expect(status.html.replace(/<span aria-hidden="true"[\s\S]*<\/span>/, "").replace(/<[^>]*>/g, "")).toBe(m.nushi_pending());
 });
 
 it("shortens only same-origin AI source labels while preserving exact destinations", () => {
@@ -45,34 +74,87 @@ it.each(["/v/orchard", "/settings/profile", "/t/word", "/t/7/extra"])("preserves
   expect(html).not.toContain(m.nushi_open_post());
 });
 
-it("shows source authors and dates on one metadata line with quotations closed", () => {
-  const html = renderToStaticMarkup(createElement(NushiSources, { sources: [
+it.each(["en", "ja", "fr", "ko", "zh-Hans", "zh-Hant"] as const)("formats the source list for %s readers with quotations closed", locale => {
+  setTestLocale(locale);
+  const sources = [
     { author: "@a", date: "2026-04-02", href: "/t/1?orig=1#p-1", quote: "Original passage" },
     { author: "@c", date: "2026-04-03", href: "/t/3?orig=3#p-3", quote: "Another passage" },
-  ] }));
-  expect(html).toMatch(/<p data-nushi-sources="true" class="ui-meta">.*@a 4\/2.*@c 4\/3<\/a><\/span><\/p>/);
-  expect(html).toContain('href="/t/1?orig=1#p-1"');
-  expect(html).toContain(`<summary class="cursor-pointer underline">${m.nushi_quotes()}</summary>`);
-  expect(html).toMatch(/<details data-nushi-quotes="true" class="space-y-3 ui-help">/);
-  expect(html).not.toContain(" open=");
-  expect(html.indexOf("Original passage")).toBeGreaterThan(html.indexOf("<details"));
+  ];
+  const html = renderToStaticMarkup(createElement(NushiSources, { sources }));
+  const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
+  const dates = sources.map(source => new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(new Date(`${source.date}T00:00:00Z`)));
+  const labels = sources.map((source, i) => `${source.author} ${dates[i]}`);
+  expect(tags(line.html, "a").map(node => ({ href: node.attrs.href, text: node.text }))).toEqual(sources.map((source, i) => ({ href: source.href, text: labels[i] })));
+  expect(line.text).toBe(m.nushi_sources() + (/^(ja|zh)/.test(locale) ? "" : " ") + new Intl.ListFormat(locale, { type: "unit" }).format(labels));
+  const quotes = tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!;
+  expect(quotes.attrs).not.toHaveProperty("open");
+  expect(tags(quotes.html, "summary")[0].text).toBe(m.nushi_quotes());
+  expect(quotes.text).toContain("Original passage");
 });
 
 it.each([false, true])("links inline numbers and folds only quotations after translated=%s readings", translated => {
-  const href = "https://example.test/t/7?orig=7#p-7:~:text=An%20orchard";
-  const reading = "The post asks for public review. [1]";
-  const block = `[1] @@writer · 2026-04-02\nOriginal passage\n\nWith context.\n訳の箇所。\n${href}`;
-  const body = `${reading}\n\n${block}\n\nConsulted range.`;
-  const start = reading.length + 2;
-  const sources = { citationRanges: [[start, start + block.length] as [number, number]], scopeStart: start + block.length + 2, bodyLength: body.length };
+  const { href, body, sources } = chatAnswer();
   const shown = translated ? body.replace("The post asks for public review.", "公開の検討を求める投稿。") : body;
   const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(shown), sources }));
-  expect(html).toContain(`<a class="ui-meta underline" href="${href}">[1]</a>`);
-  expect(html).toContain(`<a class="whitespace-nowrap underline" href="${href}">@writer 4/2</a>`);
-  expect(html).toContain("Original passage\n\nWith context.\n訳の箇所。");
-  expect(html).toContain(`<p class="ui-meta">Consulted range.</p>`);
-  expect(html).not.toContain(" open=");
-  expect(html).not.toContain(m.chat_nushi_read());
-  expect(html.split("<details")).toHaveLength(2);
-  expect(html).toContain(`>${m.nushi_open_post()}</a>`);
+  const reference = tags(html, "a").find(node => "data-nushi-reference" in node.attrs)!;
+  expect(reference.attrs.href).toBe(href);
+  expect(reference.text).toBe("[1]");
+  expect(reference.attrs["aria-label"]).toContain("@writer");
+  expect(reference.attrs["aria-label"]).toContain(new Intl.DateTimeFormat("en", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(new Date("2026-04-02T00:00:00Z")));
+  const line = tags(html, "p").find(node => "data-nushi-sources" in node.attrs)!;
+  expect(tags(line.html, "a")[0].attrs.href).toBe(href);
+  expect(line.text).toContain("@writer");
+  const quotes = tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)!;
+  expect(quotes.attrs).not.toHaveProperty("open");
+  expect(quotes.text).toContain("Original passage\n\nWith context.\n訳の箇所。");
+  expect(tags(html, "p").find(node => "data-nushi-scope" in node.attrs)?.text).toBe("Consulted range.");
+  expect(tags(html, "details")).toHaveLength(1);
+  expect(tags(quotes.html, "a").find(node => node.text === m.nushi_open_post())?.attrs.href).toBe(href);
+});
+
+it.each([undefined, -1])("keeps every new chat control in the message tab order with tabIndex=%s", tabIndex => {
+  const { body, sources } = chatAnswer("Reading. ".repeat(300));
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources, tabIndex }));
+  for (const node of [...tags(html, "a"), ...tags(html, "summary")]) expect(node.attrs.tabindex).toBe(tabIndex === -1 ? "-1" : undefined);
+});
+
+it.each([2200, 2201])("folds chat readings at the public-answer threshold for %s characters", length => {
+  const { body, sources } = chatAnswer("a".repeat(length));
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources }));
+  expect(html.includes("data-nushi-readings")).toBe(length > 2200);
+  expect(tags(html, "details").find(node => "data-nushi-quotes" in node.attrs)).toBeDefined();
+});
+
+it.each([false, true])("discloses truncated=%s beside the consulted scope", truncated => {
+  const { body, sources } = chatAnswer();
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources, truncated }));
+  const scope = tags(html, "p").find(node => "data-nushi-scope" in node.attrs)!;
+  expect(scope.html.includes("data-nushi-truncated")).toBe(truncated);
+  if (truncated) expect(scope.text).toContain(m.nushi_truncated());
+});
+
+it.each(["missing origin", "changed origin", "missing date"])("measures the legacy body after source parsing fails with %s", failure => {
+  if (failure === "missing origin") control.origin = null;
+  if (failure === "changed origin") control.origin = "https://new.example.test";
+  const { body, sources } = chatAnswer("Long reading. ".repeat(100), failure === "missing date" ? "" : undefined);
+  const observe = vi.fn(), disconnect = vi.fn();
+  vi.stubGlobal("ResizeObserver", class { observe = observe; disconnect = disconnect; });
+  vi.stubGlobal("getComputedStyle", () => ({ lineHeight: "20px" }));
+  control.measure = true;
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(body), sources, tabIndex: -1 }));
+  expect(html).not.toContain("data-nushi-sources");
+  const cleanup = control.effects[0]() as () => void;
+  expect(observe).toHaveBeenCalledOnce();
+  expect(control.setLong).toHaveBeenCalledWith(true);
+  cleanup();
+  expect(disconnect).toHaveBeenCalledOnce();
+  for (const node of tags(html, "a")) expect(node.attrs.tabindex).toBe("-1");
+});
+
+it.each([2200, 2201])("counts paragraph breaks and translated length at the %s-character fold boundary", length => {
+  const reading = "a".repeat(1098) + "\n\n" + "b".repeat(1100);
+  const { body, sources } = chatAnswer(reading);
+  const shown = body.replace(reading, reading + "c".repeat(length - reading.length));
+  const html = renderToStaticMarkup(createElement(ChatNushiBody, { parts: chatParts(shown), sources }));
+  expect(html.includes("data-nushi-readings")).toBe(length > 2200);
 });

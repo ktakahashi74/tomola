@@ -30,7 +30,7 @@ export async function presentChatNushi(db: Db, userId: string, messages: ChatMes
     const row = rows.find(row => row.id === message.id);
     const hidden = message.hidden || !!preference?.hide || !row || !!row.answer.hiddenAt || !!row.answer.deletedAt;
     const shape = row?.answer.nushiShape;
-    const sources = !hidden && shape?.citationRanges?.length && shape.scopeStart !== undefined ? { citationRanges: shape.citationRanges, scopeStart: shape.scopeStart, bodyLength: row!.answer.body.length } : undefined;
-    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { caller: row?.handle ?? null, edited: !!row?.editedAt, sources, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
+    const sources = !hidden && shape?.citationRanges?.length && shape.scopeStart !== undefined ? { citationRanges: shape.citationRanges, scopeStart: shape.scopeStart, bodyLength: row!.answer.body.length, readingChars: shape.ranges.reduce((length, [from, to]) => length + to - from, 0) } : undefined;
+    return { ...message, hidden, parts: hidden ? [] : chatParts(row!.answer.body), translation: hidden ? null : message.translation, reply: hidden ? null : message.reply, nushi: { caller: row?.handle ?? null, edited: !!row?.editedAt, sources, truncated: !hidden && shape?.scope?.truncated === true, departed: hidden ? [] : [...new Set(departed.filter(source => source.id === message.id).flatMap(source => source.handle ? [source.handle] : []))] } };
   });
 }

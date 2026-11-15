@@ -125,11 +125,10 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     const sources = answer.locator("[data-nushi-sources]");
     await expect(sources).toBeVisible();
     await expect(sources).toContainText("znushi_flow_owner");
-    await expect(sources).toHaveClass(/ui-meta/);
     const sourceLink = sources.getByRole("link").first();
     const sourceHref = await sourceLink.getAttribute("href");
     expect(sourceHref).toMatch(/\/t\/\d+.*#(?:p|c)-\d+:~:text=/);
-    await expect(answer.getByRole("link", { name: "[1]", exact: true })).toHaveAttribute("href", sourceHref!);
+    await expect(answer.getByRole("link", { name: /^\[1\] @/ })).toHaveAttribute("href", sourceHref!);
     const quotes = answer.locator("[data-nushi-quotes]");
     await expect(quotes).not.toHaveAttribute("open");
     await expect(quotes.locator("blockquote").first()).toBeHidden();

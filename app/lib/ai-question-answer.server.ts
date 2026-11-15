@@ -95,10 +95,14 @@ export function answerVerificationFailure(reason: AnswerVerificationReason, valu
   return { ok: false, reason, counts: { readings: readings.length, citations } };
 }
 
+export function parseQuestionJson(raw: string): unknown {
+  return JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1"));
+}
+
 export function verifyQuestionAnswerResult(raw: string, materials: AiQuestionMaterials, options: AnswerVerificationOptions = {}): AnswerVerificationResult {
   if (!options.ignoreLengths && raw.length > AI_QUESTION_LIMITS.outputChars) return answerVerificationFailure("output_too_long");
   let value: unknown;
-  try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1")); }
+  try { value = parseQuestionJson(raw); }
   catch { return answerVerificationFailure("not_json"); }
   const fail = (reason: AnswerVerificationReason) => answerVerificationFailure(reason, value);
   const parsed = (options.ignoreCounts || options.ignoreLengths ? answerSchema(options) : rawAnswerSchema).safeParse(value);

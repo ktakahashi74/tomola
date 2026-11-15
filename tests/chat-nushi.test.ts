@@ -53,7 +53,7 @@ it("publishes a private source guide without an AI member or human unread/search
   if (answer.deleted) throw new Error("Unexpected deleted answer");
   expect(answer).toMatchObject({ nushi: { caller: "zcn_caller", edited: false }, own: false, reply: { id: c.sent.id }, author: "nushi" });
   expect(JSON.stringify(answer)).toContain("zcn_owner");
-  expect(answer.nushi?.sources).toMatchObject({ citationRanges: [[expect.any(Number), expect.any(Number)]], scopeStart: expect.any(Number), bodyLength: expect.any(Number) });
+  expect(answer.nushi?.sources).toMatchObject({ citationRanges: [[expect.any(Number), expect.any(Number)]], scopeStart: expect.any(Number), bodyLength: expect.any(Number), readingChars: expect.any(Number) });
   expect((await chatUnreadCounts(w.db, "zcn_reader")).get(w.village.slug!)).toBe(0);
   await markChatRead(w.db, "zcn_reader", w.village.slug!, page.seq);
   expect((await w.db.select().from(chatReads).where(eq(chatReads.userId, "zcn_reader")))[0].seq).toBe(c.sent.seq);
@@ -86,6 +86,11 @@ it.each([false, true])("publishes a chat size retry with bounded=%s scope and un
   expect(answer.body).toContain("[1] @@zcn_owner ·");
   expect((await w.db.select().from(chatNushiReservations)).filter(row => row.key === "member:zcn_caller")).toHaveLength(1);
   expect((await w.db.select().from(llmUsage)).filter(row => row.model === fake.model)).toHaveLength(2);
+  const presented = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
+  if (presented.consentRequired) throw new Error("Consent missing");
+  const shown = presented.messages.find(message => message.id === answer.id)!;
+  if (shown.deleted) throw new Error("Unexpected deleted answer");
+  expect(shown.nushi?.truncated).toBe(bounded);
   const shape = answer.nushiShape!;
   await w.db.update(chatMessages).set({ nushiShape: { status: shape.status, ranges: shape.ranges } }).where(eq(chatMessages.id, answer.id));
   const page = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
