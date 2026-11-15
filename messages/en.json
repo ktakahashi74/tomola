@@ -2985,5 +2985,6 @@
   "nushi_voice_remove": "Remove the speaking style",
   "nushi_voice_removed": "Speaking style removed by an operator",
   "mail_nushi_voice_removed": "An operator removed your village’s Nushi speaking style ({reason}). It now uses the usual Nushi. {url}",
-  "nushi_voice_disclosure": "When enabled, the village owner’s public speaking-style text is also sent to Nushi’s provider. It controls only tone and wording; Nushi’s source and quotation rules take priority."
+  "nushi_voice_disclosure": "When enabled, the village owner’s public speaking-style text is also sent to Nushi’s provider. It controls only tone and wording; Nushi’s source and quotation rules take priority.",
+  "nushi_voice_save": "Save speaking style"
 }

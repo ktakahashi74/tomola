@@ -6,11 +6,11 @@ import type { publicNushiVoice } from "~/lib/nushi-voice.server";
 import { m } from "~/paraglide/messages.js";
 
 export function NushiVoiceSetting({ text }: { text: string }) {
-  return <Form method="post" className="max-w-xl space-y-2" data-nushi-voice-setting>
+  return <Form method="post" className="max-w-xl space-y-2" data-nushi-voice-setting aria-label={m.nushi_voice_title()}>
     <label className="block space-y-1"><span>{m.nushi_voice_title()}</span><Textarea name="voice" defaultValue={text} rows={4} maxLength={NUSHI_VOICE_MAX * 2} onInput={event => event.currentTarget.setCustomValidity([...event.currentTarget.value].length > NUSHI_VOICE_MAX ? m.nushi_voice_invalid() : "")} aria-describedby="nushi-voice-help" /></label>
     <p id="nushi-voice-help" className="ui-help">{m.nushi_voice_help()}</p>
     <p className="ui-help">{m.nushi_voice_public_help()}</p>
-    <Button type="submit" name="intent" value="nushi-voice" variant="outline">{m.save_changes()}</Button>
+    <Button type="submit" name="intent" value="nushi-voice" variant="outline">{m.nushi_voice_save()}</Button>
     <Button type="submit" name="intent" value="nushi-voice-clear" formNoValidate variant="outline">{m.nushi_voice_clear()}</Button>
   </Form>;
 }

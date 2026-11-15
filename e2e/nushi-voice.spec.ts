@@ -20,7 +20,7 @@ test("owners publish a speaking style and readers follow answer labels to its hi
   await management.locator(":scope > summary").click();
   const text = "Use a warm greeting and brief, polite sentences.";
   await setting.locator('textarea[name="voice"]').fill(text);
-  await setting.getByRole("button", { name: en.save_changes, exact: true }).click();
+  await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
   await expect(page.locator("[data-nushi-voice-text]")).toHaveText(text);
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.242") });
   try {
@@ -61,7 +61,7 @@ test("a personal village's holder edits a style without exposing the member page
   await waitForClientRoute(page);
   const setting = page.locator("#village-management [data-nushi-voice-setting]");
   await setting.locator('textarea[name="voice"]').fill("A polite personal village style.");
-  await setting.getByRole("button", { name: en.save_changes, exact: true }).click();
+  await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
   await expect(page.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.244") });
   try {

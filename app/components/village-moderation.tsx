@@ -33,7 +33,7 @@ export function VillageReportForm({ reported, hasIcon = false, hasVoice = false,
 export function VillageMetadataView({ value, label }: { value: VillageMetadata; label: string }) {
   return <div className="space-y-1 [overflow-wrap:anywhere]">
     <h3 className="text-sm font-semibold">{label}</h3>
-    <p>{villageName(value)}</p><p className="ui-meta">/v/{value.slug}</p>
+    <p>{villageName(value)}</p><p className="ui-meta">{value.slug?.startsWith("@") ? `/v/personal/${value.slug.slice(1)}` : `/v/${value.slug}`}</p>
     <pre className="whitespace-pre-wrap font-sans text-sm">{value.description}</pre>
     {value.nushiVoice !== undefined && <><p className="ui-meta">{m.nushi_voice_title()}</p><p className="whitespace-pre-wrap">{value.nushiVoice || m.nushi_voice_default()}</p></>}
   </div>;
@@ -48,7 +48,7 @@ type Card = Omit<VillageReportCard, "reports"> & { reports: Array<Omit<VillageRe
 export function VillageModerationCard({ card: c, handled, returnTo }: { card: Card; handled: boolean; returnTo: string }) {
   const descriptionId = useId();
   return <section id={`v-report-${c.reportId ?? c.village.slug}`} className="space-y-3 rounded border p-4 [overflow-wrap:anywhere]">
-    <div className="flex flex-wrap gap-2 ui-meta"><span>{m.mod_kind_village()}</span><span>{c.village.kind === "invite_public" ? m.village_invite_public() : m.village_open()}</span>{c.village.ended && <span>{m.village_ended()}</span>}
+    <div className="flex flex-wrap gap-2 ui-meta"><span>{m.mod_kind_village()}</span><span>{c.village.kind === "personal" ? m.village_personal() : c.village.kind === "invite_public" ? m.village_invite_public() : m.village_open()}</span>{c.village.ended && <span>{m.village_ended()}</span>}
       <Link className="underline" to={c.village.slug?.startsWith("@") ? `/v/personal/${c.village.slug.slice(1)}` : `/v/${c.village.slug}`}>{m.notification_open()}</Link>
     </div>
     {c.iconUrl && <VillageIcon src={c.iconUrl} className="size-16 rounded" />}
