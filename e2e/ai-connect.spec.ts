@@ -2,6 +2,7 @@ import { oauthLoopback } from "./support/oauth-loopback";
 import { expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { test } from "./editor-fixture";
+import { REPLY_MORE_SYMBOL } from "../app/lib/reply-more";
 import { enMessages as en, jaMessages as ja, useMember, waitForClientRoute, formatMessage, captureScreenshot } from "./helpers";
 
 async function checkFooter(page: import("@playwright/test").Page, messages: typeof en) {
@@ -33,7 +34,7 @@ for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]
       await expect(main.getByText(formatMessage(messages.connect_prompt, { site: new URL(page.url()).host }), { exact: true })).toBeVisible();
       await expect(main.getByText(messages.connect_internet, { exact: true })).toBeVisible();
       await expect(main.getByText(formatMessage(messages.connect_publish, { title: messages.mcp_connect_title, allow: messages.mcp_allow }), { exact: true })).toBeVisible();
-      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: "…" }), { exact: true })).toBeVisible();
+      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: REPLY_MORE_SYMBOL }), { exact: true })).toBeVisible();
       await expect(main.getByRole("group").first()).toHaveAccessibleName(publicReading ? messages.connect_public_address : messages.connect_members_address);
       const offline = main.getByRole("region", { name: messages.connect_offline_heading, exact: true });
       await expect(offline.getByText(formatMessage(messages.connect_copy_post, { open: messages.open_in_ai, copy: messages.open_in_ai_copy_md }), { exact: true })).toBeVisible();
@@ -57,9 +58,20 @@ for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]
         await page.keyboard.press(index === 0 ? "Enter" : "Space");
         await expect(button).toHaveText(messages.connect_address_copied);
         await expect(group.getByRole("status")).toHaveText(messages.connect_address_copied);
-        await expect(group).toHaveAttribute("aria-live", "polite");
+        await expect(group).not.toHaveAttribute("aria-live");
         expect(await page.evaluate(() => (window as unknown as { copiedAddresses: string[] }).copiedAddresses.at(-1))).toBe(await group.locator("code").textContent());
         await expect(button).toHaveText(messages.connect_copy_address);
+        await expect(group.getByRole("status")).toBeEmpty();
+      }
+      if (urls.length > 1) {
+        await groups.first().getByRole("button").click();
+        await expect(groups.first().getByRole("status")).toHaveText(messages.connect_address_copied);
+        await groups.nth(1).getByRole("button").click();
+        await expect(groups.nth(1).getByRole("status")).toHaveText(messages.connect_address_copied);
+        await expect(groups.first().getByRole("button")).toHaveText(messages.connect_copy_address);
+        await expect(groups.first().getByRole("status")).toBeEmpty();
+        await expect(groups.nth(1).getByRole("button")).toHaveText(messages.connect_copy_address);
+        await expect(groups.nth(1).getByRole("status")).toBeEmpty();
       }
       // A refusal or an unavailable API must keep the selectable address and avoid success feedback.
       for (const unavailable of [false, true]) {
@@ -69,7 +81,7 @@ for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]
         const group = groups.first();
         const button = group.getByRole("button");
         await button.click();
-        await expect(group.getByRole("status")).toHaveText(messages.invites_copy_failed);
+        await expect(group.getByRole("status")).toHaveText(messages.connect_copy_failed);
         await expect(button).toHaveText(messages.connect_copy_address);
         await expect(group.locator("pre")).toHaveCSS("user-select", "all");
         await expect(group.locator("code")).toHaveText(urls[0]);
@@ -104,7 +116,7 @@ for (const [lang, locale, messages] of [["ja", "ja-JP", ja], ["en", "en-US", en]
       await expect(main.getByRole("group", { name: messages.connect_read_only_address, exact: true })).toHaveCount(publicReading ? 1 : 0);
       await expect(main.getByText(messages.connect_connections_empty, { exact: true })).toBeVisible();
       await expect(main.getByText(messages.connect_connections_read_only, { exact: true })).toBeVisible();
-      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: "…" }), { exact: true })).toBeVisible();
+      await expect(main.getByText(formatMessage(messages.connect_write_without_connection, { write: messages.ai_write_button, more: REPLY_MORE_SYMBOL }), { exact: true })).toBeVisible();
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

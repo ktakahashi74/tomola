@@ -18,7 +18,7 @@ To connect an AI tool, follow ${plan.connectMdUrl}: the steps are written for th
 ${connectAccountSection(plan)}
 ${connectVerificationSection(plan)}
 ${connectManualSection(plan)}
-### Official guides and command examples
+## Official guides and command examples
 
 ${clientSetupMarkdown(plan)}
 

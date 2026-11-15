@@ -2627,6 +2627,7 @@
   "connect_read_only_address": "To read only, you can use this address without connecting your account:",
   "connect_copy_address": "Copy",
   "connect_address_copied": "Copied",
+  "connect_copy_failed": "Could not copy. Select the address and copy it.",
   "connect_write_without_connection": "To write just a reply or a post with an AI, you do not need to connect: use “{write}” on the writing screen (in a reply, under “{more}”). You paste what the AI writes back into the box yourself.",
   "connect_member_address": "To make drafts as a member, use this address instead:",
   "connect_copy_post": "To have it read just one post, choose “{copy}” under “{open}” at the top of the post, and paste it into your AI.",

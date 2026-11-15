@@ -5,8 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createStaticHandler, createStaticRouter, StaticRouterProvider, useLoaderData, type StaticHandlerContext } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SiteFooter } from "~/components/site-footer";
-import { accountsPointer, accountsSection, clientSetupMarkdown, connectMarkdown, connectPlan, connectPointer, mcpServerName, shellQuote } from "~/lib/api/connect.server";
+import { accountsPointer, accountsSection, appGuidesMarkdown, clientSetupMarkdown, connectAccountSection, connectManualSection, connectMarkdown, connectPlan, connectPointer, connectSafetySection, connectVerificationSection, mcpServerName, shellQuote } from "~/lib/api/connect.server";
 import { mcpConnectionGuide } from "~/lib/mcp/guide.server";
+import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 
@@ -69,7 +70,7 @@ describe("connection data and discovery", () => {
   it("makes endpoint choice, discovery and tool verification product-neutral and puts examples afterwards", () => {
     const plan = connectPlan("https://example.org", true);
     const text = connectMarkdown(plan);
-    const examples = text.indexOf("## 5.");
+    const examples = text.indexOf("## Official guides and command examples");
     const general = text.slice(0, examples);
     expect(general).toContain(plan.publicMcpUrl);
     expect(general).toContain(plan.mcpUrl);
@@ -111,19 +112,24 @@ describe("connection data and discovery", () => {
     expect(text).toContain("do not bypass the refusal");
     expect(text).toContain("not a test that MCP works");
   });
-  it("shares endpoint choice, manual setup and safety in both machine guides", async () => {
-    vi.stubEnv("PUBLIC_READING", "1");
+  it.each([false, true])("shares connection sections in both machine guides with public reading=%s", async publicReading => {
+    vi.stubEnv("PUBLIC_READING", publicReading ? "1" : "");
     const plan = connectPlan();
+    const connect = (await import("~/routes/connect-md")).loader;
     const guide = (await import("~/routes/mcp-guide")).loader;
-    const pages = [connectMarkdown(plan), await (await guide(args("/help/mcp.md")) as Response).text()];
+    const pages = [await (await connect(args("/connect.md")) as Response).text(), await (await guide(args("/help/mcp.md")) as Response).text()];
     for (const text of pages) {
-      for (const part of ["explicitly asks to connect", "member tools: drafts", "tomola_activity with notifications", 'word "reply" alone', "works without connecting", "paste the AI’s text back themselves", "clearly asked to connect for continued use", "Only after both the reading call and tomola_draft_list succeed", "do not remove it yourself", "before these checks pass", "give only that product’s guide", "ask once which product", "does not authorize changes", "quoted text or other pages", "changes user-level settings", "connection is not complete", "Do not retry through another environment"]) expect(text).toContain(part);
-      for (const guide of plan.appGuides) {
-        expect(text).toContain(guide.reference);
-        expect(text).toContain(guide.scope);
-      }
-      expect(text.indexOf("tomola_draft_list")).toBeLessThan(text.indexOf("a read-only connection to the same site is no longer needed"));
+      for (const section of [connectAccountSection, connectVerificationSection, connectManualSection, connectSafetySection, appGuidesMarkdown, clientSetupMarkdown]) expect(text).toContain(section(plan));
+      const removal = text.indexOf("a read-only connection to the same site is no longer needed");
+      expect(removal >= 0).toBe(publicReading);
+      if (publicReading) expect(text.indexOf("tomola_draft_list")).toBeLessThan(removal);
     }
+    expect(connectSafetySection(plan).includes(plan.publicMcpUrl)).toBe(publicReading);
+  });
+  it("requires draft verification only for a member connection requesting drafts", () => {
+    const text = connectVerificationSection(connectPlan());
+    expect(text).toContain("For a member connection requesting draft, also check that `tomola_draft_create` is listed, then call `tomola_draft_list`");
+    expect(text).not.toContain("For every member connection");
   });
   it("does not offer anonymous setup when public reading is disabled", () => {
     const plan = connectPlan("https://forum.example.org", false);
@@ -165,7 +171,7 @@ describe("/connect", () => {
       expect(data.text.prompt).toBe(member ? m.connect_member_prompt({ site: plan.host }) : m.connect_prompt({ site: plan.host }));
       expect(data.addresses[0].label).toBe(!member && !publicReading ? m.connect_members_address() : m.connect_public_address());
       if (publicReading) expect(data.addresses[1].label).toBe(member ? m.connect_read_only_address() : m.connect_member_address());
-      for (const text of [data.text.prompt, m.connect_internet(), m.connect_publish({ title: m.mcp_connect_title(), allow: m.mcp_allow() }), m.connect_copy_post({ open: m.open_in_ai(), copy: m.open_in_ai_copy_md() }), m.connect_write_without_connection({ write: m.ai_write_button(), more: "…" })]) expect(html).toContain(escape(text));
+      for (const text of [data.text.prompt, m.connect_internet(), m.connect_publish({ title: m.mcp_connect_title(), allow: m.mcp_allow() }), m.connect_copy_post({ open: m.open_in_ai(), copy: m.open_in_ai_copy_md() }), m.connect_write_without_connection({ write: m.ai_write_button(), more: REPLY_MORE_SYMBOL })]) expect(html).toContain(escape(text));
       for (const { url } of data.addresses) expect(html).toContain(`<code>${url}</code>`);
       expect(html.indexOf("<code>")).toBeLessThan(html.indexOf('id="connect-offline-heading"'));
       expect(html.slice(html.indexOf('id="connect-offline-heading"'))).not.toContain("<code>");

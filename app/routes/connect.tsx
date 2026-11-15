@@ -25,6 +25,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
       write: m.connect_write_without_connection({ write: m.ai_write_button(), more: REPLY_MORE_SYMBOL }),
       copyAddress: m.connect_copy_address(),
       copiedAddress: m.connect_address_copied(),
+      copyFailed: m.connect_copy_failed(),
       copy: m.connect_copy_post({ open: m.open_in_ai(), copy: m.open_in_ai_copy_md() }),
       connections: count === null ? null : count === 0 ? m.connect_connections_empty() : m.connect_connections_count({ count }),
       connectionsReadOnly: m.connect_connections_read_only(),
@@ -65,11 +66,11 @@ export default function Connect({ loaderData }: Route.ComponentProps) {
       <p className="text-lg font-semibold [overflow-wrap:anywhere]">{text.prompt}</p>
       <p>{text.internet}</p>
       <div className="space-y-4">
-        {addresses.map(({ label, url }, index) => <fieldset key={url} disabled={!hydrated} role="group" aria-live="polite" aria-labelledby={`connect-address-${index}`} className="min-w-0 space-y-2">
+        {addresses.map(({ label, url }, index) => <fieldset key={url} disabled={!hydrated} role="group" aria-labelledby={`connect-address-${index}`} className="min-w-0 space-y-2">
           <p id={`connect-address-${index}`}>{label}</p>
           <div className="flex flex-wrap items-center gap-2">
             <pre className={`${addressClass} min-w-0 flex-1`}><code>{url}</code></pre>
-            <CopyTextButton text={url} label={copiedUrl === url ? text.copiedAddress : text.copyAddress} copiedLabel={text.copiedAddress} onResult={copied => setCopiedUrl(copied ? url : null)} />
+            <CopyTextButton text={url} label={copiedUrl === url ? text.copiedAddress : text.copyAddress} copiedLabel={text.copiedAddress} failedLabel={text.copyFailed} showCopied={copiedUrl === url} onResult={copied => setCopiedUrl(copied ? url : null)} />
           </div>
         </fieldset>)}
       </div>

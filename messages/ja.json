@@ -1863,6 +1863,7 @@
   "connect_read_only_address": "読むだけなら、アカウントでつながなくても、こちらで使えます。",
   "connect_copy_address": "写す",
   "connect_address_copied": "写しました",
+  "connect_copy_failed": "写せませんでした。アドレスを選んで写してください。",
   "connect_write_without_connection": "返信や投稿を AI と書くだけなら、つながなくても、書く画面の「{write}」が使えます（返信欄では「{more}」の中）。AI が書いた文は、自分で欄に貼って取り込みます。",
   "connect_member_address": "会員として下書きも作るなら、代わりにこちら。",
   "connect_copy_post": "記事を1本だけ読ませるなら、記事の頭の「{open}」から「{copy}」を選び、AI に貼り付けます。",

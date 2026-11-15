@@ -1864,6 +1864,7 @@
   "connect_read_only_address": "05e20594c1d2ff09",
   "connect_copy_address": "af74f7c5362aaee9",
   "connect_address_copied": "8e3df45a49dba2b2",
+  "connect_copy_failed": "92eda1386a5c2d69",
   "connect_write_without_connection": "029b307478276219",
   "connect_member_address": "e25ac33a5439f3d6",
   "connect_copy_post": "7d18fb9c5505002d",
