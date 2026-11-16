@@ -144,7 +144,7 @@ it("publishes translated Markdown evidence and saves exactly the projected model
     expect(req.user).not.toContain("SECRET");
     expect(input.context).toMatchObject({ callingPost: "@nushi orchard 問い リンク", parentPost: "親の文", topic: { title: "1. # <T> 果樹園", body: "話題の文 リンク" } });
     const material = input.materials.find((s: { id: string }) => s.id === `e-${f.source}-body`);
-    expect(material).toMatchObject({ original: expect.stringContaining("Orchard bold and link."), translation: { text: "果樹園の強調とリンク。", lang: "ja" } });
+    expect(material).toMatchObject({ original: expect.stringContaining("Orchard bold and link."), translation: { text: "果樹園の強調とリンク。", lang: "ja" }, date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
     return { text: JSON.stringify({ status: "answered", readings: [{ text: "果樹園の出典。", citations: [{ sourceId: material.id, quote: "Orchard bold and link.", translatedQuote: "果樹園の強調とリンク。" }] }] }), inputTokens: 1, outputTokens: 1 };
   } } });
   expect((await f.db.select().from(nushiRequests).where(eq(nushiRequests.id, request.id)))[0]).toMatchObject({ state: "answered" });

@@ -2,7 +2,7 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, entryRevisions, moderationActions, nushiAnswers, nushiReports, nushiRequests, nushiSources } from "./db/schema";
 import { readNushiAnswer } from "./nushi.server";
-import { reconstructNushiMaterials } from "./nushi-materials.server";
+import { reconstructNushiMaterials, withPostDates } from "./nushi-materials.server";
 import { projectQuestionSource } from "./ai-question-materials.server";
 import { clipQuestionText } from "./ai-questions";
 import { nushiEnabled } from "./nushi-config.server";
@@ -19,7 +19,9 @@ export async function reportNushi(db: Db, reporterId: string, input: { answerId:
     // reports have no copy of the question, output or materials.
     const [stored] = await db.select({ scope: nushiAnswers.scope }).from(nushiAnswers).where(eq(nushiAnswers.id, input.answerId));
     const sources = input.kind === "error" ? await db.select().from(nushiSources).where(eq(nushiSources.answerId, input.answerId)) : [];
-    const materials = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" }))) : null;
+    const snapshots = sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" }));
+    const reconstructed = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage, snapshots) : null;
+    const materials = reconstructed && withPostDates(reconstructed, snapshots);
     if (input.kind === "error" && !materials) return "evidence_unavailable" as const;
     let questionBody = question?.body ?? "";
     const call = sources.find(source => source.entryId === answer.entryId);

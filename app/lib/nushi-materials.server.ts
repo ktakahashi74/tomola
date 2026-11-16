@@ -57,6 +57,15 @@ export type NushiMaterialIndex = Array<{ id: string; chars: number; translation?
 const snapshotHash = (entry: { title: string | null; body: string; lang: string; langCode: string | null }) => createHash("sha256").update(JSON.stringify([hashPost(entry.title, entry.body, entry.lang), entry.langCode])).digest("hex");
 const textHash = (entry: { title: string | null; body: string }) => createHash("sha256").update(entry.title ?? "").update("\0").update(entry.body).digest("hex");
 const translationHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// Each material carries the day its post was published, so answers can show how a discussion developed.
+export function withPostDates<T extends { id: string }>(sources: readonly T[], snapshots: readonly { id: number; createdAt: Date }[]): Array<T & { date?: string }> {
+  const days = new Map(snapshots.map(snapshot => [snapshot.id, snapshot.createdAt.toISOString().slice(0, 10)]));
+  return sources.map(source => {
+    const day = days.get(Number(/^e-(\d+)-/.exec(source.id)?.[1]));
+    return day ? { ...source, date: day } : source;
+  });
+}
+
 export function nushiMaterialIndex(sources: readonly AiQuestionSource[]): NushiMaterialIndex {
   return sources.map(source => ({ id: source.id, chars: source.original.length, ...(source.translation ? { translation: { chars: source.translation.text.length, hash: translationHash(source.translation) } } : {}) }));
 }
