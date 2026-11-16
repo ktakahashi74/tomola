@@ -1,11 +1,14 @@
+import { m } from "~/paraglide/messages.js";
 import type { Db } from "./db/client.server";
 import { readNushiAnswer, threadNushi } from "./nushi.server";
 import type { Lang } from "./languages";
 import { mdBlock } from "./md/frontmatter.server";
 
 export function nushiBody(value: NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>) {
-  if (value.hidden) return "AI (Nushi) answer — currently not displayed.";
+  if (value.hidden) return value.reason === "source_changed" ? m.nushi_source_unavailable()
+    : value.reason === "superseded" ? `${m.nushi_superseded()}${value.supersededById ? `\n\n/nushi/${value.supersededById}` : ""}` : "AI (Nushi) answer — currently not displayed.";
   const lines = ["AI (Nushi) answer", `Called by @${value.caller ?? "?"}. From this village’s public posts.`];
+  if (value.sourcesChanged) lines.push(m.nushi_sources_edited());
   if (value.voiceHref) lines.push(`Speaking style set by the village owner: ${value.voiceHref}`);
   if (value.personal) lines.push("This is not the owner's answer. The owner has not checked it.");
   if (value.answer.status === "not_confirmed") {
@@ -25,5 +28,5 @@ export function nushiBody(value: NonNullable<Awaited<ReturnType<typeof readNushi
 }
 export async function nushiMarkdownBlocks(db: Db, threadId: number, entryIds: number[], language: Lang) {
   const view = await threadNushi(db, threadId, entryIds, language);
-  return view.answers.map(value => mdBlock({ type: "ai_reply", id: `nushi-${value.id}`, author_kind: "ai", author: "Nushi", thread: `p-${threadId}`, reply_to: `${value.entryId === threadId ? "p" : "c"}-${value.entryId}`, canonical: `/nushi/${value.id}`, hidden: value.hidden || undefined, content_trust: "untrusted_ai_content" }, value.hidden ? null : nushiBody(value)));
+  return view.answers.map(value => mdBlock({ type: "ai_reply", id: `nushi-${value.id}`, author_kind: "ai", author: "Nushi", thread: `p-${threadId}`, reply_to: `${value.entryId === threadId ? "p" : "c"}-${value.entryId}`, canonical: `/nushi/${value.id}`, hidden: value.hidden || undefined, superseded_by: value.hidden && value.supersededById ? `/nushi/${value.supersededById}` : undefined, sources_changed: !value.hidden && value.sourcesChanged || undefined, content_trust: "untrusted_ai_content" }, value.hidden ? null : nushiBody(value)));
 }

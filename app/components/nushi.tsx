@@ -8,10 +8,16 @@ import { NushiPending } from "./nushi-pending";
 import { NushiSources, nushiSourceLabel, NUSHI_READINGS_FOLD_CHARS } from "./nushi-sources";
 
 export type NushiAnswerView = NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>;
-export function NushiAnswer({ answer: value, hide = false, member = false, back }: { answer: NushiAnswerView; hide?: boolean; member?: boolean; back?: string }) {
+export function NushiAnswer({ answer: value, hide = false, member = false, back, refresh = false }: { answer: NushiAnswerView; hide?: boolean; member?: boolean; back?: string; refresh?: boolean }) {
   back ??= `/nushi/${value.id}`;
+  const refreshForm = refresh && <form method="post" action="/nushi/action" data-nushi-refresh>
+    <input type="hidden" name="intent" value="refresh" /><input type="hidden" name="answerId" value={value.id} /><input type="hidden" name="returnTo" value={`/t/${value.threadId}`} />
+    <Button type="submit" variant="outline">{m.nushi_refresh()}</Button>
+  </form>;
   if (value.hidden || hide) return <div id={`nushi-${value.id}`} data-nushi-hidden className="rounded border p-3 ui-help text-muted-foreground">
-    {value.hidden && value.reason === "source_changed" ? m.nushi_source_changed() : m.nushi_hidden()}
+    {value.hidden && value.reason === "source_changed" ? m.nushi_source_unavailable() : value.hidden && value.reason === "superseded" ? m.nushi_superseded() : m.nushi_hidden()}
+    {value.hidden && value.supersededById && <a className="ms-2 underline" href={`/nushi/${value.supersededById}`}>{m.notification_open()}</a>}
+    {refreshForm}
     {hide && <a className="ms-2 underline" href={`/nushi/${value.id}`}>{m.notification_open()}</a>}
   </div>;
   const sources = value.answer.citations.map(citation => {
@@ -34,6 +40,8 @@ export function NushiAnswer({ answer: value, hide = false, member = false, back 
       {value.personal && <p className="ui-help text-muted-foreground">{m.nushi_personal_notice()}</p>}
       {value.translated && <p className="ui-meta"><TranslationLabel kind="primary" engine={value.translationEngine} model={value.translationModel} /> <a className="underline" href={`/nushi/${value.id}?lang=${value.originalLang}`}>{m.show_original()}</a></p>}
     </header>
+    {value.sourcesChanged && <p data-nushi-stale className="ui-help text-muted-foreground">{m.nushi_sources_edited()}</p>}
+    {refreshForm}
     {long ? <><p>{value.answer.readings[0]?.text.slice(0, 180)}…</p><details data-nushi-readings className="space-y-3"><summary className="cursor-pointer underline">{m.nushi_more()}</summary>{content}</details></> : <div className="space-y-3">{content}</div>}
     <NushiSources sources={sources} />
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 ui-meta">

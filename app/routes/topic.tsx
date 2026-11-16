@@ -1,6 +1,6 @@
 import { hasPostAiMaterial, hasPostAiMaterialInstructionWarning } from "~/lib/post-ai-materials.server";
 import { renderNushiThread } from "~/lib/nushi-html.server";
-import { readNushiAnswer, threadNushi } from "~/lib/nushi.server";
+import { readNushiAnswer, threadNushi, canRefreshNushi } from "~/lib/nushi.server";
 import { nushiPreferences, nushiTopicDisabled } from "~/lib/nushi-settings.server";
 import { nushiPlace } from "~/lib/nushi-materials.server";
 import { nushiEnabled } from "~/lib/nushi-config.server";
@@ -381,7 +381,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       return [...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
         ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : [])];
     })(),
-    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: `/t/${topic.id}${url.search}`, reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
+    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: `/t/${topic.id}${url.search}`, refreshable: (await Promise.all(nushi.answers.map(async answer => await canRefreshNushi(db, answer, user?.id) ? answer.id : null))).filter((id): id is number => id !== null), reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
     nushiAvailable: canWriteReply && !!await nushiPlace(db, topic.id),
     reader: !user,
     askAi: user && topic.visibility === "visible" && postAskAiEnabled()

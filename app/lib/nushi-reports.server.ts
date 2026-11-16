@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "./db/client.server";
-import { entries, moderationActions, nushiAnswers, nushiReports, nushiRequests } from "./db/schema";
+import { entries, entryRevisions, moderationActions, nushiAnswers, nushiReports, nushiRequests, nushiSources } from "./db/schema";
 import { readNushiAnswer } from "./nushi.server";
 import { reconstructNushiMaterials } from "./nushi-materials.server";
 import { projectQuestionSource } from "./ai-question-materials.server";
@@ -14,13 +14,21 @@ export async function reportNushi(db: Db, reporterId: string, input: { answerId:
   if (!input.note.includes("\0") && input.note.length <= 1000 && (input.kind === "moderation" ? isReason(input.reason) : input.kind === "error" && input.consent && (NUSHI_ERROR_REASONS as readonly string[]).includes(input.reason))) {
     const answer = await readNushiAnswer(db, input.answerId);
     if (!answer || answer.hidden) return false;
-    const [question] = await db.select({ body: entries.body }).from(entries).where(eq(entries.id, answer.entryId));
+    const [question] = await db.select({ body: entries.body, revision: entries.mentionRevision }).from(entries).where(eq(entries.id, answer.entryId));
     // Reconstruct only for the explicit error-report opt-in. Ordinary moderation
     // reports have no copy of the question, output or materials.
     const [stored] = await db.select({ scope: nushiAnswers.scope }).from(nushiAnswers).where(eq(nushiAnswers.id, input.answerId));
-    const materials = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage) : null;
+    const sources = input.kind === "error" ? await db.select().from(nushiSources).where(eq(nushiSources.answerId, input.answerId)) : [];
+    const materials = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" }))) : null;
     if (input.kind === "error" && !materials) return false;
-    const evidence = input.kind === "error" ? { question: clipQuestionText((await projectQuestionSource({ kind: "post", field: "body", author: "", original: question?.body ?? "" })).original, 2000), answer: answer.answer,
+    let questionBody = question?.body ?? "";
+    const call = sources.find(source => source.entryId === answer.entryId);
+    if (call && question?.revision !== call.revision) {
+      const [revision] = await db.select().from(entryRevisions).where(and(eq(entryRevisions.entryId, answer.entryId), eq(entryRevisions.mentionRevision, call.revision), isNull(entryRevisions.deletedAt)));
+      if (!revision) return false;
+      questionBody = revision.body;
+    }
+    const evidence = input.kind === "error" ? { question: clipQuestionText((await projectQuestionSource({ kind: "post", field: "body", author: "", original: questionBody })).original, 2000), answer: answer.answer,
       materials, scope: answer.scope } : undefined;
     const [saved] = await db.insert(nushiReports).values({ answerId: input.answerId, reporterId, kind: input.kind, reason: input.reason, note: input.note.trim(), evidence }).onConflictDoNothing().returning({ id: nushiReports.id });
     return !!saved;

@@ -128,3 +128,47 @@ it.each(["", ".data"])("uses no-store only for member state or a thread with AI 
     expect(await cache(topic.id, "znushi_route_reader")).toBe("private, no-store");
   } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
 });
+
+it("allows only the caller to refresh through a same-origin form and preserves warnings on public output", async () => {
+  const { editEntry } = await import("~/lib/entries.server");
+  const { entries } = await import("~/lib/db/schema");
+  const { loader: page } = await import("~/routes/nushi-answer");
+  const { m } = await import("~/paraglide/messages.js");
+  const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard fresh", lang: "en" });
+  if (!topic.ok) throw new Error(topic.error);
+  const [request] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, topic.id));
+  await processNushiRequest(h.db, request.id);
+  const [answer] = await h.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, request.id));
+  const [entry] = await h.db.select().from(entries).where(eq(entries.id, topic.id));
+  expect(await editEntry(h.db, entry.authorId, entry.id, { body: entry.body + " Revised wording.", lang: "en" }, { now: new Date(entry.createdAt.getTime() + 3_600_000) })).toMatchObject({ ok: true });
+  const response = await read(h.args(h.request(`/nushi/${answer.id}.json?lang=en`), { id: String(answer.id) }));
+  expect(await response.json()).toMatchObject({ hidden: false, sourcesChanged: true });
+  const markdown = await read(h.args(h.request(`/nushi/${answer.id}.md?lang=en`), { id: String(answer.id) }));
+  expect(await markdown.text()).toContain(m.nushi_sources_edited());
+  for (const as of [undefined, "znushi_route_reader", "znushi_route_owner"]) {
+    const view = await page(h.args(h.request(`/nushi/${answer.id}?lang=en`, { as }), { id: String(answer.id) }));
+    expect(view.html.includes("data-nushi-refresh")).toBe(as === "znushi_route_owner");
+  }
+  const form = { intent: "refresh", answerId: String(answer.id) };
+  const submit = (as?: string, headers?: Record<string, string>) => h.outcome(() => action(h.args(h.request("/nushi/action", { as, form, headers }))));
+  expect((await submit()).status).toBe(302);
+  expect((await submit("znushi_route_reader")).status).toBe(400);
+  expect((await submit("znushi_route_owner", { origin: "https://elsewhere.example" })).status).toBe(403);
+  expect(await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, topic.id))).toHaveLength(1);
+  expect((await submit("znushi_route_owner")).status).toBe(302);
+  expect(await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, topic.id))).toHaveLength(2);
+});
+
+it("excludes unavailable source text from JSON and Markdown while retaining a marker", async () => {
+  const { entries } = await import("~/lib/db/schema");
+  const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard unavailable", lang: "en" });
+  if (!topic.ok) throw new Error(topic.error);
+  const [request] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, topic.id));
+  await processNushiRequest(h.db, request.id);
+  const [answer] = await h.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, request.id));
+  await h.db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, topic.id));
+  const json = await read(h.args(h.request(`/nushi/${answer.id}.json?lang=en`), { id: String(answer.id) }));
+  expect(await json.json()).toMatchObject({ hidden: true, reason: "source_changed" });
+  const markdown = await read(h.args(h.request(`/nushi/${answer.id}.md?lang=en`), { id: String(answer.id) }));
+  expect(await markdown.text()).not.toContain(answer.answer.readings[0].text);
+});

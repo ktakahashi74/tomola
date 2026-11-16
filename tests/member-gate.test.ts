@@ -106,6 +106,7 @@ describe("every write path goes through the writer gate", () => {
       ["topic-edit", () => import("~/routes/topic-edit") as never, `/t/${id}/edit`, { id }, { title: "x", body: "y" }],
       ["reply-edit", () => import("~/routes/reply-edit") as never, `/c/${id}/edit`, { id }, { body: "y" }],
       ["draft (save, publish, delete)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "save", body: "y" }],
+      ["Nushi refresh", () => import("~/routes/nushi-action") as never, "/nushi/action", {}, { intent: "refresh", answerId: "1" }],
       ["vote", () => import("~/routes/vote") as never, "/vote", {}, { entryId: id, on: "1" }],
       ["stance (choose, change, withdraw)", () => import("~/routes/stance") as never, "/stance", {}, { questionId: id, position: "agree", version: "0" }],
       ["settings-tokens (create)", () => import("~/routes/settings-tokens") as never, "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],

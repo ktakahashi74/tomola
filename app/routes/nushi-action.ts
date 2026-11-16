@@ -9,6 +9,7 @@ import { formString } from "~/lib/entry-form.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
 import { setTopicNushi, setVillageNushi } from "~/lib/nushi-settings.server";
 import { reportNushi, resolveNushiReport } from "~/lib/nushi-reports.server";
+import { requestNushiAgain } from "~/lib/nushi.server";
 import { getViewer } from "~/lib/roles.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 
@@ -24,6 +25,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!rate.allowed) throw data("Too many requests", { status: 429, headers: rateLimitHeaders(rate) });
   let ok = false;
   switch (text("intent")) {
+    case "refresh": ok = await requestNushiAgain(db, user.id, Number(text("answerId"))); break;
     case "preferences":
       await db.update(profiles).set({ hideNushi: text("hide") === "1", nushiCitationNotifications: text("citations") === "1" }).where(eq(profiles.userId, user.id));
       ok = true; break;

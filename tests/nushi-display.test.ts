@@ -47,7 +47,7 @@ vi.mock("react-router", async original => ({ ...await original<typeof import("re
 
 function postAnswer(): Extract<NushiAnswerView, { hidden: false }> {
   return {
-    id: 1, requestId: "request", entryId: 1, threadId: 7, hidden: false,
+    id: 1, requestId: "request", entryId: 1, threadId: 7, hidden: false, sourcesChanged: false,
     answer: { status: "answered", readings: [{ text: "The orchard needs review.", citations: [] }], citations: [] },
     lang: "en", langCode: null, originalLang: "en", translated: false, translationEngine: "fake", translationModel: "fake",
     scope: { posts: 3, from: "2026-04-01", to: "2026-04-02", truncated: false }, engine: "fake", model: "fake", promptVersion: "nushi-v8", date: "2026-04-02T12:00:00Z",
@@ -190,7 +190,7 @@ it.each([false, true])("links inline numbers and folds only quotations after tra
 
 it.each([false, true])("shows former membership beside the public source with left=%s before quotations open", left => {
   const answer: NushiAnswerView = {
-    id: 1, requestId: "request", entryId: 1, threadId: 1, hidden: false,
+    id: 1, requestId: "request", entryId: 1, threadId: 1, hidden: false, sourcesChanged: false,
     answer: { status: "answered", readings: [{ text: "@writer asks for review.", citations: [1] }], citations: [{
       sourceId: "e-7-body", kind: "post", field: "body", author: "@writer", original: { quote: "Original passage", lang: "en", href: "/t/7" },
     }] }, lang: "en", langCode: null, originalLang: "en", translated: false, translationEngine: "fake", translationModel: "fake",

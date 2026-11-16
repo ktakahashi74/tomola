@@ -1782,7 +1782,8 @@ export const readingCounts = pgTable("reading_counts", {
 // AI replies have no member identity and never enter human post aggregates.
 export const nushiRequests = pgTable("nushi_requests", {
   id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
-  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }).unique(),
+  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }),
+  replacesAnswerId: bigint("replaces_answer_id", { mode: "number" }).references((): AnyPgColumn => nushiAnswers.id),
   threadId: bigint("thread_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }),
   villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
   callerId: text("caller_id").references(() => user.id, { onDelete: "set null" }),
@@ -1796,6 +1797,8 @@ export const nushiRequests = pgTable("nushi_requests", {
   token: text("token"),
   attempts: integer("attempts").notNull().default(0),
 }, t => [
+  uniqueIndex("nushi_requests_active_entry_unique").on(t.entryId).where(sql`${t.state} in ('pending', 'processing')`),
+  index("nushi_requests_entry_idx").on(t.entryId),
   index("nushi_requests_thread_idx").on(t.threadId),
   index("nushi_requests_village_idx").on(t.villageId),
   index("nushi_requests_caller_idx").on(t.callerId),
@@ -1815,10 +1818,13 @@ export const nushiAnswers = pgTable("nushi_answers", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   hiddenAt: timestamp("hidden_at", { withTimezone: true }),
   hiddenReason: text("hidden_reason"),
+  sourcesChanged: boolean("sources_changed").notNull().default(false),
+  supersededById: bigint("superseded_by_id", { mode: "number" }).references((): AnyPgColumn => nushiAnswers.id),
 });
 // Every supplied post supports the answer, even when it was not quoted.
 // Only revisions and routing metadata are retained here, never copied bodies.
 export const nushiSources = pgTable("nushi_sources", {
+  textHash: text("text_hash"),
   answerId: bigint("answer_id", { mode: "number" }).notNull().references(() => nushiAnswers.id, { onDelete: "cascade" }),
   entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id),
   revision: integer("revision").notNull(),

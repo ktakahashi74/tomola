@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, type Locator } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
@@ -261,4 +263,58 @@ test("Nushi moderation reports appear in the operator queue and public action lo
     await expect(page.locator("[data-nushi-answer]")).toHaveCount(0);
     await expect(page.locator("[data-nushi-hidden]")).toHaveCount(1);
   } finally { await operatorContext.close(); }
+});
+
+test("public edits warn on the original answer and only its caller can replace it with a native form", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.225"));
+  const clock = path.join(state().dir, "server-clock.txt"), previous = fs.readFileSync(clock, "utf8");
+  const callerContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.226") });
+  const guestContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, javaScriptEnabled: false, extraHTTPHeaders: clientHeaders("192.0.2.227") });
+  try {
+    await useMember(page, "znushi_flow_owner@example.com", "/settings?lang=en#settings-nushi");
+    const settings = page.locator("#settings-nushi");
+    await settings.getByLabel(en.nushi_enable, { exact: true }).check();
+    await settings.locator('form:has(input[name="villageId"])').getByRole("button").click();
+    await page.goto("/t/new?lang=en"); await waitForClientRoute(page);
+    await page.getByLabel(en.field_body, { exact: true }).fill("The orchard date needs review. Growers disagree about the planting schedule.");
+    await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+    await expect(page).toHaveURL(/\/t\/\d+/);
+    const topic = new URL(page.url()).pathname;
+    const caller = await callerContext.newPage(), guest = await guestContext.newPage();
+    await useMember(caller, "znushi_flow_caller@example.com", `${topic}?lang=en`); await waitForClientRoute(caller);
+    await caller.locator('#reply textarea[name="body"]').fill("@nushi orchard schedule");
+    await caller.getByRole("button", { name: en.submit_reply, exact: true }).click();
+    await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1, { timeout: 120_000 });
+    const id = (await caller.locator("[data-nushi-answer]").getAttribute("id"))!.replace("nushi-", "");
+    const before = await (await caller.request.get(`/nushi/${id}.json?lang=en`)).json();
+    fs.writeFileSync(clock, String(Number(previous) + 31 * 60_000));
+    await page.goto(`${topic}/edit?lang=en`); await waitForClientRoute(page);
+    await page.locator('textarea[name="body"]').fill("The orchard schedule has changed. Growers now propose a later review.");
+    await page.getByRole("button", { name: en.save_changes, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${topic}\\?edited=`));
+    await expect(page.locator("main")).toContainText("The orchard schedule has changed. Growers now propose a later review.");
+    await caller.goto(`${topic}?lang=en`);
+    await expect(caller.locator("[data-nushi-stale]")).toHaveText(en.nushi_sources_edited);
+    const after = await (await caller.request.get(`/nushi/${id}.json?lang=en`)).json();
+    expect(after.answer).toEqual(before.answer); expect(after.sourcesChanged).toBe(true);
+    await guest.goto(`${topic}?lang=en`);
+    await expect(guest.locator("[data-nushi-stale]")).toHaveText(en.nushi_sources_edited);
+    await expect(guest.locator("[data-nushi-refresh]")).toHaveCount(0);
+    await page.goto(`${topic}?lang=en`);
+    await expect(page.locator("[data-nushi-refresh]")).toHaveCount(0);
+    await expect(caller.locator("[data-nushi-refresh]")).toHaveCount(1);
+    await caller.locator("[data-nushi-refresh]").getByRole("button", { name: en.nushi_refresh, exact: true }).click();
+    await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1, { timeout: 120_000 });
+    await expect(caller.locator("[data-nushi-stale]")).toHaveCount(0, { timeout: 120_000 });
+    const marker = caller.locator(`#nushi-${id}[data-nushi-hidden]`);
+    await expect(marker).toContainText(en.nushi_superseded);
+    const replacement = await marker.getByRole("link").getAttribute("href");
+    expect(replacement).toMatch(/^\/nushi\/\d+$/);
+    await marker.getByRole("link").click();
+    await expect(caller).toHaveURL(new RegExp(`${replacement}$`));
+    await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1);
+    const old = await (await caller.request.get(`/nushi/${id}.json?lang=en`)).json();
+    expect(old.hidden).toBe(true); expect(old).not.toHaveProperty("answer");
+  } finally { fs.writeFileSync(clock, previous); await callerContext.close(); await guestContext.close(); }
 });

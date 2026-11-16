@@ -8,15 +8,15 @@ import { m } from "~/paraglide/messages.js";
 
 // These are native links and forms. React escapes all model and source text;
 // the client inserts only this server-rendered markup, never raw provider HTML.
-export function renderNushiAnswerPage(answer: NushiAnswerView, preferences: { hide: boolean; citations: boolean }, member: boolean) {
-  return renderToStaticMarkup(<main className="reading-column space-y-4"><NushiAnswer answer={answer} hide={preferences.hide} member={member} />{preferences.hide && <form method="post" action="/nushi/action"><input type="hidden" name="intent" value={member ? "preferences" : "visitor-hide"} /><input type="hidden" name="hide" value="0" /><input type="hidden" name="citations" value={preferences.citations ? "1" : "0"} /><input type="hidden" name="returnTo" value={`/nushi/${answer.id}`} /><Button type="submit" variant="outline">{m.notification_open()}</Button></form>}<a className="underline" href={`/t/${answer.threadId}`}>{m.reply_target_link()}</a></main>, { identifierPrefix: `nushi-${answer.id}-` });
+export function renderNushiAnswerPage(answer: NushiAnswerView, preferences: { hide: boolean; citations: boolean }, member: boolean, refresh = false) {
+  return renderToStaticMarkup(<main className="reading-column space-y-4"><NushiAnswer answer={answer} hide={preferences.hide} member={member} refresh={refresh} />{preferences.hide && <form method="post" action="/nushi/action"><input type="hidden" name="intent" value={member ? "preferences" : "visitor-hide"} /><input type="hidden" name="hide" value="0" /><input type="hidden" name="citations" value={preferences.citations ? "1" : "0"} /><input type="hidden" name="returnTo" value={`/nushi/${answer.id}`} /><Button type="submit" variant="outline">{m.notification_open()}</Button></form>}<a className="underline" href={`/t/${answer.threadId}`}>{m.reply_target_link()}</a></main>, { identifierPrefix: `nushi-${answer.id}-` });
 }
 
-export function renderNushiThread(view: ComponentProps<typeof NushiThreadControls>["view"], posts: Array<{ id: number; nushiParentId?: number | null }>, options: { threadId: number; member: boolean; back: string; reply?: number }) {
+export function renderNushiThread(view: ComponentProps<typeof NushiThreadControls>["view"], posts: Array<{ id: number; nushiParentId?: number | null }>, options: { threadId: number; member: boolean; back: string; reply?: number; refreshable?: number[] }) {
   const entries: Record<number, string> = {};
   for (const post of posts) {
     if (!post.nushiParentId && !view.answers.some(answer => answer.entryId === post.id) && !view.requests.some(request => request.entryId === post.id)) continue;
-    entries[post.id] = renderToStaticMarkup(<NushiThreadEntry entryId={post.id} nushiParentId={post.nushiParentId} view={view} member={options.member} />, { identifierPrefix: `nushi-${post.id}-` });
+    entries[post.id] = renderToStaticMarkup(<NushiThreadEntry entryId={post.id} nushiParentId={post.nushiParentId} view={view} member={options.member} refreshable={options.refreshable} />, { identifierPrefix: `nushi-${post.id}-` });
   }
   const controls = view.setting !== null || view.answers.length ? renderToStaticMarkup(<NushiThreadControls view={view} {...options} />, { identifierPrefix: `nushi-controls-${options.threadId}-` }) : "";
   const reply = options.reply ? renderToStaticMarkup(<><input type="hidden" name="nushiParentId" value={options.reply} /><p>{m.nushi_name()} · {m.reply_to_button()}</p></>) : "";

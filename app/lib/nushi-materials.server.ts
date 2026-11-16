@@ -1,9 +1,10 @@
+import { getWriter } from "./members.server";
 import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { createHash } from "node:crypto";
 import { sourceHash as hashPost } from "./source-hash.server";
 import { and, asc, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
-import { entries, nushiAnswers, nushiRequests, nushiReservations, nushiSources, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
+import { entries, entryRevisions, nushiAnswers, nushiRequests, nushiReservations, nushiSources, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "./visibility.server";
 import { nushiInVillage, nushiLimits } from "./nushi-config.server";
 import { findLiteral } from "./combined-search.server";
@@ -31,10 +32,11 @@ export async function nushiPlaces(db: Db, threadIds: readonly number[], env: Llm
   return rows.filter(row => !row.topic.nushiDisabled && nushiInVillage(row.village, env));
 }
 export async function nushiCaller(db: Db, request: typeof nushiRequests.$inferSelect, env: LlmEnv = process.env) {
+  if (request.replacesAnswerId && (!request.callerId || !(await getWriter(db, request.callerId)).ok)) return null;
   const place = await nushiPlace(db, request.threadId, env);
   if (!place || place.village.id !== request.villageId || !request.callerId) return null;
   const [entry] = await db.select().from(entries).where(and(eq(entries.id, request.entryId), isNull(entries.deletedAt), isNull(entries.hiddenAt)));
-  if (!entry || (entry.threadId ?? entry.id) !== request.threadId || entry.sourceHash !== request.sourceHash || entry.mentionRevision !== request.revision) return null;
+  if (!entry || entry.authorId !== request.callerId || (entry.threadId ?? entry.id) !== request.threadId || entry.sourceHash !== request.sourceHash || entry.mentionRevision !== request.revision) return null;
   let parent: typeof entries.$inferSelect | undefined;
   if (entry.parentId !== null) {
     [parent] = await db.select().from(entries).where(and(eq(entries.id, entry.parentId), eq(entries.threadId, request.threadId), isNull(entries.deletedAt), isNull(entries.hiddenAt)));
@@ -49,10 +51,11 @@ export async function nushiCaller(db: Db, request: typeof nushiRequests.$inferSe
   }
   return { ...place, entry, parent, previous };
 }
-export type NushiSnapshot = { id: number; revision: number; sourceHash: string; authorId: string; author: string; createdAt: Date };
+export type NushiSnapshot = { textHash?: string | null; id: number; revision: number; sourceHash: string; authorId: string; author: string; createdAt: Date };
 export type NushiMaterials = { materials: AiQuestionMaterials; snapshots: NushiSnapshot[]; dates: { from: string | null; to: string | null }; language: Lang; answerLanguage: SourceLang; answerLangCode: string | null; context: unknown; query: string };
 export type NushiMaterialIndex = Array<{ id: string; chars: number; translation?: { chars: number; hash: string } }>;
 const snapshotHash = (entry: { title: string | null; body: string; lang: string; langCode: string | null }) => createHash("sha256").update(JSON.stringify([hashPost(entry.title, entry.body, entry.lang), entry.langCode])).digest("hex");
+const textHash = (entry: { title: string | null; body: string }) => createHash("sha256").update(entry.title ?? "").update("\0").update(entry.body).digest("hex");
 const translationHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 export function nushiMaterialIndex(sources: readonly AiQuestionSource[]): NushiMaterialIndex {
   return sources.map(source => ({ id: source.id, chars: source.original.length, ...(source.translation ? { translation: { chars: source.translation.text.length, hash: translationHash(source.translation) } } : {}) }));
@@ -60,7 +63,7 @@ export function nushiMaterialIndex(sources: readonly AiQuestionSource[]): NushiM
 
 // Reconstruct the exact bounded source fields for an opted-in error report.
 // The persisted index contains lengths and hashes, never material text.
-export async function reconstructNushiMaterials(db: Db, index: NushiMaterialIndex, language: Lang): Promise<AiQuestionSource[] | null> {
+export async function reconstructNushiMaterials(db: Db, index: NushiMaterialIndex, language: Lang, snapshots?: readonly NushiSnapshot[]): Promise<AiQuestionSource[] | null> {
   const ids = [...new Set(index.map(item => Number(/^e-(\d+)-/.exec(item.id)![1])))];
   if (!ids.length) return [];
   const rows = await db.select({ entry: entries, author: retainedAuthorColumn(entries.authorId, profiles.handle, "handle") }).from(entries).innerJoin(rootTopic, rootTopicOn()).leftJoin(profiles, eq(profiles.userId, entries.authorId)).where(and(inArray(entries.id, ids), visibleWithTopic()));
@@ -73,12 +76,21 @@ export async function reconstructNushiMaterials(db: Db, index: NushiMaterialInde
     const row = rows.find(({ entry }) => entry.id === Number(parsed[1]));
     if (!row) return null;
     const { entry, author } = row, field = parsed[2] as "title" | "body";
+    const snapshot = snapshots?.find(source => source.id === entry.id);
+    let original = entry[field] ?? "", originalSourceHash = entry.sourceHash;
+    if (snapshot && snapshot.sourceHash !== snapshotHash(entry)) {
+      const [revision] = await db.select().from(entryRevisions).where(and(eq(entryRevisions.entryId, entry.id), eq(entryRevisions.mentionRevision, snapshot.revision), isNull(entryRevisions.deletedAt)));
+      // Historical language metadata is not retained; fail closed if it changed.
+      if (!revision || snapshotHash({ ...entry, title: revision.title, body: revision.body }) !== snapshot.sourceHash) return null;
+      original = revision[field] ?? "";
+      originalSourceHash = hashPost(revision.title, revision.body, entry.lang);
+    }
     const picked = translations.shown.get(entry.id)?.[0];
     const translated = field === "title" ? picked?.title : picked?.text;
     const location = locations.get(entry.id);
     const href = entry.kind === "topic" ? `/t/${entry.id}` : location?.state === "visible" ? location.href : null;
     if (!href) return null;
-    const source = await projectQuestionSource<AiQuestionSource>({ id: item.id, kind: entry.kind === "topic" ? "post" : "reply", field, author: authorLabel(author), lang: entry.langCode ?? entry.lang, original: entry[field] ?? "", sourceHash: entry.sourceHash, href,
+    const source = await projectQuestionSource<AiQuestionSource>({ id: item.id, kind: entry.kind === "topic" ? "post" : "reply", field, author: authorLabel(author), lang: entry.langCode ?? entry.lang, original, sourceHash: originalSourceHash, href,
       ...(item.translation && picked && translated ? { translation: { text: translated, lang: language, stale: picked.stale } } : {}) });
     source.original = clipQuestionText(source.original, item.chars);
     if (source.translation && item.translation) source.translation.text = clipQuestionText(source.translation.text, item.translation.chars);
@@ -160,7 +172,7 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
       if (row) dependencies.set(id, row);
     }
   }
-  const snapshots = [...dependencies.values()].map(({ entry, author }) => ({ id: entry.id, revision: entry.mentionRevision, sourceHash: snapshotHash(entry), authorId: entry.authorId, author: authorLabel(author), createdAt: entry.createdAt }));
+  const snapshots = [...dependencies.values()].map(({ entry, author }) => ({ id: entry.id, revision: entry.mentionRevision, sourceHash: snapshotHash(entry), textHash: textHash(entry), authorId: entry.authorId, author: authorLabel(author), createdAt: entry.createdAt }));
   const dates = rows.filter(({ entry }) => used.has(entry.id)).map(({ entry }) => entry.createdAt.toISOString()).sort();
   return { materials, snapshots, query, dates: { from: dates[0] ?? null, to: dates.at(-1) ?? null } };
 }
@@ -181,7 +193,7 @@ export async function nushiMaterials(db: Db, request: typeof nushiRequests.$infe
       if (row) dependencies.set(id, row);
     }
   }
-  const snapshots = [...dependencies.values()].map(({ entry, author }) => ({ id: entry.id, revision: entry.mentionRevision, sourceHash: snapshotHash(entry), authorId: entry.authorId, author: authorLabel(author), createdAt: entry.createdAt }));
+  const snapshots = [...dependencies.values()].map(({ entry, author }) => ({ id: entry.id, revision: entry.mentionRevision, sourceHash: snapshotHash(entry), textHash: textHash(entry), authorId: entry.authorId, author: authorLabel(author), createdAt: entry.createdAt }));
   return { ...collected, snapshots: [...collected.snapshots, ...snapshots.filter(source => !collected.snapshots.some(existing => existing.id === source.id))], language, answerLanguage: caller.entry.lang as SourceLang, answerLangCode: caller.entry.langCode, context: { callingPost: clipQuestionText(callingPost, 2000), parentPost: caller.parent ? clipQuestionText(await contextText(caller.parent.body), 2000) : null, topic: { title: caller.topic.title === null ? null : await contextText(caller.topic.title, "title"), body: clipQuestionText(await contextText(caller.topic.body), 2000) }, previousAiReply: caller.previous ? clipQuestionText(JSON.stringify(caller.previous.answer), 4000) : null } };
 }
 
@@ -189,6 +201,27 @@ export async function snapshotsCurrent(db: Db, snapshots: readonly NushiSnapshot
   const rows = snapshots.length ? await db.select({ entry: entries }).from(entries).innerJoin(rootTopic, rootTopicOn())
     .where(and(inArray(entries.id, snapshots.map(source => source.id)), eq(rootTopic.villageId, villageId), visibleWithTopic())) : [];
   return snapshots.every(source => rows.some(({ entry }) => entry.id === source.id && snapshotHash(entry) === source.sourceHash && entry.mentionRevision === source.revision && entry.authorId === source.authorId));
+}
+
+// Published answers may retain passages that remain in public edit history.
+// Generation still requires snapshotsCurrent, including exact revision checks.
+export async function publishedSnapshots(db: Db, snapshots: readonly NushiSnapshot[], villageId: string) {
+  const ids = snapshots.map(source => source.id);
+  const rows = ids.length ? await db.select({ entry: entries }).from(entries).innerJoin(rootTopic, rootTopicOn())
+    .where(and(inArray(entries.id, ids), eq(rootTopic.villageId, villageId), visibleWithTopic())) : [];
+  const history = ids.length ? await db.select().from(entryRevisions).where(and(inArray(entryRevisions.entryId, ids), isNull(entryRevisions.deletedAt))) : [];
+  let changed = false;
+  for (const source of snapshots) {
+    const entry = rows.find(row => row.entry.id === source.id)?.entry;
+    if (!entry || entry.authorId !== source.authorId) return null;
+    if (snapshotHash(entry) === source.sourceHash || (source.textHash && textHash(entry) === source.textHash)) {
+      changed ||= entry.mentionRevision !== source.revision || snapshotHash(entry) !== source.sourceHash;
+      continue;
+    }
+    if (!history.some(revision => revision.entryId === source.id && revision.mentionRevision === source.revision && (!source.textHash || textHash(revision) === source.textHash))) return null;
+    changed = true;
+  }
+  return { changed };
 }
 
 export async function nushiSourceLabels(db: Db, answerId: number) {

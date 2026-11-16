@@ -827,6 +827,13 @@
       "when": 1794726670110,
       "tag": "0117_village_nushi_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1794795905435,
+      "tag": "0118_nushi_stale_answers",
+      "breakpoints": true
     }
   ]
 }

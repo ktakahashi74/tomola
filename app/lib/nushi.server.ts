@@ -1,4 +1,5 @@
 import { readNushiVoice, nushiVoiceCurrent, nushiVoiceLink, type NushiVoice } from "./nushi-voice.server";
+import { getWriter } from "./members.server";
 import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { enabledTargetLangs } from "./enabled-langs.server";
 import { notificationEmailDedupeKey, enqueueImmediateEmails } from "./notifications.server";
@@ -8,7 +9,7 @@ import type { Db } from "./db/client.server";
 import { chatNushiRequests, chatNushiReservations, entries, jobs, nushiAnswers, nushiQuotaLock, nushiRequests, nushiReservations, nushiSources, nushiTranslations, notifications, profiles, villages } from "./db/schema";
 import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
-import { nushiCaller, nushiMaterials, nushiPlace, nushiPlaces, nushiSourceLabels, snapshotsCurrent, nushiMaterialIndex, reconstructNushiMaterials, type NushiMaterials } from "./nushi-materials.server";
+import { nushiCaller, nushiMaterials, nushiPlace, nushiPlaces, nushiSourceLabels, snapshotsCurrent, nushiMaterialIndex, reconstructNushiMaterials, publishedSnapshots, type NushiMaterials } from "./nushi-materials.server";
 import { questionPrompt } from "./ai-question-answer.server";
 import { logNushiVerificationFailure } from "./nushi-answer.server";
 import { completeNushiAnswer } from "./nushi-completion.server";
@@ -33,6 +34,7 @@ export async function requestNushi(db: Db, entryId: number, suppress = false, no
   const threadId = entry.threadId ?? entry.id;
   const place = await nushiPlace(db, threadId, env);
   if (!place) return;
+  if ((await db.select({ id: nushiRequests.id }).from(nushiRequests).where(eq(nushiRequests.entryId, entryId)).limit(1)).length) return;
   const [request] = await db.insert(nushiRequests).values({ entryId, threadId, villageId: place.village.id, callerId: entry.authorId,
     revision: entry.mentionRevision, sourceHash: entry.sourceHash, createdAt: now, expiresAt: new Date(now.getTime() + nushiLimits(env).ttlSeconds * 1000) })
     .onConflictDoNothing().returning();
@@ -155,10 +157,18 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
       const limits = nushiLimits(env);
       const quotas: Array<[string, number]> = [[`member:${current.callerId}`, limits.member], [`topic:${current.threadId}`, limits.topic], [`village:${current.villageId}`, limits.village], ...authors.map(author => [`author:${author}`, limits.author] as [string, number])];
       if (!await reserveDaily(tx, id, quotas, clock(), env)) { await finish(tx, id, "limit", clock(), request.token!); return; }
+      if (current.replacesAnswerId) {
+        const [previous] = await tx.select().from(nushiAnswers).where(eq(nushiAnswers.id, current.replacesAnswerId)).for("update");
+        if (!previous || previous.supersededById || (previous.hiddenAt && previous.hiddenReason !== "source_changed")) {
+          await finish(tx, id, "changed", clock(), request.token!); return;
+        }
+      }
       const [published] = await tx.insert(nushiAnswers).values({ voiceEventId: voice?.text ? voice.eventId : null, requestId: id, answer, scope: { posts: new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, ...input.dates, truncated: input.materials.scope.truncated || verified.truncated, materialIndex: nushiMaterialIndex(input.materials.sources), materialLanguage: input.language, answerLangCode: input.answerLangCode },
         lang: input.answerLanguage, engine: completer.engine, model: completer.model, promptVersion: NUSHI_PROMPT_VERSION, createdAt: clock() }).onConflictDoNothing().returning();
       if (!published) return;
-      await tx.insert(nushiSources).values(input.snapshots.map(source => ({ answerId: published.id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, authorId: source.authorId, author: source.author, createdAt: source.createdAt })));
+      if (current.replacesAnswerId) await tx.update(nushiAnswers).set({ hiddenAt: clock(), hiddenReason: "superseded", supersededById: published.id })
+        .where(eq(nushiAnswers.id, current.replacesAnswerId));
+      await tx.insert(nushiSources).values(input.snapshots.map(source => ({ answerId: published.id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, textHash: source.textHash, authorId: source.authorId, author: source.author, createdAt: source.createdAt })));
       await tx.update(nushiRequests).set({ state: "answered", leaseUntil: null }).where(eq(nushiRequests.id, id));
       await notifyResult(tx, current, clock());
       if (answer.readings.length) for (const lang of enabledTargetLangs(input.answerLanguage)) await enqueue(tx, "translate_nushi", { answerId: published.id, lang }, { dedupeKey: `nushi-translation:${published.id}:${lang}`, maxAttempts: 2 });
@@ -216,13 +226,14 @@ export async function readNushiAnswer(db: Db, id: number, language?: Lang, env: 
   if (!row) return null;
   const available = !row.answer.hiddenAt && !!await nushiPlace(db, row.request.threadId, env);
   const sources = available ? await db.select().from(nushiSources).where(eq(nushiSources.answerId, id)) : [];
-  const current = available && await snapshotsCurrent(db, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" })), row.request.villageId);
-  if (!current) return { id, requestId: row.request.id, entryId: row.request.entryId, threadId: row.request.threadId, hidden: true as const, reason: row.answer.hiddenReason ?? "disabled" };
+  const current = available ? await publishedSnapshots(db, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" })), row.request.villageId) : null;
+  const common = { id, requestId: row.request.id, entryId: row.request.entryId, threadId: row.request.threadId };
+  if (!current) return { ...common, hidden: true as const, reason: row.answer.hiddenReason ?? (available ? "source_changed" : "disabled"), supersededById: row.answer.supersededById };
   const [caller] = row.request.callerId ? await db.select({ handle: profiles.handle }).from(profiles).where(eq(profiles.userId, row.request.callerId)) : [];
   const place = (await nushiPlace(db, row.request.threadId, env))!;
   const [translation] = language && language !== row.answer.lang ? await db.select().from(nushiTranslations).where(and(eq(nushiTranslations.answerId, id), eq(nushiTranslations.lang, language))) : [];
   const voiceHref = await nushiVoiceLink(db, row.request.villageId, row.answer.voiceEventId, env);
-  return { ...(voiceHref ? { voiceHref } : {}), id, requestId: row.request.id, entryId: row.request.entryId, threadId: row.request.threadId, hidden: false as const,
+  return { ...(voiceHref ? { voiceHref } : {}), id, requestId: row.request.id, entryId: row.request.entryId, threadId: row.request.threadId, hidden: false as const, sourcesChanged: row.answer.sourcesChanged || current.changed,
     answer: translation ? { ...row.answer.answer, readings: row.answer.answer.readings.map((reading, index) => ({ ...reading, text: translation.readings[index] ?? reading.text })) } : row.answer.answer,
     lang: translation?.lang ?? row.answer.lang, langCode: row.answer.scope.answerLangCode, originalLang: row.answer.lang, translated: !!translation, translationEngine: translation?.engine ?? null, translationModel: translation?.model ?? null,
     scope: { posts: row.answer.scope.posts, from: row.answer.scope.from, to: row.answer.scope.to, truncated: row.answer.scope.truncated }, engine: row.answer.engine, model: row.answer.model, promptVersion: row.answer.promptVersion, date: row.answer.createdAt.toISOString(),
@@ -231,10 +242,11 @@ export async function readNushiAnswer(db: Db, id: number, language?: Lang, env: 
 }
 export async function threadNushi(db: Db, threadId: number, entryIds: number[], language: Lang) {
   if (!nushiEnabled()) return { answers: [], requests: [] };
-  const requests = await db.select().from(nushiRequests).where(and(eq(nushiRequests.threadId, threadId), inArray(nushiRequests.entryId, entryIds)));
+  const requests = await db.select().from(nushiRequests).where(and(eq(nushiRequests.threadId, threadId), inArray(nushiRequests.entryId, entryIds))).orderBy(asc(nushiRequests.createdAt), asc(nushiRequests.id));
+  const latest = new Map(requests.map(request => [request.entryId, request.id]));
   const answers = requests.length ? await db.select({ id: nushiAnswers.id }).from(nushiAnswers).where(inArray(nushiAnswers.requestId, requests.map(request => request.id))) : [];
   return { answers: (await Promise.all(answers.map(answer => readNushiAnswer(db, answer.id, language)))).filter(answer => answer !== null),
-    requests: requests.filter(request => request.state !== "answered").map(request => ({ id: request.id, entryId: request.entryId, state: request.state, failure: request.failure })) };
+    requests: requests.filter(request => request.state !== "answered" && latest.get(request.entryId) === request.id).map(request => ({ id: request.id, entryId: request.entryId, state: request.state, failure: request.failure })) };
 }
 
 export async function nushiCounts(db: Db, threadIds: readonly number[]) {
@@ -245,4 +257,40 @@ export async function nushiCounts(db: Db, threadIds: readonly number[]) {
   const readable = new Set((await nushiPlaces(db, [...new Set(rows.map(row => row.threadId))])).map(row => row.topic.id));
   for (const row of rows) if (readable.has(row.threadId)) counts.set(row.threadId, (counts.get(row.threadId) ?? 0) + 1);
   return counts;
+}
+
+// The caller alone can replace a stale answer. Lock public sources before the
+// request, following publication and withdrawal, and serialize on the call row.
+export async function requestNushiAgain(db: Db, callerId: string, answerId: number, now = new Date(), env: LlmEnv = process.env) {
+  if (!(await getWriter(db, callerId, { now })).ok || !nushiEnabled(env) || !Number.isSafeInteger(answerId) || answerId < 1) return false;
+  const [peek] = await db.select({ request: nushiRequests }).from(nushiAnswers).innerJoin(nushiRequests, eq(nushiRequests.id, nushiAnswers.requestId)).where(eq(nushiAnswers.id, answerId));
+  if (!peek || peek.request.callerId !== callerId) return false;
+  return db.transaction(async tx => {
+    await tx.select({ id: villages.id }).from(villages).where(eq(villages.id, peek.request.villageId)).for("share");
+    await tx.select({ id: entries.id }).from(entries).where(inArray(entries.id, [...new Set([peek.request.entryId, peek.request.threadId])])).orderBy(asc(entries.id)).for("no key update");
+    const [entry] = await tx.select().from(entries).where(eq(entries.id, peek.request.entryId));
+    if (!entry || entry.authorId !== callerId || !entry.sourceHash) return false;
+    const candidate = { ...peek.request, revision: entry.mentionRevision, sourceHash: entry.sourceHash };
+    if (!await nushiCaller(tx, candidate, env)) return false;
+    const view = await readNushiAnswer(tx, answerId, undefined, env);
+    if (!view || (view.hidden ? view.reason !== "source_changed" : !view.sourcesChanged)) return false;
+    const [previous] = await tx.select().from(nushiAnswers).where(eq(nushiAnswers.id, answerId));
+    if (previous.supersededById) return false;
+    const [pending] = await tx.select({ id: nushiRequests.id }).from(nushiRequests).where(and(eq(nushiRequests.entryId, entry.id), active())).limit(1);
+    if (pending) return true;
+    const [request] = await tx.insert(nushiRequests).values({ entryId: entry.id, threadId: candidate.threadId, villageId: candidate.villageId, callerId,
+      revision: entry.mentionRevision, sourceHash: entry.sourceHash, replacesAnswerId: answerId, createdAt: now, expiresAt: new Date(now.getTime() + nushiLimits(env).ttlSeconds * 1000) }).onConflictDoNothing().returning();
+    if (request) await enqueue(tx, NUSHI_JOB, { requestId: request.id }, { priority: 1, dedupeKey: `nushi:${request.id}`, maxAttempts: 3 });
+    return !!request;
+  });
+}
+
+// Viewer-specific form eligibility stays out of shared JSON and Markdown data.
+export async function canRefreshNushi(db: Db, value: NonNullable<Awaited<ReturnType<typeof readNushiAnswer>>>, userId?: string) {
+  if (!userId || (value.hidden ? value.reason !== "source_changed" : !value.sourcesChanged)) return false;
+  const [request] = await db.select().from(nushiRequests).where(eq(nushiRequests.id, value.requestId));
+  if (!request || request.callerId !== userId || !(await getWriter(db, userId)).ok) return false;
+  if ((await db.select({ id: nushiRequests.id }).from(nushiRequests).where(and(eq(nushiRequests.entryId, request.entryId), active())).limit(1)).length) return false;
+  const [entry] = await db.select().from(entries).where(eq(entries.id, request.entryId));
+  return !!entry && entry.authorId === userId && !!await nushiCaller(db, { ...request, revision: entry.mentionRevision, sourceHash: entry.sourceHash ?? "" });
 }
