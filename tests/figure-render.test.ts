@@ -455,3 +455,29 @@ it("compares normalized cached labels and never paints a translated TeX command"
   const accepted = await renderFigureLabels(bytes, cached, ["Level ε"], "en");
   expect(accepted.results[0].status).toBe("rendered");
 });
+
+it.each(["en", "ja", "ko", "zh-Hans"] as const)("reflows paragraph breaks only when translated lines also need wrapping in %s", async lang => {
+  const source = Array(3).fill("This paragraph contains a long line of explanatory prose.").join("\n");
+  const glyph = await sharp({ text: { text: source, font: figureFontDescription("en", 18), rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const w = 700, h = 400;
+  const bytes = await sharp({ create: { width: w, height: h, channels: 4, background: "white" } }).composite([{ input: glyph.data, left: 50, top: 150 }]).png().toBuffer();
+  const r = { ...region, text: source, x: 50 / w, y: 150 / h, width: glyph.info.width / w, height: glyph.info.height / h };
+  const line = lang === "en" ? "A longer translated explanation with enough words to require natural wrapping across the available paragraph width. ".repeat(2).trim() : "自然な折り返しで段落全体の文章を読みやすく表示するための説明文です。".repeat(3);
+  const label = [line, line, line].join("\n"), joined = [line, line, line].join(lang === "en" ? " " : "");
+  const broken = await renderFigureLabels(bytes, reading([r]), [label], lang);
+  const continuous = await renderFigureLabels(bytes, reading([r]), [joined], lang);
+  expect(broken.results[0].status).toBe("rendered");
+  expect(broken.bytes).toEqual(continuous.bytes);
+  const short = "First\nSecond";
+  const retained = await renderFigureLabels(bytes, reading([r]), [short], "en");
+  const single = await renderFigureLabels(bytes, reading([r]), ["First Second"], "en");
+  expect(retained.results[0].status).toBe("rendered");
+  expect(retained.bytes).not.toEqual(single.bytes);
+  if (lang === "en") {
+    const title = reading([{ ...r, weight: "bold" }]);
+    const lines = await renderFigureLabels(bytes, title, [label], lang);
+    const continuousTitle = await renderFigureLabels(bytes, title, [joined], lang);
+    expect(lines.results[0].status).toBe("rendered");
+    expect(lines.bytes).not.toEqual(continuousTitle.bytes);
+  }
+});

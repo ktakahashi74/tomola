@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { FIGURE_OVERLAP, figureOverlapPosition, figureOverlapTreatment, prepareFigureOverlap } from "~/lib/figure-overlap.server";
 import * as overlap from "~/lib/figure-overlap.server";
 import * as space from "~/lib/figure-space.server";
-import { renderFigureLabels } from "~/lib/figure-render.server";
+import { createFigureRenderer, renderFigureLabels } from "~/lib/figure-render.server";
 import type { FigureReading } from "~/lib/figure";
 
 afterEach(() => vi.restoreAllMocks());
@@ -15,9 +15,9 @@ const measured = [{ box: anchor, points: [], lineCount: 1, lineHeights: [20], un
 it("never places a fallback across another text box, even with unrestricted graphic overlap", () => {
   const data = Buffer.alloc(width * height * 4, 255);
   const forbidden = { left: 78, top: 0, width: 4, height };
-  const space = prepareFigureOverlap(data, width, height, 0, measured, [forbidden]);
+  const space = prepareFigureOverlap(data, width, height, 0, measured, [forbidden])!;
   expect(figureOverlapPosition(space, 70, 20, 1)).toBeNull();
-  const adjacent = prepareFigureOverlap(data, width, height, 0, measured, [{ left: 0, top: 0, width: 45, height }]);
+  const adjacent = prepareFigureOverlap(data, width, height, 0, measured, [{ left: 0, top: 0, width: 45, height }])!;
   const placed = figureOverlapPosition(adjacent, 70, 20, 0)!;
   expect(placed.position.left).toBeGreaterThanOrEqual(45);
   expect(placed.pixels).toBe(0);
@@ -26,7 +26,7 @@ it("never places a fallback across another text box, even with unrestricted grap
 it("rejects every placement above the graphic overlap ceiling and accepts its exact boundary", () => {
   const data = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x += 4) data.set([0, 0, 0, 255], (y * width + x) * 4);
-  const space = prepareFigureOverlap(data, width, height, 0, measured, []);
+  const space = prepareFigureOverlap(data, width, height, 0, measured, [])!;
   expect(figureOverlapPosition(space, 64, 24, .2)).toBeNull();
   const placed = figureOverlapPosition(space, 64, 24, .25)!;
   expect(placed.pixels).toBe(64 * 24 / 4);
@@ -84,9 +84,14 @@ it("applies the ceiling to actual fallback rendering while preserving a neighbou
     const rejected = await renderFigureLabels(source, reading, ["W".repeat(14)], "en");
     expect(rejected.results[0]).toMatchObject({ status: "external", reason: "does_not_fit" });
     FIGURE_OVERLAP.maxRatio = .2;
-    const accepted = await renderFigureLabels(source, reading, ["W".repeat(14)], "en");
+    const render = await createFigureRenderer(source, reading, "en");
+    const deferred = await render(["W".repeat(14)], { final: false });
+    expect(deferred.results[0].status).toBe("external");
+    expect(prepare).toHaveBeenCalledTimes(1);
+    const accepted = await render(["W".repeat(14)], { final: true });
     expect(accepted.results[0].status).toBe("rendered");
     expect(prepare).toHaveBeenCalledTimes(2);
+    expect(prepare.mock.calls[1][5]).toContainEqual({ left: 208, top: -2, width: 44, height: 184 });
     const placements = position.mock.results.filter(r => r.type === "return" && r.value).map(r => r.value);
     expect(placements.length).toBeGreaterThan(0);
     for (const p of placements) {
@@ -97,4 +102,39 @@ it("applies the ceiling to actual fallback rendering while preserving a neighbou
     const original = await sharp(source).ensureAlpha().raw().toBuffer();
     for (let y = 0; y < h; y++) expect(rendered.subarray((y * w + 210) * 4, (y * w + 250) * 4)).toEqual(original.subarray((y * w + 210) * 4, (y * w + 250) * 4));
   } finally { FIGURE_OVERLAP.maxRatio = saved; }
+});
+
+it("prefers a source edge over a lower-overlap shifted placement and keeps the source margin", () => {
+  const data = Buffer.alloc(width * height * 4, 255);
+  const edge = { ...anchor, left: 12, width: 80 };
+  for (let y = 25; y < 55; y++) data.set([0, 0, 0, 255], (y * width + 14) * 4);
+  const prepared = prepareFigureOverlap(data, width, height, 0, [{ ...measured[0], box: edge }], [])!;
+  const placed = figureOverlapPosition(prepared, 90, 24, .1, "left")!;
+  expect(placed.position.left).toBe(edge.left + 1);
+  expect(placed.aligned).toBe(true);
+  expect(placed.pixels).toBeGreaterThan(0);
+  const blocked = { ...prepared, obstacles: [{ left: 13, top: 0, width: 2, height }] };
+  const moved = figureOverlapPosition(blocked, 90, 24, .1, "left")!;
+  expect(moved.aligned).toBe(false);
+  expect(moved.position.left).toBeGreaterThanOrEqual(edge.left);
+});
+
+it("rejects source erasure outside its backing or inconsistent with a smooth background", () => {
+  const data = Buffer.alloc(width * height * 4, 255), point = 35 * width + 55;
+  data.set([0, 0, 0, 255], point * 4);
+  const ink = [{ ...measured[0], points: [point] }];
+  expect(prepareFigureOverlap(data, width, height, 0, ink, [], undefined, { left: 60, top: 30, width: 50, height: 20 })).toBeNull();
+  vi.spyOn(space, "figureBackgroundPatchAgrees").mockReturnValue(false);
+  const model = { box: anchor, channels: [[255, 0, 0], [255, 0, 0], [255, 0, 0], [255, 0, 0]] };
+  expect(prepareFigureOverlap(data, width, height, 0, ink, [], model)).toBeNull();
+});
+
+
+it("retains nearby shifted candidates when the source edge cannot accommodate a wider label", () => {
+  const ink = [{ ...measured[0], box: { left: 60, top: 30, width: 40, height: 20 } }];
+  const data = Buffer.alloc(width * height * 4, 255);
+  const prepared = prepareFigureOverlap(data, width, height, 0, ink, [{ left: 130, top: 0, width: 5, height }])!;
+  const placed = figureOverlapPosition(prepared, 90, 24, .1, "left")!;
+  expect(placed.aligned).toBe(false);
+  expect(placed.position.left + placed.position.width).toBeLessThanOrEqual(130);
 });

@@ -1,21 +1,29 @@
-import { FIGURE_SPACE, background, figureEraseMask, figureSpaceWindow, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
+import { FIGURE_SPACE, background, figureEraseMask, figureBackgroundPatch, figureBackgroundPatchAgrees, figureSpaceWindow, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
 
 export const FIGURE_OVERLAP = { maxRatio: .1, treatment: "halo" as "halo" | "backing" };
 
 const intersects = (a: FigureBox, b: FigureBox) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
 
+const anchorErase = (box: FigureBox, width: number, height: number): FigureBox => {
+  const fringe = FIGURE_SPACE.glyphFringe, left = Math.max(0, box.left - fringe), top = Math.max(0, box.top - fringe);
+  return { left, top, width: Math.min(width, box.left + box.width + fringe) - left, height: Math.min(height, box.top + box.height + fringe) - top };
+};
+
 // Integral counts keep every placement query constant-time. Only failed labels
 // allocate a bounded local window; no full-image mask is retained per label.
-export function prepareFigureOverlap(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], forbidden: FigureBox[], surface?: FigureBackground) {
+export function prepareFigureOverlap(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], forbidden: FigureBox[], surface?: FigureBackground, bounds?: FigureBox, erase: FigureBox = anchorErase(measured[index].box, width, height)) {
   const anchor = measured[index].box, window = figureSpaceWindow(anchor, width, height);
-  const stride = window.width + 1, elements = new Uint32Array(stride * (window.height + 1));
+  const stride = window.width + 1;
   const color = background(data, width, height, anchor);
   // Keep the existing erasure protection for dark rules on light fields.
   // Bright glyphs on dark fields can meet artwork without clearing its fringe.
   const eraseGuard = color[0] * .299 + color[1] * .587 + color[2] * .114 > 128 ? 2 : 0;
   // Measure after source-text erasure, including its shadow and antialias
   // fringe. Protected artwork remains in the obstacle count.
-  const removable = figureEraseMask(width, height, index, measured, window, undefined, eraseGuard);
+  const removable = figureEraseMask(width, height, index, measured, window, bounds, eraseGuard);
+  if (measured[index].points.some(p => !removable[(Math.floor(p / width) - window.top) * window.width + p % width - window.left])) return null;
+  if (surface && !figureBackgroundPatchAgrees(figureBackgroundPatch(data, width, height, erase, measured[index], surface), erase, width, measured[index], surface)) return null;
+  const elements = new Uint32Array(stride * (window.height + 1));
   const obstacles = forbidden.filter(b => intersects(b, window));
   for (let y = 0; y < window.height; y++) {
     let row = 0;
@@ -32,23 +40,29 @@ export function prepareFigureOverlap(data: Buffer, width: number, height: number
     const l = box.left - window.left, t = box.top - window.top, r = l + box.width, b = t + box.height;
     return elements[b * stride + r] - elements[t * stride + r] - elements[b * stride + l] + elements[t * stride + l];
   };
-  return { anchor, window, elements, stride, count, obstacles, eraseGuard };
+  return { anchor, window, elements, stride, count, obstacles, eraseGuard, canvasWidth: width };
 }
 
-export function figureOverlapPosition(space: ReturnType<typeof prepareFigureOverlap>, width: number, height: number, maxRatio: number) {
+export function figureOverlapPosition(space: NonNullable<ReturnType<typeof prepareFigureOverlap>>, width: number, height: number, maxRatio: number, align: "left" | "centre" | "right" = "centre") {
   const { anchor, window, obstacles } = space;
   const cx = anchor.left + anchor.width / 2, cy = anchor.top + anchor.height / 2;
-  const preferredX = Math.round(cx - width / 2), preferredY = Math.round(cy - height / 2);
+  const preferredX = align === "left" ? anchor.left + 1 : align === "right" ? anchor.left + anchor.width - width - 1 : Math.round(cx - width / 2), preferredY = Math.round(cy - height / 2);
   const dx = Math.min(48, Math.max(8, Math.ceil(anchor.width / 4))), dy = Math.min(24, Math.max(4, Math.ceil(anchor.height / 4)));
-  const left = Math.max(window.left, preferredX - dx, Math.floor(cx - width + 1)), right = Math.min(window.left + window.width - width, preferredX + dx, Math.floor(cx));
+  const minimumMargin = Math.ceil(space.canvasWidth * .01), after = space.canvasWidth - anchor.left - anchor.width;
+  const leftMargin = Math.max(minimumMargin, anchor.left <= space.canvasWidth * .15 ? anchor.left : 0);
+  const rightMargin = Math.max(minimumMargin, after <= space.canvasWidth * .15 ? after : 0);
+  // Keep the original local search when an aligned candidate cannot fit.
+  const centredX = Math.round(cx - width / 2);
+  const left = Math.max(window.left, leftMargin, Math.min(centredX - dx, preferredX), Math.floor(cx - width + 1));
+  const right = Math.min(window.left + window.width - width, space.canvasWidth - rightMargin - width, Math.max(centredX + dx, preferredX), Math.floor(cx));
   const top = Math.max(window.top, preferredY - dy, Math.floor(cy - height + 1)), bottom = Math.min(window.top + window.height - height, preferredY + dy, Math.floor(cy));
-  let best: { position: FigureBox; pixels: number; ratio: number; distance: number } | null = null;
+  let best: { position: FigureBox; pixels: number; ratio: number; distance: number; aligned: boolean } | null = null;
   for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) {
     const position = { left: x, top: y, width, height };
     if (obstacles.some(b => intersects(position, b))) continue;
-    const pixels = space.count(position), ratio = pixels / (width * height), distance = (x - preferredX) ** 2 + (y - preferredY) ** 2;
-    if (ratio > maxRatio || best && (ratio > best.ratio || ratio === best.ratio && distance >= best.distance)) continue;
-    best = { position, pixels, ratio, distance };
+    const pixels = space.count(position), ratio = pixels / (width * height), distance = (x - preferredX) ** 2 + (y - preferredY) ** 2, aligned = x === preferredX;
+    if (ratio > maxRatio || best && (Number(!aligned) > Number(!best.aligned) || aligned === best.aligned && (ratio > best.ratio || ratio === best.ratio && distance >= best.distance))) continue;
+    best = { position, pixels, ratio, distance, aligned };
   }
   return best;
 }

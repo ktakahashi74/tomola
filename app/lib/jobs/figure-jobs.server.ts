@@ -118,9 +118,9 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
       };
       const labelsOut = parseLabels(result, labels);
       const render = await createFigureRenderer(image.bytes, reading, lang);
-      let rendered = await render(labelsOut);
+      let rendered = await render(labelsOut, { final: false });
       // A missing or one-character capacity cannot guide a useful shortening.
-      // Keep those full translations outside rather than constraining the batch.
+      // The final layout can still rescue them without constraining the batch.
       const retryIndexes = rendered.results.flatMap((r, i) => r.reason === "does_not_fit" && (r.maxCharacters ?? 0) > 1 ? [i] : []);
       if (retryIndexes.length) {
         const retrySources = retryIndexes.map(i => labels[i]);
@@ -131,19 +131,19 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
             figureCharacterBudgets: retryIndexes.map(i => rendered.results[i].maxCharacters!),
           }, options);
         } catch (error) {
-          if (!(error instanceof LlmError) || error.retryable) throw error;
+          if (!(error instanceof LlmError)) throw error;
         }
         const candidates = parseLabels(shortened, retrySources);
         const proposed = [...labelsOut];
         for (const [j, i] of retryIndexes.entries()) if (candidates[j] && preservesFigureMath(labels[i], candidates[j]!)) proposed[i] = candidates[j];
-        const retried = await render(proposed);
+        const retried = await render(proposed, { final: true });
         // An unsuccessful retry must not replace the fuller external translation
         // or sacrifice a label already drawn in the first layout.
         if (rendered.results.every((r, i) => r.status !== "rendered" || retried.results[i].status === "rendered")) {
           for (const i of retryIndexes) if (retried.results[i].status !== "rendered") retried.results[i] = rendered.results[i];
           rendered = retried;
-        }
-      }
+        } else rendered = await render(labelsOut, { final: true });
+      } else rendered = await render(labelsOut, { final: true });
       const { bytes, results: labelResults } = rendered;
       const counts = new Map<string, number>();
       for (const label of labelResults) if (label.reason) counts.set(label.reason, (counts.get(label.reason) ?? 0) + 1);

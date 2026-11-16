@@ -87,6 +87,13 @@ function labelAlignment(box: Box, free: Box, width: number): Alignment {
   return Math.abs(before - after) <= Math.max(4, box.width * .1) ? "centre" : before < after ? "left" : "right";
 }
 async function labelImage(label: string, region: FigureRegion, lang: Lang, color: string, size: number, width: number, height: number, align: Alignment, wrap: boolean) {
+  const sourceLines = region.text.split(/\r\n|[\n\r\u2028\u2029]/).map(line => line.trim()).filter(Boolean);
+  const paragraph = region.weight !== "bold" && sourceLines.length >= 2 && sourceLines.filter(line => [...line].length >= (/^(ja|ko|zh)/.test(region.lang) ? 20 : 40)).length >= Math.ceil(sourceLines.length / 2);
+  // Reflow prose only when an explicit source-style break also needs wrapping.
+  // Short independent lines and titles retain their intentional breaks.
+  if (wrap && paragraph && /[\n\r\u2028\u2029]/.test(label) && (await textMetrics(label, lang, size, region.weight)).inkWidth > width) {
+    label = label.split(/\r\n|[\n\r\u2028\u2029]/).map(line => line.trim()).join(/^(ja|ko|zh)/.test(lang) ? "" : " ");
+  }
   const image = sharp({ text: {
     text: `<span foreground="${color}" lang="${lang}">${escapePango(label)}</span>`,
     font: figureFontDescription(lang, size, region.weight), width: Math.max(1, width), rgba: true, wrap: wrap ? "word-char" : "none", align,
@@ -230,16 +237,16 @@ async function fitLabel(label: string, region: FigureRegion, box: Box, rectangle
 
 export type FigureRenderResult = { bytes: Buffer | null; results: FigureLabelResult[] };
 
-async function fitOverlap(label: string, region: FigureRegion, lang: Lang, color: string, size: number, space: ReturnType<typeof prepareFigureOverlap>, align: Alignment) {
+async function fitOverlap(label: string, region: FigureRegion, lang: Lang, color: string, size: number, space: NonNullable<ReturnType<typeof prepareFigureOverlap>>, align: Alignment) {
   const limit = space.window.width - 2, anchor = space.anchor;
   const widths = [...new Set([limit, ...[1, 1.25, 1.5, 2, 3].map(scale => Math.min(limit, Math.ceil(anchor.width * scale)))])];
-  let best: { text: Buffer; position: Box; size: number; pixels: number; ratio: number; distance: number } | null = null;
-  for (const width of widths) {
-    const text = await labelImage(label, region, lang, color, size, width, space.window.height - 2, align, width !== limit);
+  let best: { text: Buffer; position: Box; size: number; pixels: number; ratio: number; distance: number; aligned: boolean } | null = null;
+  for (const [width, wrap] of [[limit, false], ...widths.map(width => [width, true] as const)] as const) {
+    const text = await labelImage(label, region, lang, color, size, width, space.window.height - 2, align, wrap);
     if (!text) continue;
     const w = text.info.width + 2, h = text.info.height + 2;
-    const placement = figureOverlapPosition(space, w, h, FIGURE_OVERLAP.maxRatio);
-    if (!placement || best && (placement.ratio > best.ratio || placement.ratio === best.ratio && placement.distance >= best.distance)) continue;
+    const placement = figureOverlapPosition(space, w, h, FIGURE_OVERLAP.maxRatio, align);
+    if (!placement || best && (Number(!placement.aligned) > Number(!best.aligned) || placement.aligned === best.aligned && (placement.ratio > best.ratio || placement.ratio === best.ratio && placement.distance >= best.distance))) continue;
     const glyphs = await sharp(text.data).extend({ top: 1, bottom: 1, left: 1, right: 1, background: "#00000000" }).ensureAlpha().raw().toBuffer();
     best = { ...placement, text: glyphs, size };
   }
@@ -251,7 +258,7 @@ export async function renderFigureLabels(bytes: Buffer, reading: FigureReading, 
 }
 
 // Reuse decoded pixels, ink measurements and font sizes for a shortening pass.
-export async function createFigureRenderer(bytes: Buffer, reading: FigureReading, lang: Lang): Promise<(labels: readonly (string | null)[]) => Promise<FigureRenderResult>> {
+export async function createFigureRenderer(bytes: Buffer, reading: FigureReading, lang: Lang): Promise<(labels: readonly (string | null)[], options?: { final?: boolean }) => Promise<FigureRenderResult>> {
   const regions = figureTranslationRegions(reading);
   const rejected = (labels: readonly (string | null)[]): FigureRenderResult => ({ bytes: null, results: regions.map((r, i) => ({ source: r.text, translation: labels[i] ?? null, status: "external", reason: "unusable_reading" })) });
   if (!usableFigure(reading)) return async labels => rejected(labels);
@@ -275,7 +282,7 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
   const groups = labelGroups(regions, inks, sizes, alignments);
   const alignment = (i: number, free: Box) => alignments[i] ?? labelAlignment(inks[i].box, free, info.width);
   const colors = indexes.map(i => figureTextColor(data, background(data, info.width, info.height, measured[i].box), measured[i]));
-  return async labels => {
+  return async (labels, { final = true } = {}) => {
     if (labels.length !== regions.length) return rejected(labels);
     const results = rejected(labels).results;
     const demands = await Promise.all(regions.map(async (_, i) => {
@@ -397,27 +404,32 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
     }
     // Settle every existing layout first. A rescued label cannot move or
     // resize earlier translations, and their entire raster footprints stay clear.
-    for (let i = 0; i < regions.length; i++) {
+    for (let i = 0; final && i < regions.length; i++) {
       if (results[i].reason !== "does_not_fit") continue;
       await setImmediate();
       const index = indexes[i], ink = measured[index];
       if (!ink.points.length) continue;
       const window = figureSpaceWindow(ink.box, info.width, info.height);
       if (ink.box.width > window.width || ink.box.height > window.height) continue;
-      const forbidden = [...boxes.filter((_, j) => j !== index), ...measured.filter((_, j) => j !== index).map(m => m.box), ...occupied];
+      const otherText = [...boxes.filter((_, j) => j !== index), ...measured.filter((_, j) => j !== index).map(m => m.box), ...occupied];
+      const forbidden = otherText.map(b => ({ left: b.left - 2, top: b.top - 2, width: b.width + 4, height: b.height + 4 }));
       const surface = fallbackSurfaces[i]?.surface ?? context.surfaces?.[index];
-      const space = prepareFigureOverlap(data, info.width, info.height, index, measured, forbidden, surface);
-      const fitted = await fitOverlap(labels[i]!, regions[i], lang, colors[i], Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), space, labelAlignment(ink.box, window, info.width));
-      if (!fitted) continue;
+      const bounds = context.bounds?.[index] ?? surface?.bounds;
       const fringe = FIGURE_SPACE.glyphFringe;
       const erase = fallbackSurfaces[i]?.erase ?? { left: Math.max(0, ink.box.left - fringe), top: Math.max(0, ink.box.top - fringe),
         width: Math.min(info.width, ink.box.left + ink.box.width + fringe) - Math.max(0, ink.box.left - fringe),
         height: Math.min(info.height, ink.box.top + ink.box.height + fringe) - Math.max(0, ink.box.top - fringe) };
-      const removable = figureEraseMask(info.width, info.height, index, measured, erase, undefined, space.eraseGuard);
-      if (ink.points.some(p => !removable[(Math.floor(p / info.width) - erase.top) * erase.width + p % info.width - erase.left] || forbidden.some(b => inside(b, p % info.width, Math.floor(p / info.width))))) continue;
+      const space = prepareFigureOverlap(data, info.width, info.height, index, measured, forbidden, surface, bounds, erase);
+      if (!space) continue;
+      const removable = figureEraseMask(info.width, info.height, index, measured, erase, bounds, space.eraseGuard);
+      if (ink.points.some(p => !removable[(Math.floor(p / info.width) - erase.top) * erase.width + p % info.width - erase.left] || otherText.some(b => inside(b, p % info.width, Math.floor(p / info.width))))) continue;
       const restored = figureBackgroundPatch(data, info.width, info.height, erase, ink, surface);
+      if (surface && !figureBackgroundPatchAgrees(restored, erase, info.width, ink, surface)) continue;
+      const fitted = await fitOverlap(labels[i]!, regions[i], lang, colors[i], Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), space, alignment(i, window));
+      if (!fitted) continue;
+      const eraseObstacles = otherText.filter(b => b.left < erase.left + erase.width && erase.left < b.left + b.width && b.top < erase.top + erase.height && erase.top < b.top + b.height);
       for (let y = 0; y < erase.height; y++) for (let x = 0; x < erase.width; x++) {
-        if (!removable[y * erase.width + x] || forbidden.some(b => inside(b, erase.left + x, erase.top + y))) continue;
+        if (!removable[y * erase.width + x] || eraseObstacles.some(b => inside(b, erase.left + x, erase.top + y))) continue;
         restored.copy(painted, ((erase.top + y) * info.width + erase.left + x) * 4, (y * erase.width + x) * 4, (y * erase.width + x + 1) * 4);
       }
       const glyphs = figureOverlapTreatment(fitted.text, fitted.position.width, fitted.position.height, fitted.position, background(data, info.width, info.height, ink.box), surface);

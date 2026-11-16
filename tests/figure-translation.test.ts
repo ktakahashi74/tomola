@@ -664,6 +664,39 @@ describe("figure translation pipeline", () => {
     expect(saved.labelResults!.map(r => r.status)).toEqual(other ? ["external", sacrifice ? "external" : "rendered", "rendered"] : ["external"]);
   });
 
+  it.each(["rescued", "sacrificed", "failed", "tiny_budget"] as const)("settles the final layout after the shortening decision: %s", async outcome => {
+    const w = await world();
+    const sources = ["First", "Second"];
+    vi.mocked(w.reader.read).mockResolvedValue({ text: readingResponse({ ...sourceReading, regions: sources.map((text, i) => ({ ...sourceReading.regions[0], text, y: .1 + i * .5, height: .2 })) }), model: w.reader.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 });
+    const render = vi.fn(async (labels: readonly (string | null)[], options?: { final?: boolean }) => ({ bytes: w.bytes, results: labels.map((translation, i) => {
+      const fits = i === 0 ? !(outcome === "sacrificed" && translation === "短い") : options?.final === true;
+      return { source: sources[i], translation, status: fits ? "rendered" as const : "external" as const,
+        reason: fits ? null : "does_not_fit" as const, maxCharacters: outcome === "tiny_budget" ? 1 : 20 };
+    }) }));
+    vi.spyOn(figureRender, "createFigureRenderer").mockResolvedValue(render);
+    vi.mocked(w.engine.translate).mockImplementation(async req => {
+      if (req.figureCharacterBudgets) {
+        expect(render).toHaveBeenCalledTimes(1);
+        expect(render.mock.calls[0][1]).toEqual({ final: false });
+        if (outcome === "failed") throw new LlmError("unavailable", "Synthetic shortening failure");
+      }
+      return { text: JSON.stringify(req.figureCharacterBudgets ? ["短い"] : ["長い翻訳", "長い翻訳"]), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 };
+    });
+    // Losing a previously rendered label rejects the candidate, even when the
+    // candidate's other label was rescued by the final placement stage.
+    if (outcome === "sacrificed") render.mockImplementation(async (labels, options) => ({ bytes: w.bytes, results: labels.map((translation, i) => {
+      const fits = i === 0 ? !labels.includes("短い") : options?.final === true;
+      return { source: sources[i], translation, status: fits ? "rendered" as const : "external" as const,
+        reason: fits ? null : "does_not_fit" as const, maxCharacters: 20 };
+    }) }));
+    expect(await w.run()).toMatchObject({ failed: 0 });
+    expect(render.mock.calls.map(call => call[1])).toEqual(outcome === "sacrificed" ? [{ final: false }, { final: true }, { final: true }] : [{ final: false }, { final: true }]);
+    const [saved] = await db.select().from(figureTranslations);
+    expect(saved.labelResults!.map(r => r.status)).toEqual(["rendered", "rendered"]);
+    expect(saved.labels![1]).toBe(["failed", "tiny_budget", "sacrificed"].includes(outcome) ? "長い翻訳" : "短い");
+    expect(w.engine.translate).toHaveBeenCalledTimes(outcome === "tiny_budget" ? 1 : 2);
+  });
+
   it("adopts shortened banner labels only while every previously rendered label still fits", async () => {
     const text = "H".repeat(12), width = 320, height = 180;
     const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 18", rgba: true } }).png().toBuffer({ resolveWithObject: true });
