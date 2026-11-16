@@ -105,7 +105,7 @@ BEGIN
         JOIN nushi_requests request ON request.entry_id = call.id
         JOIN nushi_answers child ON child.request_id = request.id
     )
-    UPDATE nushi_answers SET hidden_at = now(), hidden_reason = CASE WHEN NEW.hidden_reason IN ('superseded', 'context_hidden') THEN 'context_hidden' ELSE 'source_changed' END WHERE hidden_at IS NULL AND id <> NEW.id AND id IN (SELECT id FROM affected);
+    UPDATE nushi_answers SET hidden_at = now(), hidden_reason = 'context_hidden' WHERE hidden_at IS NULL AND id <> NEW.id AND id IN (SELECT id FROM affected);
   END IF;
   RETURN NEW;
 END $$;

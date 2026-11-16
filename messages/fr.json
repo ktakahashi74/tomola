@@ -2981,6 +2981,7 @@
   "nushi_sources_edited": "Les publications ou traductions utilisées pour cette réponse ont été modifiées depuis. Les citations conservent le texte utilisé à ce moment-là.",
   "nushi_refresh": "Répondre à nouveau à partir des publications actuelles",
   "nushi_superseded": "Remplacée par une nouvelle réponse utilisant les publications actuelles.",
+  "nushi_report_unavailable": "Cette réponse ne peut plus être envoyée avec un signalement d’erreur, car les publications ou traductions qu’elle a utilisées ne peuvent pas être restaurées à l’identique. Pour signaler un problème la concernant, signalez plutôt cette publication.",
   "nushi_pending": "Nushi réfléchit",
   "nushi_open_post": "Ouvrir la publication",
   "nushi_failed": "Nushi n’a pas pu répondre.",

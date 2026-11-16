@@ -2356,6 +2356,7 @@
   "nushi_sources_edited": "用於此回答的貼文或翻譯在此之後已經過編輯。引文仍保留當時使用的文字。",
   "nushi_refresh": "使用目前的貼文重新回答",
   "nushi_superseded": "已替換為使用目前貼文的新回答。",
+  "nushi_report_unavailable": "這則回答無法再隨錯誤回報一同送出，因為其所引用的貼文或翻譯已無法完全還原。若要反映其問題，請改為檢舉此貼文。",
   "nushi_pending": "Nushi 正在思考",
   "nushi_open_post": "開啟貼文",
   "nushi_failed": "Nushi 無法回答。",

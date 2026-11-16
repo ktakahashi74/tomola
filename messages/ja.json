@@ -2149,6 +2149,7 @@
   "nushi_sources_edited": "この答えの後に、材料にした投稿や訳が直されました。引用は答えた時の文です。",
   "nushi_refresh": "いまの投稿で答え直す",
   "nushi_superseded": "いまの投稿で答え直しました。",
+  "nushi_report_unavailable": "この答えは、答えた時の投稿や訳を元のとおりに戻せないため、誤りの報告には使えません。答えに問題があるときは、この投稿を通報してください。",
   "nushi_pending": "ヌシが考えています",
   "nushi_open_post": "投稿を開く",
   "nushi_failed": "ヌシは答えられませんでした。",

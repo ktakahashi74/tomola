@@ -314,7 +314,7 @@ test("public edits warn on the original answer and only its caller can replace i
     await errorReport.locator('input[name="consent"]').check();
     await errorReport.getByRole("button", { name: en.nushi_report_error, exact: true }).click();
     await expect(caller).toHaveURL(new RegExp(`/nushi/${id}\\?report=unavailable$`));
-    await expect(caller.locator("[data-nushi-report-unavailable]")).toHaveText(en.post_ask_error_expired);
+    await expect(caller.locator("[data-nushi-report-unavailable]")).toHaveText(en.nushi_report_unavailable);
     await caller.goto(`${topic}?lang=en`);
     await guest.goto(`${topic}?lang=en`);
     await expect(guest.locator("[data-nushi-stale]")).toHaveText(en.nushi_sources_edited);

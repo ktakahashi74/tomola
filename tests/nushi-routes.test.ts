@@ -99,7 +99,7 @@ it("explains unavailable historical evidence without saving an inaccurate report
   expect(await h.db.select().from(nushiReports)).toEqual(before);
   const { loader: readPage } = await import("~/routes/nushi-answer");
   const page = await readPage(h.args(h.request(outcome.location!, { as: "znushi_route_reader" }), { id: String(answer.id) }));
-  expect(page.html).toContain(m.post_ask_error_expired());
+  expect(page.html).toContain(m.nushi_report_unavailable());
   expect(page.html).toContain("data-nushi-report-unavailable");
 });
 it("keeps visitor hiding on the device and member hiding in the account", async () => {
