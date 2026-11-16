@@ -2976,6 +2976,7 @@
   "nushi_truncated": "Some material was left out.",
   "nushi_sources": "Sources:",
   "nushi_quotes": "View quotations",
+  "village_nushi_title": "This village's Nushi",
   "nushi_voice_title": "Nushi speaking style",
   "nushi_voice_help": "Up to 500 characters. Describe only formality, sentence endings, greetings, level of detail and local wording. Leave empty for the usual Nushi. Nushi’s rules about sources, quotations, people’s views and disagreements take priority.",
   "nushi_voice_public_help": "The text and its change history, including when and who changed it, are public. They can also be read without signing in when public reading is enabled.",

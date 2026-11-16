@@ -37,7 +37,7 @@ import { m } from "~/paraglide/messages.js";
 export async function loader({ request }: { request: Request }) {
   // A closed village route must render the ordinary 404, including for private-site guests.
   const pathname = new URL(request.url).pathname.replace(/\.data$/, "").replace(/\/$/, "");
-  if ((pathname === "/villages" || pathname.startsWith("/villages/") || pathname.startsWith("/mod/village/") || /^\/v\/[^/]+(?:\/chat)?$/.test(pathname)) && !villagesEnabled()) throw data("Not found", { status: 404 });
+  if ((pathname === "/villages" || pathname.startsWith("/villages/") || pathname.startsWith("/mod/village/") || /^\/v\/[^/]+(?:\/(?:chat|nushi))?$/.test(pathname)) && !villagesEnabled()) throw data("Not found", { status: 404 });
   if ((/^\/v\/[^/]+\/chat$/.test(pathname) || pathname === "/settings/chat") && !villageChatEnabled()) throw data("Not found", { status: 404 });
   const { user, profile, db } = await getReader(request);
   // loggedOut: the notice left by logging out, which now lands on the posts where reading needs no login (the middleware clears it after this read).

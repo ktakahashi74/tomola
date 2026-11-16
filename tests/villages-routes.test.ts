@@ -22,7 +22,7 @@ it("returns 404 for every disabled HTML/Markdown route before authentication or 
   await expect(directoryLoader({ request: request("/villages") } as never)).rejects.toMatchObject({ init: { status: 404 } });
   await expect(villageLoader({ request: request("/v/en"), params: { slug: "en" } } as never)).rejects.toMatchObject({ init: { status: 404 } });
   for (const pending of [serveVillagesMd(request("/villages.md")), serveVillageMd(request("/v/en.md"), "en"), directoryMdLoader({ request: request("/villages.txt") })]) await expect(pending).rejects.toMatchObject({ init: { status: 404 } });
-  for (const url of ["/villages", "/v/en", "/v/en.md", "/v/en.txt", "/v/en.data"]) await expect(headerLoader({ request: request(url) })).rejects.toMatchObject({ init: { status: 404 } });
+  for (const url of ["/villages", "/v/en", "/v/en.md", "/v/en.txt", "/v/en.data", "/v/en/nushi", "/v/en/nushi.data"]) await expect(headerLoader({ request: request(url) })).rejects.toMatchObject({ init: { status: 404 } });
   const response = new Response("ordinary route processing");
   const next = vi.fn(async () => response);
   expect(await villageMdMiddleware({ request: request("/v/en.md"), params: { slug: "en.md" } }, next)).toBe(response);

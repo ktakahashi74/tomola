@@ -111,10 +111,12 @@ describe("every write path goes through the writer gate", () => {
       ["settings-tokens (create)", () => import("~/routes/settings-tokens") as never, "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
       ["invites-new", () => import("~/routes/invites-new") as never, "/invites/new", {}, { email: "x@example.com" }],
       ["village address suggestion", () => import("~/routes/village-slug-suggest") as never, "/villages/suggest-slug", {}, { name: "京都" }],
+      ["village Nushi style and reports", () => import("~/routes/village-nushi") as never, "/v/garden/nushi", { slug: "garden" }, { intent: "nushi-voice", voice: "Brief." }],
     ];
     for (const [name, load, p, params, form] of cases) {
       const mod = await load();
       if (p === "/villages/suggest-slug") { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_SLUG_SUGGEST", "1"); }
+      if (p === "/v/garden/nushi") vi.stubEnv("VILLAGES", "1");
       try {
         const outcome = await h.outcome(() => mod.action(h.args(h.request(p, { as: "halfway", form }), params)));
         expect(outcome, name).toMatchObject({ status: 302, location: "/onboarding" });

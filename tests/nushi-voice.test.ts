@@ -135,7 +135,7 @@ it.each(["valid", "foreign", "quote", "url"])("keeps hostile style out of retrie
   if (output === "valid") {
     const [answer] = await f.db.select().from(nushiAnswers);
     const view = await readNushiAnswer(f.db, answer.id);
-    expect(view).toMatchObject({ hidden: false, voiceHref: `/v/nushi-test#nushi-voice-${answer.voiceEventId}` });
+    expect(view).toMatchObject({ hidden: false, voiceHref: `/v/nushi-test/nushi#nushi-voice-${answer.voiceEventId}` });
     expect(answer.scope.materialIndex).toEqual(expect.anything());
   } else expect(request.failure).toBe("unverified");
 });
@@ -176,7 +176,7 @@ it.each([false, true])("applies chat labels and URL checks only when style was s
   const page = await chatPage(f.db, "nushi-caller", f.village.slug!);
   if (!page || page.consentRequired) throw new Error("Chat unavailable");
   const answer = page.messages.at(-1)!;
-  if (styled) expect(answer).toMatchObject({ nushi: { voiceHref: expect.stringMatching(/^\/v\/nushi-test#nushi-voice-\d+$/) } });
+  if (styled) expect(answer).toMatchObject({ nushi: { voiceHref: expect.stringMatching(/^\/v\/nushi-test\/nushi#nushi-voice-\d+$/) } });
   else expect(answer).not.toHaveProperty("nushi.voiceHref");
   vi.stubEnv("VILLAGE_NUSHI_VOICE", "0");
   const disabled = await chatPage(f.db, "nushi-caller", f.village.slug!);

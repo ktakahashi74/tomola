@@ -149,6 +149,7 @@ export default [
       route("villages", "routes/villages.tsx"),
       route("villages/new", "routes/village-create.tsx"),
       route("v/:slug", "routes/village.tsx"),
+      route("v/:slug/nushi", "routes/village-nushi.tsx"),
       route("v/personal/:handle", "routes/personal-village-voice.tsx"),
       route("v/:slug/chat", "routes/village-chat.tsx"),
       route("v/:slug/chat/search", "routes/village-chat-search.tsx"),

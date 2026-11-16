@@ -1,10 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { profiles, villageEvents, villages } from "./db/schema";
 import { isVillageOwner, lockModeratedVillage, lockVillageActor } from "./village-moderation.server";
 import { villageDescriptionText } from "./villages";
 import { villagesEnabled } from "./villages-enabled.server";
-import { nushiVoiceEnabled } from "./nushi-config.server";
+import { nushiInVillage, nushiVoiceEnabled } from "./nushi-config.server";
 import { NUSHI_VOICE_MAX, nushiVoiceHref } from "./nushi-voice";
 import type { LlmEnv } from "./llm/types";
 import { nushiVoiceHistory } from "./nushi-voice-history.server";
@@ -12,6 +12,13 @@ import { nushiVoiceHistory } from "./nushi-voice-history.server";
 export type NushiVoice = { text: string; eventId: number | null };
 
 export { personalVoiceVillage } from "./personal-villages.server";
+
+export async function villageNushiAvailable(db: Db, village: Parameters<typeof nushiInVillage>[0] & { id: string }, env: LlmEnv = process.env) {
+  if (nushiInVillage(village, env)) return true;
+  const [event] = await db.select({ id: villageEvents.id }).from(villageEvents)
+    .where(and(eq(villageEvents.villageId, village.id), inArray(villageEvents.action, ["nushi_voice", "moderation_nushi_voice"]))).limit(1);
+  return !!event;
+}
 
 export async function readNushiVoice(db: Db, villageId: string, env: LlmEnv = process.env): Promise<NushiVoice | undefined> {
   if (!nushiVoiceEnabled(env)) return;

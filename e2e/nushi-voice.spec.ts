@@ -9,43 +9,57 @@ test("owners publish a speaking style and readers follow answer labels to its hi
   await useMember(page, "zcn_flow_owner@example.com", "/v/chat-nushi-browser?lang=en");
   await waitForClientRoute(page);
   const management = page.locator("#village-management");
-  const setting = management.locator("[data-nushi-voice-setting]");
+  await expect(page.locator("#nushi-voice, [data-nushi-voice-setting]")).toHaveCount(0);
+  const link = page.getByRole("link", { name: en.village_nushi_title, exact: true });
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveAttribute("href", "/v/chat-nushi-browser/nushi");
+  expect(await link.evaluate(link => {
+    const posts = document.querySelector(".topic-row")?.closest("ul");
+    const roster = document.getElementById("village-roster");
+    const management = document.getElementById("village-management");
+    return !!posts && !!roster && !!management
+      && !!(posts.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && !!(link.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && !!(link.compareDocumentPosition(management) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
+  await management.locator(":scope > summary").click();
+  const nushiToggle = management.locator('form[action="/nushi/action"]');
+  await nushiToggle.getByRole("checkbox").uncheck();
+  await nushiToggle.getByRole("button", { name: en.settings_email_save, exact: true }).click();
+  await expect(link).toHaveCount(0);
+  expect((await page.request.get("/v/chat-nushi-browser/nushi")).status()).toBe(404);
+  await nushiToggle.getByRole("checkbox").check();
+  await nushiToggle.getByRole("button", { name: en.settings_email_save, exact: true }).click();
+  await expect(link).toHaveCount(1);
+  await link.click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(en.village_nushi_title);
+  await expect(page.locator("main")).toContainText(en.nushi_description);
+  const setting = page.locator("#village-management [data-nushi-voice-setting]");
   if (!enabled) {
     await expect(setting).toHaveCount(0);
     await expect(page.locator("#nushi-voice")).toHaveCount(0);
-    expect((await page.request.post("/v/chat-nushi-browser", { headers: { Origin: state().baseURL }, form: { intent: "nushi-voice", voice: "Warm." } })).status()).toBe(404);
+    expect((await page.request.post("/v/chat-nushi-browser/nushi", { headers: { Origin: state().baseURL }, form: { intent: "nushi-voice", voice: "Warm." } })).status()).toBe(404);
     expect((await page.request.get("/v/personal/zcn_flow_owner")).status()).toBe(404);
     return;
   }
-  await expect(page.locator("#nushi-voice")).toHaveCount(0);
-  await management.locator(":scope > summary").click();
+  await expect(page.locator("[data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
   const text = "Use a warm greeting and brief, polite sentences.";
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.242") });
   try {
     const reader = await guest.newPage();
     await reader.goto("/v/chat-nushi-browser?lang=en");
     await expect(reader.locator("#nushi-voice")).toHaveCount(0);
+    await reader.getByRole("link", { name: en.village_nushi_title, exact: true }).click();
+    await expect(reader.locator("[data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
+    await expect(reader.locator("[data-nushi-voice-setting]")).toHaveCount(0);
     await setting.locator('textarea[name="voice"]').fill(text);
     await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
-    await expect(page).toHaveURL(/\?manage=1#nushi-voice$/);
+    await expect(page).toHaveURL(/\/v\/chat-nushi-browser\/nushi\?manage=1#nushi-voice$/);
     await expect(page.locator("[data-nushi-voice-text]")).toHaveText(text);
     await expect(page.locator("#nushi-voice")).toHaveAccessibleName(en.nushi_voice_title);
     await expect(page.locator("#nushi-voice")).toContainText(en.nushi_voice_owner_label);
-    expect(await page.locator("#nushi-voice").evaluate(voice => {
-      const posts = document.querySelector(".topic-row")?.closest("ul");
-      const roster = document.getElementById("village-roster");
-      const management = document.getElementById("village-management");
-      return !!posts && !!roster && !!management
-        && !!(posts.compareDocumentPosition(voice) & Node.DOCUMENT_POSITION_FOLLOWING)
-        && !!(voice.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING)
-        && !!(voice.compareDocumentPosition(management) & Node.DOCUMENT_POSITION_FOLLOWING);
-    })).toBe(true);
     await reader.reload();
     await expect(reader.locator("[data-nushi-voice-text]")).toHaveText(text);
-    expect(await reader.locator(".topic-row").last().evaluate(post => {
-      const voice = document.getElementById("nushi-voice");
-      return !!voice && !!(post.compareDocumentPosition(voice) & Node.DOCUMENT_POSITION_FOLLOWING);
-    })).toBe(true);
     await expect(reader.locator("[data-nushi-voice-setting]")).toHaveCount(0);
     await reader.locator("#nushi-voice summary").click();
     await expect(reader.locator("#nushi-voice li").first()).toContainText("@zcn_flow_owner");
@@ -60,22 +74,23 @@ test("owners publish a speaking style and readers follow answer labels to its hi
     const label = page.locator("[data-nushi-answer] [data-nushi-voice-link]");
     await expect(label).toHaveText(en.nushi_voice_owner_label);
     const href = await label.getAttribute("href");
-    expect(href).toMatch(/^\/v\/chat-nushi-browser#nushi-voice-\d+$/);
+    expect(href).toMatch(/^\/v\/chat-nushi-browser\/nushi#nushi-voice-\d+$/);
     await reader.goto(`${topic}?lang=en`);
     await reader.locator("[data-nushi-voice-link]").click();
     await expect(reader).toHaveURL(new RegExp(`${href}$`));
     await expect(reader.locator(new URL(reader.url()).hash)).toContainText(text);
-    await page.goto("/v/chat-nushi-browser?manage=1&lang=en");
+    await page.goto("/v/chat-nushi-browser/nushi?manage=1&lang=en");
     await setting.getByRole("button", { name: en.nushi_voice_clear, exact: true }).click();
     await expect(page.locator("[data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
     await reader.goto(href!);
     await expect(reader.locator(new URL(reader.url()).hash)).toContainText(text);
     const eventId = href!.match(/nushi-voice-(\d+)$/)![1];
-    await useMember(reader, "zcn_flow_caller@example.com", "/v/chat-nushi-browser?lang=en");
+    await useMember(reader, "zcn_flow_caller@example.com", "/v/chat-nushi-browser/nushi?lang=en");
     await waitForClientRoute(reader);
+    await expect(reader.locator("[data-nushi-voice-setting]")).toHaveCount(0);
     const report = reader.locator('form:has(input[name="intent"][value="flag"])');
     await report.locator("..").locator(":scope > summary").click();
-    await report.locator('select[name="target"]').selectOption("nushi_voice");
+    await expect(report.locator('input[name="target"]')).toHaveValue("nushi_voice");
     await report.locator('select[name="voiceEventId"]').selectOption(eventId);
     await report.getByLabel(en.flag_reason, { exact: true }).click();
     await reader.getByRole("listbox").getByRole("option", { name: en.reason_other, exact: true }).click();
