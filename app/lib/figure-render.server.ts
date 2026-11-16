@@ -168,18 +168,18 @@ export async function figureFontSize(region: FigureRegion, ink: FigureInk, cache
   const measuredHeight = ink.lineHeights.length ? Math.max(...ink.lineHeights) : ink.box.height - 4;
   return Math.max(1, Math.floor(ink.points.length ? measuredHeight * 16 / Math.max(1, source.inkLineHeight || source.lineHeight) : Math.min((ink.box.height - 4) / lines, (ink.box.width - 4) * 16 / source.width!)));
 }
-export async function figureCapacity(size: number, box: Box, lang: Lang, bold = false): Promise<number> {
+export async function figureCapacity(size: number, box: Box, lang: Lang, bold = false, inset = 2): Promise<number> {
   const sample = lang === "ja" || lang === "ko" || lang.startsWith("zh") ? "天地人日月山川" : "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const font = figureFontDescription(lang, size, bold ? "bold" : "normal");
   const one = await sharp({ text: { text: sample, font, rgba: true } }).metadata();
   const two = await sharp({ text: { text: `${sample}\n${sample}`, font, rgba: true } }).metadata();
-  const padding = 4;
+  const padding = inset * 2;
   return Math.max(0, Math.floor((box.width - padding) / (one.width! / [...sample].length))) *
     (box.height - padding < one.height! ? 0 : 1 + Math.floor((box.height - padding - one.height!) / Math.max(1, two.height! - one.height!)));
 }
 
 type LabelImageCache = Map<string, ReturnType<typeof labelImage>>;
-async function fitLabel(label: string, region: FigureRegion, box: Box, rectangles: Box[], originalSize: number, align: Alignment, lang: Lang, color: string, minimumSize = Math.max(1, Math.ceil(originalSize * FIGURE_MIN_FONT_SCALE)), images: LabelImageCache = new Map(), anchored = true, sourceSizeOnly = false) {
+async function fitLabel(label: string, region: FigureRegion, box: Box, rectangles: Box[], originalSize: number, align: Alignment, lang: Lang, color: string, minimumSize = Math.max(1, Math.ceil(originalSize * FIGURE_MIN_FONT_SCALE)), images: LabelImageCache = new Map(), anchored = true, sourceSizeOnly = false, inset = 2) {
   const free = rectangles[0];
   const right = free.left + free.width;
   const wide = { ...box, left: align === "left" ? box.left : free.left,
@@ -190,22 +190,23 @@ async function fitLabel(label: string, region: FigureRegion, box: Box, rectangle
       area = { left, top, width: Math.min(area.left + area.width, free.left + free.width) - left,
         height: Math.min(area.top + area.height, free.top + free.height) - top };
     }
-    if (area.width <= 4 || area.height <= 4) return null;
-    const contentWidth = !anchored ? area.width - 4 : align === "left" ? area.left + area.width - box.left - 4 : align === "right" ? box.left + box.width - area.left - 4 : area.width - 4;
+    const padding = inset * 2;
+    if (area.width <= padding || area.height <= padding) return null;
+    const contentWidth = !anchored ? area.width - padding : align === "left" ? area.left + area.width - box.left - padding : align === "right" ? box.left + box.width - area.left - padding : area.width - padding;
     if (contentWidth <= 0) return null;
-    const key = JSON.stringify([label, region.weight ?? "normal", lang, color, size, contentWidth, area.height, align, wrap]);
+    const key = JSON.stringify([label, region.weight ?? "normal", lang, color, size, contentWidth, area.height, align, wrap, inset]);
     let pending = images.get(key);
     if (!pending) {
       if (images.size >= 128) images.delete(images.keys().next().value!);
-      pending = labelImage(label, region, lang, color, size, contentWidth, area.height - 4, align, wrap);
+      pending = labelImage(label, region, lang, color, size, contentWidth, area.height - padding, align, wrap);
       images.set(key, pending);
     }
     const text = await pending;
     if (!text) return null;
-    const preferredX = align === "left" ? box.left + 2 : align === "right" ? box.left + box.width - text.info.width - 2 : Math.floor(box.left + (box.width - text.info.width) / 2);
-    const left = !anchored || align === "centre" ? Math.max(area.left + 2, Math.min(area.left + area.width - text.info.width - 2, preferredX)) : preferredX;
-    if (left < area.left + 2 || left + text.info.width > area.left + area.width - 2) return null;
-    const top = Math.max(area.top + 2, Math.min(area.top + area.height - text.info.height - 2, Math.floor(box.top + (box.height - text.info.height) / 2)));
+    const preferredX = align === "left" ? box.left + inset : align === "right" ? box.left + box.width - text.info.width - inset : Math.floor(box.left + (box.width - text.info.width) / 2);
+    const left = !anchored || align === "centre" ? Math.max(area.left + inset, Math.min(area.left + area.width - text.info.width - inset, preferredX)) : preferredX;
+    if (left < area.left + inset || left + text.info.width > area.left + area.width - inset) return null;
+    const top = Math.max(area.top + inset, Math.min(area.top + area.height - text.info.height - inset, Math.floor(box.top + (box.height - text.info.height) / 2)));
     return { text, size, position: { left, top, width: text.info.width, height: text.info.height } };
   };
   // Columns retain their source edge even when a larger free rectangle extends
@@ -275,9 +276,9 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
     const images: LabelImageCache = new Map();
     const overlays: OverlayOptions[] = [], occupied: Box[] = [];
     const overlaps = (box: Box) => occupied.some(b => box.left < b.left + b.width + 2 && b.left - 2 < box.left + box.width && box.top < b.top + b.height + 2 && b.top - 2 < box.top + box.height);
-    const relaxedFit = async (i: number, minimumSize: number, space = figureSpace(data, info.width, info.height, indexes[i], measured, occupied, context), sourceSizeOnly = false) => {
+    const relaxedFit = async (i: number, minimumSize: number, space = figureSpace(data, info.width, info.height, indexes[i], measured, occupied, context), sourceSizeOnly = false, inset = 2) => {
       const fitted = space.rectangles.length ? await fitLabel(labels[i]!, regions[i], inks[i].box, space.rectangles, sizes[i],
-        labelAlignment(inks[i].box, space.rectangles[0], info.width), lang, colors[i], minimumSize, images, false, sourceSizeOnly) : null;
+        labelAlignment(inks[i].box, space.rectangles[0], info.width), lang, colors[i], minimumSize, images, false, sourceSizeOnly, inset) : null;
       return { space, fitted };
     };
     for (const group of order) {
@@ -323,12 +324,21 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
         // model or a verified backing, at the same readable font-size floor.
         if (!fitted && !space.surface) {
           const surfaceSpace = figureSurfaceSpace(data, info.width, info.height, indexes[i], measured, occupied, context);
-          if (surfaceSpace) {
-            const retry = await relaxedFit(i, Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), surfaceSpace);
+          // Verified backing bounds already include clearance from the edges.
+          // Try the existing layout first, then omit the duplicate text inset.
+          const backing = context.surfaces?.[indexes[i]]?.backing ?? surfaceSpace?.surface?.backing;
+          const attempts = [{ space: surfaceSpace, inset: 2 }, ...(backing ? [{ space, inset: 0 }, { space: surfaceSpace, inset: 0 }] : [])];
+          for (const { space: alternative, inset } of attempts) {
+            if (!alternative) continue;
+            const retry = await relaxedFit(i, Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), alternative, false, inset);
             space = retry.space; fitted = retry.fitted; anchored = false; independent = true;
-            results[i].available = { width: space.rectangles[0]?.width ?? 0, height: space.rectangles[0]?.height ?? 0 };
+            results[i].available = { width: Math.max(results[i].available!.width, space.rectangles[0]?.width ?? 0),
+              height: Math.max(results[i].available!.height, space.rectangles[0]?.height ?? 0) };
             const floor = Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE));
-            results[i].maxCharacters = Math.max(1, ...await Promise.all(space.rectangles.map(b => figureCapacity(floor, b, lang, regions[i].weight === "bold"))));
+            const required = await textMetrics(labels[i]!, lang, floor, regions[i].weight, metricCache);
+            results[i].required = { width: required.inkWidth + inset * 2, height: required.inkHeight + inset * 2 };
+            results[i].maxCharacters = Math.max(results[i].maxCharacters!, ...await Promise.all(space.rectangles.map(b => figureCapacity(floor, b, lang, regions[i].weight === "bold", inset))));
+            if (fitted) break;
           }
         }
         if (!fitted) continue;

@@ -1,8 +1,8 @@
 import sharp from "sharp";
 import { expect, it } from "vitest";
 import type { FigureReading, FigureRegion } from "~/lib/figure";
-import { renderFigureLabels } from "~/lib/figure-render.server";
-import { FIGURE_SPACE, figureSpace, figureSpaceWindow, prepareFigureSpace } from "~/lib/figure-space.server";
+import { FIGURE_MIN_FONT_SCALE, figureCapacity, figureFontSize, renderFigureLabels } from "~/lib/figure-render.server";
+import { FIGURE_SPACE, figureSpace, figureSpaceWindow, figureSurfaceSpace, measureFigure, prepareFigureSpace } from "~/lib/figure-space.server";
 
 const reading = (text: string, box: { left: number; top: number; width: number; height: number }, width: number, height: number, lang: "en" | "ja" = "en"): FigureReading => ({
   lang, confidence: 1, regions: [{ text, lang, confidence: 1, orientation: "horizontal", x: box.left / width, y: box.top / height, width: box.width / width, height: box.height / height } satisfies FigureRegion],
@@ -60,6 +60,56 @@ it("keeps short text inside a shaded dark backing over patterned artwork and ret
   expect(longer.bytes).toBeNull();
 });
 
+it.each(["ja", "fr"] as const)("fits %s glyphs inside a shallow backing without changing its edges or artwork", async lang => {
+  const width = 280, height = 120, text = "H".repeat(9), pixels = Buffer.alloc(width * height * 4, 255);
+  const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 16", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const backing = { left: 50, top: 50, width: glyph.info.width + 28, height: glyph.info.height + 6 };
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const onBacking = x >= backing.left && x < backing.left + backing.width && y >= backing.top && y < backing.top + backing.height;
+    const color = onBacking ? [30, 48, 52] : (x + y) % 2 ? [190, 145, 100] : [110, 175, 150];
+    for (let c = 0; c < 3; c++) pixels[(y * width + x) * 4 + c] = color[c];
+  }
+  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).composite([{ input: glyph.data, left: backing.left + 14, top: backing.top + 3 }]).png().toBuffer();
+  const input = reading(text, { left: backing.left + 14, top: backing.top + 3, width: glyph.info.width, height: glyph.info.height }, width, height);
+  const measured = measureFigure(await raw(source), width, height, input), size = await figureFontSize(input.regions[0], measured[0]);
+  const translation = (lang === "ja" ? "山" : "É").repeat(lang === "ja" ? 6 : 9);
+  const floor = Math.ceil(size * FIGURE_MIN_FONT_SCALE);
+  const minimum = await sharp({ text: { text: translation, font: `${lang === "ja" ? "Noto Sans CJK JP" : "Noto Sans"} ${floor}`, rgba: true } }).metadata();
+  expect(minimum.height! + 4).toBeGreaterThan(backing.height - 4);
+  const out = await renderFigureLabels(source, input, [translation], lang);
+  expect(out.results[0].status).toBe("rendered");
+  expect(out.bytes).not.toBeNull();
+  const a = await raw(source), b = await raw(out.bytes!);
+  let changed = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const p = (y * width + x) * 4;
+    if (a.subarray(p, p + 4).equals(b.subarray(p, p + 4))) continue;
+    changed++;
+    expect(x).toBeGreaterThanOrEqual(backing.left + 2);
+    expect(x).toBeLessThan(backing.left + backing.width - 2);
+    expect(y).toBeGreaterThanOrEqual(backing.top + 2);
+    expect(y).toBeLessThan(backing.top + backing.height - 2);
+  }
+  expect(changed).toBeGreaterThan(0);
+});
+
+it("retains the larger ordinary-search budget when the surface search is more restrictive", async () => {
+  const width = 480, height = 160, text = "H".repeat(8), pixels = Buffer.alloc(width * height * 4, 255);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) for (let c = 0; c < 3; c++) pixels[(y * width + x) * 4 + c] = Math.round(50 + x / 3 + (x >= 250 ? (c ? -1 : 1) * Math.min(75, y * 2) : 0));
+  const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 24", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).composite([{ input: glyph.data, left: 40, top: 65 }]).png().toBuffer();
+  const input = reading(text, { left: 40, top: 65, width: glyph.info.width, height: glyph.info.height }, width, height);
+  const data = await raw(source), measured = measureFigure(data, width, height, input), context = prepareFigureSpace(width, height, measured, data);
+  const ordinary = figureSpace(data, width, height, 0, measured, [], context), surface = figureSurfaceSpace(data, width, height, 0, measured, [], context)!;
+  expect(ordinary.rectangles[0].width).toBeGreaterThan(surface.rectangles[0].width);
+  const floor = Math.ceil(await figureFontSize(input.regions[0], measured[0]) * FIGURE_MIN_FONT_SCALE);
+  const budgets = await Promise.all([ordinary, surface].map(async space => Math.max(1, ...await Promise.all(space.rectangles.map(b => figureCapacity(floor, b, "en"))))));
+  expect(budgets[0]).toBeGreaterThan(budgets[1]);
+  const out = await renderFigureLabels(source, input, ["M".repeat(1000)], "en");
+  expect(out.results[0]).toMatchObject({ status: "external", reason: "does_not_fit", maxCharacters: Math.max(...budgets),
+    available: { width: Math.max(ordinary.rectangles[0].width, surface.rectangles[0].width), height: Math.max(ordinary.rectangles[0].height, surface.rectangles[0].height) } });
+});
+
 it.each([false, true])("uses open background but keeps ambiguous backings bounded (patterned: %s)", async patterned => {
   const width = 300, height = 160, text = "H".repeat(6), pixels = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -79,6 +129,13 @@ it("keeps a large multiline label inside the bounded search window", () => {
   const window = figureSpaceWindow(anchor, 2000, 1125);
   expect(window.height).toBeGreaterThanOrEqual(anchor.height);
   expect(window.width * window.height).toBeLessThanOrEqual(FIGURE_SPACE.maxWindowPixels);
+});
+
+it.each([{ width: 1990, height: 1600 }, { width: 2200, height: 20 }])("skips background modelling for a label beyond the search window: %o", dimensions => {
+  const measured = [{ box: { left: 0, top: 0, ...dimensions }, points: [0], lineCount: 1, lineHeights: [dimensions.height], uncertain: false }];
+  const context = prepareFigureSpace(2400, 2000, measured);
+  Object.defineProperty(context, "surfaces", { get() { throw new Error("Background model must not be requested"); } });
+  expect(figureSurfaceSpace(Buffer.alloc(0), 2400, 2000, 0, measured, [], context)).toBeUndefined();
 });
 
 it("retains a thin upright glyph and wraps inside its enclosure without changing the frame or arrow", async () => {

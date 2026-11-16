@@ -293,14 +293,20 @@ function figureBacking(data: Buffer, width: number, height: number, ink: FigureI
   const colors = (y: number) => Array.from({ length: bounds.width }, (_, dx) => [0, 1, 2, 3].map(c => median([-1, 0, 1].map(d => sample(Math.max(0, Math.min(width - 1, bounds.left + dx + d)), y)[c]))));
   return { box, channels: [], bounds, backing: { box: bounds, top: colors(bounds.top), bottom: colors(bounds.top + bounds.height - 1) } };
 }
-function surfaceMatches(surface: FigureBackground, color: ArrayLike<number>, x: number, y: number): boolean {
+function surfaceMatches(surface: FigureBackground, color: ArrayLike<number>, x: number, y: number, offset = 0): boolean {
   const backing = surface.backing;
   if (backing) {
     if (!inside(backing.box, x, y)) return false;
     const dx = x - backing.box.left, top = backing.top[dx], bottom = backing.bottom[dx];
-    return [0, 1, 2, 3].every(c => color[c] >= Math.min(top[c], bottom[c]) - FIGURE_SPACE.backgroundNoise && color[c] <= Math.max(top[c], bottom[c]) + FIGURE_SPACE.backgroundNoise);
+    for (let c = 0; c < 4; c++) if (color[offset + c] < Math.min(top[c], bottom[c]) - FIGURE_SPACE.backgroundNoise || color[offset + c] > Math.max(top[c], bottom[c]) + FIGURE_SPACE.backgroundNoise) return false;
+    return true;
   }
-  return surfaceColor(surface, x, y).every((v, c) => Math.abs(color[c] - v) <= FIGURE_SPACE.backgroundNoise);
+  for (let c = 0; c < 4; c++) {
+    const channel = surface.channels[c];
+    const expected = Math.max(0, Math.min(255, Math.round(channel[0] + channel[1] * (x - surface.box.left) / surface.box.width + channel[2] * (y - surface.box.top) / surface.box.height)));
+    if (Math.abs(color[offset + c] - expected) > FIGURE_SPACE.backgroundNoise) return false;
+  }
+  return true;
 }
 function surfaceColor(surface: FigureBackground, x: number, y: number): number[] {
   const backing = surface.backing;
@@ -454,9 +460,9 @@ export function figureSpace(data: Buffer, width: number, height: number, index: 
   let head = 0, tail = 0, seed = -1, best = Infinity;
   const color = background(data, width, height, anchor), ring = padded(localAnchor, 3, w, h);
   for (let p = 0; p < count; p++) {
-    const q = p * 4, expected = surface ? surfaceColor(surface, p % w + window.left, Math.floor(p / w) + window.top) : color;
-    nearBackground[p] = surface ? (surfaceMatches(surface, virtual.subarray(q, q + 4), p % w + window.left, Math.floor(p / w) + window.top) ? 1 : 0) : Math.abs(virtual[q + 3] - expected[3]) <= FIGURE_SPACE.backgroundNoise &&
-      (expected[3] <= 16 && virtual[q + 3] <= 16 || Math.max(Math.abs(virtual[q] - expected[0]), Math.abs(virtual[q + 1] - expected[1]), Math.abs(virtual[q + 2] - expected[2])) <= FIGURE_SPACE.backgroundNoise) ? 1 : 0;
+    const q = p * 4;
+    nearBackground[p] = surface ? (surfaceMatches(surface, virtual, p % w + window.left, Math.floor(p / w) + window.top, q) ? 1 : 0) : Math.abs(virtual[q + 3] - color[3]) <= FIGURE_SPACE.backgroundNoise &&
+      (color[3] <= 16 && virtual[q + 3] <= 16 || Math.max(Math.abs(virtual[q] - color[0]), Math.abs(virtual[q + 1] - color[1]), Math.abs(virtual[q + 2] - color[2])) <= FIGURE_SPACE.backgroundNoise) ? 1 : 0;
   }
   allowFaintFigureLines(virtual, w, h, nearBackground, blocked, color);
   for (let y = ring.top; y < ring.top + ring.height; y++) for (let x = ring.left; x < ring.left + ring.width; x++) {
@@ -520,6 +526,8 @@ export function figureSpace(data: Buffer, width: number, height: number, index: 
 }
 
 export function figureSurfaceSpace(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], occupied: FigureBox[], context: FigureSpaceContext) {
+  const anchor = measured[index].box, window = figureSpaceWindow(anchor, width, height);
+  if (anchor.width > window.width || anchor.height > window.height) return;
   const model = context.surfaces?.[index] ?? figureBackgroundSurface(data, width, height, measured[index]);
   return model ? figureSpace(data, width, height, index, measured, occupied, context, FIGURE_SPACE.guard, model) : undefined;
 }
