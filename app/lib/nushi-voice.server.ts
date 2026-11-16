@@ -7,16 +7,18 @@ import { villagesEnabled } from "./villages-enabled.server";
 import { nushiInVillage, nushiVoiceEnabled } from "./nushi-config.server";
 import { NUSHI_VOICE_MAX, nushiVoiceHref } from "./nushi-voice";
 import type { LlmEnv } from "./llm/types";
-import { nushiVoiceHistory } from "./nushi-voice-history.server";
+import { NUSHI_VOICE_EVENT_ACTIONS, nushiVoiceHistory } from "./nushi-voice-history.server";
+import { chatNushiInVillage } from "./chat-nushi-config.server";
 
 export type NushiVoice = { text: string; eventId: number | null };
 
 export { personalVoiceVillage } from "./personal-villages.server";
 
 export async function villageNushiAvailable(db: Db, village: Parameters<typeof nushiInVillage>[0] & { id: string }, env: LlmEnv = process.env) {
-  if (nushiInVillage(village, env)) return true;
+  if (nushiInVillage(village, env) || chatNushiInVillage(village, env)) return true;
+  if (!nushiVoiceEnabled(env)) return false;
   const [event] = await db.select({ id: villageEvents.id }).from(villageEvents)
-    .where(and(eq(villageEvents.villageId, village.id), inArray(villageEvents.action, ["nushi_voice", "moderation_nushi_voice"]))).limit(1);
+    .where(and(eq(villageEvents.villageId, village.id), inArray(villageEvents.action, NUSHI_VOICE_EVENT_ACTIONS))).limit(1);
   return !!event;
 }
 

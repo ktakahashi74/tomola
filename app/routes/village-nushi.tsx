@@ -10,6 +10,7 @@ import { publicNushiVoice, setNushiVoice, villageNushiAvailable } from "~/lib/nu
 import { readingHeaders } from "~/lib/public-reading.server";
 import { getViewer } from "~/lib/roles.server";
 import { createVillageReport, openVillageReportTargets } from "~/lib/village-moderation.server";
+import { villageError } from "~/lib/village-errors";
 import { villageName } from "~/lib/village-name";
 import { localizeVillage } from "~/lib/village-translations.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -45,7 +46,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (form.get("target") !== "nushi_voice") throw data("Bad request", { status: 400 });
     await enforceMemberLimit(db, "report", user.id);
     const result = await createVillageReport(db, user.id, { slug: village.slug, target: form.get("target"), voiceEventId: form.get("voiceEventId"), reason: form.get("reason"), note: form.get("note") });
-    if (!result.ok) return data({ error: result.error }, { status: result.error === "forbidden" ? 403 : result.error === "not_found" ? 404 : 400 });
+    if (!result.ok) return data({ error: result.error, flag: true }, { status: result.error === "forbidden" ? 403 : result.error === "not_found" ? 404 : 400 });
     return { reported: true };
   }
   if (intent !== "nushi-voice" && intent !== "nushi-voice-clear") throw data("Bad request", { status: 400 });
@@ -60,7 +61,7 @@ export default function VillageNushi({ loaderData: value, actionData }: Route.Co
     <h1 className="heading-1">{m.village_nushi_title()}</h1>
     <Link className="underline" to={`/v/${value.village.slug}`}>{value.village.name}</Link>
     <p>{m.nushi_description()} <Link className="underline" to="/ai-use#nushi">{m.ai_use_title()}</Link></p>
-    {actionData && "error" in actionData && <p role="alert">{actionData.error === "invalid_voice" ? m.nushi_voice_invalid() : m.flag_error()}</p>}
+    {actionData && "error" in actionData && <p role="alert">{"flag" in actionData ? m.flag_error() : actionData.error === "invalid_voice" ? m.nushi_voice_invalid() : villageError(String(actionData.error))}</p>}
     {actionData && "reported" in actionData && <p role="status">{m.flag_thanks()}</p>}
     {value.voice && <NushiVoicePublic voice={value.voice} />}
     {value.owner && !value.ended && value.voice && <details id="village-management" open><summary className="cursor-pointer underline">{m.village_manage()}</summary>

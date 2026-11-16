@@ -105,6 +105,19 @@ it("uses the same availability for links and pages, retaining history after stop
   expect(auth.getReader).not.toHaveBeenCalled();
 });
 
+it("opens the Nushi page when only chat Nushi is enabled, and not for history alone once styles are off", async () => {
+  const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
+  vi.stubEnv("VILLAGE_NUSHI", "0"); vi.stubEnv("VILLAGE_CHAT", "1"); vi.stubEnv("VILLAGE_CHAT_NUSHI", "1");
+  auth.getReader.mockResolvedValue({ db: f.db });
+  const args = { request: request("/v/nushi-test/nushi"), params: { slug: "nushi-test" } };
+  expect(await villageLoader(args as never)).toHaveProperty("nushiPage", true);
+  expect(await nushiLoader(args as never)).toMatchObject({ voice: { text: "" } });
+  await setNushiVoice(f.db, "nushi-owner", f.village.id, "Brief.");
+  vi.stubEnv("VILLAGE_CHAT_NUSHI", "0"); vi.stubEnv("VILLAGE_NUSHI_VOICE", "0");
+  expect(await villageLoader(args as never)).toHaveProperty("nushiPage", false);
+  await expect(nushiLoader(args as never)).rejects.toMatchObject({ init: { status: 404 } });
+});
+
 it("rejects style writes and reports on the village page and non-style reports on the Nushi page", async () => {
   const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
   auth.requireWriter.mockResolvedValue({ db: f.db, user: { id: "nushi-owner" } });
