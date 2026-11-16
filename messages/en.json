@@ -2927,7 +2927,6 @@
   "nushi_sources_edited": "Posts or translations used for this answer have since been edited. Quotations retain the text used at the time.",
   "nushi_refresh": "Answer again using the current posts",
   "nushi_superseded": "Replaced by a new answer using the current posts.",
-  "nushi_source_changed": "The source posts have changed. This answer is no longer displayed.",
   "nushi_pending": "Nushi is thinking",
   "nushi_open_post": "Open post",
   "nushi_failed": "Nushi could not answer.",

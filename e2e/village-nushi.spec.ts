@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type Locator } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
+import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute, openPostSettings } from "./helpers";
 import { expectNushiPending } from "./support/nushi-pending";
 
 async function expectAnswerLayout(answer: Locator, member: boolean) {
@@ -294,10 +294,28 @@ test("public edits warn on the original answer and only its caller can replace i
     await page.getByRole("button", { name: en.save_changes, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${topic}\\?edited=`));
     await expect(page.locator("main")).toContainText("The orchard schedule has changed. Growers now propose a later review.");
+    // Historical language metadata is unavailable to reconstruct exact evidence.
+    await page.goto(`${topic}/edit?lang=en`); await waitForClientRoute(page);
+    await openPostSettings(page);
+    await page.getByRole("combobox", { name: en.field_lang, exact: true }).click();
+    await page.getByRole("option", { name: "日本語", exact: true }).click();
+    await page.getByRole("button", { name: en.save_changes, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${topic}(?:\\?.*)?$`));
+    await page.goto(`${topic}/edit?lang=en`);
+    await expect(page.locator('input[name="lang"]')).toHaveValue("ja");
     await caller.goto(`${topic}?lang=en`);
     await expect(caller.locator("[data-nushi-stale]")).toHaveText(en.nushi_sources_edited);
     const after = await (await caller.request.get(`/nushi/${id}.json?lang=en`)).json();
     expect(after.answer).toEqual(before.answer); expect(after.sourcesChanged).toBe(true);
+    await caller.goto(`/nushi/${id}?lang=en`);
+    await caller.locator("[data-nushi-about] > summary").click();
+    const errorReport = caller.locator('details:has(> summary:text-is("' + en.nushi_report_error + '"))');
+    await errorReport.locator(":scope > summary").click();
+    await errorReport.locator('input[name="consent"]').check();
+    await errorReport.getByRole("button", { name: en.nushi_report_error, exact: true }).click();
+    await expect(caller).toHaveURL(new RegExp(`/nushi/${id}\\?report=unavailable$`));
+    await expect(caller.locator("[data-nushi-report-unavailable]")).toHaveText(en.post_ask_error_expired);
+    await caller.goto(`${topic}?lang=en`);
     await guest.goto(`${topic}?lang=en`);
     await expect(guest.locator("[data-nushi-stale]")).toHaveText(en.nushi_sources_edited);
     await expect(guest.locator("[data-nushi-refresh]")).toHaveCount(0);

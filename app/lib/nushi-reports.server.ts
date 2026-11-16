@@ -20,12 +20,12 @@ export async function reportNushi(db: Db, reporterId: string, input: { answerId:
     const [stored] = await db.select({ scope: nushiAnswers.scope }).from(nushiAnswers).where(eq(nushiAnswers.id, input.answerId));
     const sources = input.kind === "error" ? await db.select().from(nushiSources).where(eq(nushiSources.answerId, input.answerId)) : [];
     const materials = input.kind === "error" ? await reconstructNushiMaterials(db, stored.scope.materialIndex, stored.scope.materialLanguage, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" }))) : null;
-    if (input.kind === "error" && !materials) return false;
+    if (input.kind === "error" && !materials) return "evidence_unavailable" as const;
     let questionBody = question?.body ?? "";
     const call = sources.find(source => source.entryId === answer.entryId);
     if (call && question?.revision !== call.revision) {
       const [revision] = await db.select().from(entryRevisions).where(and(eq(entryRevisions.entryId, answer.entryId), eq(entryRevisions.mentionRevision, call.revision), isNull(entryRevisions.deletedAt)));
-      if (!revision) return false;
+      if (!revision) return "evidence_unavailable" as const;
       questionBody = revision.body;
     }
     const evidence = input.kind === "error" ? { question: clipQuestionText((await projectQuestionSource({ kind: "post", field: "body", author: "", original: questionBody })).original, 2000), answer: answer.answer,

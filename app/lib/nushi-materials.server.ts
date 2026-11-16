@@ -2,7 +2,7 @@ import { getWriter } from "./members.server";
 import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { createHash } from "node:crypto";
 import { sourceHash as hashPost } from "./source-hash.server";
-import { and, asc, count, eq, inArray, isNull, like, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, like, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, entryRevisions, nushiAnswers, nushiRequests, nushiReservations, nushiSources, profiles, villageMembers, villageDepartures, villages } from "./db/schema";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "./visibility.server";
@@ -205,21 +205,29 @@ export async function snapshotsCurrent(db: Db, snapshots: readonly NushiSnapshot
 
 // Published answers may retain passages that remain in public edit history.
 // Generation still requires snapshotsCurrent, including exact revision checks.
-export async function publishedSnapshots(db: Db, snapshots: readonly NushiSnapshot[], villageId: string) {
+export async function publishedSnapshots(db: Db, snapshots: readonly NushiSnapshot[], villageId: string, warningEntryIds: ReadonlySet<number>) {
   const ids = snapshots.map(source => source.id);
   const rows = ids.length ? await db.select({ entry: entries }).from(entries).innerJoin(rootTopic, rootTopicOn())
     .where(and(inArray(entries.id, ids), eq(rootTopic.villageId, villageId), visibleWithTopic())) : [];
-  const history = ids.length ? await db.select().from(entryRevisions).where(and(inArray(entryRevisions.entryId, ids), isNull(entryRevisions.deletedAt))) : [];
+  const current = new Map(rows.map(({ entry }) => [entry.id, entry]));
+  const unmatched: NushiSnapshot[] = [];
   let changed = false;
   for (const source of snapshots) {
-    const entry = rows.find(row => row.entry.id === source.id)?.entry;
+    const entry = current.get(source.id);
     if (!entry || entry.authorId !== source.authorId) return null;
-    if (snapshotHash(entry) === source.sourceHash || (source.textHash && textHash(entry) === source.textHash)) {
-      changed ||= entry.mentionRevision !== source.revision || snapshotHash(entry) !== source.sourceHash;
+    const hash = snapshotHash(entry);
+    if (hash === source.sourceHash || (source.textHash && textHash(entry) === source.textHash)) {
+      changed ||= warningEntryIds.has(source.id) && (entry.mentionRevision !== source.revision || hash !== source.sourceHash);
       continue;
     }
+    unmatched.push(source);
+    changed ||= warningEntryIds.has(source.id);
+  }
+  // Fetch only the retained versions needed to establish continued readability.
+  const history = unmatched.length ? await db.select({ entryId: entryRevisions.entryId, mentionRevision: entryRevisions.mentionRevision, title: entryRevisions.title, body: entryRevisions.body }).from(entryRevisions)
+    .where(and(or(...unmatched.map(source => and(eq(entryRevisions.entryId, source.id), eq(entryRevisions.mentionRevision, source.revision)))), isNull(entryRevisions.deletedAt))) : [];
+  for (const source of unmatched) {
     if (!history.some(revision => revision.entryId === source.id && revision.mentionRevision === source.revision && (!source.textHash || textHash(revision) === source.textHash))) return null;
-    changed = true;
   }
   return { changed };
 }

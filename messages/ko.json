@@ -2870,7 +2870,6 @@
   "nushi_hide": "내 화면에서 Nushi 답변 숨기기",
   "nushi_citation_pref": "Nushi가 내 게시물을 인용할 때 알림 받기(하루 최대 1회)",
   "nushi_hidden": "Nushi의 답변(현재 표시되지 않음)",
-  "nushi_source_changed": "출처 게시물이 변경되었습니다. 이 답변은 더 이상 표시되지 않습니다.",
   "nushi_pending": "Nushi가 생각 중입니다",
   "nushi_open_post": "게시물 열기",
   "nushi_failed": "Nushi가 답변할 수 없습니다.",

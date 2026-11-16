@@ -2352,7 +2352,6 @@
   "nushi_hide": "在我的屏幕上隐藏 Nushi 的回答",
   "nushi_citation_pref": "当 Nushi 引用我的帖子时通知我（每天最多一次）",
   "nushi_hidden": "Nushi 的回答（当前未显示）",
-  "nushi_source_changed": "引用的源帖子已更改。此回答不再显示。",
   "nushi_pending": "Nushi 正在思考",
   "nushi_open_post": "打开帖子",
   "nushi_failed": "Nushi 无法作出回答。",

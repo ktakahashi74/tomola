@@ -5,17 +5,19 @@ import { afterEach, expect, it, vi } from "vitest";
 import { PG_MODE } from "./helpers/pg-test";
 import { nushiFixture } from "./helpers/nushi";
 import { createReply, createTopic, editEntry } from "~/lib/entries.server";
-import { entries, entryRevisions, jobs, nushiAnswers, nushiRequests, nushiTranslations, translations, villages } from "~/lib/db/schema";
+import { entries, entryRevisions, jobs, nushiAnswers, nushiRequests, nushiSources, nushiTranslations, translations, villages } from "~/lib/db/schema";
 import { canRefreshNushi, processNushiRequest, readNushiAnswer, requestNushiAgain, resolveNushiCompleter, threadNushi } from "~/lib/nushi.server";
 import { nushiBody, nushiMarkdownBlocks } from "~/lib/nushi-markdown.server";
 import { NushiAnswer } from "~/components/nushi";
 import { createNushiTranslationHandlers } from "~/lib/nushi-translations.server";
 import { m } from "~/paraglide/messages.js";
+import * as literalSearch from "~/lib/combined-search.server";
+import * as semanticSearch from "~/lib/search.server";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
-async function fixture() {
-  const f = await nushiFixture();
+async function fixture(options: Parameters<typeof nushiFixture>[0] = {}) {
+  const f = await nushiFixture(options);
   await processNushiRequest(f.db, f.request.id);
   const [answer] = await f.db.select().from(nushiAnswers);
   return { ...f, answer };
@@ -54,6 +56,58 @@ it("ignores edits to replies that supplied neither evidence nor context", async 
   await edit(f, other.id);
   expect(await readNushiAnswer(f.db, f.answer.id)).toMatchObject({ hidden: false, sourcesChanged: false });
 });
+it.each(["body", "language", "uncited"])("ignores an unrelated topic's %s edit when only its reply was supplied", async kind => {
+  const f = await nushiFixture();
+  const root = await createTopic(f.db, "nushi-owner", { body: "An unrelated discussion heading.", lang: "en", village: f.village.slug });
+  if (!root.ok) throw new Error(root.error);
+  const reply = await createReply(f.db, "nushi-owner", root.id, { body: "Orchard growers need more time.", lang: "en" });
+  if (!reply.ok) throw new Error(reply.error);
+  vi.spyOn(literalSearch, "findLiteral").mockResolvedValue([{ id: reply.id, threadId: root.id }] as Awaited<ReturnType<typeof literalSearch.findLiteral>>);
+  vi.spyOn(semanticSearch, "findSimilar").mockResolvedValue([]);
+  const fake = resolveNushiCompleter();
+  await processNushiRequest(f.db, f.request.id, kind === "uncited" ? { completer: { ...fake, complete: async () => ({ text: JSON.stringify({ status: "not_confirmed", readings: [] }), inputTokens: 1, outputTokens: 1 }) } } : {});
+  const [answer] = await f.db.select().from(nushiAnswers);
+  expect(answer.scope.materialIndex.map(item => item.id)).toContain(`e-${reply.id}-body`);
+  expect(answer.scope.materialIndex.some(item => item.id.startsWith(`e-${root.id}-`))).toBe(false);
+  expect(await f.db.select().from(nushiSources).where(eq(nushiSources.entryId, root.id))).toHaveLength(1);
+  if (kind !== "uncited") expect(answer.answer.citations.map(item => item.sourceId)).toContain(`e-${reply.id}-body`);
+  const setup = { ...f, answer };
+  if (kind === "language") await f.db.update(entries).set({ lang: "de" }).where(eq(entries.id, root.id));
+  else await edit(setup, root.id);
+  expect((await f.db.select().from(nushiAnswers))[0].sourcesChanged).toBe(false);
+  const view = (await readNushiAnswer(f.db, answer.id))!;
+  expect(view).toMatchObject({ hidden: false, sourcesChanged: false });
+  expect(await canRefreshNushi(f.db, view, "nushi-caller")).toBe(false);
+  await edit(setup, reply.id);
+  expect((await f.db.select().from(nushiAnswers))[0].sourcesChanged).toBe(true);
+  // The read gate independently identifies edits to supplied material.
+  await f.db.update(nushiAnswers).set({ sourcesChanged: false }).where(eq(nushiAnswers.id, answer.id));
+  expect(await readNushiAnswer(f.db, answer.id)).toMatchObject({ hidden: false, sourcesChanged: true });
+  await f.db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, root.id));
+  expect(await readNushiAnswer(f.db, answer.id)).toMatchObject({ hidden: true });
+});
+it("ignores edits to a candidate omitted by the material budget but still closes on its withdrawal", async () => {
+  const f = await nushiFixture(), candidates: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const topic = await createTopic(f.db, "nushi-owner", { body: `Orchard evidence ${i}. ` + "x".repeat(8_000), lang: "en", village: f.village.slug });
+    if (!topic.ok) throw new Error(topic.error);
+    candidates.push(topic.id);
+  }
+  vi.spyOn(literalSearch, "findLiteral").mockResolvedValue(candidates.map(id => ({ id, threadId: id })) as Awaited<ReturnType<typeof literalSearch.findLiteral>>);
+  vi.spyOn(semanticSearch, "findSimilar").mockResolvedValue([]);
+  await processNushiRequest(f.db, f.request.id);
+  const [answer] = await f.db.select().from(nushiAnswers), omitted = candidates.at(-1)!;
+  expect(answer.scope.truncated).toBe(true);
+  expect(answer.scope.materialIndex.some(item => item.id.startsWith(`e-${omitted}-`))).toBe(false);
+  expect(await f.db.select().from(nushiSources).where(eq(nushiSources.entryId, omitted))).toHaveLength(1);
+  await edit({ ...f, answer }, omitted);
+  expect((await f.db.select().from(nushiAnswers))[0].sourcesChanged).toBe(false);
+  const view = (await readNushiAnswer(f.db, answer.id))!;
+  expect(view).toMatchObject({ hidden: false, sourcesChanged: false });
+  expect(await canRefreshNushi(f.db, view, "nushi-caller")).toBe(false);
+  await f.db.update(entries).set({ deletedAt: new Date() }).where(eq(entries.id, omitted));
+  expect(await readNushiAnswer(f.db, answer.id)).toMatchObject({ hidden: true });
+});
 it.each(["deleted", "hidden", "private", "moved", "author", "history", "coalesced"])("withdraws content when its source becomes %s", async kind => {
   const f = await fixture();
   if (kind === "history") {
@@ -69,20 +123,29 @@ it.each(["deleted", "hidden", "private", "moved", "author", "history", "coalesce
   expect((await f.db.select().from(nushiAnswers))[0].hiddenAt).not.toBeNull();
   expect((await nushiMarkdownBlocks(f.db, f.topic, [f.topic], "en")).join("\n")).not.toContain(f.answer.answer.citations[0].original.quote);
 });
-it.each(["edit", "delete"])("warns after a supplied translation %s and preserves answer translations", async kind => {
+it.each(["edit", "delete", "other"])("warns after a supplied translation %s and preserves answer translations", async kind => {
   const f = await nushiFixture();
   const [source] = await f.db.select().from(entries).where(eq(entries.id, f.source));
   await f.db.update(entries).set({ lang: "ja", title: null }).where(eq(entries.id, f.source));
   await f.db.insert(translations).values({ entryId: f.source, lang: "en", text: "A supplied orchard translation.", sourceHash: source.sourceHash, engine: "fake", model: "fake", kind: "primary", field: "body", flags: [] });
-  await processNushiRequest(f.db, f.request.id);
+  let request = f.request;
+  if (kind === "other") {
+    const call = await createReply(f.db, "nushi-caller", f.topic, { body: "@nushi orchard", lang: "other", langCode: "eo" });
+    if (!call.ok) throw new Error(call.error);
+    [request] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, call.id));
+  }
+  await processNushiRequest(f.db, request.id);
   const [answer] = await f.db.select().from(nushiAnswers);
-  expect(answer.answer.citations.some(c => c.translation)).toBe(true);
+  if (kind === "other") expect(answer).toMatchObject({ lang: "other", scope: { materialLanguage: "en" } });
+  expect(answer.scope.materialIndex.some(item => item.translation)).toBe(true);
+  if (kind !== "other") expect(answer.answer.citations.some(c => c.translation)).toBe(true);
   const [job] = await f.db.select().from(jobs).where(and(eq(jobs.kind, "translate_nushi"), eq(jobs.dedupeKey, `nushi-translation:${answer.id}:ja`)));
   await createNushiTranslationHandlers().translate_nushi(job, { db: f.db, now: new Date() });
-  if (kind === "edit") await f.db.update(translations).set({ text: "Corrected translation." }).where(eq(translations.entryId, f.source));
+  if (kind !== "delete") await f.db.update(translations).set({ text: "Corrected translation." }).where(eq(translations.entryId, f.source));
   else await f.db.delete(translations).where(eq(translations.entryId, f.source));
   const view = await readNushiAnswer(f.db, answer.id, "ja");
   expect(view).toMatchObject({ hidden: false, translated: true, sourcesChanged: true });
+  expect((await f.db.select().from(nushiAnswers))[0].sourcesChanged).toBe(true);
   expect(await f.db.select().from(nushiTranslations)).toHaveLength(1);
 });
 it("limits refresh to the caller and atomically replaces the answer without changing human aggregates", async () => {
@@ -104,6 +167,9 @@ it("limits refresh to the caller and atomically replaces the answer without chan
   expect(answer).toBeDefined();
   expect(await readNushiAnswer(f.db, f.answer.id)).toMatchObject({ hidden: true, reason: "superseded", supersededById: answer.id });
   expect(await readNushiAnswer(f.db, answer.id)).toMatchObject({ hidden: false, sourcesChanged: false });
+  // Equal timestamps must still keep the old marker before the replacement.
+  await f.db.update(nushiAnswers).set({ createdAt: f.answer.createdAt });
+  expect((await threadNushi(f.db, f.topic, [f.topic], "en")).answers.map(value => value.id)).toEqual([f.answer.id, answer.id]);
   expect(await f.db.select().from(nushiAnswers).where(isNull(nushiAnswers.hiddenAt))).toHaveLength(1);
   expect(await f.db.select().from(nushiRequests)).toHaveLength(2);
   const [after] = await f.db.select().from(entries).where(eq(entries.id, f.topic));
@@ -155,6 +221,41 @@ it("keeps warnings local and propagates withdrawal through AI follow-ups", async
   expect(await readNushiAnswer(f.db, child.id)).toMatchObject({ hidden: false, sourcesChanged: false });
   await f.db.update(nushiAnswers).set({ hiddenAt: new Date(), hiddenReason: "moderation" }).where(eq(nushiAnswers.id, f.answer.id));
   expect(await readNushiAnswer(f.db, child.id)).toMatchObject({ hidden: true });
+});
+it("uses the generic hidden marker for follow-ups withdrawn by replacement", async () => {
+  const f = await fixture();
+  vi.stubEnv("VILLAGE_NUSHI_AUTHOR_DAILY_LIMIT", "1");
+  const call = await createReply(f.db, "nushi-caller", f.topic, { body: "@nushi another detail", lang: "en", nushiParentId: f.answer.id });
+  if (!call.ok) throw new Error(call.error);
+  const [childRequest] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, call.id));
+  await processNushiRequest(f.db, childRequest.id);
+  const [child] = await f.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, childRequest.id));
+  await edit(f);
+  await requestNushiAgain(f.db, "nushi-caller", f.answer.id);
+  const [request] = await f.db.select().from(nushiRequests).where(eq(nushiRequests.replacesAnswerId, f.answer.id));
+  await processNushiRequest(f.db, request.id);
+  const view = (await readNushiAnswer(f.db, child.id))!;
+  expect(view).toMatchObject({ hidden: true, reason: "context_hidden" });
+  const html = renderToStaticMarkup(createElement(NushiAnswer, { answer: view }));
+  expect(html).toContain(m.nushi_hidden());
+  expect(html).not.toContain(m.nushi_source_unavailable());
+  expect(html).not.toContain(child.answer.readings[0]?.text ?? "UNEXPECTED_ANSWER_TEXT");
+});
+
+it("loads history only for mismatched source versions", async () => {
+  const queries: Array<{ sql: string; params: unknown[] }> = [];
+  const f = await fixture({ logger: { logQuery(sql, params) { queries.push({ sql, params }); } } });
+  queries.length = 0;
+  expect(await readNushiAnswer(f.db, f.answer.id)).toMatchObject({ hidden: false, sourcesChanged: false });
+  expect(queries.filter(query => query.sql.includes('from "entry_revisions"'))).toHaveLength(0);
+  await edit(f);
+  queries.length = 0;
+  expect(await readNushiAnswer(f.db, f.answer.id)).toMatchObject({ hidden: false, sourcesChanged: true });
+  const history = queries.filter(query => query.sql.includes('from "entry_revisions"'));
+  expect(history).toHaveLength(1);
+  const [source] = await f.db.select().from(nushiSources).where(and(eq(nushiSources.answerId, f.answer.id), eq(nushiSources.entryId, f.source)));
+  expect(history[0].params).toEqual([f.source, source.revision]);
+  expect(history[0].params).not.toContain(f.topic);
 });
 
 const pg = it.skipIf(!PG_MODE);
@@ -231,4 +332,22 @@ it("reconstructs the original material for a consented report on a stale answer"
   const [report] = await f.db.select().from(nushiReports);
   expect(JSON.stringify(report.evidence)).not.toContain("Updated timing.");
   expect(JSON.stringify(report.evidence)).toContain(f.answer.answer.citations[0].original.quote);
+});
+
+it.each(["translation", "language"])("refuses error evidence when the original %s cannot be reconstructed", async kind => {
+  const { reportNushi } = await import("~/lib/nushi-reports.server");
+  const { nushiReports } = await import("~/lib/db/schema");
+  const f = await nushiFixture();
+  const [source] = await f.db.select().from(entries).where(eq(entries.id, f.source));
+  await f.db.update(entries).set({ lang: "ja", title: null }).where(eq(entries.id, f.source));
+  await f.db.insert(translations).values({ entryId: f.source, lang: "en", text: "A supplied orchard translation.", sourceHash: source.sourceHash, kind: "primary", field: "body", flags: [] });
+  await processNushiRequest(f.db, f.request.id);
+  const [answer] = await f.db.select().from(nushiAnswers);
+  expect(answer.scope.materialIndex.some(item => item.translation)).toBe(true);
+  if (kind === "translation") await f.db.update(translations).set({ text: "Corrected translation." }).where(eq(translations.entryId, f.source));
+  else await f.db.update(entries).set({ lang: "de" }).where(eq(entries.id, f.source));
+  expect(await reportNushi(f.db, "nushi-follower", { answerId: answer.id, kind: "error", reason: "wrong_post", note: "Review old evidence.", consent: true })).toBe("evidence_unavailable");
+  expect(await f.db.select().from(nushiReports)).toHaveLength(0);
+  expect(await reportNushi(f.db, "nushi-follower", { answerId: answer.id, kind: "moderation", reason: "other", note: "Review this answer.", consent: false })).toBe(true);
+  expect((await f.db.select().from(nushiReports))[0].evidence).toBeNull();
 });

@@ -13,7 +13,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const answer = await readNushiAnswer(db, Number(params.id), displayLangFor(request, profile));
   if (!answer) throw data("Not found", { status: 404 });
   const preferences = await nushiPreferences(db, user?.id, request);
-  return { html: renderNushiAnswerPage(answer, preferences, !!user, await canRefreshNushi(db, answer, user?.id)), title: m.nushi_name() };
+  return { html: renderNushiAnswerPage(answer, preferences, !!user, await canRefreshNushi(db, answer, user?.id), new URL(request.url).searchParams.get("report") === "unavailable"), title: m.nushi_name() };
 }
 export const headers = () => ({ "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" });
 export function meta({ loaderData }: Route.MetaArgs) { return [{ title: loaderData?.title }]; }

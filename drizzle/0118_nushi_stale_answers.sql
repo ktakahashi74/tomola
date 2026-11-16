@@ -49,15 +49,19 @@ BEGIN
         ))
       )
     );
-  UPDATE nushi_answers SET sources_changed = true WHERE hidden_at IS NULL
-    AND id IN (SELECT answer_id FROM nushi_sources WHERE entry_id = NEW.id);
+  UPDATE nushi_answers a SET sources_changed = true WHERE a.hidden_at IS NULL
+    AND a.id IN (SELECT answer_id FROM nushi_sources WHERE entry_id = NEW.id)
+    AND (EXISTS (SELECT 1 FROM jsonb_array_elements(a.scope->'materialIndex') material
+        WHERE material->>'id' IN ('e-' || NEW.id || '-body', 'e-' || NEW.id || '-title'))
+      OR EXISTS (SELECT 1 FROM nushi_requests r JOIN entries call ON call.id = r.entry_id
+        WHERE r.id = a.request_id AND NEW.id IN (r.entry_id, r.thread_id, call.parent_id)));
   RETURN NEW;
 END $$;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION nushi_withdraw_translation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'UPDATE' AND ROW(OLD.text, OLD.flags, OLD.source_hash, OLD.mention_revision) IS NOT DISTINCT FROM ROW(NEW.text, NEW.flags, NEW.source_hash, NEW.mention_revision) THEN RETURN NEW; END IF;
-  UPDATE nushi_answers a SET sources_changed = true WHERE a.hidden_at IS NULL AND a.lang = OLD.lang
+  UPDATE nushi_answers a SET sources_changed = true WHERE a.hidden_at IS NULL AND a.scope->>'materialLanguage' = OLD.lang
     AND a.id IN (SELECT answer_id FROM nushi_sources WHERE entry_id = OLD.entry_id)
     AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.scope->'materialIndex') material
       WHERE material->>'id' IN ('e-' || OLD.entry_id || '-body', 'e-' || OLD.entry_id || '-title') AND material ? 'translation');
@@ -78,3 +82,30 @@ BEGIN
 END $$;
 --> statement-breakpoint
 CREATE TRIGGER nushi_withdraw_revision AFTER UPDATE OR DELETE ON entry_revisions FOR EACH ROW EXECUTE FUNCTION nushi_withdraw_revision();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION nushi_withdraw_derivatives() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.hidden_at IS NULL AND NEW.hidden_at IS NOT NULL THEN
+    DELETE FROM nushi_translations WHERE answer_id = NEW.id;
+    WITH RECURSIVE affected(id) AS (
+      SELECT NEW.id
+      UNION
+      SELECT child.id FROM affected parent
+        JOIN entries call ON call.nushi_parent_id = parent.id
+        JOIN nushi_requests request ON request.entry_id = call.id
+        JOIN nushi_answers child ON child.request_id = request.id
+    )
+    UPDATE nushi_requests SET state = 'cancelled', failure = 'changed', lease_until = NULL
+      WHERE state IN ('pending', 'processing') AND entry_id IN (SELECT id FROM entries WHERE nushi_parent_id IN (SELECT id FROM affected));
+    WITH RECURSIVE affected(id) AS (
+      SELECT NEW.id
+      UNION
+      SELECT child.id FROM affected parent
+        JOIN entries call ON call.nushi_parent_id = parent.id
+        JOIN nushi_requests request ON request.entry_id = call.id
+        JOIN nushi_answers child ON child.request_id = request.id
+    )
+    UPDATE nushi_answers SET hidden_at = now(), hidden_reason = CASE WHEN NEW.hidden_reason IN ('superseded', 'context_hidden') THEN 'context_hidden' ELSE 'source_changed' END WHERE hidden_at IS NULL AND id <> NEW.id AND id IN (SELECT id FROM affected);
+  END IF;
+  RETURN NEW;
+END $$;

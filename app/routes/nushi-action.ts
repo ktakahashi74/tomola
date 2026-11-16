@@ -31,7 +31,11 @@ export async function action({ request }: Route.ActionArgs) {
       ok = true; break;
     case "village": ok = await setVillageNushi(db, user.id, text("villageId"), text("enabled") === "1"); break;
     case "topic": ok = await setTopicNushi(db, user.id, Number(text("threadId")), text("disabled") === "1"); break;
-    case "report": ok = await reportNushi(db, user.id, { answerId: Number(text("answerId")), kind: text("kind"), reason: text("reason"), note: text("note"), consent: text("consent") === "1" }); break;
+    case "report": {
+      const result = await reportNushi(db, user.id, { answerId: Number(text("answerId")), kind: text("kind"), reason: text("reason"), note: text("note"), consent: text("consent") === "1" });
+      if (result === "evidence_unavailable") throw redirect(`/nushi/${Number(text("answerId"))}?report=unavailable`, { headers: { "Cache-Control": "private, no-store" } });
+      ok = result; break;
+    }
     case "moderate": {
       const viewer = await getViewer(db, user);
       if (!viewer.scope.operator) throw data("Forbidden", { status: 403 });

@@ -78,6 +78,30 @@ it("saves no error evidence without consent, and keeps moderation behind the ope
     expect((await moderation(h.args(h.request("/moderation", { as: "znushi_route_reader" })))).nushi).toBe(false);
   } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
 });
+it("explains unavailable historical evidence without saving an inaccurate report", async () => {
+  const { entries, translations } = await import("~/lib/db/schema");
+  const { m } = await import("~/paraglide/messages.js");
+  const source = await createTopic(h.db, h.ids.znushi_route_owner, { body: "Orchard historical report source.", lang: "ja" });
+  if (!source.ok) throw new Error(source.error);
+  const [entry] = await h.db.select().from(entries).where(eq(entries.id, source.id));
+  await h.db.insert(translations).values({ entryId: source.id, lang: "en", text: "A supplied orchard translation.", sourceHash: entry.sourceHash, kind: "primary", field: "body", flags: [] });
+  const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard historical report", lang: "en" });
+  if (!topic.ok) throw new Error(topic.error);
+  const [request] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, topic.id));
+  await processNushiRequest(h.db, request.id);
+  const [answer] = await h.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, request.id));
+  expect(answer.scope.materialIndex.some(item => item.translation)).toBe(true);
+  await h.db.update(translations).set({ text: "A corrected translation." }).where(eq(translations.entryId, source.id));
+  const before = await h.db.select().from(nushiReports);
+  const outcome = await h.outcome(() => action(h.args(h.request("/nushi/action", { as: "znushi_route_reader", form: { intent: "report", answerId: String(answer.id), kind: "error", reason: "wrong_post", consent: "1" } }))));
+  expect(outcome.status).toBe(302);
+  expect(outcome.location).toBe(`/nushi/${answer.id}?report=unavailable`);
+  expect(await h.db.select().from(nushiReports)).toEqual(before);
+  const { loader: readPage } = await import("~/routes/nushi-answer");
+  const page = await readPage(h.args(h.request(outcome.location!, { as: "znushi_route_reader" }), { id: String(answer.id) }));
+  expect(page.html).toContain(m.post_ask_error_expired());
+  expect(page.html).toContain("data-nushi-report-unavailable");
+});
 it("keeps visitor hiding on the device and member hiding in the account", async () => {
   const visitor = await h.outcome(() => action(h.args(h.request("/nushi/action", { form: { intent: "visitor-hide", hide: "1", returnTo: `/nushi/${answerId}` } }))));
   expect(visitor.status).toBe(302);

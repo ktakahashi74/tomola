@@ -4,9 +4,9 @@ import { addMember, createTestDb } from "./db";
 import { createTopic } from "~/lib/entries.server";
 import { nushiRequests, villageMembers, villages } from "~/lib/db/schema";
 
-export async function nushiFixture() {
+export async function nushiFixture(options: Parameters<typeof createTestDb>[0] = {}) {
   vi.stubEnv("VILLAGE_NUSHI", "1"); vi.stubEnv("VILLAGES", "1"); vi.stubEnv("PUBLIC_READING", "1"); vi.stubEnv("TRANSLATION_PRIMARY", "fake");
-  const db = await createTestDb();
+  const db = await createTestDb(options);
   await addMember(db, "nushi-owner", "znushi_owner");
   await addMember(db, "nushi-caller", "znushi_caller");
   await addMember(db, "nushi-follower", "znushi_follower");

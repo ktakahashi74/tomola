@@ -226,7 +226,10 @@ export async function readNushiAnswer(db: Db, id: number, language?: Lang, env: 
   if (!row) return null;
   const available = !row.answer.hiddenAt && !!await nushiPlace(db, row.request.threadId, env);
   const sources = available ? await db.select().from(nushiSources).where(eq(nushiSources.answerId, id)) : [];
-  const current = available ? await publishedSnapshots(db, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" })), row.request.villageId) : null;
+  const [call] = available ? await db.select({ parentId: entries.parentId }).from(entries).where(eq(entries.id, row.request.entryId)) : [];
+  const warningEntryIds = new Set([row.request.entryId, row.request.threadId, call?.parentId,
+    ...row.answer.scope.materialIndex.map(material => Number(/^e-(\d+)-/.exec(material.id)?.[1]))].filter((id): id is number => id != null && Number.isSafeInteger(id)));
+  const current = available ? await publishedSnapshots(db, sources.map(source => ({ ...source, id: source.entryId, authorId: source.authorId ?? "" })), row.request.villageId, warningEntryIds) : null;
   const common = { id, requestId: row.request.id, entryId: row.request.entryId, threadId: row.request.threadId };
   if (!current) return { ...common, hidden: true as const, reason: row.answer.hiddenReason ?? (available ? "source_changed" : "disabled"), supersededById: row.answer.supersededById };
   const [caller] = row.request.callerId ? await db.select({ handle: profiles.handle }).from(profiles).where(eq(profiles.userId, row.request.callerId)) : [];
@@ -244,7 +247,7 @@ export async function threadNushi(db: Db, threadId: number, entryIds: number[], 
   if (!nushiEnabled()) return { answers: [], requests: [] };
   const requests = await db.select().from(nushiRequests).where(and(eq(nushiRequests.threadId, threadId), inArray(nushiRequests.entryId, entryIds))).orderBy(asc(nushiRequests.createdAt), asc(nushiRequests.id));
   const latest = new Map(requests.map(request => [request.entryId, request.id]));
-  const answers = requests.length ? await db.select({ id: nushiAnswers.id }).from(nushiAnswers).where(inArray(nushiAnswers.requestId, requests.map(request => request.id))) : [];
+  const answers = requests.length ? await db.select({ id: nushiAnswers.id }).from(nushiAnswers).where(inArray(nushiAnswers.requestId, requests.map(request => request.id))).orderBy(asc(nushiAnswers.createdAt), asc(nushiAnswers.id)) : [];
   return { answers: (await Promise.all(answers.map(answer => readNushiAnswer(db, answer.id, language)))).filter(answer => answer !== null),
     requests: requests.filter(request => request.state !== "answered" && latest.get(request.entryId) === request.id).map(request => ({ id: request.id, entryId: request.entryId, state: request.state, failure: request.failure })) };
 }
