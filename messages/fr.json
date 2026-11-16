@@ -2977,7 +2977,7 @@
   "nushi_hide": "Masquer les réponses de Nushi sur mon écran",
   "nushi_citation_pref": "M’avertir lorsque Nushi cite mes publications (au maximum une fois par jour)",
   "nushi_hidden": "Réponse de Nushi (actuellement non affichée)",
-  "nushi_source_unavailable": "Cette réponse n’est plus affichée car une publication source ou la version utilisée n’est plus accessible publiquement.",
+  "nushi_source_unavailable": "Cette réponse n’est plus affichée car une publication source a été modifiée ou la version utilisée ne peut plus être lue.",
   "nushi_sources_edited": "Les publications ou traductions utilisées pour cette réponse ont été modifiées depuis. Les citations conservent le texte utilisé à ce moment-là.",
   "nushi_refresh": "Répondre à nouveau à partir des publications actuelles",
   "nushi_superseded": "Remplacée par une nouvelle réponse utilisant les publications actuelles.",
