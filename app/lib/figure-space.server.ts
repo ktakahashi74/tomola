@@ -313,7 +313,7 @@ function surfaceMatches(surface: FigureBackground, color: ArrayLike<number>, x: 
   }
   return true;
 }
-function surfaceColor(surface: FigureBackground, x: number, y: number): number[] {
+export function surfaceColor(surface: FigureBackground, x: number, y: number): number[] {
   const backing = surface.backing;
   if (backing) {
     const dx = Math.max(0, Math.min(backing.box.width - 1, x - backing.box.left)), fraction = Math.max(0, Math.min(1, (y - backing.box.top) / Math.max(1, backing.box.height - 1)));
@@ -537,13 +537,13 @@ export function figureSurfaceSpace(data: Buffer, width: number, height: number, 
   return model ? figureSpace(data, width, height, index, measured, occupied, context, FIGURE_SPACE.guard, model) : undefined;
 }
 
-export function figureEraseMask(width: number, height: number, index: number, measured: FigureInk[], window: FigureBox = { left: 0, top: 0, width, height }, backing?: FigureBox): Uint8Array {
+export function figureEraseMask(width: number, height: number, index: number, measured: FigureInk[], window: FigureBox = { left: 0, top: 0, width, height }, backing?: FigureBox, protectedGuard = 2): Uint8Array {
   const mask = new Uint8Array(boxArea(window));
   for (const p of measured[index].points) for (let dy = -FIGURE_SPACE.glyphFringe; dy <= FIGURE_SPACE.glyphFringe; dy++) for (let dx = -FIGURE_SPACE.glyphFringe; dx <= FIGURE_SPACE.glyphFringe; dx++) {
     const x = p % width + dx, y = Math.floor(p / width) + dy;
     if (inside(window, x, y) && (!backing || inside(backing, x, y)) && !measured.some((m, j) => j !== index && inside(m.box, x, y))) mask[(y - window.top) * window.width + x - window.left] = 1;
   }
-  for (const p of measured[index].protectedPoints ?? []) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+  for (const p of measured[index].protectedPoints ?? []) for (let dy = -protectedGuard; dy <= protectedGuard; dy++) for (let dx = -protectedGuard; dx <= protectedGuard; dx++) {
     const x = p % width + dx, y = Math.floor(p / width) + dy;
     if (inside(window, x, y)) mask[(y - window.top) * window.width + x - window.left] = 0;
   }

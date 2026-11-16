@@ -138,7 +138,7 @@ it.each([1, 2, 3].flatMap(version => (["skipped", "ready"] as const).map(state =
   const upload = await image(), id = upload.url.slice(7, 71), entryId = await post(upload.url);
   const [stored] = await db.select({ bytes: media.bytes }).from(media).where(eq(media.id, id));
   const currentKey = readingKeyOf(stored.bytes!), oldKey = currentKey.replace(/:v\d+$/, `:v${version}`);
-  expect(FIGURE_VERSION).toBe(15);
+  expect(FIGURE_VERSION).toBe(16);
   expect(currentKey).toMatch(new RegExp(`:v${FIGURE_VERSION}$`));
   expect(currentKey).not.toBe(oldKey);
   const reader = createFigureReader({ TRANSLATION_PRIMARY: "fake" });
@@ -258,7 +258,7 @@ it("handles help and invalid options before opening a database", async () => {
   expect((await captureCli(output => runFigureBackfill([], env, async () => { throw Error("Synthetic database failure"); }, output))).status).toBe(1);
 });
 
-it.each([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].flatMap(version => (["ready", "skipped"] as const).map(state => ({ version, state }))))("rebuilds v$version $state variants with the cached reading and no reading call", async ({ version, state }) => {
+it.each([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].flatMap(version => (["ready", "skipped"] as const).map(state => ({ version, state }))))("rebuilds v$version $state variants with the cached reading and no reading call", async ({ version, state }) => {
   const { db, image, post } = await fixture();
   const upload = await image(), id = upload.url.slice(7, 71);
   await post(upload.url);

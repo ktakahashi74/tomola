@@ -139,7 +139,7 @@ it("retains the larger ordinary-search budget when the surface search is more re
     available: { width: Math.max(ordinary.rectangles[0].width, surface.rectangles[0].width), height: Math.max(ordinary.rectangles[0].height, surface.rectangles[0].height) } });
 });
 
-it.each([false, true])("uses open background but keeps ambiguous backings bounded (patterned: %s)", async patterned => {
+it.each([false, true])("uses matching background near an ambiguous backing without covering patterned artwork (patterned: %s)", async patterned => {
   const width = 300, height = 160, text = "H".repeat(6), pixels = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const onBacking = x >= 45 && x < 180 && y >= 80 && y < 104;
@@ -149,8 +149,8 @@ it.each([false, true])("uses open background but keeps ambiguous backings bounde
   const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 16", rgba: true } }).png().toBuffer({ resolveWithObject: true });
   const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).composite([{ input: glyph.data, left: 60, top: 85 }]).png().toBuffer();
   const out = await renderFigureLabels(source, reading(text, { left: 60, top: 85, width: glyph.info.width, height: glyph.info.height }, width, height), [`${"M".repeat(6)}\n${"M".repeat(6)}`], "en");
-  expect(out.results[0].status).toBe(patterned ? "external" : "rendered");
-  if (patterned) expect(out.bytes).toBeNull();
+  expect(out.results[0].status).toBe("rendered");
+  if (patterned) await unchanged(source, out.bytes!, width, { left: 0, top: 104, width, height: height - 104 });
 });
 
 it("keeps a large multiline label inside the bounded search window", () => {
