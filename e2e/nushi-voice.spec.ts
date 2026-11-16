@@ -17,16 +17,35 @@ test("owners publish a speaking style and readers follow answer labels to its hi
     expect((await page.request.get("/v/personal/zcn_flow_owner")).status()).toBe(404);
     return;
   }
+  await expect(page.locator("#nushi-voice")).toHaveCount(0);
   await management.locator(":scope > summary").click();
   const text = "Use a warm greeting and brief, polite sentences.";
-  await setting.locator('textarea[name="voice"]').fill(text);
-  await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
-  await expect(page.locator("[data-nushi-voice-text]")).toHaveText(text);
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.242") });
   try {
     const reader = await guest.newPage();
     await reader.goto("/v/chat-nushi-browser?lang=en");
+    await expect(reader.locator("#nushi-voice")).toHaveCount(0);
+    await setting.locator('textarea[name="voice"]').fill(text);
+    await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
+    await expect(page).toHaveURL(/\?manage=1#nushi-voice$/);
+    await expect(page.locator("[data-nushi-voice-text]")).toHaveText(text);
+    await expect(page.locator("#nushi-voice")).toHaveAccessibleName(en.nushi_voice_title);
+    await expect(page.locator("#nushi-voice")).toContainText(en.nushi_voice_owner_label);
+    expect(await page.locator("#nushi-voice").evaluate(voice => {
+      const posts = document.querySelector(".topic-row")?.closest("ul");
+      const roster = document.getElementById("village-roster");
+      const management = document.getElementById("village-management");
+      return !!posts && !!roster && !!management
+        && !!(posts.compareDocumentPosition(voice) & Node.DOCUMENT_POSITION_FOLLOWING)
+        && !!(voice.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING)
+        && !!(voice.compareDocumentPosition(management) & Node.DOCUMENT_POSITION_FOLLOWING);
+    })).toBe(true);
+    await reader.reload();
     await expect(reader.locator("[data-nushi-voice-text]")).toHaveText(text);
+    expect(await reader.locator(".topic-row").last().evaluate(post => {
+      const voice = document.getElementById("nushi-voice");
+      return !!voice && !!(post.compareDocumentPosition(voice) & Node.DOCUMENT_POSITION_FOLLOWING);
+    })).toBe(true);
     await expect(reader.locator("[data-nushi-voice-setting]")).toHaveCount(0);
     await reader.locator("#nushi-voice summary").click();
     await expect(reader.locator("#nushi-voice li").first()).toContainText("@zcn_flow_owner");
@@ -90,6 +109,7 @@ test("a personal village's holder edits a style without exposing the member page
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.243"));
   await useMember(page, "znushi_flow_owner@example.com", "/v/personal/znushi_flow_owner?lang=en");
   await waitForClientRoute(page);
+  await expect(page.locator("#nushi-voice [data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
   const setting = page.locator("#village-management [data-nushi-voice-setting]");
   await setting.locator('textarea[name="voice"]').fill("A polite personal village style.");
   await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();

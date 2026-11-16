@@ -242,7 +242,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     </>} />
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
     {actionData && "error" in actionData && <p role="alert">{actionData.error === "invalid_voice" ? m.nushi_voice_invalid() : villageError(String(actionData.error))}</p>}
-    {"voice" in loaderData && loaderData.voice && <NushiVoicePublic voice={loaderData.voice} />}
     {ended && <p role="status">{m.village_ended()}</p>}
     {!ended && <VillageInvites invites={incoming} />}
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -251,6 +250,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
     <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
     <Pagination page={page} hasNext={hasNext} dropParams={["manage", "membersPage", "invitesPage", "notice"]} />
+    {"voice" in loaderData && loaderData.voice && (loaderData.voice.text || loaderData.voice.history.length > 0) && <NushiVoicePublic voice={loaderData.voice} />}
     {management.canReadRoster && <details id="village-roster" open={search.get("notice") === "remove-member" || management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
       {notice && search.get("notice") === "remove-member" && <p role="status">{notice}</p>}
       <ul className="space-y-3 py-3">{management.roster.map(member => <li key={member.handle} className="flex flex-wrap items-center gap-x-3 gap-y-2">

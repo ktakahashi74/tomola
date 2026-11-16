@@ -1,15 +1,39 @@
+import { createElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { nushiFixture } from "./helpers/nushi";
+import { renderInRouter } from "./helpers/render-in-router";
 import { getProfile } from "~/lib/profiles.server";
 import { personalVoiceVillage, setNushiVoice } from "~/lib/nushi-voice.server";
 
 const auth = vi.hoisted(() => ({ getReader: vi.fn(), requireWriter: vi.fn() }));
 vi.mock("~/lib/auth/session.server", () => ({ getReader: auth.getReader, requireWriter: auth.requireWriter }));
-import { loader as villageLoader, action as villageAction } from "~/routes/village";
+import Village, { loader as villageLoader, action as villageAction } from "~/routes/village";
 import { loader as personalLoader, action as personalAction } from "~/routes/personal-village-voice";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 const request = (path: string, form?: Record<string, string>, origin = "http://localhost:5173") => new Request(`http://localhost${path}`, form ? { method: "POST", headers: { Origin: origin }, body: new URLSearchParams(form) } : undefined);
+
+it("keeps unused styles out of the village page and places published or cleared styles after posts and pagination", async () => {
+  const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
+  auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-owner", email: "owner@example.com" }, profile: await getProfile(f.db, "nushi-owner") });
+  const render = async () => {
+    const view = await villageLoader({ request: request("/v/nushi-test"), params: { slug: "nushi-test" } } as never);
+    return renderInRouter(() => createElement(Village, { loaderData: { ...view, hasNext: true } } as never), "/v/nushi-test");
+  };
+  const unused = await render();
+  expect(unused).not.toContain('id="nushi-voice"');
+  expect(unused).toContain("data-nushi-voice-setting");
+  for (const text of ["Polite and brief.", ""]) {
+    await setNushiVoice(f.db, "nushi-owner", f.village.id, text);
+    const html = await render();
+    const voice = html.indexOf('id="nushi-voice"');
+    expect(voice).toBeGreaterThan(html.indexOf(`id="q-${f.source}"`));
+    expect(voice).toBeGreaterThan(html.indexOf('rel="next"'));
+    expect(voice).toBeLessThan(html.indexOf('id="village-roster"'));
+    expect(voice).toBeLessThan(html.indexOf('id="village-management"'));
+    expect(html).toContain("data-nushi-voice-text");
+  }
+});
 
 it("shows styles and only style history to guests and removes all style fields when disabled", async () => {
   const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
