@@ -267,12 +267,12 @@ export function figureBackgroundPatchAgrees(patch: Buffer, box: FigureBox, width
 
 // A fallback model is used only after the original placement has failed.
 export type FigureBackground = { box: FigureBox; channels: number[][]; bounds?: FigureBox; backing?: { box: FigureBox; top: number[][]; bottom: number[][] } };
-// Paired dark edges across nearly the complete text width certify a small
+// Paired dark edges across nearly the complete text width certify a shallow
 // backing. Search stays between those edges and within the glyph fringe at
 // either end; color changes beneath a translucent backing do not enlarge it.
 function figureBacking(data: Buffer, width: number, height: number, ink: FigureInk): FigureBackground | undefined {
   const box = ink.box;
-  if (box.height > 32 || box.width > 256 || luminance(background(data, width, height, box)) > 128) return;
+  if (box.height > 32 || box.width > FIGURE_SPACE.maxWindowWidth || luminance(background(data, width, height, box)) > 128) return;
   const sample = (x: number, y: number) => Array.from(data.subarray((y * width + x) * 4, (y * width + x + 1) * 4));
   const edges: number[] = [];
   for (const side of [-1, 1]) {
@@ -291,7 +291,12 @@ function figureBacking(data: Buffer, width: number, height: number, ink: FigureI
   const bounds = { left: Math.max(0, box.left - 4), top: edges[0], width: Math.min(width, box.left + box.width + 4) - Math.max(0, box.left - 4), height: edges[1] - edges[0] + 1 };
   if (bounds.top > box.top || bounds.top + bounds.height < box.top + box.height) return;
   const colors = (y: number) => Array.from({ length: bounds.width }, (_, dx) => [0, 1, 2, 3].map(c => median([-1, 0, 1].map(d => sample(Math.max(0, Math.min(width - 1, bounds.left + dx + d)), y)[c]))));
-  return { box, channels: [], bounds, backing: { box: bounds, top: colors(bounds.top), bottom: colors(bounds.top + bounds.height - 1) } };
+  // Preserve established small-backing models. Wide banners sample inside the
+  // existing clearance to avoid edge ringing, without enlarging the backing.
+  const inset = box.width > 256 ? FIGURE_SPACE.guard : 0;
+  return { box, channels: [], bounds, backing: { box: bounds,
+    top: colors(Math.min(bounds.top + inset, box.top - 1)),
+    bottom: colors(Math.max(bounds.top + bounds.height - 1 - inset, box.top + box.height)) } };
 }
 function surfaceMatches(surface: FigureBackground, color: ArrayLike<number>, x: number, y: number, offset = 0): boolean {
   const backing = surface.backing;

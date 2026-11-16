@@ -119,7 +119,9 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
       const labelsOut = parseLabels(result, labels);
       const render = await createFigureRenderer(image.bytes, reading, lang);
       let rendered = await render(labelsOut);
-      const retryIndexes = rendered.results.flatMap((r, i) => r.reason === "does_not_fit" ? [i] : []);
+      // A missing or one-character capacity cannot guide a useful shortening.
+      // Keep those full translations outside rather than constraining the batch.
+      const retryIndexes = rendered.results.flatMap((r, i) => r.reason === "does_not_fit" && (r.maxCharacters ?? 0) > 1 ? [i] : []);
       if (retryIndexes.length) {
         const retrySources = retryIndexes.map(i => labels[i]);
         let shortened: typeof result = null;

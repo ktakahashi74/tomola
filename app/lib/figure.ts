@@ -1,6 +1,6 @@
 import type { Lang } from "./languages";
 
-export const FIGURE_VERSION = 14;
+export const FIGURE_VERSION = 15;
 export const FIGURE_CONFIDENCE = 0.85;
 export type FigureRegion = {
   text: string; lang: Lang; confidence: number;

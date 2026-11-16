@@ -13,6 +13,35 @@ async function unchanged(before: Buffer, after: Buffer, width: number, box: { le
   for (let y = box.top; y < box.top + box.height; y++) expect(b.subarray((y * width + box.left) * 4, (y * width + box.left + box.width) * 4)).toEqual(a.subarray((y * width + box.left) * 4, (y * width + box.left + box.width) * 4));
 }
 
+it.each([{ count: 8, translated: 10 }, { count: 14, translated: 21 }])("fits longer white text within a filled banner on white with $count source glyphs", async ({ count, translated }) => {
+  const text = "山".repeat(count);
+  const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans CJK JP 20", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const width = glyph.info.width + 100, height = 120;
+  const banner = { left: 30, top: 40, width: glyph.info.width + 40, height: glyph.info.height + 16 };
+  const pixels = Buffer.alloc(width * height * 4, 255);
+  for (let y = banner.top; y < banner.top + banner.height; y++) for (let x = banner.left; x < banner.left + banner.width; x++) {
+    pixels.set([23, 85, 200, 255], (y * width + x) * 4);
+  }
+  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).composite([{ input: glyph.data, left: 50, top: 48 }]).png().toBuffer();
+  const input = reading(text, { left: 50, top: 48, width: glyph.info.width, height: glyph.info.height }, width, height, "ja");
+  expect(glyph.info.width > 256).toBe(count === 14);
+  const translation = "M".repeat(translated);
+  const out = await renderFigureLabels(source, input, [translation], "en");
+  expect(out.results[0].status).toBe("rendered");
+  const a = await raw(source), b = await raw(out.bytes!);
+  let changed = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const p = (y * width + x) * 4;
+    if (a.subarray(p, p + 4).equals(b.subarray(p, p + 4))) continue;
+    changed++;
+    expect(x).toBeGreaterThanOrEqual(banner.left + 2);
+    expect(x).toBeLessThan(banner.left + banner.width - 2);
+    expect(y).toBeGreaterThanOrEqual(banner.top + 2);
+    expect(y).toBeLessThan(banner.top + banner.height - 2);
+  }
+  expect(changed).toBeGreaterThan(0);
+});
+
 it("stops at a broad fill even when its soft edge connects to a known background gradient", () => {
   const width = 200, height = 80, pixels = Buffer.alloc(width * height * 4, 255);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {

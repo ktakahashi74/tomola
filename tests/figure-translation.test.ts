@@ -20,6 +20,7 @@ import { createFakeEngine } from "~/lib/llm/engines/fake.server";
 import { LlmError } from "~/lib/llm/errors.server";
 import { backfillFigures } from "~/lib/figure-backfill.server";
 import * as figureFonts from "~/lib/figure-fonts.server";
+import * as figureRender from "~/lib/figure-render.server";
 import * as llm from "~/lib/llm/index.server";
 import * as markdownBudget from "~/lib/markdown-budget.server";
 import { FLAG_MARKDOWN_BUDGET } from "~/lib/llm/flags";
@@ -642,6 +643,45 @@ describe("figure translation pipeline", () => {
     expect(saved.labelResults!.every(r => r.status === "rendered")).toBe(true);
     await backfillFigures(db, { enqueue: true }); await w.run();
     expect(w.engine.translate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([{ other: false, sacrifice: false }, { other: true, sacrifice: false }, { other: true, sacrifice: true }])("omits unusable budgets and preserves prior rendered labels (other: $other, sacrifice: $sacrifice)", async ({ other, sacrifice }) => {
+    const w = await world();
+    const sources = other ? ["First", "Second", "Third"] : ["First"];
+    vi.mocked(w.reader.read).mockResolvedValue({ text: readingResponse({ ...sourceReading, regions: sources.map((text, i) => ({ ...sourceReading.regions[0], text, x: .05, y: .05 + i * .3, width: .2, height: .2 })) }), model: w.reader.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 });
+    vi.mocked(w.engine.translate).mockImplementation(async req => ({ text: JSON.stringify(req.figureCharacterBudgets ? ["短い"] : sources.map(() => "長い翻訳")), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 }));
+    const render = vi.fn(async (labels: readonly (string | null)[]) => ({ bytes: other ? w.bytes : null, results: labels.map((translation, i) => {
+      const fits = i === 2 ? !(sacrifice && labels.includes("短い")) : translation === "短い";
+      return { source: sources[i], translation, status: fits ? "rendered" as const : "external" as const,
+        reason: fits ? null : "does_not_fit" as const, maxCharacters: i === 0 ? 1 : 20 };
+    }) }));
+    vi.spyOn(figureRender, "createFigureRenderer").mockResolvedValue(render);
+    expect(await w.run()).toMatchObject({ failed: 0 });
+    expect(w.engine.translate).toHaveBeenCalledTimes(other ? 2 : 1);
+    if (other) expect(vi.mocked(w.engine.translate).mock.calls[1][0]).toMatchObject({ text: JSON.stringify(["Second"]), figureCharacterBudgets: [20] });
+    const [saved] = await db.select().from(figureTranslations);
+    expect(saved.labels).toEqual(other ? ["長い翻訳", sacrifice ? "長い翻訳" : "短い", "長い翻訳"] : ["長い翻訳"]);
+    expect(saved.labelResults!.map(r => r.status)).toEqual(other ? ["external", sacrifice ? "external" : "rendered", "rendered"] : ["external"]);
+  });
+
+  it("adopts shortened banner labels only while every previously rendered label still fits", async () => {
+    const text = "H".repeat(12), width = 320, height = 180;
+    const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 18", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+    const bands = Buffer.from(`<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="white"/><rect x="20" y="20" width="280" height="36" fill="#17498c"/><rect x="20" y="85" width="280" height="36" fill="#7c2865"/></svg>`);
+    const bytes = await sharp(bands).composite([20, 85].map(top => ({ input: glyph.data, left: 60, top: top + 10 }))).png().toBuffer();
+    const w = await world(bytes);
+    const reading: FigureReading = { ...sourceReading, regions: [30, 95].map(y => ({ ...sourceReading.regions[0], text, x: 60 / width, y: y / height, width: glyph.info.width / width, height: glyph.info.height / height })) };
+    vi.mocked(w.reader.read).mockResolvedValue({ text: readingResponse(reading), model: w.reader.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 });
+    const full = ["W".repeat(100), "短い"], shortened = "M".repeat(7);
+    vi.mocked(w.engine.translate).mockImplementation(async req => ({ text: JSON.stringify(req.figureCharacterBudgets ? [shortened] : full), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 }));
+    expect(await w.run()).toMatchObject({ failed: 0 });
+    expect(w.engine.translate).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(w.engine.translate).mock.calls[1][0].figureCharacterBudgets![0]).toBeGreaterThan(1);
+    const [saved] = await db.select().from(figureTranslations);
+    expect(saved.labels).toEqual([shortened, full[1]]);
+    expect(saved.labelResults!.every(r => r.status === "rendered")).toBe(true);
+    const direct = await figureRender.renderFigureLabels(bytes, reading, [shortened, full[1]], "ja");
+    expect(saved.bytes).toEqual(direct.bytes);
   });
 
   it.each(["malformed", "formula", "too_long", "leak"])("keeps the full external translation after a %s shortening response", async failure => {
