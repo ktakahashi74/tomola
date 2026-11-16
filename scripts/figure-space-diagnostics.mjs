@@ -59,7 +59,7 @@ async function diagnose(inputDir, outputDir, beforeDir, name) {
   assert.equal(width, saved.width); assert.equal(height, saved.height);
   const before = beforeDir ? JSON.parse(await readFile(join(beforeDir, `${id}.json`))) : null;
   const reading = saved.reading, measured = measureFigure(data, width, height, reading);
-  const context = prepareFigureSpace(width, height, measured);
+  const context = prepareFigureSpace(width, height, measured, data);
   const rows = [], cyan = new Uint8Array(width * height);
   for (const [i, region] of reading.regions.entries()) {
     const ink = measured[i], translated = region.lang === reading.lang, box = figureBox(region, width, height);

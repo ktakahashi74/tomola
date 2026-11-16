@@ -60,6 +60,20 @@ it("keeps short text inside a shaded dark backing over patterned artwork and ret
   expect(longer.bytes).toBeNull();
 });
 
+it.each([false, true])("uses open background but keeps ambiguous backings bounded (patterned: %s)", async patterned => {
+  const width = 300, height = 160, text = "H".repeat(6), pixels = Buffer.alloc(width * height * 4, 255);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const onBacking = x >= 45 && x < 180 && y >= 80 && y < 104;
+    const color = !patterned || onBacking ? [25, 47, 52] : y < 104 ? [19, 42, 47] : ((Math.floor(x / 7) + Math.floor(y / 7)) % 2 ? [186, 141, 93] : [115, 170, 146]);
+    for (let c = 0; c < 3; c++) pixels[(y * width + x) * 4 + c] = color[c];
+  }
+  const glyph = await sharp({ text: { text: `<span foreground="white">${text}</span>`, font: "Noto Sans 16", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).composite([{ input: glyph.data, left: 60, top: 85 }]).png().toBuffer();
+  const out = await renderFigureLabels(source, reading(text, { left: 60, top: 85, width: glyph.info.width, height: glyph.info.height }, width, height), [`${"M".repeat(6)}\n${"M".repeat(6)}`], "en");
+  expect(out.results[0].status).toBe(patterned ? "external" : "rendered");
+  if (patterned) expect(out.bytes).toBeNull();
+});
+
 it("keeps a large multiline label inside the bounded search window", () => {
   const anchor = { left: 50, top: 670, width: 1320, height: 252 };
   const window = figureSpaceWindow(anchor, 2000, 1125);

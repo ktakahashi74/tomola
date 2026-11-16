@@ -356,9 +356,27 @@ function figureBackgroundSurface(data: Buffer, width: number, height: number, in
   return { box, channels, bounds: !light && box.height <= 32 && box.width <= 256 ? box : undefined };
 }
 
-export type FigureSpaceContext = { obstacles: FigureBox[]; speckGuards: FigureBox[] };
-export function prepareFigureSpace(width: number, height: number, measured: FigureInk[]): FigureSpaceContext {
-  return { obstacles: measured.map(m => padded(m.box, 2, width, height)), speckGuards: measured.map(m => padded(m.box, 4, width, height)) };
+export type FigureSpaceContext = { obstacles: FigureBox[]; speckGuards: FigureBox[]; bounds?: (FigureBox | undefined)[]; surfaces?: (FigureBackground | undefined)[] };
+export function prepareFigureSpace(width: number, height: number, measured: FigureInk[], data?: Buffer): FigureSpaceContext {
+  const surfaces: (FigureBackground | undefined)[] = [];
+  const bounds = data ? measured.map(ink => {
+    const box = ink.box, color = background(data, width, height, box);
+    if (box.height > 32 || box.width > 256 || luminance(color) > 128) { surfaces.push(undefined); return; }
+    const surface = figureBackgroundSurface(data, width, height, ink);
+    surfaces.push(surface);
+    if (surface?.backing) return surface.bounds;
+    // Ordinary placement must respect ambiguous backings too. A smooth field
+    // that also explains the surrounding ring can still use the open canvas.
+    const reference = surface ?? { box, channels: color.map(v => [v, 0, 0]) }, ring = padded(box, 16, width, height);
+    let samples = 0, matches = 0;
+    for (let y = ring.top; y < ring.top + ring.height; y += 2) for (let x = ring.left; x < ring.left + ring.width; x += 2) {
+      if (inside(box, x, y) || measured.some(other => other !== ink && inside(other.box, x, y))) continue;
+      samples++;
+      if (surfaceMatches(reference, data.subarray((y * width + x) * 4, (y * width + x + 1) * 4), x, y)) matches++;
+    }
+    return samples && matches >= samples * .85 ? undefined : box;
+  }) : undefined;
+  return { obstacles: measured.map(m => padded(m.box, 2, width, height)), speckGuards: measured.map(m => padded(m.box, 4, width, height)), bounds, surfaces };
 }
 
 // Bound all per-label raster work. A label larger than the window is left intact.
@@ -411,14 +429,15 @@ function allowFaintFigureLines(data: Buffer, width: number, height: number, near
   for (let p = 0; p < allowed.length; p++) if (allowed[p]) nearBackground[p] = 1;
 }
 
-export function figureSpace(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], occupied: FigureBox[] = [], context = prepareFigureSpace(width, height, measured), guard: number = FIGURE_SPACE.guard, surface?: FigureBackground): { anchor: FigureBox; erase: FigureBox; window: FigureBox; mask: Uint8Array; rectangles: FigureBox[]; seed: number; surface?: FigureBackground } {
+export function figureSpace(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], occupied: FigureBox[] = [], context = prepareFigureSpace(width, height, measured), guard: number = FIGURE_SPACE.guard, surface?: FigureBackground): { anchor: FigureBox; erase: FigureBox; window: FigureBox; mask: Uint8Array; rectangles: FigureBox[]; seed: number; surface?: FigureBackground; bounds?: FigureBox } {
   const anchor = measured[index].box, erase = padded(anchor, FIGURE_SPACE.glyphFringe, width, height);
   const window = figureSpaceWindow(anchor, width, height), w = window.width, h = window.height, count = w * h;
   const localAnchor = { ...anchor, left: anchor.left - window.left, top: anchor.top - window.top };
   if (anchor.width > w || anchor.height > h) return { anchor, erase, window, mask: new Uint8Array(count), rectangles: [] as FigureBox[], seed: -1 };
   const virtual = Buffer.alloc(count * 4);
   for (let y = 0; y < h; y++) data.copy(virtual, y * w * 4, ((window.top + y) * width + window.left) * 4, ((window.top + y) * width + window.left + w) * 4);
-  const removable = figureEraseMask(width, height, index, measured, window, surface?.bounds);
+  const bounds = context.bounds?.[index] ?? surface?.bounds;
+  const removable = figureEraseMask(width, height, index, measured, window, bounds);
   const restored = surface ? Buffer.alloc(boxArea(erase) * 4) : figureBackgroundPatch(data, width, height, erase, measured[index]);
   if (surface) for (let y = 0; y < erase.height; y++) for (let x = 0; x < erase.width; x++) restored.set(surfaceColor(surface, erase.left + x, erase.top + y), (y * erase.width + x) * 4);
   for (let y = 0; y < erase.height; y++) for (let x = 0; x < erase.width; x++) {
@@ -488,7 +507,7 @@ export function figureSpace(data: Buffer, width: number, height: number, index: 
     if (p + w < count) { distance[p] = Math.min(distance[p], distance[p + w] + 1); if (x) distance[p] = Math.min(distance[p], distance[p + w - 1] + 1); if (x + 1 < w) distance[p] = Math.min(distance[p], distance[p + w + 1] + 1); }
     safe[p] = distance[p] > guard ? 1 : 0;
   }
-  const limit = surface?.bounds ? { ...surface.bounds, left: surface.bounds.left - window.left, top: surface.bounds.top - window.top } : undefined;
+  const limit = bounds ? { ...bounds, left: bounds.left - window.left, top: bounds.top - window.top } : undefined;
   if (limit) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!inside(limit, x, y)) safe[y * w + x] = 0;
   let candidates = figureRectangles(safe, w, h, localAnchor);
   const centre = { left: Math.floor(localAnchor.left + localAnchor.width / 2), top: Math.floor(localAnchor.top + localAnchor.height / 2), width: 1, height: 1 };
@@ -497,11 +516,11 @@ export function figureSpace(data: Buffer, width: number, height: number, index: 
   // complete source box fits only a shallow strip. fitLabel still checks all ink.
   if (surface) candidates = [...candidates, ...figureRectangles(safe, w, h, centre)].sort((a, b) => boxArea(b) - boxArea(a));
   const rectangles = candidates.map(b => ({ ...b, left: b.left + window.left, top: b.top + window.top }));
-  return { anchor, erase, window, mask: safe, rectangles, seed, surface };
+  return { anchor, erase, window, mask: safe, rectangles, seed, surface, bounds };
 }
 
 export function figureSurfaceSpace(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], occupied: FigureBox[], context: FigureSpaceContext) {
-  const model = figureBackgroundSurface(data, width, height, measured[index]);
+  const model = context.surfaces?.[index] ?? figureBackgroundSurface(data, width, height, measured[index]);
   return model ? figureSpace(data, width, height, index, measured, occupied, context, FIGURE_SPACE.guard, model) : undefined;
 }
 

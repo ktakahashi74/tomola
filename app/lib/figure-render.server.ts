@@ -248,7 +248,7 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
   }
   // Dropped OCR labels are obstacles for glyph recovery, erasure and placement.
   measured.push(...protectedBoxes.map(box => ({ box, points: [], lineCount: 0, lineHeights: [], uncertain: false })));
-  const context = prepareFigureSpace(info.width, info.height, measured);
+  const context = prepareFigureSpace(info.width, info.height, measured, data);
   const indexes = regions.map(r => reading.regions.indexOf(r));
   const metricCache: TextMetricCache = new Map();
   const sizes = await Promise.all(regions.map((r, i) => figureFontSize(r, measured[indexes[i]], metricCache)));
@@ -354,7 +354,7 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
         if (space.surface && !figureBackgroundPatchAgrees(restored, space.erase, info.width, ink, space.surface)) continue;
         // Only identified glyphs and their antialias fringe are removable. Blank
         // synthetic boxes need no erasure, and nearby diagram marks stay untouched.
-        const removable = figureEraseMask(info.width, info.height, indexes[i], measured, space.erase, space.surface?.bounds);
+        const removable = figureEraseMask(info.width, info.height, indexes[i], measured, space.erase, space.bounds);
         // Do not leave source glyph fragments where a protected mark prevents erasure.
         if (ink.points.some(p => !removable[(Math.floor(p / info.width) - space.erase.top) * space.erase.width + p % info.width - space.erase.left])) continue;
         for (let y = 0; y < space.erase.height; y++) for (let x = 0; x < space.erase.width; x++) {
