@@ -23,7 +23,7 @@ export const readingKeyOf = (bytes: Buffer) => `${createHash("sha256").update(by
 // Rendering generations reuse settled readings with the unchanged reading
 // prompt. Keep previous cache generations intact.
 export async function cachedFigureReadings(db: Db, keys: readonly string[]) {
-  const previousKeys = (key: string) => [12, 11, 10, 9, 8, 7, 6, 5, 4].map(version => key.replace(/:v\d+$/, `:v${version}`));
+  const previousKeys = (key: string) => [13, 12, 11, 10, 9, 8, 7, 6, 5, 4].map(version => key.replace(/:v\d+$/, `:v${version}`));
   const rows = keys.length ? await db.select().from(figureReadings).where(inArray(figureReadings.key, [...new Set(keys.flatMap(key => [key, ...previousKeys(key)]))])) : [];
   const byKey = new Map(rows.map(row => [row.key, row]));
   const reusable = new Map<string, typeof rows[number]>();

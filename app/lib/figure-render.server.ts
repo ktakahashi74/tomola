@@ -13,7 +13,7 @@ export function usableFigure(reading: FigureReading): boolean {
     region.confidence >= FIGURE_CONFIDENCE && region.orientation === "horizontal");
 }
 
-import { background, figureBackgroundPatch, figureBox, figureEraseMask, figureSpace, measureFigureInk, prepareFigureSpace, type FigureBox as Box, type FigureInk } from "./figure-space.server";
+import { background, figureBackgroundPatch, figureBackgroundPatchAgrees, figureBox, figureEraseMask, figureSpace, figureSurfaceSpace, measureFigureInk, prepareFigureSpace, type FigureBox as Box, type FigureInk } from "./figure-space.server";
 import type { FigureLabelResult } from "./figure";
 export const FIGURE_MIN_FONT_SCALE = 0.75;
 type Alignment = "left" | "centre" | "right";
@@ -319,6 +319,18 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
           results[i].required = { width: required.inkWidth + 4, height: required.inkHeight + 4 };
           results[i].maxCharacters = Math.max(1, ...await Promise.all(space.rectangles.map(b => figureCapacity(floor, b, lang, regions[i].weight === "bold"))));
         }
+        // Preserve successful layouts. Only failed labels try a spatial color
+        // model or a verified backing, at the same readable font-size floor.
+        if (!fitted && !space.surface) {
+          const surfaceSpace = figureSurfaceSpace(data, info.width, info.height, indexes[i], measured, occupied, context);
+          if (surfaceSpace) {
+            const retry = await relaxedFit(i, Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), surfaceSpace);
+            space = retry.space; fitted = retry.fitted; anchored = false; independent = true;
+            results[i].available = { width: space.rectangles[0]?.width ?? 0, height: space.rectangles[0]?.height ?? 0 };
+            const floor = Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE));
+            results[i].maxCharacters = Math.max(1, ...await Promise.all(space.rectangles.map(b => figureCapacity(floor, b, lang, regions[i].weight === "bold"))));
+          }
+        }
         if (!fitted) continue;
         candidates.push({ i, space, fitted, independent, anchored });
       }
@@ -338,10 +350,11 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
         // placement. Retry independently before requesting shorter text.
         if (!fitted || overlaps(fitted.position)) ({ space, fitted } = await relaxedFit(i, Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE))));
         if (!fitted || overlaps(fitted.position)) continue;
-        const restored = figureBackgroundPatch(data, info.width, info.height, space.erase, ink);
+        const restored = figureBackgroundPatch(data, info.width, info.height, space.erase, ink, space.surface);
+        if (space.surface && !figureBackgroundPatchAgrees(restored, space.erase, info.width, ink, space.surface)) continue;
         // Only identified glyphs and their antialias fringe are removable. Blank
         // synthetic boxes need no erasure, and nearby diagram marks stay untouched.
-        const removable = figureEraseMask(info.width, info.height, indexes[i], measured, space.erase);
+        const removable = figureEraseMask(info.width, info.height, indexes[i], measured, space.erase, space.surface?.bounds);
         // Do not leave source glyph fragments where a protected mark prevents erasure.
         if (ink.points.some(p => !removable[(Math.floor(p / info.width) - space.erase.top) * space.erase.width + p % info.width - space.erase.left])) continue;
         for (let y = 0; y < space.erase.height; y++) for (let x = 0; x < space.erase.width; x++) {
