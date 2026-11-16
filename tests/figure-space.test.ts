@@ -35,15 +35,69 @@ it("finds the largest anchored rectangle across aspect ratios, matching exhausti
   }
 });
 
-it("tolerates compression noise but stops at a visible low-contrast rule", () => {
+it("tolerates compression noise but stops at a darker rule", () => {
   const width = 80, height = 50, data = Buffer.alloc(width * height * 4, 255);
-  for (let y = 0; y < height; y++) for (let c = 0; c < 3; c++) data[(y * width + 60) * 4 + c] = 225;
+  for (let y = 0; y < height; y++) for (let c = 0; c < 3; c++) data[(y * width + 60) * 4 + c] = 210;
   for (let c = 0; c < 3; c++) data[(25 * width + 25) * 4 + c] = 242;
   const measured = [{ box: { left: 20, top: 20, width: 20, height: 12 }, points: [], lineCount: 0, lineHeights: [], uncertain: false }];
   const space = figureSpace(data, width, height, 0, measured);
   expect(space.rectangles[0].width).toBeGreaterThan(40);
   expect(space.mask[25 * width + 25]).toBe(1);
   expect(space.mask[25 * width + 65]).toBe(0);
+});
+
+it.each([true, false])("crosses faint straight rules while respecting dark marks and label keep-outs (vertical: %s)", vertical => {
+  const width = 180, height = 160, data = Buffer.alloc(width * height * 4, 255);
+  const at = (x: number, y: number) => vertical ? y * width + x : x * width + y;
+  const paint = (x: number, y: number, value: number) => { for (let c = 0; c < 3; c++) data[at(x, y) * 4 + c] = value; };
+  for (const x of [45, 70, 95]) for (let y = 0; y < 150; y++) {
+    paint(x - 1, y, 244); paint(x, y, 228); paint(x + 1, y, 252);
+  }
+  for (let y = 0; y < (vertical ? height : width); y++) for (let x = 125; x < 129; x++) paint(x, y, 20);
+  const box = vertical ? { left: 32, top: 55, width: 52, height: 20 } : { left: 55, top: 32, width: 20, height: 52 };
+  const other = vertical ? { left: 92, top: 100, width: 20, height: 15 } : { left: 100, top: 92, width: 15, height: 20 };
+  const measured = [box, other].map(box => ({ box, points: [], lineCount: 0, lineHeights: [], uncertain: false }));
+  const space = figureSpace(data, width, height, 0, measured, [other]);
+  expect(space.rectangles.length).toBeGreaterThan(0);
+  for (const x of [45, 70, 95, 110]) expect(space.mask[at(x, 65)]).toBe(1);
+  expect(space.mask[at(135, 65)]).toBe(0);
+  expect(space.mask[at(100, 105)]).toBe(0);
+});
+
+it.each([
+  { value: 222, thickness: 1, length: 100 },
+  { value: 228, thickness: 4, length: 100 },
+  { value: 228, thickness: 1, length: 23 },
+  { value: 228, thickness: 30, length: 100 },
+])("keeps nonqualifying marks out of the placement mask: %j", ({ value, thickness, length }) => {
+  const width = 160, height = 120, data = Buffer.alloc(width * height * 4, 255);
+  for (let y = 10; y < 10 + length; y++) for (let x = 80; x < 80 + thickness; x++) for (let c = 0; c < 3; c++) data[(y * width + x) * 4 + c] = value;
+  const measured = [{ box: { left: 30, top: 20, width: 20, height: 12 }, points: [], lineCount: 0, lineHeights: [], uncertain: false }];
+  expect(figureSpace(data, width, height, 0, measured).mask[20 * width + 80]).toBe(0);
+});
+
+it.each([1, 2, 3])("renders translated glyphs over %ipx grid lines near the source without painting a dark bar", async thickness => {
+  const width = 600, height = 240, left = 120, top = 75;
+  const text = "H".repeat(5);
+  const glyph = await sharp({ text: { text, font: "Noto Sans 28", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const rules = [145, 185, 225, 265, 305].map(x => `<rect x="${x}" width="${thickness}" height="240" fill="#e4e4e4"/>`).join("");
+  const marks = Buffer.from(`<svg width="${width}" height="${height}">${rules}<rect x="380" width="6" height="240"/><rect x="40" y="145" width="500" height="25"/></svg>`);
+  const bytes = await image(width, height).composite([{ input: marks }, { input: glyph.data, left, top }]).png().toBuffer();
+  const source = reading([{ ...label, text, x: left / width, y: top / height, width: glyph.info.width / width, height: glyph.info.height / height }]);
+  const out = await renderFigureLabels(bytes, source, ["M".repeat(8)], "en");
+  expect(out.results[0].status).toBe("rendered");
+  const raw = await sharp(out.bytes!).ensureAlpha().raw().toBuffer(), original = await sharp(bytes).ensureAlpha().raw().toBuffer();
+  const changed: number[] = [];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const p = (y * width + x) * 4;
+    if (!raw.subarray(p, p + 4).equals(original.subarray(p, p + 4))) changed.push(y * width + x);
+    if (x >= 380 && x < 386 || y >= 145 && y < 170) expect(raw.subarray(p, p + 4)).toEqual(original.subarray(p, p + 4));
+  }
+  expect(changed.length).toBeGreaterThan(100);
+  expect(Math.min(...changed.map(p => p % width))).toBeGreaterThanOrEqual(left - 4);
+  expect(Math.min(...changed.map(p => p % width))).toBeLessThanOrEqual(left + 4);
+  expect(changed.some(p => p % width === 225 && raw[p * 4] < 100)).toBe(true);
+  expect(changed.every(p => Math.floor(p / width) >= top - 6 && Math.floor(p / width) <= top + glyph.info.height + 6)).toBe(true);
 });
 
 it("measures shifted glyphs and pixel lines when OCR omitted a line break", async () => {

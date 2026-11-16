@@ -1,7 +1,7 @@
 import type { FigureReading, FigureRegion } from "./figure";
 
 export type FigureBox = { left: number; top: number; width: number; height: number };
-export const FIGURE_SPACE = { adjacentDelta: 6, backgroundNoise: 16, contrast: 40, glyphFringe: 4, guard: 2, maxSpeckPixels: 9, maxSpeckDiameter: 3, maxWindowWidth: 2048, maxWindowHeight: 512, maxWindowPixels: 262144, horizontalMargin: 192, verticalMargin: 96 } as const;
+export const FIGURE_SPACE = { adjacentDelta: 6, backgroundNoise: 16, faintLineContrast: 32, faintLineWidth: 3, faintLineLength: 24, contrast: 40, glyphFringe: 4, guard: 2, maxSpeckPixels: 9, maxSpeckDiameter: 3, maxWindowWidth: 2048, maxWindowHeight: 512, maxWindowPixels: 262144, horizontalMargin: 192, verticalMargin: 96 } as const;
 export const inside = (b: FigureBox, x: number, y: number) => x >= b.left && x < b.left + b.width && y >= b.top && y < b.top + b.height;
 export const boxArea = (b: FigureBox) => b.width * b.height;
 export function figureBox(region: Pick<FigureRegion, "x" | "y" | "width" | "height">, width: number, height: number): FigureBox {
@@ -206,6 +206,48 @@ export function figureSpaceWindow(anchor: FigureBox, width: number, height: numb
     top: Math.max(0, Math.min(height - h, anchor.top - Math.floor((h - anchor.height) / 2))), width: w, height: h };
 }
 
+// Only narrow, straight, low-contrast rules may join the background. Check
+// matching background on both sides so edges of broad fills remain obstacles.
+function allowFaintFigureLines(data: Buffer, width: number, height: number, nearBackground: Uint8Array, blocked: Uint8Array, color: number[]): void {
+  const faint = new Uint8Array(width * height), allowed = new Uint8Array(width * height);
+  for (let p = 0; p < faint.length; p++) {
+    let delta = Math.abs(data[p * 4 + 3] - color[3]);
+    if (color[3] > 16 || data[p * 4 + 3] > 16) for (let c = 0; c < 3; c++) delta = Math.max(delta, Math.abs(data[p * 4 + c] - color[c]));
+    faint[p] = !blocked[p] && delta <= FIGURE_SPACE.faintLineContrast ? 1 : 0;
+  }
+  for (const vertical of [true, false]) {
+    const across = vertical ? width : height, along = vertical ? height : width;
+    const at = (x: number, y: number) => vertical ? y * width + x : x * width + y;
+    const thin = new Uint8Array(width * height);
+    for (let y = 0; y < along; y++) for (let x = 0; x < across;) {
+      if (nearBackground[at(x, y)]) { x++; continue; }
+      const start = x;
+      let lowContrast = true;
+      while (x < across && !nearBackground[at(x, y)]) { lowContrast &&= Boolean(faint[at(x, y)]); x++; }
+      // Sample beyond the immediate antialias fringe as well as checking that
+      // both adjacent pixels already belong to the background tolerance.
+      const before = start - 2, after = x + 1;
+      if (!lowContrast || before < 0 || after >= across || x - start > FIGURE_SPACE.faintLineWidth ||
+        !nearBackground[at(before, y)] || !nearBackground[at(after, y)] ||
+        blocked[at(before, y)] || blocked[at(after, y)] || difference(data, at(before, y), at(after, y)) > FIGURE_SPACE.adjacentDelta) continue;
+      for (let k = start; k < x; k++) thin[at(k, y)] = 1;
+    }
+    for (let x = 0; x < across; x++) for (let y = 0; y < along;) {
+      const start = y;
+      let run = 0, longest = 0;
+      // Erased glyphs can interrupt a rule with background pixels. Continue
+      // along its fixed raster coordinate, stopping at ink or label keep-outs.
+      while (y < along && !blocked[at(x, y)] && (thin[at(x, y)] || nearBackground[at(x, y)])) {
+        run = thin[at(x, y)] ? run + 1 : 0;
+        longest = Math.max(longest, run); y++;
+      }
+      if (longest >= FIGURE_SPACE.faintLineLength) for (let k = start; k < y; k++) if (thin[at(x, k)]) allowed[at(x, k)] = 1;
+      y++;
+    }
+  }
+  for (let p = 0; p < allowed.length; p++) if (allowed[p]) nearBackground[p] = 1;
+}
+
 export function figureSpace(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], occupied: FigureBox[] = [], context = prepareFigureSpace(width, height, measured), guard: number = FIGURE_SPACE.guard) {
   const anchor = measured[index].box, erase = padded(anchor, FIGURE_SPACE.glyphFringe, width, height);
   const window = figureSpaceWindow(anchor, width, height), w = window.width, h = window.height, count = w * h;
@@ -233,6 +275,7 @@ export function figureSpace(data: Buffer, width: number, height: number, index: 
     nearBackground[p] = Math.abs(virtual[q + 3] - color[3]) <= FIGURE_SPACE.backgroundNoise &&
       (color[3] <= 16 && virtual[q + 3] <= 16 || Math.max(Math.abs(virtual[q] - color[0]), Math.abs(virtual[q + 1] - color[1]), Math.abs(virtual[q + 2] - color[2])) <= FIGURE_SPACE.backgroundNoise) ? 1 : 0;
   }
+  allowFaintFigureLines(virtual, w, h, nearBackground, blocked, color);
   for (let y = ring.top; y < ring.top + ring.height; y++) for (let x = ring.left; x < ring.left + ring.width; x++) {
     const p = y * w + x;
     if (inside(localAnchor, x, y) || blocked[p]) continue;
