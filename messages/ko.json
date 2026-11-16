@@ -2923,6 +2923,7 @@
   "nushi_truncated": "일부 자료가 생략되었습니다.",
   "nushi_sources": "출처:",
   "nushi_quotes": "인용 보기",
+  "village_nushi_title": "이 빌리지의 Nushi",
   "nushi_voice_title": "Nushi의 말투",
   "nushi_voice_help": "최대 500자까지 입력할 수 있습니다. 정중함의 정도, 문장 종결 표현, 인사말, 상세함의 수준, 빌리지 내 특정 표현만 작성해 주세요. 비워 두면 평소의 Nushi 말투를 사용합니다. 출처, 인용, 사람들의 견해, 이견에 대한 Nushi의 규칙이 우선 적용됩니다.",
   "nushi_voice_public_help": "본문과 변경 일시, 변경자를 포함한 변경 내역은 공개됩니다. 공개 읽기가 활성화된 경우 로그인하지 않은 사용자도 읽을 수 있습니다.",

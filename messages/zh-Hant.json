@@ -2405,6 +2405,7 @@
   "nushi_truncated": "已省略部分材料。",
   "nushi_sources": "來源：",
   "nushi_quotes": "查看引用",
+  "village_nushi_title": "此村的 Nushi",
   "nushi_voice_title": "Nushi 的說話風格",
   "nushi_voice_help": "最多 500 個字元。僅描述語氣禮貌程度、句尾語助詞、問候語、詳細程度以及在地用詞。留空則使用一般的 Nushi。Nushi 關於出處來源、引用、他人觀點及異議處理的規則具有優先權。",
   "nushi_voice_public_help": "此文字及其變更記錄（包含變更時間與變更者）皆為公開。若啟用了公開閱讀，未登入的使用者亦可瀏覽。",
