@@ -4,7 +4,7 @@ import { FIGURE_CONFIDENCE, figureTranslationRegions, preservesFigureMath, sameF
 import type { Lang } from "./languages";
 import { MEDIA_LIMITS } from "./media";
 import { assertFigureFontsAvailable, canRenderFigureText, figureFontDescription, type FigureFontWeight } from "./figure-fonts.server";
-import { FIGURE_OVERLAP, figureOverlapPosition, figureOverlapTreatment, prepareFigureOverlap } from "./figure-overlap.server";
+import { FIGURE_OVERLAP, figureOverlapBackground, figureOverlapPosition, figureOverlapTreatment, prepareFigureOverlap } from "./figure-overlap.server";
 
 export const escapePango = (text: string) => text.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 
@@ -419,15 +419,14 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
       const erase = fallbackSurfaces[i]?.erase ?? { left: Math.max(0, ink.box.left - fringe), top: Math.max(0, ink.box.top - fringe),
         width: Math.min(info.width, ink.box.left + ink.box.width + fringe) - Math.max(0, ink.box.left - fringe),
         height: Math.min(info.height, ink.box.top + ink.box.height + fringe) - Math.max(0, ink.box.top - fringe) };
-      const space = prepareFigureOverlap(data, info.width, info.height, index, measured, forbidden, surface, bounds, erase);
+      const space = prepareFigureOverlap(data, info.width, info.height, index, measured, forbidden, surface, bounds);
       if (!space) continue;
       const removable = figureEraseMask(info.width, info.height, index, measured, erase, bounds, space.eraseGuard);
       if (ink.points.some(p => !removable[(Math.floor(p / info.width) - erase.top) * erase.width + p % info.width - erase.left] || otherText.some(b => inside(b, p % info.width, Math.floor(p / info.width))))) continue;
-      const restored = figureBackgroundPatch(data, info.width, info.height, erase, ink, surface);
-      if (surface && !figureBackgroundPatchAgrees(restored, erase, info.width, ink, surface)) continue;
       const fitted = await fitOverlap(labels[i]!, regions[i], lang, colors[i], Math.max(1, Math.ceil(sizes[i] * FIGURE_MIN_FONT_SCALE)), space, alignment(i, window));
       if (!fitted) continue;
       const eraseObstacles = otherText.filter(b => b.left < erase.left + erase.width && erase.left < b.left + b.width && b.top < erase.top + erase.height && erase.top < b.top + b.height);
+      const restored = figureOverlapBackground(figureBackgroundPatch(data, info.width, info.height, erase, ink, surface), erase, removable, surface, eraseObstacles);
       for (let y = 0; y < erase.height; y++) for (let x = 0; x < erase.width; x++) {
         if (!removable[y * erase.width + x] || eraseObstacles.some(b => inside(b, erase.left + x, erase.top + y))) continue;
         restored.copy(painted, ((erase.top + y) * info.width + erase.left + x) * 4, (y * erase.width + x) * 4, (y * erase.width + x + 1) * 4);

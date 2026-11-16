@@ -1,12 +1,28 @@
 import sharp from "sharp";
 import { afterEach, expect, it, vi } from "vitest";
-import { FIGURE_OVERLAP, figureOverlapPosition, figureOverlapTreatment, prepareFigureOverlap } from "~/lib/figure-overlap.server";
+import { FIGURE_OVERLAP, figureOverlapBackground, figureOverlapPosition, figureOverlapTreatment, prepareFigureOverlap } from "~/lib/figure-overlap.server";
 import * as overlap from "~/lib/figure-overlap.server";
 import * as space from "~/lib/figure-space.server";
 import { createFigureRenderer, renderFigureLabels } from "~/lib/figure-render.server";
 import type { FigureReading } from "~/lib/figure";
 
 afterEach(() => vi.restoreAllMocks());
+
+it.each([1, 2])("covers widespread restoration streaks while retaining the exact deviation boundary: %i", different => {
+  const box = { left: 10, top: 20, width: 12, height: 1 };
+  const surface = { box, channels: [[20, 0, 0], [30, 0, 0], [40, 0, 0], [255, 0, 0]] };
+  const patch = Buffer.concat(Array.from({ length: 12 }, () => Buffer.from([20, 30, 40, 255])));
+  for (let p = 0; p <= different; p++) patch[p * 4] = 100;
+  patch[11 * 4] = 100;
+  const original = Buffer.from(patch), mask = new Uint8Array(12).fill(1);
+  mask[11] = 0;
+  const restored = figureOverlapBackground(patch, box, mask, surface, [{ left: 10, top: 20, width: 1, height: 1 }]);
+  expect(patch).toEqual(original);
+  expect(restored.subarray(0, 4)).toEqual(original.subarray(0, 4));
+  expect(restored.subarray(44)).toEqual(original.subarray(44));
+  for (let p = 1; p <= 10; p++) expect(restored.subarray(p * 4, p * 4 + 4)).toEqual(different === 1 ? original.subarray(p * 4, p * 4 + 4) : Buffer.from([20, 30, 40, 255]));
+  expect(figureOverlapBackground(patch, box, mask)).toBe(patch);
+});
 
 const width = 160, height = 80;
 const anchor = { left: 50, top: 30, width: 60, height: 20 };
@@ -79,6 +95,11 @@ it("applies the ceiling to actual fallback rendering while preserving a neighbou
   const ordinary = space.figureSpace;
   vi.spyOn(space, "figureSpace").mockImplementation((...args) => ({ ...ordinary(...args), rectangles: [] }));
   vi.spyOn(space, "figureSurfaceSpace").mockReturnValue(undefined);
+  const context = space.prepareFigureSpace;
+  vi.spyOn(space, "prepareFigureSpace").mockImplementation((...args) => ({ ...context(...args), surfaces: [{
+    box: args[2][0].box, channels: [[20, 0, 0], [30, 0, 0], [40, 0, 0], [255, 0, 0]],
+  }] }));
+  vi.spyOn(space, "figureBackgroundPatchAgrees").mockReturnValue(false);
   try {
     FIGURE_OVERLAP.maxRatio = 0;
     const rejected = await renderFigureLabels(source, reading, ["W".repeat(14)], "en");
@@ -119,14 +140,16 @@ it("prefers a source edge over a lower-overlap shifted placement and keeps the s
   expect(moved.position.left).toBeGreaterThanOrEqual(edge.left);
 });
 
-it("rejects source erasure outside its backing or inconsistent with a smooth background", () => {
+it("keeps source erasure inside its backing while allowing local color restoration to differ from the placement model", () => {
   const data = Buffer.alloc(width * height * 4, 255), point = 35 * width + 55;
   data.set([0, 0, 0, 255], point * 4);
   const ink = [{ ...measured[0], points: [point] }];
   expect(prepareFigureOverlap(data, width, height, 0, ink, [], undefined, { left: 60, top: 30, width: 50, height: 20 })).toBeNull();
-  vi.spyOn(space, "figureBackgroundPatchAgrees").mockReturnValue(false);
-  const model = { box: anchor, channels: [[255, 0, 0], [255, 0, 0], [255, 0, 0], [255, 0, 0]] };
-  expect(prepareFigureOverlap(data, width, height, 0, ink, [], model)).toBeNull();
+  const model = { box: anchor, channels: [[230, 0, 0], [230, 0, 0], [230, 0, 0], [255, 0, 0]] };
+  const patch = space.figureBackgroundPatch(data, width, height, anchor, ink[0], model);
+  expect(space.figureBackgroundPatchAgrees(patch, anchor, width, ink[0], model)).toBe(false);
+  expect(prepareFigureOverlap(data, width, height, 0, ink, [], model)).not.toBeNull();
+  expect(prepareFigureOverlap(data, width, height, 0, ink, [], model, { left: 60, top: 30, width: 50, height: 20 })).toBeNull();
 });
 
 

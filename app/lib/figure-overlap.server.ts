@@ -1,17 +1,32 @@
-import { FIGURE_SPACE, background, figureEraseMask, figureBackgroundPatch, figureBackgroundPatchAgrees, figureSpaceWindow, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
+import { FIGURE_SPACE, background, figureEraseMask, figureSpaceWindow, inside, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
 
-export const FIGURE_OVERLAP = { maxRatio: .1, treatment: "halo" as "halo" | "backing" };
+export const FIGURE_OVERLAP = { maxRatio: .1, maxErasureDeviationRatio: .1, treatment: "halo" as "halo" | "backing" };
 
 const intersects = (a: FigureBox, b: FigureBox) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
 
-const anchorErase = (box: FigureBox, width: number, height: number): FigureBox => {
-  const fringe = FIGURE_SPACE.glyphFringe, left = Math.max(0, box.left - fringe), top = Math.max(0, box.top - fringe);
-  return { left, top, width: Math.min(width, box.left + box.width + fringe) - left, height: Math.min(height, box.top + box.height + fringe) - top };
-};
+// Sampling artwork beneath source text can leave bright streaks. When too many
+// restored pixels differ, use the smooth field within the same erasure mask.
+export function figureOverlapBackground(patch: Buffer, box: FigureBox, mask: Uint8Array, surface?: FigureBackground, obstacles: FigureBox[] = []): Buffer {
+  if (!surface) return patch;
+  let pixels = 0, different = 0;
+  const allowed = (p: number) => mask[p] && !obstacles.some(b => inside(b, box.left + p % box.width, box.top + Math.floor(p / box.width)));
+  for (let p = 0; p < mask.length; p++) {
+    if (!allowed(p)) continue;
+    pixels++;
+    const q = p * 4, expected = surfaceColor(surface, box.left + p % box.width, box.top + Math.floor(p / box.width));
+    let delta = Math.abs(patch[q + 3] - expected[3]);
+    if (patch[q + 3] > 16 || expected[3] > 16) for (let c = 0; c < 3; c++) delta = Math.max(delta, Math.abs(patch[q + c] - expected[c]));
+    if (delta > FIGURE_SPACE.backgroundNoise) different++;
+  }
+  if (different <= pixels * FIGURE_OVERLAP.maxErasureDeviationRatio) return patch;
+  const out = Buffer.from(patch);
+  for (let p = 0; p < mask.length; p++) if (allowed(p)) out.set(surfaceColor(surface, box.left + p % box.width, box.top + Math.floor(p / box.width)), p * 4);
+  return out;
+}
 
 // Integral counts keep every placement query constant-time. Only failed labels
 // allocate a bounded local window; no full-image mask is retained per label.
-export function prepareFigureOverlap(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], forbidden: FigureBox[], surface?: FigureBackground, bounds?: FigureBox, erase: FigureBox = anchorErase(measured[index].box, width, height)) {
+export function prepareFigureOverlap(data: Buffer, width: number, height: number, index: number, measured: FigureInk[], forbidden: FigureBox[], surface?: FigureBackground, bounds?: FigureBox) {
   const anchor = measured[index].box, window = figureSpaceWindow(anchor, width, height);
   const stride = window.width + 1;
   const color = background(data, width, height, anchor);
@@ -22,7 +37,6 @@ export function prepareFigureOverlap(data: Buffer, width: number, height: number
   // fringe. Protected artwork remains in the obstacle count.
   const removable = figureEraseMask(width, height, index, measured, window, bounds, eraseGuard);
   if (measured[index].points.some(p => !removable[(Math.floor(p / width) - window.top) * window.width + p % width - window.left])) return null;
-  if (surface && !figureBackgroundPatchAgrees(figureBackgroundPatch(data, width, height, erase, measured[index], surface), erase, width, measured[index], surface)) return null;
   const elements = new Uint32Array(stride * (window.height + 1));
   const obstacles = forbidden.filter(b => intersects(b, window));
   for (let y = 0; y < window.height; y++) {
