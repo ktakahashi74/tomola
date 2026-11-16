@@ -528,6 +528,8 @@ describe("source scan", () => {
       ["app/lib/md/manifest.server.ts", "reads questions, which always have a title"],
       // The hash of a missing title is the hash of an empty one on purpose: a topic without a title has the hash of its body, so that taking the title off restores the old version.
       ["app/lib/source-hash.server.ts", "a missing title hashes as an empty one"],
+      // The Nushi edit check hashes the cited text the same way as the database trigger, where a missing title is an empty one.
+      ["app/lib/nushi-materials.server.ts", "hashes a missing title as an empty one, matching the database"],
       // Only the estimate of the tokens of an embedding input; the title is optional there and nothing is sent for a missing one.
       ["app/lib/llm/engines/gemini-embedding.server.ts", "estimates the tokens of the input"],
       // The title attribute of an image in the body (Markdown's optional image title), not the title of a topic.
