@@ -35,6 +35,8 @@ services:
         REVISION: ${TOMOLA_REVISION:-unknown}
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
+    # Default for hosts with room to spare. On smaller hosts, lower it in a compose override file,
+    # leaving room for PostgreSQL and the OS. Exceeding the limit stops and restarts only the app.
     mem_limit: 2g
     pids_limit: 512
     # PostgreSQL owns persistent data; sharp buffers, tsx IPC/cache and other

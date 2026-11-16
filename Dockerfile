@@ -54,7 +54,10 @@ COPY --from=figure-fonts /font-licenses/ /usr/share/doc/figure-fonts/
 RUN fc-cache -f
 ARG REVISION=unknown
 # Operational scripts use the version and production dependencies already installed in the image. Do not select another pnpm or reinstall dependencies at runtime.
+# In-process image processing (sharp/libvips) leaves freed native memory in glibc's per-thread arenas.
+# Two arenas keep the app's resident memory lower. Can be overridden in .env.
 ENV NODE_ENV=production \
+    MALLOC_ARENA_MAX=2 \
     TOMOLA_OPERATOR_DIR=/operator \
     REVISION=${REVISION} \
     TMPDIR=/tmp \

@@ -295,6 +295,15 @@ Reading rate limits (browser, API, MCP and public reads) also use process-local 
 
 Keep backups of the secrets private as well, with restricted permissions and encryption. `docker compose config`, `docker inspect` and environment listings contain secrets; do not paste them into public material. After changing the configuration, recreate the app container and confirm that the change took effect.
 
+### Memory
+
+The image sets `MALLOC_ARENA_MAX` in `Dockerfile`; Markdown workers are bounded,
+and image conversion runs in short-lived child processes. Keep these defaults.
+Adjust only the app container's `mem_limit` in `docker-compose.yml` for the host;
+on smaller hosts, lower it in a compose override file.
+A V8 heap limit (`--max-old-space-size`) is unnecessary: the JS heap is small,
+and most RSS comes from memory outside JS.
+
 ## 3. Proxies and TRUSTED_PROXY_HOPS
 
 The supplied setup exposes only Caddy; the app and database ports are not published. With one Caddy in front, set `TRUSTED_PROXY_HOPS=1`. If you add a CDN or another proxy in front, check that the sources Caddy trusts and the actual number of hops agree. Publishing the app port directly creates a path on which forwarding headers can be forged.
