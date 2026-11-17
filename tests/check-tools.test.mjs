@@ -131,12 +131,12 @@ test('writer gate AST handles whitespace, aliases and wrappers without borrowing
   assert.equal(lintAction(prelude + 'import {requireUser} from "~/lib/auth/session.server"; export async function action() { await requireUser(request); await check(request); }').length, 1);
 });
 
-import { budgetViolations, PAGE_GZIP_GROWTH_LIMIT } from '../scripts/editor-bundle-budget.ts';
+import { budgetViolations, PAGE_GZIP_GROWTH_LIMIT, WRITING_PAGE_GZIP_LIMIT } from '../scripts/editor-bundle-budget.ts';
 test('page growth fails at the threshold and absolute budgets remain enforced', () => {
   const previous = { 'routes/topic': 100000, 'routes/topic-new': 450 * 1024 };
   assert.deepEqual(budgetViolations([{ routeId: 'routes/topic', gzipBytes: 100000 + PAGE_GZIP_GROWTH_LIMIT - 1 }], previous), []);
   assert.equal(budgetViolations([{ routeId: 'routes/topic', gzipBytes: 100000 + PAGE_GZIP_GROWTH_LIMIT }], previous)[0].kind, 'growth');
-  assert.equal(budgetViolations([{ routeId: 'routes/topic-new', gzipBytes: 456 * 1024 }], previous).some(row => row.kind === 'absolute'), true);
+  assert.equal(budgetViolations([{ routeId: 'routes/topic-new', gzipBytes: WRITING_PAGE_GZIP_LIMIT + 1 }], previous).some(row => row.kind === 'absolute'), true);
   assert.equal(budgetViolations([{ routeId: 'routes/new', gzipBytes: 1 }], previous)[0].kind, 'missing-baseline');
   assert.throws(() => budgetViolations([{ routeId: 'routes/topic', gzipBytes: 2 }], { 'routes/topic': NaN }));
 });
