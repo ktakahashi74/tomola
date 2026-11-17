@@ -18,6 +18,7 @@ test("an operator sends a batch and shares a single manually created invitation"
     await expect(results.getByRole("listitem").filter({ hasText: email })).toContainText(m.invites_result_sent);
   }
   await expect(results.locator("code")).toHaveCount(0);
+  await expect(page.getByLabel(m.invites_bulk_emails, { exact: true })).toHaveValue("");
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

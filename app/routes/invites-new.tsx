@@ -13,7 +13,7 @@ import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { inviteUrl } from "~/lib/site-url";
 import { m } from "~/paraglide/messages.js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createSignupInvitation, signupVillageChoices } from "~/lib/signup-village.server";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { invitationNoteText, INVITATION_NOTE_MAX } from "~/lib/invitation-note";
@@ -87,10 +87,20 @@ export function meta({}: Route.MetaArgs) {
 export default function InvitesNew({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const results = actionData && "results" in actionData ? actionData.results : undefined;
+  const formRef = useRef<HTMLFormElement>(null);
+  // A created invitation empties the recipient and note, so a filled form is not mistaken for an unsent one.
+  // The village, mail and language choices stay for the next invitation.
+  useEffect(() => {
+    if (!actionData || actionData.error || (!actionData.url && !("results" in actionData))) return;
+    for (const name of ["email", "note"]) {
+      const field = formRef.current?.elements.namedItem(name);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = "";
+    }
+  }, [actionData]);
   return (
     <main className="space-y-4">
       <h1 className="text-2xl font-bold">{m.invites_title()}</h1>
-      <Form method="post" className="space-y-2">
+      <Form ref={formRef} method="post" className="space-y-2">
         <Field className="min-w-0 w-auto"><FieldLabel className="block">
           {loaderData.operator ? m.invites_bulk_emails() : m.invites_email()}
           {loaderData.operator ? <Textarea name="email" required rows={5} className="block w-full" aria-describedby="bulk-email-help" /> : <Input name="email" type="email" required className="block w-full" />}

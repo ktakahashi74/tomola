@@ -25,6 +25,8 @@ test("an invitation note waits as plain text, then shows a marked translation an
     await page.getByRole("button", { name: m.invites_submit, exact: true }).click();
     const link = page.locator("code").filter({ hasText: "/invite/" });
     await expect(link).toBeVisible();
+    await expect(page.getByLabel(m.invites_email, { exact: true })).toHaveValue("");
+    await expect(page.getByLabel(m.invites_note, { exact: true })).toHaveValue("");
     const url = (await link.textContent())!;
     fs.writeFileSync(held, note);
     const guest = await context.newPage();
