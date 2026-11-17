@@ -1,6 +1,7 @@
 import fs from "node:fs";
-import { test, expect, state, useMember, watchCsp } from "./helpers";
-import { enMessages } from "../e2e/helpers";
+import { test, expect, openUserMenu, state, useMember, watchCsp } from "./helpers";
+import { enMessages, waitForClientRoute } from "../e2e/helpers";
+import { beforeHydration } from "../e2e/support/prehydration";
 
 const enabled = process.env.E2E_GOOGLE_LOGIN === "1";
 
@@ -74,7 +75,7 @@ test("Google navigation sends no invitation Referer and cancellation preserves e
 for (const ua of ["Line/15.0", "FBAN/FBIOS;FBAV/1", "Messenger/1", "Instagram 300", "LinkedInApp LIAPP/1", "KAKAOTALK 26.1", "Mozilla/5.0 (Linux; Android 15; Pixel 9; wv) AppleWebKit/537.36 Version/4.0 Chrome/140.0 Mobile Safari/537.36"]) {
   test(`embedded browser ${ua} offers URL copying and email instead of Google`, async ({ browser }) => {
     test.skip(!enabled);
-    const context = await browser.newContext({ userAgent: ua });
+    const context = await browser.newContext({ userAgent: ua, baseURL: state().baseURL, javaScriptEnabled: false });
     const page = await context.newPage();
     try {
       for (const path of ["/login", state().invites["google_invitee@example.com"]]) {
@@ -83,33 +84,110 @@ for (const ua of ["Line/15.0", "FBAN/FBIOS;FBAV/1", "Messenger/1", "Instagram 30
         await expect(page.getByRole("button", { name: enMessages.google_copy_url, exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(0);
       }
+      await useMember(page, "google_controls@example.com"); await page.goto("/settings");
+      await expect(page.locator("#settings-google [data-google-browser-note]")).toBeVisible();
+      await expect(page.locator("#settings-google .google-login-form")).toHaveCount(0);
     } finally { await context.close(); }
   });
 }
 
-for (const mode of ["display-mode", "ios"]) {
-  test(`standalone ${mode} hides Google and copies the current URL`, async ({ page, context }) => {
+test("initial HTML offers Google on login, invitation and settings without JavaScript", async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: state().baseURL, javaScriptEnabled: false });
+  const page = await context.newPage();
+  try {
+    for (const path of ["/login", state().invites["google_invitee@example.com"]]) {
+      await page.goto(path);
+      await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(enabled ? 1 : 0);
+      await expect(page.getByRole("button", { name: enMessages.google_copy_url, exact: true })).toHaveCount(0);
+    }
+    await useMember(page, "google_controls@example.com"); await page.goto("/settings");
+    await expect(page.getByRole("button", { name: enMessages.google_connect, exact: true })).toHaveCount(enabled ? 1 : 0);
+    await expect(page.getByRole("button", { name: enMessages.google_copy_url, exact: true })).toHaveCount(0);
+  } finally { await context.close(); }
+});
+
+for (const javaScriptEnabled of [false, true]) {
+  test(`standalone CSS shows browser guidance with JavaScript ${javaScriptEnabled ? "enabled" : "disabled"}`, async ({ browser }) => {
     test.skip(!enabled);
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.addInitScript(mode => {
-      if (mode === "ios") Object.defineProperty(navigator, "standalone", { value: true });
-      else {
-        const match = window.matchMedia.bind(window);
-        window.matchMedia = query => {
-          const result = match(query);
-          if (query === "(display-mode: standalone)") Object.defineProperty(result, "matches", { value: true });
-          return result;
-        };
+    const context = await browser.newContext({ baseURL: state().baseURL, javaScriptEnabled, permissions: ["clipboard-read", "clipboard-write"] });
+    const page = await context.newPage();
+    try {
+      for (const path of ["/login?next=%2F#ignored", `${state().invites["google_invitee@example.com"]}#ignored`, "/settings#settings-google"]) {
+        if (path.startsWith("/settings") && javaScriptEnabled) {
+          await useMember(page, "google_controls@example.com");
+          await waitForClientRoute(page);
+          const menu = await openUserMenu(page);
+          const loaded = page.waitForResponse(response => new URL(response.url()).pathname === "/settings.data");
+          await menu.getByRole("menuitem", { name: enMessages.nav_settings, exact: true }).click();
+          expect((await loaded).ok()).toBe(true);
+          await expect(page).toHaveURL(url => url.pathname === "/settings");
+        } else {
+          if (path.startsWith("/settings")) await useMember(page, "google_controls@example.com");
+          await page.goto(path);
+        }
+        if (javaScriptEnabled) await waitForClientRoute(page);
+        const google = page.locator(".google-login");
+        await expect(google.locator(".google-login-form")).toBeVisible();
+        await expect(google.locator("[data-google-browser-note]")).toBeHidden();
+        const height = (await google.boundingBox())!.height;
+        // Playwright cannot emulate display-mode. Activate the shipped media
+        // rule itself, without duplicating its declarations or using app JS.
+        const applied = await page.evaluate(() => {
+          let found = false;
+          function activate(rules: CSSRuleList) {
+            for (const rule of rules) {
+              if (rule instanceof CSSMediaRule && /display-mode:\s*standalone/.test(rule.conditionText) && rule.cssText.includes(".google-login-form")) {
+                rule.media.mediaText = "all"; found = true;
+              } else if ("cssRules" in rule) activate((rule as CSSGroupingRule).cssRules);
+            }
+          }
+          for (const sheet of document.styleSheets) activate(sheet.cssRules);
+          return found;
+        });
+        expect(applied).toBe(true);
+        await expect(google.locator(".google-login-form")).toBeHidden();
+        await expect(google.locator("[data-google-browser-note]")).toBeVisible();
+        // Role lookup excludes the display:none branch from accessibility.
+        await expect(google.getByRole("button", { name: /Google/ })).toHaveCount(0);
+        expect(Math.abs((await google.boundingBox())!.height - height)).toBeLessThanOrEqual(1);
+        if (javaScriptEnabled) {
+          await google.getByRole("button", { name: enMessages.google_copy_url, exact: true }).click();
+          const expected = new URL(page.url()); expected.hash = "";
+          expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected.href);
+        }
       }
-    }, mode);
-    await page.goto(state().invites["google_invitee@example.com"]);
-    await expect(page.getByText(enMessages.google_open_browser, { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: enMessages.google_copy_url, exact: true }).click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(page.url());
-    await expect(page.getByRole("button", { name: enMessages.invite_submit, exact: true })).toBeVisible();
+    } finally { await context.close(); }
   });
 }
+
+test("settings retain Google and adjacent control positions across hydration", async ({ page }, testInfo) => {
+  test.skip(!enabled);
+  await useMember(page, "google_controls@example.com");
+  const csp = await watchCsp(page);
+  const positions = () => page.evaluate(() => {
+    // Other settings above this area replace their native fallback controls.
+    // Measure from the preceding section to isolate movement caused by Google.
+    const anchor = document.querySelector("#settings-passkeys")!.getBoundingClientRect().bottom;
+    return ["#settings-google", "#settings-sessions", "#settings-advanced > summary"].map(selector => {
+      const rect = document.querySelector(selector)!.getBoundingClientRect();
+      return { selector, top: rect.top - anchor, height: rect.height };
+    });
+  });
+  let before: Awaited<ReturnType<typeof positions>> = [];
+  await beforeHydration(page, "/settings", async () => {
+    await expect(page.locator(".google-login-form button")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    before = await positions();
+  });
+  const after = await positions();
+  await testInfo.attach("google-hydration-positions", { body: JSON.stringify({ before, after }, null, 2), contentType: "application/json" });
+  for (let i = 0; i < before.length; i++) {
+    expect(Math.abs(after[i].top - before[i].top), before[i].selector).toBeLessThanOrEqual(1);
+    expect(Math.abs(after[i].height - before[i].height), before[i].selector).toBeLessThanOrEqual(1);
+  }
+  expect(csp.violations).toEqual([]); expect(csp.pageErrors).toEqual([]);
+  expect(csp.hydrationWarnings).toEqual([]);
+});
 
 test("settings show connection date and allow disconnecting while retaining email login", async ({ page }) => {
   test.skip(!enabled);

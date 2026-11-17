@@ -15,7 +15,7 @@ import { noticeSources } from "~/lib/notice-sources.server";
 import { inviteUrl } from "~/lib/site-url";
 import { findValidInvitationByToken } from "~/lib/invitations.server";
 import { googleInvitationContext } from "~/lib/auth/google-policy.server";
-import { googleBrowserBlocked } from "~/components/google-login";
+import { googleBrowserBlocked, googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { action as inviteAction, loader as inviteLoader } from "~/routes/invite";
 
 vi.hoisted(() => vi.resetModules());
@@ -412,6 +412,13 @@ describe("Google application routes and notices", () => {
 });
 
 it("recognizes additional embedded browsers while preserving ordinary browsers", () => {
-  for (const ua of ["KAKAOTALK 26.1", "NAVER(inapp; search; 2100)", "MicroMessenger/8.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9; wv) AppleWebKit/537.36"]) expect(googleBrowserBlocked(ua, false), ua).toBe(true);
-  for (const ua of ["Mozilla/5.0 Firefox/144.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140.0 Mobile Safari/537.36", "NAVER Whale/4.0"]) expect(googleBrowserBlocked(ua, false), ua).toBe(false);
+  for (const ua of ["KAKAOTALK 26.1", "NAVER(inapp; search; 2100)", "MicroMessenger/8.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9; wv) AppleWebKit/537.36"]) expect(googleBrowserBlocked(ua), ua).toBe(true);
+  for (const ua of ["Mozilla/5.0 Firefox/144.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140.0 Mobile Safari/537.36", "NAVER Whale/4.0"]) expect(googleBrowserBlocked(ua), ua).toBe(false);
+});
+
+it("derives browser guidance and the fragment-free copy URL from the request", () => {
+  expect(googleBrowserFromRequest(new Request(`${BASE}/invite/fixture?openExternalBrowser=1#ignored`, { headers: { "user-agent": "Line/15.0" } }))).toEqual({ blocked: true, url: `${BASE}/invite/fixture?openExternalBrowser=1` });
+  expect(googleBrowserFromRequest(new Request(`${BASE}/settings`))).toEqual({ blocked: false, url: `${BASE}/settings` });
+  expect(googleBrowserFromRequest(new Request(`${BASE}/settings.data?lang=en&_routes=routes%2Fsettings`))).toEqual({ blocked: false, url: `${BASE}/settings?lang=en` });
+  expect(googleBrowserFromRequest(new Request(`${BASE}/invite/fixture.data?openExternalBrowser=1&_routes=routes%2Finvite`))).toEqual({ blocked: false, url: `${BASE}/invite/fixture?openExternalBrowser=1` });
 });

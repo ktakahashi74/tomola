@@ -32,6 +32,7 @@ import { PasskeySettings } from "~/components/passkey-settings";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { getAuth } from "~/lib/auth/auth.server";
 import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { GoogleLogin } from "~/components/google-login";
 import { reauthenticationPath } from "~/lib/reauth";
 import { isAPIError } from "better-auth/api";
@@ -107,6 +108,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     emailPref: profile.emailPref,
     passkeys,
     ...(googleLoginConfig() ? { google: {
+      browser: googleBrowserFromRequest(request),
       accounts: (await db.select({ id: account.id, createdAt: account.createdAt }).from(account).where(and(eq(account.userId, user.id), eq(account.providerId, "google")))).map(row => ({ id: row.id, date: dateOf(row.createdAt) })),
       failed: new URL(request.url).searchParams.has("error"),
     } } : {}),
@@ -510,7 +512,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           {loaderData.google.accounts.length ? loaderData.google.accounts.map(linked => <div key={linked.id} className="space-y-2">
             <p>{m.google_connected({ date: linked.date })}</p>
             {loaderData.credentialFresh ? <Form method="post" reloadDocument><input type="hidden" name="intent" value="google-unlink" /><input type="hidden" name="accountId" value={linked.id} /><Button variant="outline" type="submit">{m.google_disconnect()}</Button></Form> : <Link to={reauthenticationPath("/settings#settings-google")} className="underline">{m.google_verify()}</Link>}
-          </div>) : <><p>{m.google_not_connected()}</p>{loaderData.credentialFresh ? <GoogleLogin link /> : <Link to={reauthenticationPath("/settings#settings-google")} className="underline">{m.google_verify()}</Link>}</>}
+          </div>) : <><p>{m.google_not_connected()}</p>{loaderData.credentialFresh ? <GoogleLogin browser={loaderData.google.browser} link /> : <Link to={reauthenticationPath("/settings#settings-google")} className="underline">{m.google_verify()}</Link>}</>}
         </section>}
 
         <section id="settings-sessions" aria-labelledby="settings-sessions-heading" className="scroll-mt-4 space-y-3">

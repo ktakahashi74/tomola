@@ -26,6 +26,7 @@ import { readInvitationNote } from "~/lib/invitation-note.server";
 import { languageLabel } from "~/lib/language-label";
 import { trialParticipationRequired } from "~/lib/notice-sources.server";
 import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { startGoogleSignIn } from "~/lib/auth/google-flow.server";
 import { maskGoogleInvitationEmail } from "~/lib/auth/google-policy.server";
 import { GoogleLogin, GoogleLoginError } from "~/components/google-login";
@@ -60,7 +61,7 @@ async function loaderImplementation({ params, request }: Route.LoaderArgs) {
   const note = invitation && from ? await readInvitationNote(db, invitation.id, getLocale(), new URL(request.url).searchParams.get("original") === "1") : null;
   return {
     publicReading: publicReading(),
-    ...(googleLoginConfig() ? { google: { error: new URL(request.url).searchParams.get("error"), email: invitation ? maskGoogleInvitationEmail(invitation.email) : null } } : {}),
+    ...(googleLoginConfig() ? { google: { browser: googleBrowserFromRequest(request), error: new URL(request.url).searchParams.get("error"), email: invitation ? maskGoogleInvitationEmail(invitation.email) : null } } : {}),
     trialRequired: trialParticipationRequired(),
     email: invitation?.email ?? null,
     reopenInvitation: !params.token && !invitation,
@@ -160,7 +161,7 @@ export default function Invite({ loaderData, actionData }: Route.ComponentProps)
       </> : <>
       <p><span className="block">{m.entry_intro()}</span><span className="block">{m.invite_about()}</span></p>
       {loaderData.publicReading && <p className="ui-help text-muted-foreground">{m.public_reading_onboarding()}</p>}
-      {loaderData.google && <><GoogleLoginError {...loaderData.google} /><GoogleLogin /></>}
+      {loaderData.google && <><GoogleLoginError {...loaderData.google} /><GoogleLogin browser={loaderData.google.browser} /></>}
       <Form method="post" className="space-y-2">
           <p>{m.invite_for({ email: loaderData.email })}</p>
           <p className="ui-help text-muted-foreground">{m.invite_next()}</p>

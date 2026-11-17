@@ -30,6 +30,7 @@ import { getLocale } from "~/paraglide/runtime.js";
 import { hasLogoutNotice } from "~/lib/auth/logout-notice.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
 import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { startGoogleSignIn } from "~/lib/auth/google-flow.server";
 import { GoogleLogin, GoogleLoginError } from "~/components/google-login";
 
@@ -68,7 +69,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   // The extra fields are present only when they apply, so an ordinary login screen carries nothing more than before.
   return {
     next, reauth, codePending, loggedOut: hasLogoutNotice(request),
-    ...(googleLoginConfig() && !reauth ? { google: { error: new URL(request.url).searchParams.get("error") } } : {}),
+    ...(googleLoginConfig() && !reauth ? { google: { browser: googleBrowserFromRequest(request), error: new URL(request.url).searchParams.get("error") } } : {}),
     ...(verifying ? { verifying } : {}),
     ...(publicReading() ? { publicReading: true } : {}),
     ...(/^\/u\//.test(next) ? { membersOnlyTarget: true } : {}),
@@ -189,7 +190,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
         {screenAction?.status === "origin_mismatch" && <p role="alert" className="text-destructive">{m.auth_origin_mismatch()}</p>}
       </> : <>
       {verifying?.hasPasskey && <PasskeyLogin next={loaderData.next} or="after" />}
-      {loaderData.google && <><GoogleLoginError error={loaderData.google.error} /><GoogleLogin next={loaderData.next} /></>}
+      {loaderData.google && <><GoogleLoginError error={loaderData.google.error} /><GoogleLogin browser={loaderData.google.browser} next={loaderData.next} /></>}
       <Form method="post" className="space-y-2">
           <input type="hidden" name="next" value={loaderData.next} />
           {loaderData.reauth && <input type="hidden" name="reauth" value="1" />}

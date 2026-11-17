@@ -956,6 +956,11 @@ that do not recognize it keep the ordinary invitation token path. Detection is
 a hint: cancellation and provider errors always leave email-code sign-in
 available. The separate MCP login screen does not offer Google sign-in.
 
+Google controls are rendered in the initial HTML to keep nearby controls in
+place during hydration. Embedded-browser guidance is selected from the request
+User-Agent; standalone guidance uses CSS `display-mode: standalone`, including
+before JavaScript loads. The copied URL comes from the request, without a fragment.
+
 Before enabling, check Gmail and Workspace invitations, an address mismatch,
 provider cancellation, email-code fallback, explicit connection and removal,
 stale-session re-verification, iPhone/Android browsers, embedded browsers and
