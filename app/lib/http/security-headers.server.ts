@@ -3,6 +3,7 @@ import { createContext, type MiddlewareFunction } from "react-router";
 import { isDevOrTest } from "~/lib/env.server";
 import { getSessionCookie } from "better-auth/cookies";
 import { publicReading } from "~/lib/public-reading.server";
+import { googleLoginConfig } from "~/lib/auth/google-config.server";
 
 // Security headers, attached to all responses by root middleware (app/root.tsx). Do not overwrite route-provided headers
 // such as authentication pages' privacy headers or /preview's CSP, since routes choose stricter values.
@@ -44,7 +45,7 @@ export function generateNonce(): string {
   return randomBytes(16).toString("base64");
 }
 
-export function contentSecurityPolicy(nonce: string): string {
+export function contentSecurityPolicy(nonce: string, googleNavigation = false): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
@@ -56,7 +57,8 @@ export function contentSecurityPolicy(nonce: string): string {
     "manifest-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    // Chromium applies form-action to redirects after a same-origin POST too.
+    `form-action 'self'${googleNavigation ? " https://accounts.google.com" : ""}`,
   ].join("; ");
 }
 
@@ -81,8 +83,9 @@ export const isHtml = (headers: Headers): boolean => (headers.get("content-type"
 
 // Header list, attaching only headers absent from the response.
 export function securityHeaders(opts: SecurityHeaderOptions): Record<string, string> {
+  const googleNavigation = !!googleLoginConfig() && (authenticationFlow(opts.pathname ?? "/") || opts.pathname === "/settings");
   return {
-    ...(opts.production ? { "Content-Security-Policy": contentSecurityPolicy(opts.nonce), "Strict-Transport-Security": HSTS } : {}),
+    ...(opts.production ? { "Content-Security-Policy": contentSecurityPolicy(opts.nonce, googleNavigation), "Strict-Transport-Security": HSTS } : {}),
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": PERMISSIONS_POLICY,

@@ -196,7 +196,7 @@ test("invitation creation rejects self-invites and copies the created link with 
   await page.getByLabel(enMessages.invites_email, { exact: true }).fill("pat-invitee@example.com");
   await page.getByRole("button", { name: enMessages.invites_submit }).click();
   const link = page.locator("code");
-  await expect(link).toHaveText(new RegExp(`^${escapeRegex(state().baseURL)}/invite/[A-Za-z0-9_-]{43}$`));
+  await expect(link).toHaveText(new RegExp(`^${escapeRegex(state().baseURL)}/invite/[A-Za-z0-9_-]{43}\\?openExternalBrowser=1$`));
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByRole("button", { name: enMessages.invites_copy, exact: true }).click();
   await expect(page.getByRole("status")).toHaveText(enMessages.invites_copied);

@@ -31,6 +31,10 @@ import { OpenInAiSettings } from "~/components/open-in-ai";
 import { PasskeySettings } from "~/components/passkey-settings";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { getAuth } from "~/lib/auth/auth.server";
+import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { GoogleLogin } from "~/components/google-login";
+import { reauthenticationPath } from "~/lib/reauth";
+import { isAPIError } from "better-auth/api";
 import { getCredentialSessionFresh, requireMember, requireWriter } from "~/lib/auth/session.server";
 import { getWriter } from "~/lib/members.server";
 import { formString } from "~/lib/entry-form.server";
@@ -44,8 +48,8 @@ import { changeHandle, changeHomeArea, nextHandleChangeAt, nextHomeAreaChangeAt,
 import { HOME_AREA_CHANGE_DAYS } from "~/lib/profile-settings";
 import { removeOwnPasskey } from "~/lib/auth/passkeys.server";
 import { SigningFailureResponse, signingPreferenceValue, withSignedWrite } from "~/lib/signing.server";
-import { eq } from "drizzle-orm";
-import { profiles } from "~/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { account, profiles } from "~/lib/db/schema";
 import { SignedForm } from "~/components/signed-form";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
@@ -102,6 +106,10 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     ...(webPushEnabled() ? { push: { publicKey: pushConfig()!.publicKey } } : {}),
     emailPref: profile.emailPref,
     passkeys,
+    ...(googleLoginConfig() ? { google: {
+      accounts: (await db.select({ id: account.id, createdAt: account.createdAt }).from(account).where(and(eq(account.userId, user.id), eq(account.providerId, "google")))).map(row => ({ id: row.id, date: dateOf(row.createdAt) })),
+      failed: new URL(request.url).searchParams.has("error"),
+    } } : {}),
     credentialFresh: await getCredentialSessionFresh(request),
     shareBookmarklet: shareBookmarklet(siteUrl()),
     ...(villagesEnabled() ? { posting: await postingVillages(db, user.id, undefined, { repair: false, reader: villageReaderFor(request, profile) }) } : {}),
@@ -132,6 +140,25 @@ async function settingsAction({ request }: { request: Request }) {
   assertSameOrigin(request);
   const { user, db } = await requireMember(request);
   const form = await request.formData();
+  const intent = formString(form, "intent");
+  if (intent === "google-link" || intent === "google-unlink") {
+    if (!googleLoginConfig()) throw new Response("Not found", { status: 404 });
+    const auth = await getAuth();
+    try {
+      if (intent === "google-link") {
+        const { response, headers } = await auth.api.linkSocialAccount({ request, headers: request.headers, returnHeaders: true, asResponse: false, body: { provider: "google", callbackURL: "/settings#settings-google" } });
+        headers.set("Referrer-Policy", "no-referrer"); headers.set("Cache-Control", "no-store");
+        return redirect(response.url, { headers });
+      }
+      const [linked] = await db.select({ id: account.id }).from(account).where(and(eq(account.id, formString(form, "accountId")), eq(account.userId, user.id), eq(account.providerId, "google")));
+      if (!linked) throw new Response("Not found", { status: 404 });
+      await auth.api.unlinkAccount({ request, headers: request.headers, asResponse: false, body: { accountId: linked.id } });
+    } catch (error) {
+      if (isAPIError(error) && error.body?.code === "SESSION_NOT_FRESH") throw redirect(reauthenticationPath("/settings#settings-google"));
+      throw error;
+    }
+    throw redirect("/settings#settings-google");
+  }
   const returnTo = settingsReturnFromRequest(request);
   if (formString(form, "intent") === "sign-posts") {
     try {
@@ -476,6 +503,15 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
 
         {actionData?.intent === "delete-passkey" && <p role="alert" className="text-destructive">{m.signing_failed()}</p>}
         <PasskeySettings passkeys={passkeys} fresh={loaderData.credentialFresh} saved={saved === "passkey-removed" ? saved : null} returnTo={returnTo} />
+        {loaderData.google && <section id="settings-google" aria-labelledby="settings-google-heading" className="scroll-mt-4 space-y-3">
+          <h3 id="settings-google-heading" className="text-lg font-semibold">{m.google_settings_heading()}</h3>
+          <p className="ui-help text-muted-foreground">{m.google_settings_help()}</p>
+          {loaderData.google.failed && <p role="alert">{m.google_failed()}</p>}
+          {loaderData.google.accounts.length ? loaderData.google.accounts.map(linked => <div key={linked.id} className="space-y-2">
+            <p>{m.google_connected({ date: linked.date })}</p>
+            {loaderData.credentialFresh ? <Form method="post" reloadDocument><input type="hidden" name="intent" value="google-unlink" /><input type="hidden" name="accountId" value={linked.id} /><Button variant="outline" type="submit">{m.google_disconnect()}</Button></Form> : <Link to={reauthenticationPath("/settings#settings-google")} className="underline">{m.google_verify()}</Link>}
+          </div>) : <><p>{m.google_not_connected()}</p>{loaderData.credentialFresh ? <GoogleLogin link /> : <Link to={reauthenticationPath("/settings#settings-google")} className="underline">{m.google_verify()}</Link>}</>}
+        </section>}
 
         <section id="settings-sessions" aria-labelledby="settings-sessions-heading" className="scroll-mt-4 space-y-3">
           <h3 id="settings-sessions-heading" className="text-lg font-semibold">{m.settings_sessions_heading()}</h3>

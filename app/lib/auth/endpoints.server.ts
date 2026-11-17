@@ -10,6 +10,14 @@
 // To add an endpoint, add its method and path here. Matching is exact, including case and trailing slashes.
 
 export const AUTH_BASE_PATH = "/api/auth";
+import { googleLoginConfig } from "./google-config.server";
+
+export function isGoogleAuthEndpoint(request: Request): boolean {
+  if (!googleLoginConfig()) return false;
+  const path = new URL(request.url).pathname;
+  return (request.method === "POST" && path === `${AUTH_BASE_PATH}/sign-in/social`)
+    || (request.method === "GET" && path === `${AUTH_BASE_PATH}/callback/google`);
+}
 
 // OAuth's machine endpoints and signed authorize entry only. Consent/login stay behind the application screens.
 export const OAUTH_AUTH_ENDPOINTS: readonly { method: "GET" | "POST"; path: string }[] = [
@@ -35,6 +43,7 @@ export const ALLOWED_AUTH_ENDPOINTS: readonly { method: "GET" | "POST"; path: st
 export function isAllowedAuthEndpoint(request: Request): boolean {
   const { pathname } = new URL(request.url);
   if (!pathname.startsWith(`${AUTH_BASE_PATH}/`)) return false;
+  if (isGoogleAuthEndpoint(request)) return true;
   const path = pathname.slice(AUTH_BASE_PATH.length);
   const method = request.method.toUpperCase();
   return [...ALLOWED_AUTH_ENDPOINTS, ...OAUTH_AUTH_ENDPOINTS].some((endpoint) => endpoint.method === method && endpoint.path === path);

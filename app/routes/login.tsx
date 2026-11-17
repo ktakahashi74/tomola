@@ -29,6 +29,9 @@ import { m } from "~/paraglide/messages.js";
 import { getLocale } from "~/paraglide/runtime.js";
 import { hasLogoutNotice } from "~/lib/auth/logout-notice.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
+import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { startGoogleSignIn } from "~/lib/auth/google-flow.server";
+import { GoogleLogin, GoogleLoginError } from "~/components/google-login";
 
 // Document responses must retain the code error's privacy headers too.
 export function headers({ actionHeaders }: Route.HeadersArgs) {
@@ -38,7 +41,8 @@ export function headers({ actionHeaders }: Route.HeadersArgs) {
 // Login/authentication POSTs: 300 per IP per 15 minutes (AUTH_PAGE_IP_LIMIT; 429 on excess). Do not count GET page views; they write no DB rows.
 // Magic-link sending has separate per-email and per-IP limits.
 // What a re-verification is for, told from the page it returns to (the screens that ask for it all send the member back to themselves).
-function reauthPurpose(next: string): "tokens" | "mcp" | "passkey" {
+function reauthPurpose(next: string): "tokens" | "mcp" | "passkey" | "google" {
+  if (next.includes("#settings-google")) return "google";
   const path = next.split(/[?#]/)[0];
   if (path === "/settings/tokens") return "tokens";
   if (path.startsWith("/mcp/")) return "mcp";
@@ -64,6 +68,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   // The extra fields are present only when they apply, so an ordinary login screen carries nothing more than before.
   return {
     next, reauth, codePending, loggedOut: hasLogoutNotice(request),
+    ...(googleLoginConfig() && !reauth ? { google: { error: new URL(request.url).searchParams.get("error") } } : {}),
     ...(verifying ? { verifying } : {}),
     ...(publicReading() ? { publicReading: true } : {}),
     ...(/^\/u\//.test(next) ? { membersOnlyTarget: true } : {}),
@@ -83,6 +88,7 @@ export async function action({ request }: Route.ActionArgs) {
     throw redirect(safeLocalPath(String(form.get("next") ?? "")));
   }
   await enforceIpLimit(await getDb(), request, "auth-page");
+  if (intent === "google-login" && !reauth) return startGoogleSignIn(request, safeLocalPath(String(form.get("next") ?? "")));
   if (intent === "login-restart") return restartLoginCode(request);
   if (intent === "login-code") return submitLoginCode(request, form);
   const resent = intent === "login-resend";
@@ -172,7 +178,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
       {loaderData.loggedOut && <p role="status">{m.logged_out()}</p>}
       {!verifying && ("membersOnlyTarget" in loaderData) && !loaderData.codePending && <MembersOnlyNotice />}
       <h1 className="text-2xl font-bold">{heading}</h1>
-      {verifying && <p>{(verifying.purpose === "tokens" ? m.reauth_for_tokens : verifying.purpose === "mcp" ? m.reauth_for_mcp : m.reauth_for_passkey)({ who: verifying.handle ? `@${verifying.handle}` : verifying.email })}</p>}
+      {verifying && <p>{(verifying.purpose === "tokens" ? m.reauth_for_tokens : verifying.purpose === "mcp" ? m.reauth_for_mcp : verifying.purpose === "google" ? m.google_reauth_for : m.reauth_for_passkey)({ who: verifying.handle ? `@${verifying.handle}` : verifying.email })}</p>}
       {!verifying && !loaderData.codePending && <p>{m.entry_intro()}</p>}
       <IosStandaloneLoginNote />
       {!loaderData.codePending && screenAction?.status === "code_invalid" && <p role="alert" className="text-destructive">{m.login_code_invalid()}</p>}
@@ -183,6 +189,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
         {screenAction?.status === "origin_mismatch" && <p role="alert" className="text-destructive">{m.auth_origin_mismatch()}</p>}
       </> : <>
       {verifying?.hasPasskey && <PasskeyLogin next={loaderData.next} or="after" />}
+      {loaderData.google && <><GoogleLoginError error={loaderData.google.error} /><GoogleLogin next={loaderData.next} /></>}
       <Form method="post" className="space-y-2">
           <input type="hidden" name="next" value={loaderData.next} />
           {loaderData.reauth && <input type="hidden" name="reauth" value="1" />}

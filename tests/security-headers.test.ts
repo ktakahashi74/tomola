@@ -13,6 +13,21 @@ import {
   withSecurityHeaders,
 } from "~/lib/http/security-headers.server";
 
+it("permits Google form redirects only on authentication and settings screens when enabled", () => {
+  vi.stubEnv("GOOGLE_LOGIN", "1"); vi.stubEnv("GOOGLE_CLIENT_ID", "fixture"); vi.stubEnv("GOOGLE_CLIENT_SECRET", "fixture");
+  try {
+    for (const pathname of ["/login", "/invite/fixture", "/settings"]) {
+      const csp = securityHeaders({ nonce: "n", production: true, pathname })["Content-Security-Policy"];
+      expect(csp).toContain("form-action 'self' https://accounts.google.com");
+      expect(csp).toContain("connect-src 'self';");
+      expect(csp).toContain("font-src 'self' data:;");
+    }
+    expect(securityHeaders({ nonce: "n", production: true, pathname: "/t/1" })["Content-Security-Policy"]).not.toContain("google.com");
+    vi.stubEnv("GOOGLE_LOGIN", "");
+    expect(securityHeaders({ nonce: "n", production: true, pathname: "/login" })["Content-Security-Policy"]).not.toContain("google.com");
+  } finally { vi.unstubAllEnvs(); }
+});
+
 it("omits COOP throughout authentication while retaining it on reading and settings responses", async () => {
   for (const path of ["/login?reauth=1", "/login/", "/LOGIN", "/log%69n", "/auth/confirm?token=fixture", "/api/auth/oauth2/authorize", "/mcp/login", "/mcp/consent.data", "/invite/fixture", "/onboarding", "/logout"]) {
     const response = await securityHeadersMiddleware({ request: new Request(`https://forum.example${path}`), context: new RouterContextProvider(), params: {} } as never,

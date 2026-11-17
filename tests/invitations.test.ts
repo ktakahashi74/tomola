@@ -223,7 +223,7 @@ describe("the operator's invitation list", () => {
         body: new URLSearchParams({ email: "someone@example.com" }),
       });
       const res = (await action(h.args(request))) as { url: string };
-      expect(res.url).toMatch(/^https:\/\/forum\.example\.org\/invite\/[A-Za-z0-9_-]{43}$/);
+      expect(res.url).toMatch(/^https:\/\/forum\.example\.org\/invite\/[A-Za-z0-9_-]{43}\?openExternalBrowser=1$/);
     } finally {
       if (saved === undefined) delete process.env.BETTER_AUTH_URL;
       else process.env.BETTER_AUTH_URL = saved;
@@ -242,7 +242,7 @@ describe("the operator's invitation list", () => {
   it("does not disclose whether another invitee is already a member", async () => {
     const { action } = await import("~/routes/invites-new");
     for (const email of ["somchai@example.com", "unknown-invitee@example.com"]) {
-      expect(await action(h.args(h.request("/invites/new", { as: "hana", form: { email } })))).toEqual({ url: expect.stringMatching(/\/invite\/[A-Za-z0-9_-]{43}$/), error: null });
+      expect(await action(h.args(h.request("/invites/new", { as: "hana", form: { email } })))).toEqual({ url: expect.stringMatching(/\/invite\/[A-Za-z0-9_-]{43}\?openExternalBrowser=1$/), error: null });
     }
   });
 

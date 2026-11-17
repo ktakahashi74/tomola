@@ -25,6 +25,10 @@ import { getLocale } from "~/paraglide/runtime.js";
 import { readInvitationNote } from "~/lib/invitation-note.server";
 import { languageLabel } from "~/lib/language-label";
 import { trialParticipationRequired } from "~/lib/notice-sources.server";
+import { googleLoginConfig } from "~/lib/auth/google-config.server";
+import { startGoogleSignIn } from "~/lib/auth/google-flow.server";
+import { maskGoogleInvitationEmail } from "~/lib/auth/google-policy.server";
+import { GoogleLogin, GoogleLoginError } from "~/components/google-login";
 
 // Invitation URLs contain secret tokens. Send only the origin as Referer so
 // native same-origin form POSTs work without exposing the invitation token.
@@ -49,6 +53,7 @@ async function loaderImplementation({ params, request }: Route.LoaderArgs) {
   const note = invitation && from ? await readInvitationNote(db, invitation.id, getLocale(), new URL(request.url).searchParams.get("original") === "1") : null;
   return {
     publicReading: publicReading(),
+    ...(googleLoginConfig() ? { google: { error: new URL(request.url).searchParams.get("error"), email: invitation ? maskGoogleInvitationEmail(invitation.email) : null } } : {}),
     trialRequired: trialParticipationRequired(),
     email: invitation?.email ?? null,
     from,
@@ -70,6 +75,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (form.get("intent") === "login-code") return submitLoginCode(request, form);
   const invitation = await findValidInvitationByToken(db, params.token);
   if (!invitation) return { sentTo: null, error: "invalid" as const };
+  if (form.get("intent") === "google-login") return startGoogleSignIn(request);
   const auth = await getAuth();
   const pending = prepareLoginCode(request, invitation.email, form.get("intent") === "login-resend");
   const browser = pending.browser;
@@ -146,6 +152,7 @@ export default function Invite({ loaderData, actionData }: Route.ComponentProps)
       </> : <>
       <p><span className="block">{m.entry_intro()}</span><span className="block">{m.invite_about()}</span></p>
       {loaderData.publicReading && <p className="ui-help text-muted-foreground">{m.public_reading_onboarding()}</p>}
+      {loaderData.google && <><GoogleLoginError {...loaderData.google} /><GoogleLogin /></>}
       <Form method="post" className="space-y-2">
           <p>{m.invite_for({ email: loaderData.email })}</p>
           <p className="ui-help text-muted-foreground">{m.invite_next()}</p>

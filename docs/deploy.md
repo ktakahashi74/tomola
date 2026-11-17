@@ -900,3 +900,62 @@ with a generic operator error. After correcting the provider configuration,
 new notices can be delivered again. Failed notices remain available in the
 in-app notification list; do not bulk reset delivery records. No queued notice
 is guaranteed to be sent exactly once across a crash after provider acceptance.
+
+## Google sign-in (optional)
+
+Google sign-in is closed by default. Leave `GOOGLE_LOGIN` empty or unset to hide
+its invitation, login and settings controls and close the social sign-in and
+Google callback HTTP endpoints. Only `GOOGLE_LOGIN=1` together with both
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` enables it. Startup fails for a
+nonempty flag other than `1`, or for either missing credential when enabled.
+Store the secret only in the deployment's secret settings or private `.env`.
+
+1. In Google Cloud, select the site's project and configure Google Auth
+   Platform's consent screen: app name, support contact, public home page,
+   privacy-notice URL, intended audience and test users while testing.
+2. Create an OAuth client of type **Web application**. Register the exact URI
+   `https://forum.example.org/api/auth/callback/google`, replacing the origin
+   with `BETTER_AUTH_URL`. Keep HTTPS and the path unchanged. No browser SDK,
+   One Tap, Google font, or authorized JavaScript origin is needed by tomola.
+3. Request only `openid` and `email`; do not add `profile` or Google API scopes.
+   Review the consent screen's data access list and publication status.
+4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to that client's values.
+   Set `GOOGLE_LOGIN=1` only after testing representative devices and reviewing
+   the automatically appended Google section of the privacy notice. Restart
+   the app. To close future Google sign-ins, clear `GOOGLE_LOGIN` and restart;
+   email-code and passkey sign-in remain available.
+
+Invited registration skips the email code only for a verified matching address
+at `gmail.com` or `googlemail.com`, or when the ID token's `hd` equals the email
+domain. The server consumes the same invitation as email registration; browser
+signup flags cannot replace that check. Other accounts return to email-code
+registration. Existing members first sign in with email or a passkey, then
+explicitly connect Google in settings. Connecting and disconnecting require a
+fresh Better Auth session (24 hours); re-verification uses email or a passkey.
+Different Google and tomola email addresses are allowed only for that explicit
+connection. Subsequent sign-ins use Google's `sub`, leaving the tomola address
+and name unchanged. Settings show the connection date; the Google address is
+not saved separately. Disconnecting Google leaves email sign-in available.
+
+The app uses Better Auth's authorization-code flow with state and S256 PKCE.
+The Google provider does not send a nonce in this flow. ID-token sign-in and
+One Tap are disabled. Google access, refresh and ID tokens are not stored.
+Only `openid email` is requested, without incremental granted scopes; names
+and photos are not requested or used. Google learns that the person signs in
+to tomola; tomola receives an email and Google account ID. Posts and replies
+are not sent to Google for sign-in. The privacy section appears only while the
+feature is enabled, in both HTML and Markdown editions.
+
+No Google connection is made before the person presses the button. Provider
+redirects use `Referrer-Policy: no-referrer`. Known embedded app browsers and
+standalone home-screen apps instead show a browser-opening note and URL-copy
+button. Generated invitation links include `openExternalBrowser=1`; browsers
+that do not recognize it keep the ordinary invitation token path. Detection is
+a hint: cancellation and provider errors always leave email-code sign-in
+available. The separate MCP login screen does not offer Google sign-in.
+
+Before enabling, check Gmail and Workspace invitations, an address mismatch,
+provider cancellation, email-code fallback, explicit connection and removal,
+stale-session re-verification, iPhone/Android browsers, embedded browsers and
+home-screen apps. Confirm the actual redirect URI, minimal consent scopes,
+no pre-button Google requests and no invitation token in the outgoing Referer.

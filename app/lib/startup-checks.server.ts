@@ -1,5 +1,6 @@
 import { assertNushiConfig } from "./nushi-config.server";
 import { pushConfig } from "./push/config.server";
+import { googleLoginConfig } from "./auth/google-config.server";
 import { loadOperatorConfig } from "~/lib/operator-config.server";
 import { createFigureReader, figureTranslationEnabled } from "./figure-reading.server";
 import { translationEagerConfig } from "./translation-eager-config.server";
@@ -124,6 +125,7 @@ export function assertStartupConfig(
   deps: { reviewCounts?: ReviewCounts | null } = {},
 ): void {
   pushConfig(env);
+  googleLoginConfig(env);
   testSiteEnabled(env);
   if (figureTranslationEnabled(env)) createFigureReader(env);
   // Throw in production without SMTP_URL and MAIL_FROM; do not run a server that cannot send magic links.

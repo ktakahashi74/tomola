@@ -86,10 +86,11 @@ export async function findValidInvitationByToken(
 export async function markInvitationUsed(
   db: Db,
   email: string,
-  opts: { usedBy?: string | null; invitationId?: string | null; now?: Date } = {},
+  opts: { usedBy?: string | null; invitationId?: string | null; requireInvitationId?: boolean; now?: Date } = {},
 ): Promise<number> {
   const now = opts.now ?? new Date();
   const address = normalizeEmail(email);
+  if (opts.requireInvitationId && !opts.invitationId) return 0;
   if (isDeletedIdentity(opts.usedBy, address) || await isSuspendedDeletedAddress(db, address, now)) return 0;
   if (opts.invitationId) {
     const selected = await db.update(invitations).set({ usedAt: now, usedBy: opts.usedBy ?? null }).where(and(
@@ -98,6 +99,7 @@ export async function markInvitationUsed(
     )).returning({ id: invitations.id });
     if (selected.length) return selected.length;
   }
+  if (opts.requireInvitationId) return 0;
   const rows = await db
     .update(invitations)
     .set({ usedAt: now, usedBy: opts.usedBy ?? null })

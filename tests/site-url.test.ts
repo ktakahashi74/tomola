@@ -20,7 +20,7 @@ describe("siteUrl", () => {
 
 describe("inviteUrl", () => {
   it("is the site URL, /invite/ and the token, with one slash however BETTER_AUTH_URL is written", () => {
-    expect(inviteUrl("tok", { NODE_ENV: "production", BETTER_AUTH_URL: "https://forum.example.org/" })).toBe("https://forum.example.org/invite/tok");
-    expect(inviteUrl("tok", { NODE_ENV: "test" })).toBe("http://localhost:5173/invite/tok");
+    expect(inviteUrl("tok", { NODE_ENV: "production", BETTER_AUTH_URL: "https://forum.example.org/" })).toBe("https://forum.example.org/invite/tok?openExternalBrowser=1");
+    expect(inviteUrl("tok", { NODE_ENV: "test" })).toBe("http://localhost:5173/invite/tok?openExternalBrowser=1");
   });
 });

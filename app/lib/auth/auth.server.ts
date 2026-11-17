@@ -3,7 +3,9 @@ import { user } from "../db/schema";
 import { isDeletedIdentity } from "../deleted-member";
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
+import { APIError, createAuthMiddleware, getOAuthState, isAPIError } from "better-auth/api";
+import { googleLoginConfig } from "./google-config.server";
+import { prepareGoogleFlow, validateGoogleUser } from "./google-policy.server";
 import { getDb, type Db } from "~/lib/db/client.server";
 import { sessionAdapter } from "./session-adapter.server";
 import { RETENTION } from "~/lib/retention";
@@ -22,16 +24,27 @@ const g = globalThis as { __tomolaAuth?: Promise<Auth>; __tomolaAuthOptions?: We
 // Configuration must survive the same module reloads as the auth singleton.
 const originalOptions = g.__tomolaAuthOptions ??= new WeakMap<object, AuthOptions>();
 export function createAuth(db: Db, opts: AuthOptions) {
+  const google = googleLoginConfig();
   const auth = betterAuth({
     baseURL: opts.baseURL,
     secret: opts.secret,
     session: { expiresIn: RETENTION.sessionDays * 86400, updateAge: 86400 },
     database: sessionAdapter(db),
+    socialProviders: google ? { google: {
+      ...google, disableDefaultScope: true, scope: ["openid", "email"], includeGrantedScopes: false,
+      disableIdTokenSignIn: true, overrideUserInfoOnSignIn: false,
+      mapProfileToUser: () => ({ name: "", image: undefined }),
+    } } : {},
+    user: { validateUserInfo: validateGoogleUser },
+    account: { accountLinking: { disableImplicitLinking: true, allowDifferentEmails: true, allowUnlinkingAll: true, updateUserInfoOnLink: false }, updateAccountOnSignIn: false },
     logger: { level: "warn", log: (level, message, ...args) => {
       const write = level === "error" ? console.error : level === "warn" ? console.warn : console.info;
-      write("[auth]", safeErrorText([message, ...args]));
+      // Provider errors can contain codes, tokens or personal claims. Retain
+      // only the category while social authentication is configured.
+      write("[auth]", google ? "Authentication request failed" : safeErrorText([message, ...args]));
     } },
     hooks: { before: createAuthMiddleware(async ctx => {
+      await prepareGoogleFlow(ctx, opts.secret, !!google);
       if (ctx.path === "/sign-in/magic-link" && isDeletedIdentity(undefined, ctx.body?.email)) return ctx.json({ status: true });
     }), after: createAuthMiddleware(async ctx => {
       if (ctx.path !== "/passkey/generate-authenticate-options") return;
@@ -44,6 +57,10 @@ export function createAuth(db: Db, opts: AuthOptions) {
     // based on IPs, but the app has its own login rate limit (magic-link.server.ts) and an HTTP endpoint allowlist (endpoints.server.ts).
     advanced: { disableOriginCheck: false, ipAddress: { disableIpTracking: true } },
     databaseHooks: {
+      account: {
+        create: { before: async value => value.providerId === "google" ? { data: { accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null } } : undefined },
+        update: { before: async (value, context) => context?.path === "/callback/:id" && context.params?.id === "google" ? { data: { ...value, accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null } } : undefined },
+      },
       session: {
         create: {
           // Better Auth stores user agents in sessions without a setting to disable this. Omit them. The setting above omits IPs, which arrive as empty strings; normalize them to null.
@@ -63,8 +80,10 @@ export function createAuth(db: Db, opts: AuthOptions) {
             if (isDeletedIdentity(newUser.id, newUser.email)) throw new APIError("FORBIDDEN", { message: "Invalid account" });
             const id = randomUUID();
             const request = context?.request ?? new Request(opts.baseURL, { headers: context?.headers ?? undefined });
-            const invitationId = readInvitationCookie(request, opts.secret);
-            const claimed = await markInvitationUsed(db, newUser.email, { usedBy: id, invitationId });
+            const googleSignup = context?.path === "/callback/:id" && context.params?.id === "google";
+            const bound = googleSignup ? (await getOAuthState())?.serverContext?.invitationId : null;
+            const invitationId = googleSignup ? (typeof bound === "string" ? bound : null) : readInvitationCookie(request, opts.secret);
+            const claimed = await markInvitationUsed(db, newUser.email, { usedBy: id, invitationId, requireInvitationId: googleSignup });
             if (claimed === 0) {
               throw new APIError("FORBIDDEN", { code: "INVITATION_REQUIRED", message: "invitation_required" });
             }

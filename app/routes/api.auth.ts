@@ -1,6 +1,7 @@
 import type { Route } from "./+types/api.auth";
 import { authBaseURL, createAppAuth, getAuth } from "~/lib/auth/auth.server";
-import { isAllowedAuthEndpoint, isOAuthAuthEndpoint } from "~/lib/auth/endpoints.server";
+import { isAllowedAuthEndpoint, isOAuthAuthEndpoint, isGoogleAuthEndpoint } from "~/lib/auth/endpoints.server";
+import { clearInvitationCookie } from "~/lib/auth/invitation-cookie.server";
 import { handleOAuthHttp } from "~/lib/mcp/oauth-http.server";
 import { clientAddress } from "~/lib/http/client-ip.server";
 import { getDb } from "~/lib/db/client.server";
@@ -36,6 +37,19 @@ async function handle(request: Request) {
     if (!rate.allowed) return Response.json({ error: "rate_limited" }, { status: 429, headers: { ...rateLimitHeaders(rate), "Cache-Control": "no-store" } });
   }
   const auth = await getAuth();
+  if (isGoogleAuthEndpoint(request)) {
+    const response = await auth.handler(request);
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", "no-store");
+    headers.set("Referrer-Policy", "no-referrer");
+    // Keep the invitation on errors so email-code registration remains usable.
+    const target = response.headers.get("location");
+    if (new URL(request.url).pathname.endsWith("/callback/google") && target && !new URL(target, request.url).searchParams.has("error")) {
+      clearInvitationCookie(request, headers);
+      clearReadingReturn(request, headers);
+    }
+    return new Response(response.body, { status: response.status, headers });
+  }
   if (request.method === "POST" && new URL(request.url).pathname.endsWith("/passkey/verify-authentication")) {
     let credentialId: unknown;
     try { credentialId = (await request.clone().json())?.response?.id; } catch { return auth.handler(request); }

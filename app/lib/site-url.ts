@@ -14,5 +14,5 @@ export function siteUrl(env: Record<string, string | undefined> = process.env): 
 
 // Invitation URL with plaintext token returned only once at creation.
 export function inviteUrl(token: string, env: Record<string, string | undefined> = process.env): string {
-  return `${siteUrl(env)}/invite/${token}`;
+  return `${siteUrl(env)}/invite/${token}?openExternalBrowser=1`;
 }
