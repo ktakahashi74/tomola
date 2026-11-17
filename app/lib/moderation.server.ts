@@ -23,7 +23,7 @@ import { isReason, MAX_SUSPEND_DAYS, REPORT_REASONS, type ModerationAction, type
 import { createModerationNotification } from "~/lib/notifications.server";
 import { isOperatorEmail } from "~/lib/operators.server";
 import { inScope, type ModScope } from "~/lib/roles.server";
-import { enqueueTranslations } from "~/lib/translations.server";
+import { enqueueTranslations, previousBodyTranslationLangs } from "~/lib/translations.server";
 
 import { villageName } from "~/lib/village-name";
 import { isSharedVillageKind } from "~/lib/villages";
@@ -254,7 +254,7 @@ export async function unhideEntry(db: Db, actor: Actor, input: ActionInput, opts
     await touchAltOriginal(tx, entry.id, now);
     await touchReferenceTopics(tx, entry.id, now);
     if (entry.sourceHash) {
-      await enqueueTranslations(tx, { id: entry.id, lang: entry.lang, sourceHash: entry.sourceHash });
+      await enqueueTranslations(tx, { id: entry.id, lang: entry.lang, sourceHash: entry.sourceHash }, { previousBodyLangs: await previousBodyTranslationLangs(tx, entry.id), now });
       await enqueueEmbedding(tx, { id: entry.id, sourceHash: entry.sourceHash });
     }
     return { ok: true as const, actionId: action.id };

@@ -8,8 +8,36 @@ import { applyEntryEdit } from "~/lib/entries.server";
 import { runDueJobs } from "~/lib/jobs/queue.server";
 import { EDITED_BODY_DELAY_MS, REFRESH_BODY_JOB, TRANSLATE_JOB } from "~/lib/translations.server";
 import { requestBodyTranslations } from "~/lib/translation-on-read.server";
+import { addMember } from "./helpers/db";
+import { hideEntry, unhideEntry } from "~/lib/moderation.server";
+import { createAppeal, decideAppeal } from "~/lib/appeals.server";
 
 afterEach(() => vi.unstubAllEnvs());
+
+it.skipIf(!PG_MODE).each(["unhide", "appeal"] as const)("rolls back visibility and delayed refreshes together through %s", { tags: ["postgres"] }, async restore => {
+  const f = await editedBodyFixture();
+  await addMember(f.db, "moderator", "refresh_moderator");
+  await addMember(f.db, "reviewer", "refresh_reviewer");
+  const actor = { id: "moderator", scope: { operator: true, langs: [] } };
+  const now = new Date();
+  const hidden = await hideEntry(f.db, actor, { entryId: f.id, reason: "spam", note: "An invented moderation reason." }, { now });
+  if (!hidden.ok) throw new Error(hidden.error);
+  await f.edit("An invented revision while hidden.", now);
+  const appeal = await createAppeal(f.db, "writer", hidden.actionId, "An invented appeal.", { now });
+  if (!appeal.ok) throw new Error(appeal.error);
+  const rollback = new Error("Abort the invented visibility change");
+  await expect(f.db.transaction(async tx => {
+    if (restore === "unhide") {
+      expect((await unhideEntry(tx, actor, { entryId: f.id, reason: "other" }, { now })).ok).toBe(true);
+    } else {
+      expect(await decideAppeal(tx, { ...actor, id: "reviewer" }, appeal.id, { decision: "overturned", note: "An invented decision." }, { now })).toMatchObject({ ok: true, reversed: true });
+    }
+    expect(await tx.select().from(jobs).where(eq(jobs.kind, REFRESH_BODY_JOB))).toHaveLength(1);
+    throw rollback;
+  })).rejects.toBe(rollback);
+  expect((await f.row()).hiddenAt).toEqual(now);
+  expect(await f.refreshes()).toHaveLength(0);
+});
 
 it.skipIf(!PG_MODE)("serializes simultaneous browser and delayed dispatch into one revision job", { tags: ["postgres"] }, async () => {
   const f = await editedBodyFixture();

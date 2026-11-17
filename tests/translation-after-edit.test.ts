@@ -8,6 +8,8 @@ import { requestBodyTranslations } from "~/lib/translation-on-read.server";
 import { resumeBudgetWaits } from "~/lib/jobs/budget-wait.server";
 import { editEntry, softDeleteEntry } from "~/lib/entries.server";
 import { runDueJobs } from "~/lib/jobs/queue.server";
+import { hideEntry, unhideEntry } from "~/lib/moderation.server";
+import { createAppeal, decideAppeal } from "~/lib/appeals.server";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -92,6 +94,48 @@ it.each(["deletedAt", "hiddenAt", "missing", "closedLanguage", "sourceLanguage"]
   await f.run(delayed.runAt);
   expect(f.calls).toHaveLength(0);
   expect(await f.db.select().from(jobs).where(eq(jobs.kind, TRANSLATE_JOB))).toHaveLength(0);
+});
+
+it.each((["unhide", "appeal"] as const).flatMap(restore =>
+  (["edit while hidden", "waiting", "finished while hidden"] as const).map(phase => ({ restore, phase })),
+))("requeues earlier body languages through $restore after $phase", async ({ restore, phase }) => {
+  const f = await editedBodyFixture();
+  await addMember(f.db, "moderator", "refresh_moderator");
+  await addMember(f.db, "reviewer", "refresh_reviewer");
+  await f.db.insert(translations).values({ entryId: f.id, field: "body", lang: "de", kind: "human", text: "An invented earlier correction.", sourceHash: f.original.sourceHash });
+  const actor = { id: "moderator", scope: { operator: true, langs: [] } };
+  const now = new Date();
+  if (phase !== "edit while hidden") await f.edit("An invented revision before hiding.", now);
+  const hidden = await hideEntry(f.db, actor, { entryId: f.id, reason: "spam", note: "An invented moderation reason." }, { now });
+  if (!hidden.ok) throw new Error(hidden.error);
+  if (phase === "edit while hidden") {
+    await f.edit("An invented revision while hidden.", now);
+    expect(await f.refreshes()).toHaveLength(0);
+  } else {
+    expect(await f.refreshes()).toHaveLength(2);
+    if (phase === "finished while hidden") {
+      await f.run(new Date(now.getTime() + EDITED_BODY_DELAY_MS));
+      expect(await f.refreshes()).toHaveLength(0);
+      expect(await f.db.select().from(jobs).where(eq(jobs.kind, REFRESH_BODY_JOB))).toEqual([
+        expect.objectContaining({ status: "done" }), expect.objectContaining({ status: "done" }),
+      ]);
+      expect(f.calls).toHaveLength(0);
+    }
+  }
+  const restoredAt = new Date(now.getTime() + EDITED_BODY_DELAY_MS + 60_000);
+  if (restore === "unhide") {
+    expect((await unhideEntry(f.db, actor, { entryId: f.id, reason: "other" }, { now: restoredAt })).ok).toBe(true);
+  } else {
+    const appeal = await createAppeal(f.db, "writer", hidden.actionId, "An invented appeal.", { now });
+    if (!appeal.ok) throw new Error(appeal.error);
+    expect(await decideAppeal(f.db, { ...actor, id: "reviewer" }, appeal.id, { decision: "overturned", note: "An invented decision." }, { now: restoredAt })).toMatchObject({ ok: true, reversed: true });
+  }
+  expect((await f.row()).hiddenAt).toBeNull();
+  const delayed = await f.refreshes();
+  expect(delayed.map(j => (j.payload as { lang: string }).lang).sort()).toEqual(["de", "fr"]);
+  expect(delayed.every(j => j.runAt.getTime() === restoredAt.getTime() + EDITED_BODY_DELAY_MS)).toBe(true);
+  await f.run(delayed[0].runAt);
+  expect(f.calls.filter(c => ["de", "fr"].includes(c.to)).map(c => c.to).sort()).toEqual(["de", "fr"]);
 });
 
 it("uses the ordinary budget wait and attempt limit without calling the engine while stopped", async () => {

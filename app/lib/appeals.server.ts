@@ -17,7 +17,7 @@ import { inLanguageScope, isModerator, type ModScope } from "~/lib/roles.server"
 import { enqueueEmbedding } from "~/lib/embeddings.server";
 import { touchAltOriginal } from "~/lib/questions.server";
 import { lockReferenceTopics, touchReferenceTopics } from "~/lib/related-discussions.server";
-import { enqueueTranslations, replaceSegments } from "~/lib/translations.server";
+import { enqueueTranslations, previousBodyTranslationLangs, replaceSegments } from "~/lib/translations.server";
 
 import { lockVillageSlugClaims } from "~/lib/village-slugs.server";
 import { isVillageOwner, lockVillageActor, lockModeratedVillage, reverseVillageAction, villageAppealMetadata, type VillageMetadata } from "~/lib/village-moderation.server";
@@ -480,7 +480,7 @@ async function reverseAction(db: Tx, action: LoadedAction, reviewerId: string, a
     await touchAltOriginal(db, entry.id, now);
     await touchReferenceTopics(db, entry.id, now);
     if (entry.sourceHash) {
-      await enqueueTranslations(db, { id: entry.id, lang: entry.lang, sourceHash: entry.sourceHash });
+      await enqueueTranslations(db, { id: entry.id, lang: entry.lang, sourceHash: entry.sourceHash }, { previousBodyLangs: await previousBodyTranslationLangs(db, entry.id), now });
       await enqueueEmbedding(db, { id: entry.id, sourceHash: entry.sourceHash });
     }
     return true;
