@@ -2,8 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { describe, expect, it, vi } from "vitest";
 import { createClaudeEngine } from "~/lib/llm/engines/claude.server";
-import { createGeminiEmbeddingEngine, type GeminiEmbeddingClient } from "~/lib/llm/engines/gemini-embedding.server";
-import { createGeminiEngine, geminiComplete, resetThinkingFallbacks } from "~/lib/llm/engines/gemini.server";
+import { createGeminiEmbeddingEngine, DEFAULT_EMBEDDING_MODEL, type GeminiEmbeddingClient } from "~/lib/llm/engines/gemini-embedding.server";
+import { createGeminiEngine, DEFAULT_GEMINI_MODEL, geminiComplete, resetThinkingFallbacks } from "~/lib/llm/engines/gemini.server";
 import { createGeminiJudge, judgeTokenLimit } from "~/lib/llm/judge.server";
 import { THINKING_HEADROOM } from "~/lib/llm/thinking";
 import type { JudgeRequest } from "~/lib/llm/types";
@@ -171,8 +171,8 @@ describe("@google/genai (real client, fake fetch)", () => {
       await createGeminiEngine({ apiKey: "test-beta-api" }).translate({ text: "こんにちは", from: "ja", to: "en" });
       await createGeminiEmbeddingEngine({ apiKey: "test-beta-api" }).embed({ text: "source", task: "query" });
       expect(calls.map(call => call.url)).toEqual([
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+        `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_GEMINI_MODEL}:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_EMBEDDING_MODEL}:batchEmbedContents`,
       ]);
       expect(calls.every(call => call.method === "POST")).toBe(true);
     } finally {
