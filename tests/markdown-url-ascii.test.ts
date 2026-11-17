@@ -18,14 +18,16 @@ const links = (node: Node): Node[] => [...(node.type === "link" ? [node] : []), 
 const signature = (tree: Node) => links(tree).map(node => ({ url: node.url, label: text(node) }));
 
 it.each([
-  ["a.b/c.d@e.com", '<p>a.b/c.<a href="mailto:d@e.com">d@e.com</a></p>'],
-  ["https://x.com_e@f.co", '<p>https://x.<a href="mailto:com_e@f.co">com_e@f.co</a></p>'],
+  ["a.b/c.d@e.com", '<p>a.b/<a href="mailto:c.d@e.com">c.d@e.com</a></p>'],
+  ["https://x.com_e@f.co", '<p>https://<a href="mailto:x.com_e@f.co">x.com_e@f.co</a></p>'],
   ["_e@f.co", '<p><a href="mailto:_e@f.co">_e@f.co</a></p>'],
-  ["/x.come@f.co", '<p>/x.<a href="mailto:come@f.co">come@f.co</a></p>'],
+  ["/x.come@f.co", '<p>/<a href="mailto:x.come@f.co">x.come@f.co</a></p>'],
   ["x.www\\.a.com@d.co", '<p>x.<a href="http://www.a.com@d.co">www.a.com@d.co</a></p>'],
   ["xhttps\\://a.com,https\\://b.com", '<p>xhttps://a.com,<a href="https://b.com">https://b.com</a></p>'],
   ["https://.", '<p>https://.</p>'],
   ["use https://. or http:// here", '<p>use https://. or http:// here</p>'],
+  ["[https://-example.com", '<p>[https://-example.com</p>'],
+  ["[http://.example.com", '<p>[http://.example.com</p>'],
 ] as const)("preserves ordinary GFM candidate selection: %s", async (source, html) => {
   expect(await renderMarkdown(source)).toBe(html);
 });

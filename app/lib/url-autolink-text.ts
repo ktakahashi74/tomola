@@ -1,6 +1,6 @@
 // Preserve GFM's literal-text recognition in micromark events, before mdast is
 // built. Balanced links/images and code keep their normal inline grammar.
-// Matching/domain/trail rules adapted from mdast-util-gfm-autolink-literal 2.0.1;
+// Matching/domain/trail rules adapted from mdast-util-gfm-autolink-literal 2.1.0;
 /*
 (The MIT License)
 
@@ -67,13 +67,9 @@ function emails(value: string): Array<{ index: number; end: number }> {
   let index = 0;
   while (index < value.length) {
     if (!local(value[index])) { index++; continue; }
-    let start = index;
+    const start = index;
     while (index < value.length && local(value[index])) index++;
     if (value[index] !== "@") continue;
-    // A rejected local part can still contain a later valid start, such as
-    // c.d@e.com after '/'. Reuse its domain instead of rescanning the suffix.
-    while (start < index && start && (value[start - 1] === "/" || !/[\p{P}\p{S}\s]$/u.test(value.slice(Math.max(0, start - 2), start)))) start++;
-    if (start === index) { index++; continue; }
     let cursor = index + 1, segments = 0, end = cursor;
     while (cursor < value.length && label(value[cursor])) {
       while (cursor < value.length && label(value[cursor])) cursor++;
@@ -177,6 +173,7 @@ function resolveText(events: Event[], context: Context): Event[] {
       if (start && !punctuation.test(value[start - 1]) && !(value.charCodeAt(start - 1) > 127 && encodedPrefix)) continue;
       const www = /^w/i.test(match[0]);
       const domainStart = www ? start : urlPrefix.lastIndex;
+      if (punctuation.test(value[domainStart] ?? "")) continue;
       // The www prefix still requires at least one following domain character.
       if (!/[-.\w]/.test(value[urlPrefix.lastIndex] ?? "")) continue;
       if (domainStart >= domainEnd) {

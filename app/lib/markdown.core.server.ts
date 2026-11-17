@@ -46,7 +46,8 @@ const sanitizeSchema: SanitizeOptions = {
 // 9: CJK emphasis and double-tilde strikethrough.
 // 10: machine-translation typography and English word language spans in CJK bodies.
 // 11: lexical CJK URL boundaries and source positions around literal autolinks.
-export const RENDER_VERSION = 11;
+// 12: GFM 2.1 literal-text email candidates and punctuation-led domain rejection.
+export const RENDER_VERSION = 12;
 
 const DEFAULT_ID_PREFIX = "user-content-";
 
