@@ -60,14 +60,35 @@ const sourceMathCommands: Readonly<Record<string, string>> = {
   varepsilon: "ε", vartheta: "θ", varphi: "φ", varrho: "ρ", varpi: "π", varkappa: "κ",
   partial: "∂", nabla: "∇", sum: "∑", prod: "∏", int: "∫", infty: "∞", le: "≤", leq: "≤", ge: "≥", geq: "≥", times: "×", cdot: "⋅", pm: "±", sim: "∼",
 };
+// Preserve the longest TeX control word, including common n-prefixed commands
+// outside the symbol table. Unknown n-prefixed words are escaped line breaks
+// followed by prose; recognizing only the prefix would corrupt e.g. \nabla.
+const knownNCommands = new Set([
+  "ne", "neq", "neg", "ni", "not", "notin", "nexists", "natural", "nearrow", "nwarrow",
+  "newline", "nobreak", "nolinebreak", "noindent", "nolimits", "normalsize", "normalfont", "negthinspace", "negmedspace", "negthickspace",
+  "newcommand", "newenvironment", "newtheorem",
+  "nleftarrow", "nrightarrow", "nleftrightarrow", "nLeftarrow", "nRightarrow", "nLeftrightarrow",
+  "nleq", "ngeq", "nless", "ngtr", "nmid", "nparallel", "nprec", "nsucc", "npreceq", "nsucceq",
+  "nsubset", "nsupset", "nsubseteq", "nsupseteq", "nvdash", "nvDash", "nVdash", "nVDash", "ncong", "nsim", "nshortmid", "nshortparallel",
+  "ntriangleleft", "ntriangleright", "ntrianglelefteq", "ntrianglerighteq",
+]);
+export function normalizeFigureNewlines(text: string): string {
+  return text.replace(/\\([A-Za-z]+)/g, (command, name: string) =>
+    name.startsWith("n") && !Object.hasOwn(sourceMathCommands, name) && !knownNCommands.has(name) ? `\n${name.slice(1)}` : command);
+}
+export function hasFigureLiteralNewlines(reading: FigureReading): boolean {
+  return reading.regions.some(region => normalizeFigureNewlines(region.text) !== region.text);
+}
 export function normalizeFigureReading(reading: FigureReading): FigureReading {
   return { ...reading, regions: reading.regions.map(region => ({
     ...region,
-    text: region.text.replace(/\\([A-Za-z]+)/g, (command, name: string) => Object.hasOwn(sourceMathCommands, name) ? sourceMathCommands[name] : command),
+    text: normalizeFigureNewlines(region.text).replace(/\\([A-Za-z]+)/g, (command, name: string) => Object.hasOwn(sourceMathCommands, name) ? sourceMathCommands[name] : command),
   })) };
 }
 // Compare formula tokens and their multiplicity, preserving semantic distinctions.
 export function preservesFigureMath(source: string, translated: string): boolean {
+  source = normalizeFigureNewlines(source);
+  translated = normalizeFigureNewlines(translated);
   // Sources already contain visible symbols. Preserve literal source escapes,
   // but reject new or duplicated escapes before scanning formula tokens.
   const commands = (text: string) => {

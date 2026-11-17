@@ -3,7 +3,7 @@ import { and, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-or
 import type { Db } from "./db/client.server";
 import { entries, entryMedia, figureMedia, figureReadings, figureTranslations, media } from "./db/schema";
 import { enabledTargetLangs, isEnabledLang } from "./enabled-langs.server";
-import { FIGURE_VERSION, type FigureReading, type FigureLabelResult } from "./figure";
+import { FIGURE_VERSION, hasFigureLiteralNewlines, type FigureReading, type FigureLabelResult } from "./figure";
 import type { LlmEnv } from "./llm/types";
 import { FIGURE_READING_PROMPT_VERSION, figureTranslationEnabled } from "./figure-reading.server";
 import { usableFigure } from "./figure-render.server";
@@ -54,12 +54,12 @@ export function publicFigureCondition(db: Db, entryId?: number) {
   return and(eq(media.avatar, false), isNull(media.villageId), isNull(media.deletedAt), isNotNull(media.bytes), exists(reference))!;
 }
 
-export async function enqueueFigureTranslations(db: Db, mediaId: string, key: string, reading: FigureReading, env?: LlmEnv): Promise<void> {
+export async function enqueueFigureTranslations(db: Db, mediaId: string, key: string, reading: FigureReading, env?: LlmEnv, rescheduleRunning = false): Promise<void> {
   if (!reading.lang) return;
   for (const lang of enabledTargetLangs(reading.lang, env)) {
     const [saved] = await db.select({ id: figureTranslations.mediaId }).from(figureTranslations)
       .where(and(eq(figureTranslations.mediaId, mediaId), eq(figureTranslations.readingKey, key), eq(figureTranslations.lang, lang)));
-    if (!saved) await enqueue(db, TRANSLATE_FIGURE_JOB, { mediaId, key, lang }, { dedupeKey: `figure:${mediaId}:${key}:${lang}`, priority: 4 });
+    if (!saved) await enqueue(db, TRANSLATE_FIGURE_JOB, { mediaId, key, lang }, { dedupeKey: `figure:${mediaId}:${key}:${lang}`, priority: 4, rescheduleRunning });
   }
 }
 
@@ -78,7 +78,8 @@ export async function enqueueEntryFigures(db: Db, entryId: number): Promise<void
 
 // Call inside a short transaction. Backfill rechecks eligibility here, so a
 // source hidden or withdrawn since its preview never enters a reading job.
-export async function enqueuePublicFigures(db: Db, ids: readonly string[] | undefined, env: LlmEnv = process.env, entryId?: number, rereadRejected = false): Promise<number> {
+export async function enqueuePublicFigures(db: Db, ids: readonly string[] | undefined, env: LlmEnv = process.env, entryId?: number, rereadRejected = false, rerenderLiteralNewlines = false): Promise<number> {
+  if (rereadRejected && rerenderLiteralNewlines) throw new Error("Choose either rejected readings or literal newlines");
   if (!figureTranslationEnabled(env) || ids?.length === 0) return 0;
   await lockFigureMedia(db);
   const images = await db.select({ id: media.id, bytes: media.bytes }).from(media)
@@ -90,6 +91,9 @@ export async function enqueuePublicFigures(db: Db, ids: readonly string[] | unde
     const key = readingKeyOf(image.bytes);
     const cached = cache.get(key);
     if (rereadRejected && !(cached?.state === "skipped" && cached.reading === null)) continue;
+    // Recheck the settled reading under the same lock as public registration.
+    // This repair never queues OCR, even if a reading changed since the preview.
+    if (rerenderLiteralNewlines && !(cached?.state !== "pending" && cached?.reading && usableFigure(cached.reading) && hasFigureLiteralNewlines(cached.reading))) continue;
     await db.insert(figureReadings).values({ key, version: FIGURE_VERSION, ...(cached ? {
       state: cached.state, reading: cached.reading, engine: cached.engine, model: cached.model, promptVersion: cached.promptVersion,
     } : {}) }).onConflictDoNothing();
@@ -99,9 +103,13 @@ export async function enqueuePublicFigures(db: Db, ids: readonly string[] | unde
     await db.insert(figureMedia).values({ mediaId: image.id, readingKey: key }).onConflictDoNothing();
     const [saved] = await db.select().from(figureReadings).where(eq(figureReadings.key, key));
     if (saved.state !== "pending" && saved.reading && usableFigure(saved.reading)) {
+      if (rerenderLiteralNewlines) await db.delete(figureTranslations).where(and(
+        eq(figureTranslations.mediaId, image.id), eq(figureTranslations.readingKey, key),
+        inArray(figureTranslations.lang, enabledTargetLangs(saved.reading.lang!, env)),
+      ));
       // Reuse validated readings skipped by an earlier eligibility policy.
       if (saved.state === "skipped") await db.update(figureReadings).set({ state: "ready" }).where(eq(figureReadings.key, key));
-      await enqueueFigureTranslations(db, image.id, key, saved.reading, env);
+      await enqueueFigureTranslations(db, image.id, key, saved.reading, env, rerenderLiteralNewlines);
     }
     else if (saved.state === "pending") await enqueue(db, READ_FIGURE_JOB, { key }, { dedupeKey: `figure:read:${key}`, priority: 4, rescheduleRunning: true });
   }

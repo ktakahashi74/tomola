@@ -36,7 +36,7 @@ export async function seedFigureTranslation(db: Db, dir: string) {
   for (const scenario of ["toggle", "nojs", "fallback_all"]) {
     const id = fixtures[scenario].url.slice(7, 71);
     await db.update(figureTranslations).set({ ...(scenario === "fallback_all" ? { state: "skipped", bytes: null } : {}), labelResults: [
-      { source: "Source <label>", translation: "訳 <label>", status: "external", reason: "does_not_fit", required: { width: 500, height: 20 }, available: { width: 100, height: 20 } },
+      { source: "Source <label>\\nsecond line", translation: "訳 <label>\\n次の行", status: "external", reason: "does_not_fit", required: { width: 500, height: 20 }, available: { width: 100, height: 20 } },
       { source: "∂ K(w)", translation: "d K(w)", status: "external", reason: "math_mismatch" },
       { source: "Example Name", translation: "example name", status: "unchanged", reason: null },
     ] }).where(eq(figureTranslations.mediaId, id));

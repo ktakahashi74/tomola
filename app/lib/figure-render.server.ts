@@ -1,6 +1,6 @@
 import { setImmediate } from "node:timers/promises";
 import sharp, { type OverlayOptions } from "sharp";
-import { FIGURE_CONFIDENCE, figureTranslationRegions, preservesFigureMath, sameFigureLabel, type FigureReading, type FigureRegion } from "./figure";
+import { FIGURE_CONFIDENCE, figureTranslationRegions, normalizeFigureReading, normalizeFigureNewlines, preservesFigureMath, sameFigureLabel, type FigureReading, type FigureRegion } from "./figure";
 import type { Lang } from "./languages";
 import { MEDIA_LIMITS } from "./media";
 import { assertFigureFontsAvailable, canRenderFigureText, figureFontDescription, type FigureFontWeight } from "./figure-fonts.server";
@@ -259,9 +259,10 @@ export async function renderFigureLabels(bytes: Buffer, reading: FigureReading, 
 
 // Reuse decoded pixels, ink measurements and font sizes for a shortening pass.
 export async function createFigureRenderer(bytes: Buffer, reading: FigureReading, lang: Lang): Promise<(labels: readonly (string | null)[], options?: { final?: boolean }) => Promise<FigureRenderResult>> {
+  reading = normalizeFigureReading(reading);
   const regions = figureTranslationRegions(reading);
   const rejected = (labels: readonly (string | null)[]): FigureRenderResult => ({ bytes: null, results: regions.map((r, i) => ({ source: r.text, translation: labels[i] ?? null, status: "external", reason: "unusable_reading" })) });
-  if (!usableFigure(reading)) return async labels => rejected(labels);
+  if (!usableFigure(reading)) return async labels => rejected(labels.map(label => label === null ? null : normalizeFigureNewlines(label)));
   // Verify both weights before measuring source text, including mixed languages.
   await Promise.all([...new Set([lang, ...regions.map(r => r.lang)])].map(sourceLang => assertFigureFontsAvailable(sourceLang)));
   const { data, info } = await sharp(bytes, { limitInputPixels: MEDIA_LIMITS.pixels }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -283,6 +284,7 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
   const alignment = (i: number, free: Box) => alignments[i] ?? labelAlignment(inks[i].box, free, info.width);
   const colors = indexes.map(i => figureTextColor(data, background(data, info.width, info.height, measured[i].box), measured[i]));
   return async (labels, { final = true } = {}) => {
+    labels = labels.map(label => label === null ? null : normalizeFigureNewlines(label));
     if (labels.length !== regions.length) return rejected(labels);
     const results = rejected(labels).results;
     const demands = await Promise.all(regions.map(async (_, i) => {

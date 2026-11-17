@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { figureMedia, figureReadings, figureTranslations, media } from "~/lib/db/schema";
 import { enabledTargetLangs, isEnabledLang } from "~/lib/enabled-langs.server";
-import { FIGURE_VERSION, figureTranslationRegions, normalizeFigureReading } from "~/lib/figure";
+import { FIGURE_VERSION, figureTranslationRegions, normalizeFigureReading, normalizeFigureNewlines } from "~/lib/figure";
 import { createFigureReader, FIGURE_IMAGE_TOKEN_BOUND, FIGURE_READING_OUTPUT_TOKENS, FIGURE_READING_PROMPT, FIGURE_READING_PROMPT_VERSION, figureTranslationEnabled, figureReadingUser, parseFigureReading, type FigureReader } from "~/lib/figure-reading.server";
 import { assertFigureFontsAvailable } from "~/lib/figure-fonts.server";
 import type { TranslationResult } from "~/lib/llm/types";
@@ -108,7 +108,8 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
         try {
           const parsed = z.array(z.string().trim().min(1).max(2000)).length(sources.length).safeParse(JSON.parse(out.text));
           if (!parsed.success) return sources.map(() => null);
-          return parsed.data.map((label, i) => {
+          return parsed.data.map((rawLabel, i) => {
+            const label = normalizeFigureNewlines(rawLabel);
             // Apply the ordinary per-label checks before the renderer records a
             // formula mismatch. A failed formula never bypasses leak/link checks.
             const checked = inspectTranslation({ text: sources[i], from: reading.lang!, to: lang, invitationNote: true }, label, out.engine);

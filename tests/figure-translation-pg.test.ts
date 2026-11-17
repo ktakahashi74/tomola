@@ -1,14 +1,16 @@
 import sharp from "sharp";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { figureMedia, figureReadings, figureTranslations, jobs } from "~/lib/db/schema";
+import { figureMedia, figureReadings, figureTranslations, jobs, media } from "~/lib/db/schema";
+import { backfillFigures } from "~/lib/figure-backfill.server";
+import { FIGURE_VERSION, type FigureReading } from "~/lib/figure";
 import { createTopic } from "~/lib/entries.server";
 import { createFigureReader } from "~/lib/figure-reading.server";
 import { putMedia, deleteMedia } from "~/lib/media-store.server";
 import { createFigureHandlers } from "~/lib/jobs/figure-jobs.server";
-import { enqueueEntryFigures } from "~/lib/figure-translation.server";
+import { enqueueEntryFigures, readingKeyOf } from "~/lib/figure-translation.server";
 import { createFakeEngine } from "~/lib/llm/engines/fake.server";
-import { runDueJobs } from "~/lib/jobs/queue.server";
+import { enqueue, runDueJobs } from "~/lib/jobs/queue.server";
 import { createTestDb, addMember } from "./helpers/db";
 import { PG_MODE } from "./helpers/pg-test";
 import { quietLogger } from "./helpers/logger";
@@ -18,6 +20,42 @@ import { quietLogger } from "./helpers/logger";
 const jobNow = new Date("2026-10-01T00:00:00Z");
 const env = { FIGURE_TRANSLATION: "1", TRANSLATION_PRIMARY: "fake", ENABLED_LANGS: "ja,en" };
 describe.skipIf(!PG_MODE)("concurrent figure ownership and deletion", { tags: ["postgres"] }, () => {
+  it("retains a targeted repair requested while a worker finishes using the previous variant", { tags: ["postgres"] }, async () => {
+    const { vi } = await import("vitest");
+    vi.stubEnv("FIGURE_TRANSLATION", "0");
+    try {
+      const db = await createTestDb();
+      await addMember(db, "figure-repair", "figure_repair");
+      const bytes = await sharp({ create: { width: 320, height: 180, channels: 3, background: "white" } }).webp().toBuffer();
+      const image = await putMedia(db, "figure-repair", { bytes, width: 320, height: 180 });
+      const topic = await createTopic(db, "figure-repair", { title: "Repair source", body: `![figure](${image.url})`, lang: "en" });
+      if (!topic.ok) throw new Error(topic.error);
+      const id = image.url.slice(7, 71), [stored] = await db.select().from(media).where(eq(media.id, id));
+      const key = readingKeyOf(stored.bytes!);
+      const reading: FigureReading = { lang: "en", confidence: 1, regions: [{ text: "First\\nsecond", lang: "en", confidence: 1, orientation: "horizontal", x: 0.1, y: 0.2, width: 0.8, height: 0.5 }] };
+      await db.insert(figureReadings).values({ key, version: FIGURE_VERSION, state: "ready", reading, promptVersion: "figure-reading-v4" });
+      await db.insert(figureMedia).values({ mediaId: id, readingKey: key });
+      await db.insert(figureTranslations).values({ mediaId: id, readingKey: key, lang: "ja", bytes: stored.bytes, labels: ["Previous"], engine: "fake", model: "cached", promptVersion: "test" });
+      await enqueue(db, "translate_figure", { mediaId: id, key, lang: "ja" }, { dedupeKey: `figure:${id}:${key}:ja` });
+      const handlers = createFigureHandlers({ llm: { env } });
+      let entered!: () => void, release!: () => void;
+      const started = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+      const running = runDueJobs(db, { translate_figure: async (job, ctx) => {
+        await handlers.translate_figure(job, ctx);
+        entered(); await gate;
+      } }, { now: jobNow, limit: 1, logger: quietLogger });
+      await Promise.race([started, running.then(() => { throw new Error("Worker finished before the repair"); })]);
+      try { expect(await backfillFigures(db, { rerenderLiteralNewlines: true, enqueue: true, env })).toMatchObject({ readingsNeeded: 0, registeredImages: 1 }); }
+      finally { release(); }
+      expect(await running).toMatchObject({ deferred: 1, failed: 0 });
+      expect(await db.select().from(figureTranslations)).toEqual([]);
+      expect(await runDueJobs(db, handlers, { now: jobNow, logger: quietLogger })).toMatchObject({ done: 1, failed: 0 });
+      expect(await db.select().from(figureTranslations)).toMatchObject([{ labelResults: [{ source: "First\nsecond", reason: null }] }]);
+      expect((await db.select().from(figureReadings))[0].reading).toEqual(reading);
+      expect(await db.select().from(jobs).where(eq(jobs.kind, "read_figure"))).toEqual([]);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it("deduplicates two concurrent admissions of the same content", { tags: ["postgres"] }, async () => {
     const db = await createTestDb();
     await addMember(db, "figure-pg-a", "figure_pg_a"); await addMember(db, "figure-pg-b", "figure_pg_b");

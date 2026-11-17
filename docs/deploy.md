@@ -814,6 +814,14 @@ FIGURE_TRANSLATION=1 pnpm figures:backfill --enqueue
 
 This command only queues work. Workers apply the ordinary public budget, visibility checks and deletion fences. Repeating it deduplicates pending jobs and reuses finished results. It opens an existing migrated database without applying migrations or loading an environment file. Supply database/model settings through the process environment. Stop a development PGlite server before using its data directory; PostgreSQL may remain running.
 
+To repair escaped line breaks in cached readings without rereading images or changing the rendering generation, preview only the affected public figures:
+
+```sh
+pnpm figures:backfill --rerender-literal-newlines
+```
+
+Add `--enqueue` with `FIGURE_TRANSLATION=1` to remove their current variants for enabled target languages and queue fresh translations and rendering. Stored readings and older generations remain intact; no reading calls are queued. The preview includes replacement translations even when a variant already exists. This selection excludes pending, missing and unusable readings, and preserves known TeX control words such as `\nabla`, `\nu` and `\newline`. Unknown control words starting with `n` are treated as an escaped newline followed by text. The repair cannot be combined with `--reread-rejected`. Repeating the repair requests replacement again, so use the ordinary backfill to retry unfinished work afterward. Existing image URLs remain the same; clients may retain a cached image for up to a day.
+
 
 ## Device notifications (Web Push)
 

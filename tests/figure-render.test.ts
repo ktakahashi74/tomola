@@ -456,6 +456,24 @@ it("compares normalized cached labels and never paints a translated TeX command"
   expect(accepted.results[0].status).toBe("rendered");
 });
 
+it.each(["en", "fr", "ko", "zh-Hans", "zh-Hant"] as const)("renders escaped newlines as separate lines in %s", async lang => {
+  const source = "HHH\nHHH";
+  const glyph = await sharp({ text: { text: source, font: figureFontDescription("en", 24), rgba: true } }).png().toBuffer({ resolveWithObject: true });
+  const bytes = await blank().composite([{ input: glyph.data, left: 40, top: 70 }]).png().toBuffer();
+  const r = { ...region, text: "観測\\nの変化", x: 40 / width, y: 70 / height, width: glyph.info.width / width, height: glyph.info.height / height };
+  const text = lang === "ko" ? "표본\\n의 변화" : lang.startsWith("zh") ? "样本\\n的变化" : lang === "fr" ? "Valeur\\navec variation" : "Change\\nin value";
+  const normalized = text.replace("\\n", "\n");
+  const input = { ...reading([r]), lang: "ja" as const, regions: [{ ...r, lang: "ja" as const }] };
+  const before = structuredClone(input);
+  const result = await renderFigureLabels(bytes, input, [text], lang);
+  const expected = await renderFigureLabels(bytes, normalizeFigureReading(input), [normalized], lang);
+  expect(result.results).toMatchObject([{ source: "観測\nの変化", translation: normalized, status: "rendered", reason: null }]);
+  expect(result.bytes).toEqual(expected.bytes);
+  expect(result.bytes).not.toEqual((await renderFigureLabels(bytes, input, [normalized.replace("\n", " ")], lang)).bytes);
+  expect(inkRows(await raw(result.bytes!))).toHaveLength(2);
+  expect(input).toEqual(before);
+});
+
 it.each(["en", "ja", "ko", "zh-Hans"] as const)("reflows paragraph breaks only when translated lines also need wrapping in %s", async lang => {
   const source = Array(3).fill("This paragraph contains a long line of explanatory prose.").join("\n");
   const glyph = await sharp({ text: { text: source, font: figureFontDescription("en", 18), rgba: true } }).png().toBuffer({ resolveWithObject: true });

@@ -1,7 +1,7 @@
 import { inArray } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries } from "./db/schema";
-import { figurePath, type FigureFallbackReason } from "./figure";
+import { figurePath, normalizeFigureNewlines, type FigureFallbackReason } from "./figure";
 import { isEnabledLang } from "./enabled-langs.server";
 import { availableFigures, type FigureDisplay } from "./figure-translation.server";
 import { figureTranslationEnabled } from "./figure-reading.server";
@@ -60,7 +60,7 @@ export function decorateFigureHtml(html: string, originalHtml: string, available
     const external = display.results.filter(r => r.status === "external" && r.reason && Object.hasOwn(reasons, r.reason));
     const items = external.map(result => {
       const translation = result.translation ?? m.figure_fallback_unavailable({}, { locale: lang });
-      return `<span class="block mt-1" role="listitem"><span dir="auto">${escape(result.source)}</span> → <span lang="${lang}" dir="auto">${escape(translation)}</span><span class="block ui-meta">${escape(reasons[result.reason!]())}</span></span>`;
+      return `<span class="block mt-1" role="listitem"><span dir="auto">${escape(normalizeFigureNewlines(result.source))}</span> → <span lang="${lang}" dir="auto">${escape(normalizeFigureNewlines(translation))}</span><span class="block ui-meta">${escape(reasons[result.reason!]())}</span></span>`;
     }).join("");
     const allUnavailable = external.length === display.results.length && external.length > 0 && external.every(r => r.reason === "invalid_translation" && r.translation === null);
     const details = allUnavailable ? `<span class="block ui-meta">${escape(reasons.invalid_translation())}</span>` : `<span class="block" role="list">${items}</span>`;

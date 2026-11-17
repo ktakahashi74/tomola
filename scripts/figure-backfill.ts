@@ -13,12 +13,13 @@ async function openExistingDb(env: NodeJS.ProcessEnv): Promise<Db> {
 }
 
 export async function runFigureBackfill(args: string[], env = process.env, openDb: () => Promise<Db> = () => openExistingDb(env), output: CliOutput = cliOutput): Promise<number> {
-  if (args.length === 1 && args[0] === "--help") { output.log("usage: pnpm figures:backfill [--reread-rejected] [--enqueue] (default: read-only cost preview)"); return 0; }
-  if (args.some(arg => arg !== "--enqueue" && arg !== "--reread-rejected")) { output.error("usage: pnpm figures:backfill [--reread-rejected] [--enqueue]"); return 1; }
+  const usage = "usage: pnpm figures:backfill [--reread-rejected | --rerender-literal-newlines] [--enqueue]";
+  if (args.length === 1 && args[0] === "--help") { output.log(`${usage} (default: read-only cost preview)`); return 0; }
+  if (args.some(arg => !["--enqueue", "--reread-rejected", "--rerender-literal-newlines"].includes(arg)) || args.includes("--reread-rejected") && args.includes("--rerender-literal-newlines")) { output.error(usage); return 1; }
   const enqueue = args.includes("--enqueue");
   if (enqueue && !figureTranslationEnabled(env)) { output.error("FIGURE_TRANSLATION=1 is required to enqueue figures"); return 1; }
   let db: Db | undefined;
-  try { db = await openDb(); output.log(JSON.stringify(await backfillFigures(db, { enqueue, rereadRejected: args.includes("--reread-rejected"), env }), null, 2)); return 0; }
+  try { db = await openDb(); output.log(JSON.stringify(await backfillFigures(db, { enqueue, rereadRejected: args.includes("--reread-rejected"), rerenderLiteralNewlines: args.includes("--rerender-literal-newlines"), env }), null, 2)); return 0; }
   catch (error) { output.error(safeErrorText(error)); return 1; }
   finally { if (db) await closeDb(db); }
 }

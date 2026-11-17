@@ -25,6 +25,9 @@ test("translated figures switch to the original and back in topics and replies",
     await expect(fallback).toBeVisible();
     await expect(fallback).toContainText(ja.figure_fallback_space);
     await expect(fallback).toContainText(ja.figure_fallback_math);
+    await expect(fallback).toContainText("second line");
+    await expect(fallback).toContainText("次の行");
+    await expect(fallback).not.toContainText("\\n");
     await expect(fallback.locator("[role=listitem]")).toHaveCount(2);
     await expect(fallback).not.toContainText("Example Name");
     await expect(fallback.locator("label")).toHaveCount(0);
@@ -65,7 +68,8 @@ test("translated figures retain an original-image link without JavaScript", asyn
     const page = await context.newPage();
     await useMember(page, "figure_nojs_reader@example.com", destination(data));
     const fallback = page.locator("main [data-figure-fallback]").first();
-    await expect(fallback).toBeVisible(); await expect(fallback).toContainText("Source <label> → 訳 <label>");
+    await expect(fallback).toBeVisible(); await expect(fallback).toContainText("Source <label> second line → 訳 <label> 次の行");
+    await expect(fallback).not.toContainText("\\n");
     await expect(fallback).toContainText(ja.figure_fallback_space);
     const link = page.locator("main [data-figure-toggle]").first();
     await expect(link).toHaveAttribute("href", data.url);

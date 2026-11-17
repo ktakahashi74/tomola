@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getMediaReader } from "~/lib/media-reader.server";
 import { readMedia } from "~/lib/media-store.server";
 import { readFigureTranslation } from "~/lib/figure-translation.server";
@@ -26,7 +27,8 @@ export async function loader({ request }: { request: Request }) {
     const variant = translated ? await readFigureTranslation(db, parsed.id, translated.lang, translated.version) : null;
     if (translated && !variant?.bytes) return missing();
     const bytes = variant?.bytes ?? image.bytes;
-    const entity = `"${parsed.id}${translated ? `:${translated.lang}:v${translated.version}` : ""}"`;
+    // A targeted repair can replace a variant without changing its generation.
+    const entity = `"${parsed.id}${translated ? `:${translated.lang}:v${translated.version}:${createHash("sha256").update(bytes).digest("hex")}` : ""}"`;
     const headers = { ...safety, "Content-Type": image.mime, "Cache-Control": "private, max-age=86400", ETag: entity };
     if (request.headers.get("if-none-match")?.split(",").some(tag => tag.trim() === "*" || tag.trim().replace(/^W\//, "") === entity)) return new Response(null, { status: 304, headers });
     return new Response(request.method === "HEAD" ? null : new Uint8Array(bytes), { headers: { ...headers, "Content-Length": String(bytes.length) } });

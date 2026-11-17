@@ -4,18 +4,19 @@ import { figureTranslations, media } from "./db/schema";
 import { enabledTargetLangs } from "./enabled-langs.server";
 import { LANGS } from "./languages";
 import type { LlmEnv } from "./llm/types";
-import { figureTranslationRegions } from "./figure";
+import { figureTranslationRegions, hasFigureLiteralNewlines, normalizeFigureReading } from "./figure";
 import { figureTranslationEnabled } from "./figure-reading.server";
 import { usableFigure } from "./figure-render.server";
 import { publicFigureCondition, enqueuePublicFigures, readingKeyOf, cachedFigureReadings } from "./figure-translation.server";
 import { estimateFigureTranslation, figureCostProfile, FIGURE_COST_ASSUMPTIONS } from "./figure-cost.server";
 import { loadGlossary, matchGlossary } from "./translations.server";
 
-export async function backfillFigures(db: Db, opts: { enqueue?: boolean; rereadRejected?: boolean; env?: LlmEnv } = {}) {
+export async function backfillFigures(db: Db, opts: { enqueue?: boolean; rereadRejected?: boolean; rerenderLiteralNewlines?: boolean; env?: LlmEnv } = {}) {
+  if (opts.rereadRejected && opts.rerenderLiteralNewlines) throw new Error("Choose either rejected readings or literal newlines");
   const env = opts.env ?? process.env;
   if (opts.enqueue && !figureTranslationEnabled(env)) throw new Error("FIGURE_TRANSLATION=1 is required to enqueue figures");
   const profile = figureCostProfile(env);
-  const summary = { mode: opts.enqueue ? "enqueue" : "preview", selection: opts.rereadRejected ? "rejected" : "all", eligibleImages: 0, uniqueContents: 0, readingsNeeded: 0, cachedSkippedImages: 0,
+  const summary = { mode: opts.enqueue ? "enqueue" : "preview", selection: opts.rerenderLiteralNewlines ? "literal-newlines" : opts.rereadRejected ? "rejected" : "all", eligibleImages: 0, uniqueContents: 0, readingsNeeded: 0, cachedSkippedImages: 0,
     translationCallsEstimated: 0, readingUsdMicro: 0, translationUsdMicro: 0, totalUsdMicro: 0, registeredImages: 0 };
   const seen = new Set<string>(), glossary = new Map<string, Awaited<ReturnType<typeof loadGlossary>>>();
   const unknown = LANGS.map(from => {
@@ -34,6 +35,7 @@ export async function backfillFigures(db: Db, opts: { enqueue?: boolean; rereadR
     const rejectedIds: string[] = [], continuedIds: string[] = [];
     for (let i = 0; i < page.length; i++) {
       const image = page[i], key = keys[i], reading = saved.get(key);
+      if (opts.rerenderLiteralNewlines && !(reading?.state !== "pending" && reading?.reading && usableFigure(reading.reading) && hasFigureLiteralNewlines(reading.reading))) continue;
       const continued = seen.has(key);
       if (opts.rereadRejected && !continued && !(reading?.state === "skipped" && reading.reading === null)) continue;
       (continued ? continuedIds : rejectedIds).push(image.id);
@@ -42,12 +44,12 @@ export async function backfillFigures(db: Db, opts: { enqueue?: boolean; rereadR
         seen.add(key);
         if (opts.rereadRejected || !reading || reading.state === "pending") { summary.readingsNeeded++; summary.readingUsdMicro += profile.reader.estimatedUsdMicro; }
       }
-      const reusable = reading?.state !== "pending" && reading?.reading && usableFigure(reading.reading) ? reading.reading : null;
+      const reusable = reading?.state !== "pending" && reading?.reading && usableFigure(reading.reading) ? normalizeFigureReading(reading.reading) : null;
       if (!opts.rereadRejected && reading?.state === "skipped" && !reusable) { summary.cachedSkippedImages++; continue; }
       if (reusable?.lang) {
         const labels = figureTranslationRegions(reusable).map(region => region.text), from = reusable.lang;
         for (const to of enabledTargetLangs(from, env)) {
-          if (variants.has(`${image.id}:${key}:${to}`)) continue;
+          if (!opts.rerenderLiteralNewlines && variants.has(`${image.id}:${key}:${to}`)) continue;
           const pair = `${from}:${to}`;
           if (!glossary.has(pair)) glossary.set(pair, await loadGlossary(db, from, to));
           summary.translationCallsEstimated++;
@@ -61,6 +63,7 @@ export async function backfillFigures(db: Db, opts: { enqueue?: boolean; rereadR
       }
     }
     if (opts.enqueue) summary.registeredImages += await db.transaction(async tx => {
+      if (opts.rerenderLiteralNewlines) return enqueuePublicFigures(tx, [...rejectedIds, ...continuedIds], env, undefined, false, true);
       if (!opts.rereadRejected) return enqueuePublicFigures(tx, page.map(image => image.id), env);
       // Recheck rejection and public visibility under the registration lock.
       // Later pages can bind further images to a reading already reset here.

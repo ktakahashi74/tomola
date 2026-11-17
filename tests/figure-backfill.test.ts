@@ -203,6 +203,67 @@ it("uses the configured primary model, prices and thinking for the cost preview"
   expect(figureCostProfile(override).primary).toMatchObject({ priceSource: "env", inputUsdPerMillion: 2, outputUsdPerMillion: 9 });
 });
 
+it("previews and replaces only public cached readings with escaped line breaks without rereading", async () => {
+  const { db, image, post } = await fixture();
+  const ids = new Map<string, string>(), keys = new Map<string, string>();
+  const cases = ["cjk", "latin", "old", "known", "plain", "pending", "hidden", "unusable"];
+  for (const [i, kind] of cases.entries()) {
+    const upload = await image("backfill-a", `rgb(${i * 20}, 70, 80)`), id = upload.url.slice(7, 71);
+    const topic = await post(upload.url);
+    const [stored] = await db.select({ bytes: media.bytes }).from(media).where(eq(media.id, id));
+    const key = readingKeyOf(stored.bytes!), savedKey = kind === "old" ? key.replace(/:v\d+$/, ":v12") : key;
+    ids.set(kind, id); keys.set(kind, key);
+    const text = kind === "known" ? "\\nabla \\nu \\neq \\newline" : kind === "plain" ? "観測\nの変化" : kind === "latin" ? "Manual 2040.\\nref: synthetic" : "観測\\nの変化";
+    const reading: FigureReading = { lang: "ja", confidence: kind === "unusable" ? 0.1 : 1, regions: [{ text, lang: "ja", confidence: 1, orientation: "horizontal", x: 0.1, y: 0.2, width: 0.8, height: 0.5 }] };
+    await db.insert(figureReadings).values({ key: savedKey, version: kind === "old" ? 12 : FIGURE_VERSION, state: kind === "pending" ? "pending" : "ready", reading, promptVersion: "figure-reading-v4" });
+    await db.insert(figureMedia).values({ mediaId: id, readingKey: savedKey });
+    await db.insert(figureTranslations).values({ mediaId: id, readingKey: savedKey, lang: "en", bytes: stored.bytes, labels: ["Previous"], engine: "fake", model: "cached", promptVersion: "test" });
+    if (kind === "hidden") await db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, topic));
+  }
+  const [shared] = await db.select({ bytes: media.bytes }).from(media).where(eq(media.id, ids.get("cjk")!));
+  const duplicate = await putMedia(db, "backfill-b", { bytes: shared.bytes!, width: 320, height: 180 });
+  await post(duplicate.url, "backfill-b");
+  const before = await db.select().from(figureReadings), variants = await db.select().from(figureTranslations), beforeJobs = await db.select().from(jobs);
+  const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(Error("Unexpected network request"));
+  const configured = { ...env, TRANSLATION_PRIMARY: "gemini" };
+  const preview = await captureCli(output => runFigureBackfill(["--rerender-literal-newlines"], configured, async () => db, output));
+  expect(preview.status).toBe(0);
+  expect(JSON.parse(preview.stdout)).toMatchObject({ selection: "literal-newlines", eligibleImages: 4, uniqueContents: 3, readingsNeeded: 0, readingUsdMicro: 0, translationCallsEstimated: 4, registeredImages: 0 });
+  expect(JSON.parse(preview.stdout).translationUsdMicro).toBeGreaterThan(0);
+  expect(await db.select().from(figureReadings)).toEqual(before);
+  expect(await db.select().from(figureTranslations)).toEqual(variants);
+  expect(await db.select().from(jobs)).toEqual(beforeJobs);
+  expect(fetch).not.toHaveBeenCalled();
+  const enabled = { ...env, FIGURE_TRANSLATION: "1" };
+  // Registration rechecks the filter even if callers pass unrelated public IDs.
+  expect(await db.transaction(tx => enqueuePublicFigures(tx, [ids.get("known")!, ids.get("pending")!, ids.get("hidden")!], enabled, undefined, false, true))).toBe(0);
+  expect(await db.select().from(figureTranslations)).toEqual(variants);
+  const queued = await captureCli(output => runFigureBackfill(["--rerender-literal-newlines", "--enqueue"], enabled, async () => db, output));
+  expect(queued.status).toBe(0);
+  expect(JSON.parse(queued.stdout)).toMatchObject({ eligibleImages: 4, registeredImages: 4, readingsNeeded: 0, translationCallsEstimated: 4 });
+  expect(await db.select().from(jobs).where(eq(jobs.kind, "read_figure"))).toEqual([]);
+  expect(await db.select().from(jobs).where(eq(jobs.kind, "translate_figure"))).toHaveLength(4);
+  expect(await db.select().from(figureTranslations)).toEqual(variants.filter(row => ![ids.get("cjk"), ids.get("latin")].includes(row.mediaId)));
+  const reader = createFigureReader(enabled), read = vi.spyOn(reader, "read");
+  const engine = createFakeEngine(), translate = vi.spyOn(engine, "translate").mockResolvedValue({ text: JSON.stringify(["Change\\nin value"]), model: engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 10 });
+  expect(await runDueJobs(db, createFigureHandlers({ reader, llm: { env: enabled, engines: { primary: engine, secondary: null, judge: null } } }), { now: jobNow, logger: quietLogger })).toMatchObject({ done: 4, failed: 0 });
+  expect(read).not.toHaveBeenCalled();
+  for (const [request] of translate.mock.calls) expect(JSON.parse(request.text)[0]).not.toContain("\\n");
+  for (const kind of ["cjk", "latin", "old"]) {
+    const [row] = await db.select().from(figureTranslations).where(eq(figureTranslations.readingKey, keys.get(kind)!));
+    expect(row.labelResults).toMatchObject([{ translation: "Change\nin value", status: "rendered", reason: null }]);
+  }
+  for (const row of before) expect((await db.select().from(figureReadings).where(eq(figureReadings.key, row.key)))[0]).toEqual(row);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("rejects incompatible reading and rendering repairs before opening a database", async () => {
+  const open = vi.fn();
+  const result = await captureCli(output => runFigureBackfill(["--reread-rejected", "--rerender-literal-newlines", "--enqueue"], env, open, output));
+  expect(result.status).toBe(1);
+  expect(open).not.toHaveBeenCalled();
+});
+
 it("previews and rereads only rejected readings, preserving text-free and accepted caches", async () => {
   const { db, image, post } = await fixture();
   const cases = ["rejected", "old-rejected", "text-free", "accepted", "pending", "missing", "hidden"] as const;

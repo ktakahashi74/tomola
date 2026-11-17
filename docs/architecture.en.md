@@ -81,6 +81,8 @@ Converted bytes reside in the `media` table. Limits are 30 uploads per member pe
 
 With `FIGURE_TRANSLATION=1`, the software can read labels in posted figures and produce translated image variants. Reading sends the stored WebP bytes to an external model; extracted labels go to the primary translator. The stored source figure remains available, distinct from the pre-upload image, and readers can return to it from a variant. The feature defaults off and shares the ordinary translation queue and monthly budget. Unavailable reading, translation or rendering leaves the original visible; temporary failures have bounded retries. See [deployment](deploy.md#existing-figures) for settings and existing-image processing.
 
+Stored readings remain unchanged; a working copy converts known TeX symbol commands to visible symbols. Escaped newlines also become actual line breaks in this copy and in translated labels. The complete alphabetic control word is protected when known; only an unknown word starting with `n` has its leading `\n` replaced. Formula comparison, rendering and external label display share this rule. `figures:backfill --rerender-literal-newlines` previews only public figures with affected cached readings; `--enqueue` replaces their current variants for enabled target languages. It requires neither another reading call nor a rendering generation change. Translated image ETags follow the image bytes so replacements at the same URL can be revalidated.
+
 ## 3. Writing with and without AI
 
 ### 3.1 Browser posting

@@ -89,6 +89,8 @@ describe("figure translation pipeline", () => {
     { source: "“水位” \\epsilon の増加に対する体積の依存性", normalized: "“水位” ε の増加に対する体積の依存性", translated: "Volume vs. water level ε", status: "rendered" },
     { source: "\\epsilon", normalized: "ε", translated: "ε", status: "unchanged" },
     { source: "\\section{はじめに}", normalized: "\\section{はじめに}", translated: "\\section{Introduction}", status: "rendered" },
+    { source: "観測値\\nの変化", normalized: "観測値\nの変化", translated: "Change in the\\nobserved value", status: "rendered" },
+    { source: "Manual 2040.\\nref: synthetic", normalized: "Manual 2040.\nref: synthetic", translated: "Guide 2040.\\nreference: synthetic", status: "rendered" },
   ])("normalizes a fresh reading of $source before translation and label comparison", async ({ source, normalized, translated, status }) => {
     const w = await world();
     const reading: FigureReading = { ...sourceReading, lang: "ja", regions: [{ ...sourceReading.regions[0], lang: "ja", text: source }] };
@@ -99,9 +101,23 @@ describe("figure translation pipeline", () => {
     expect(w.engine.translate).toHaveBeenCalledTimes(1);
     expect(vi.mocked(w.engine.translate).mock.calls[0][0]).toMatchObject({ from: "ja", to: "en", text: JSON.stringify([normalized]) });
     const [saved] = await db.select().from(figureTranslations);
-    expect(saved.labelResults).toMatchObject([{ source: normalized, translation: translated, status, reason: null }]);
+    expect(saved.labelResults).toMatchObject([{ source: normalized, translation: translated.replaceAll("\\n", "\n"), status, reason: null }]);
     expect(saved.bytes !== null).toBe(status === "rendered");
     expect((await db.select().from(figureReadings))[0].reading?.regions[0].text).toBe(source);
+  });
+
+  it("revalidates replaced figure bytes at the same URL", async () => {
+    const w = await world();
+    expect(await w.run()).toMatchObject({ done: 2, failed: 0 });
+    const tag = (await get(w.path)).headers.get("etag")!;
+    expect((await get(w.path, { "If-None-Match": tag })).status).toBe(304);
+    const bytes = await sharp({ create: { width: 320, height: 180, channels: 3, background: "#123456" } }).webp().toBuffer();
+    await db.update(figureTranslations).set({ bytes }).where(eq(figureTranslations.mediaId, w.id));
+    const replaced = await get(w.path, { "If-None-Match": tag });
+    expect(replaced.status).toBe(200);
+    expect(Buffer.from(await replaced.arrayBuffer())).toEqual(bytes);
+    expect(replaced.headers.get("etag")).not.toBe(tag);
+    expect((await get(w.path, { "If-None-Match": replaced.headers.get("etag")! })).status).toBe(304);
   });
 
   it("reads, translates, renders, serves and displays a figure without changing the translated body's alt or Markdown source", async () => {

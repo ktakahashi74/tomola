@@ -233,9 +233,14 @@ it.each([
   ["“水位” \\epsilon の増加", "“水位” ε の増加"],
   ["\\alpha + \\vartheta + \\Gamma + \\partial K(w)", "α + θ + Γ + ∂ K(w)"],
   ["\\sum \\prod \\int \\infty \\leq \\times", "∑ ∏ ∫ ∞ ≤ ×"],
-  ["\\section{はじめに} \\d+ C:\\data\\out \\n \\constructor", "\\section{はじめに} \\d+ C:\\data\\out \\n \\constructor"],
+  ["\\section{はじめに} \\d+ C:\\data\\out \\n \\constructor", "\\section{はじめに} \\d+ C:\\data\\out \n \\constructor"],
   ["\\epsilonExtra \\Partial \\varepsilon", "\\epsilonExtra \\Partial ε"],
-])("normalizes only known symbol commands in reading text %s", (source, expected) => {
+  ["観測値\\nの変化", "観測値\nの変化"],
+  ["Manual 2040.\\nref: synthetic", "Manual 2040.\nref: synthetic"],
+  ["First\\nnext\\n最後\nAlready broken", "First\nnext\n最後\nAlready broken"],
+  ["\\nabla \\nu \\neq \\ne \\neg \\ni \\not \\notin \\newline \\nolimits \\nsubseteq", "∇ ν \\neq \\ne \\neg \\ni \\not \\notin \\newline \\nolimits \\nsubseteq"],
+  ["\\nablaExtra \\nuExtra \\newlineExtra", "\nablaExtra \nuExtra \newlineExtra"],
+])("normalizes reading symbols and escaped line breaks in %s", (source, expected) => {
   const input: FigureReading = { ...reading, regions: [{ ...reading.regions[0], text: source }, { ...reading.regions[0], lang: "ja", text: source }] };
   const before = structuredClone(input), normalized = normalizeFigureReading(input);
   expect(normalized).toEqual({ ...input, regions: input.regions.map(region => ({ ...region, text: expected })) });
@@ -261,6 +266,11 @@ it.each([
   ["\\section{はじめに}", "\\section{Introduction}", true],
   ["正規表現 \\d+", "regex \\d+", true],
   ["改行は \\n", "newline is \\n", true],
+  ["観測値\\nの変化", "Change in the\\nobserved value", true],
+  ["観測値\nの変化", "Variation de la valeur\\navec le temps", true],
+  ["条件 \\notin", "Condition \\not", false],
+  ["条件 ∇ + ν", "Condition ∇ + ν\\nnext", true],
+  ["条件 ∇ + ν", "Condition ∇\\nnext", false],
   ["保存先 C:\\data\\out", "Save to C:\\data\\data\\out", false],
   ["保存先 C:\\data\\out", "Save to C:\\Data\\out", false],
   ["正規表現 \\d+ と \\d+", "regex \\d+", false],
@@ -295,6 +305,18 @@ it.each([
   const req = { text: JSON.stringify([source]), from: "ja" as const, to: "en" as const, figure: true };
   const checked = inspectTranslation(req, JSON.stringify([translated]), "fake");
   expect(checked.flags.includes("quality_mismatch")).toBe(!valid);
+});
+
+it("normalizes escaped newlines in saved external labels while escaping HTML", () => {
+  const id = "a".repeat(64), html = `<img src="/media/${id}-320x180.webp">`;
+  const results = [{ source: "First\\nの<label>", translation: "Other\\nline<script>", status: "external" as const, reason: "does_not_fit" as const }];
+  const before = structuredClone(results);
+  const decorated = decorateFigureHtml(html, html, new Map([[id, { hasImage: false, results }]]), "en");
+  expect(decorated).toContain("First\nの&lt;label&gt;");
+  expect(decorated).toContain("Other\nline&lt;script&gt;");
+  expect(decorated).not.toContain("\\n");
+  expect(decorated).not.toContain("<script>");
+  expect(results).toEqual(before);
 });
 
 it("ignores unknown saved fallback reasons without hiding valid translations", () => {
