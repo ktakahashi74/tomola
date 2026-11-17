@@ -34,6 +34,8 @@ export function generateNotices(root: string): string {
   if (JSON.stringify(Object.keys(dependencies).sort()) !== JSON.stringify(Object.keys(locked).sort()) || Object.entries(dependencies).some(([name, version]) => locked[name].specifier !== version)) throw new Error("Production dependency lock is out of date");
   const visited = new Set<string>();
   const excluded = new Set<string>();
+  // Alias references already name the real package's complete snapshot key.
+  const snapshotKey = (name: string, version: string) => Object.hasOwn(lock.snapshots, version) ? version : `${name}@${version}`;
   const libc = process.platform === "linux" && (process.report.getReport() as { header: { glibcVersionRuntime?: string } }).header.glibcVersionRuntime ? "glibc" : "musl";
   const accepts = (values: string[] | undefined, value: string) => !values || (!values.includes(`!${value}`) && (values.every(v => v.startsWith("!")) || values.includes(value)));
   function supported(key: string) {
@@ -41,7 +43,7 @@ export function generateNotices(root: string): string {
     return !pkg || (accepts(pkg.os, process.platform) && accepts(pkg.cpu, process.arch) && accepts(pkg.libc, libc));
   }
   function visit(name: string, version: string) {
-    const key = `${name}@${version}`;
+    const key = snapshotKey(name, version);
     if (visited.has(key)) return;
     visited.add(key);
     if (!supported(key)) { excluded.add(key.split("(")[0]); return; }
@@ -59,7 +61,7 @@ export function generateNotices(root: string): string {
   for (const name of new Set(browserCss)) {
     const ref = locked[name] ?? lock.importers["."].devDependencies?.[name];
     if (!ref) throw new Error(`Missing locked browser CSS dependency: ${name}`);
-    visited.add(`${name}@${ref.version}`);
+    visited.add(snapshotKey(name, ref.version));
   }
   const inventory = new Map<string, string>();
   function add(directory: string) {
