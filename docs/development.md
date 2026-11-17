@@ -38,6 +38,8 @@ ESLint stays on 9 while `eslint-plugin-jsx-a11y` 6.10.2 declares peers only thro
 
 Paraglide reads its plugins from `node_modules` through `project.inlang/settings.json`; paths are relative to the repository root. Once dependencies are installed, `pnpm typecheck` and `pnpm build` work offline. The Docker build stage disables networking for compilation. A fresh dependency installation still needs registry access or a complete local package store.
 
+Paraglide 3 uses physical `message-modules` output in both the CLI and Vite. Standalone operator scripts and test seeds import the generated messages without a Vite loader, so keep this explicit Vite option instead of its default virtual output; see the [virtual message compatibility guide](https://github.com/opral/paraglide-js/blob/main/docs/virtual-messages.md). Declaration emission remains enabled. The `custom-htmlLang` strategy keeps server-side language negotiation and browser hydration on the same locale.
+
 Class-name merging uses `cn/engine` with tables generated from the application sources. Vite and Vitest use the same `cn/build` options in `scripts/cn-build.ts`; the `cn/vite` plugin writes the ignored `app/lib/cn-tables.generated.mjs` before serving or building. Theme registration stays disabled to preserve the original merger's treatment of custom animation classes. Import `cn` from `~/lib/utils`, so the full default tables do not enter page scripts. Keep complete class names in the scanned sources when choosing them dynamically; extend the content inputs or a generated safelist when classes come from another source. `tests/cn.test.ts` compares source-class combinations and overrides with the original merger.
 
 ## Interface strings

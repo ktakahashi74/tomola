@@ -106,7 +106,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@inlang/paraglide-js": "^2.29.3",
+    "@inlang/paraglide-js": "^3.2.2",
     "@inlang/plugin-m-function-matcher": "2.4.3",
     "@inlang/plugin-message-format": "4.6.0",
     "@modelcontextprotocol/client": "2.4.0",

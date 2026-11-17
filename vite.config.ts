@@ -22,6 +22,8 @@ export default defineConfig({
       project: "./project.inlang",
       outdir: "./app/paraglide",
       emitTsDeclarations: true,
+      // Operator scripts and test seeds also import messages outside Vite.
+      outputStructure: "message-modules",
       // custom-htmlLang: the server decides the interface language and renders it in <html lang>; the browser reads that (app/lib/http/locale-strategy.ts, locale.server.ts).
       strategy: ["custom-htmlLang", "baseLocale"],
     }),
