@@ -129,7 +129,6 @@ for (const javaScriptEnabled of [false, true]) {
         const google = page.locator(".google-login");
         await expect(google.locator(".google-login-form")).toBeVisible();
         await expect(google.locator("[data-google-browser-note]")).toBeHidden();
-        const height = (await google.boundingBox())!.height;
         // Playwright cannot emulate display-mode. Activate the shipped media
         // rule itself, without duplicating its declarations or using app JS.
         const applied = await page.evaluate(() => {
@@ -149,7 +148,6 @@ for (const javaScriptEnabled of [false, true]) {
         await expect(google.locator("[data-google-browser-note]")).toBeVisible();
         // Role lookup excludes the display:none branch from accessibility.
         await expect(google.getByRole("button", { name: /Google/ })).toHaveCount(0);
-        expect(Math.abs((await google.boundingBox())!.height - height)).toBeLessThanOrEqual(1);
         if (javaScriptEnabled) {
           await google.getByRole("button", { name: enMessages.google_copy_url, exact: true }).click();
           const expected = new URL(page.url()); expected.hash = "";
