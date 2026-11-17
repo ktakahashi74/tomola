@@ -101,11 +101,12 @@ export default async function globalSetup(config: FullConfig) {
     TOMOLA_ALLOW_FAKE_ENGINES: "1",
   });
 
-  // Prepare the development output before Vite can serve a request. A cold
-  // project's metadata and locale-module generation otherwise reload SSR after
-  // its global Markdown executor has already been created.
+  // Prepare the development output before Vite can serve a request, in the
+  // same message-module structure the Vite plugin writes. A cold project's
+  // metadata and message generation otherwise reload SSR after its global
+  // Markdown executor has already been created.
   if (process.env.E2E_BROWSER_GROUP && !buildServer) {
-    const generated = spawnSync("pnpm", ["exec", "paraglide-js", "compile", "--project", "./project.inlang", "--outdir", "./app/paraglide", "--emit-ts-declarations", "--output-structure", "locale-modules", "--strategy", "custom-htmlLang", "baseLocale"], { cwd: root, env, encoding: "utf8" });
+    const generated = spawnSync("pnpm", ["exec", "paraglide-js", "compile", "--project", "./project.inlang", "--outdir", "./app/paraglide", "--emit-ts-declarations", "--output-structure", "message-modules", "--strategy", "custom-htmlLang", "baseLocale"], { cwd: root, env, encoding: "utf8" });
     if (generated.status !== 0) {
       fs.rmSync(dir, { recursive: true, force: true });
       throw new Error(`e2e locale preparation failed:\n${generated.stdout}\n${generated.stderr}`);
