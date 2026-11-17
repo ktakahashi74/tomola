@@ -26,7 +26,7 @@ Contribution and DCO sign-off requirements are in [CONTRIBUTING.md](../CONTRIBUT
 
 ## Dependency updates
 
-Use pnpm 12.16.1, as pinned in `package.json` and the Dockerfile's `PNPM_VERSION`. Keep these versions aligned when updating pnpm.
+Use pnpm 12.21.0, as pinned in `package.json` and the Dockerfile's `PNPM_VERSION`. Keep these versions aligned when updating pnpm.
 
 Pin direct authentication dependencies (`better-auth`, `@better-auth/*` and `@simplewebauthn/*`) to exact versions and keep up with supported patch releases. Check the passkey plugin's dependency ranges before changing the SimpleWebAuthn major version. Prefer `^` for other dependencies, retaining existing explicit compatibility pins. The two Inlang plugins are also pinned exactly so their build-time code is covered by the lockfile's integrity checks.
 

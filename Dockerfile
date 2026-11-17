@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage production image for tomola. Complete deployment acceptance checks in docs/deploy.md before inviting members.
 # Stages:
-#   base: Node 26 and pnpm via corepack, matching package.json's packageManager version.
+#   base: Node 26.13.1 and pnpm via corepack, matching package.json's packageManager version.
 #   build: installs development dependencies too, then `pnpm build` (React Router server/client builds, Paraglide messages and the Markdown worker).
 #   prod-deps: production dependencies only. tsx is a production dependency for entrypoint migrations and pnpm invite.
 #   runtime: production dependencies, build output, migrations and operational scripts only. docker-entrypoint.sh runs as non-root user node.
@@ -10,9 +10,9 @@
 # Permissions: code and node_modules remain root-owned (no --chown). Runtime user node can read but not write them, preventing code replacement even if the app is compromised.
 # No writable directory needed: data goes to DATABASE_URL PostgreSQL, temporary files to /tmp. If a writable location becomes necessary, give node ownership only of that location.
 
-ARG NODE_VERSION=26
-ARG NODE_IMAGE_DIGEST=sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9
-ARG PNPM_VERSION=12.16.1
+ARG NODE_VERSION=26.13.1
+ARG NODE_IMAGE_DIGEST=sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1
+ARG PNPM_VERSION=12.21.0
 ARG COREPACK_VERSION=0.36.0
 
 FROM node:${NODE_VERSION}-bookworm-slim@${NODE_IMAGE_DIGEST} AS base
