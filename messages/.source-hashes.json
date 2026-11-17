@@ -2223,7 +2223,7 @@
   "google_copy_url": "bf44fd7445b998c6",
   "google_url_copied": "73a9beccb4f0d587",
   "google_unverified": "64a6f4e7a0876ded",
-  "google_unmanaged": "ae1b6aaf0882cfd1",
+  "google_unmanaged": "47b13106c8a96da7",
   "google_failed": "23cb62e7d926a7ba",
   "google_invitation_email": "a220afd0bba337d9",
   "google_email_fallback": "c027437658b3bb1a",
@@ -2235,7 +2235,8 @@
   "google_disconnect": "b2692915ebc6d8a8",
   "google_verify": "008205da743a4d94",
   "google_reauth_for": "e04589005ebddddf",
-  "google_privacy": "5b45ff50db057736"
+  "google_privacy": "5b45ff50db057736",
+  "google_invitation_reopen": "d1f7e3a33002dfa9"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4460,7 +4461,7 @@
   "google_copy_url": "bf44fd7445b998c6",
   "google_url_copied": "73a9beccb4f0d587",
   "google_unverified": "64a6f4e7a0876ded",
-  "google_unmanaged": "ae1b6aaf0882cfd1",
+  "google_unmanaged": "47b13106c8a96da7",
   "google_failed": "23cb62e7d926a7ba",
   "google_invitation_email": "a220afd0bba337d9",
   "google_email_fallback": "c027437658b3bb1a",
@@ -4472,7 +4473,8 @@
   "google_disconnect": "b2692915ebc6d8a8",
   "google_verify": "008205da743a4d94",
   "google_reauth_for": "e04589005ebddddf",
-  "google_privacy": "5b45ff50db057736"
+  "google_privacy": "5b45ff50db057736",
+  "google_invitation_reopen": "d1f7e3a33002dfa9"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7128,7 +7130,7 @@
   "google_copy_url": "bf44fd7445b998c6",
   "google_url_copied": "73a9beccb4f0d587",
   "google_unverified": "64a6f4e7a0876ded",
-  "google_unmanaged": "ae1b6aaf0882cfd1",
+  "google_unmanaged": "47b13106c8a96da7",
   "google_failed": "23cb62e7d926a7ba",
   "google_invitation_email": "a220afd0bba337d9",
   "google_email_fallback": "c027437658b3bb1a",
@@ -7140,7 +7142,8 @@
   "google_disconnect": "b2692915ebc6d8a8",
   "google_verify": "008205da743a4d94",
   "google_reauth_for": "e04589005ebddddf",
-  "google_privacy": "5b45ff50db057736"
+  "google_privacy": "5b45ff50db057736",
+  "google_invitation_reopen": "d1f7e3a33002dfa9"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9365,7 +9368,7 @@
   "google_copy_url": "bf44fd7445b998c6",
   "google_url_copied": "73a9beccb4f0d587",
   "google_unverified": "64a6f4e7a0876ded",
-  "google_unmanaged": "ae1b6aaf0882cfd1",
+  "google_unmanaged": "47b13106c8a96da7",
   "google_failed": "23cb62e7d926a7ba",
   "google_invitation_email": "a220afd0bba337d9",
   "google_email_fallback": "c027437658b3bb1a",
@@ -9377,7 +9380,8 @@
   "google_disconnect": "b2692915ebc6d8a8",
   "google_verify": "008205da743a4d94",
   "google_reauth_for": "e04589005ebddddf",
-  "google_privacy": "5b45ff50db057736"
+  "google_privacy": "5b45ff50db057736",
+  "google_invitation_reopen": "d1f7e3a33002dfa9"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11602,7 +11606,7 @@
   "google_copy_url": "bf44fd7445b998c6",
   "google_url_copied": "73a9beccb4f0d587",
   "google_unverified": "64a6f4e7a0876ded",
-  "google_unmanaged": "ae1b6aaf0882cfd1",
+  "google_unmanaged": "47b13106c8a96da7",
   "google_failed": "23cb62e7d926a7ba",
   "google_invitation_email": "a220afd0bba337d9",
   "google_email_fallback": "c027437658b3bb1a",
@@ -11614,7 +11618,8 @@
   "google_disconnect": "b2692915ebc6d8a8",
   "google_verify": "008205da743a4d94",
   "google_reauth_for": "e04589005ebddddf",
-  "google_privacy": "5b45ff50db057736"
+  "google_privacy": "5b45ff50db057736",
+  "google_invitation_reopen": "d1f7e3a33002dfa9"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

@@ -7,7 +7,7 @@ import { LoginCodeForm } from "~/components/login-code-form";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { Form, Link, useLocation, useRevalidator, type MiddlewareFunction } from "react-router";
 import { useEffect, useRef } from "react";
-import { invitationCookie, clearInvitationCookie } from "~/lib/auth/invitation-cookie.server";
+import { invitationCookie, clearInvitationCookie, readInvitationCookie } from "~/lib/auth/invitation-cookie.server";
 import { invitationVillage } from "~/lib/signup-village.server";
 import { prepareLoginCode } from "~/lib/auth/login-code-cookie.server";
 import { pendingLoginScreen, restartLoginCode } from "~/lib/auth/login-code-state.server";
@@ -19,7 +19,7 @@ import { EntrySteps } from "~/components/entry-steps";
 import { getAuth, isOriginRejected, isRejectedInput } from "~/lib/auth/auth.server";
 import { getDb } from "~/lib/db/client.server";
 import { enforceIpLimit } from "~/lib/http/limits.server";
-import { findValidInvitationByToken, invitationSenderHandle } from "~/lib/invitations.server";
+import { findValidInvitationById, findValidInvitationByToken, invitationSenderHandle } from "~/lib/invitations.server";
 import { m } from "~/paraglide/messages.js";
 import { getLocale } from "~/paraglide/runtime.js";
 import { readInvitationNote } from "~/lib/invitation-note.server";
@@ -45,10 +45,17 @@ export const middleware: MiddlewareFunction<Response>[] = [async ({ request, par
   return response;
 }];
 
+async function screenInvitation(request: Request, token?: string) {
+  const db = await getDb();
+  if (token) return findValidInvitationByToken(db, token);
+  const id = readInvitationCookie(request);
+  return id ? findValidInvitationById(db, id) : null;
+}
+
 // Invitation POSTs: 300 per IP per 15 minutes (AUTH_PAGE_IP_LIMIT; 429 on excess). Do not count GET page views.
 async function loaderImplementation({ params, request }: Route.LoaderArgs) {
   const db = await getDb();
-  const invitation = await findValidInvitationByToken(db, params.token);
+  const invitation = await screenInvitation(request, params.token);
   const from = invitation ? await invitationSenderHandle(db, invitation) : null;
   const note = invitation && from ? await readInvitationNote(db, invitation.id, getLocale(), new URL(request.url).searchParams.get("original") === "1") : null;
   return {
@@ -56,6 +63,7 @@ async function loaderImplementation({ params, request }: Route.LoaderArgs) {
     ...(googleLoginConfig() ? { google: { error: new URL(request.url).searchParams.get("error"), email: invitation ? maskGoogleInvitationEmail(invitation.email) : null } } : {}),
     trialRequired: trialParticipationRequired(),
     email: invitation?.email ?? null,
+    reopenInvitation: !params.token && !invitation,
     from,
     note: note ? { ...note,
       translationLabel: note.translated ? m.label_from_lang_machine({ lang: languageLabel(note.from) }) : null,
@@ -73,9 +81,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   const form = await request.formData();
   if (form.get("intent") === "login-restart") return restartLoginCode(request);
   if (form.get("intent") === "login-code") return submitLoginCode(request, form);
-  const invitation = await findValidInvitationByToken(db, params.token);
+  const invitation = await screenInvitation(request, params.token);
   if (!invitation) return { sentTo: null, error: "invalid" as const };
-  if (form.get("intent") === "google-login") return startGoogleSignIn(request);
+  if (form.get("intent") === "google-login") return startGoogleSignIn(request, "/", invitation.id);
   const auth = await getAuth();
   const pending = prepareLoginCode(request, invitation.email, form.get("intent") === "login-resend");
   const browser = pending.browser;
@@ -145,7 +153,7 @@ export default function Invite({ loaderData, actionData }: Route.ComponentProps)
       </div>}
       {loaderData.village && <p className="break-words">{m.invite_village({ village: loaderData.village.name })}</p>}
       {loaderData.village && <p className="ui-help">{m.village_join_visibility()}</p>}
-      {!loaderData.email ? <><p>{m.invite_invalid()}</p><Link to="/login" className="underline">{m.invite_invalid_login()}</Link></> : loaderData.codePending ? <>
+      {!loaderData.email ? <><p>{loaderData.reopenInvitation ? m.google_invitation_reopen() : m.invite_invalid()}</p><Link to="/login" className="underline">{m.invite_invalid_login()}</Link></> : loaderData.codePending ? <>
         <p className="break-words">{m.invite_sent({ email: loaderData.codePending.email })}</p>
         <LoginCodeForm key={loaderData.codePending.revision} state={loaderData.codePending} invalid={!!codeError} limited={actionData && "limited" in actionData ? actionData.limited : undefined} invitation />
         {actionData && "error" in actionData && actionData.error === "origin_mismatch" && <p className="text-destructive">{m.auth_origin_mismatch()}</p>}

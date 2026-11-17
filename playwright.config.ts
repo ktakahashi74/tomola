@@ -22,7 +22,11 @@ export default defineConfig({
     baseURL: `${process.env.E2E_SERVER === "build" ? "https" : "http"}://localhost:${process.env.E2E_PORT ?? 5199}`,
     // Match the local production fixture's certificate policy. Context-only
     // permission can still leave Chromium subresources failing TLS retries.
-    ...(process.env.E2E_SERVER === "build" ? { ignoreHTTPSErrors: true, launchOptions: { args: ["--ignore-certificate-errors"] } } : {}),
+    ...(process.env.E2E_SERVER === "build" ? { ignoreHTTPSErrors: true } : {}),
+    launchOptions: { args: [
+      ...(process.env.E2E_SERVER === "build" ? ["--ignore-certificate-errors"] : []),
+      ...(process.env.E2E_BLOCK_EXTERNAL_DNS === "1" ? ["--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost"] : []),
+    ] },
     // UI language follows the browser (Paraglide preferredLanguage); assertions use English text.
     locale: "en-US",
     // Ordinary scenarios intercept network requests. Worker lifecycle and

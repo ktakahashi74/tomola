@@ -12,7 +12,7 @@ test("Google entrypoints and privacy text follow the feature flag without pre-bu
     external.push(url.hostname); return route.abort();
   });
   const csp = await watchCsp(page);
-  for (const path of ["/login", new URL(state().invites["mika@example.com"]).pathname]) {
+  for (const path of ["/login", new URL(state().invites["google_invitee@example.com"]).pathname]) {
     await page.goto(path);
     await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(enabled ? 1 : 0);
   }
@@ -21,7 +21,7 @@ test("Google entrypoints and privacy text follow the feature flag without pre-bu
   expect(external).toEqual([]);
   expect(csp.violations).toEqual([]); expect(csp.pageErrors).toEqual([]);
   expect(csp.hydrationWarnings).toEqual([]);
-  await useMember(page, "pat@example.com"); await page.goto("/settings");
+  await useMember(page, "google_controls@example.com"); await page.goto("/settings");
   await expect(page.locator("#settings-google")).toHaveCount(enabled ? 1 : 0);
   await expect(page.getByRole("button", { name: enMessages.google_connect, exact: true })).toHaveCount(enabled ? 1 : 0);
   if (!enabled) {
@@ -39,7 +39,7 @@ test("Google navigation sends no invitation Referer and cancellation preserves e
     const url = new URL(request.url());
     if (url.origin !== state().baseURL) contacts.push(url.hostname);
   });
-  const invitation = state().invites["mika@example.com"];
+  const invitation = state().invites["google_cancel@example.com"];
   await page.goto(invitation);
   const google = page.getByRole("button", { name: enMessages.google_continue, exact: true });
   await expect(google).toBeVisible();
@@ -60,21 +60,24 @@ test("Google navigation sends no invitation Referer and cancellation preserves e
   expect(authorization!.searchParams.has("login_hint")).toBe(false);
   await page.goto(`${state().baseURL}/api/auth/callback/google?error=access_denied&state=${authorization!.searchParams.get("state")}`);
   await expect(page.getByRole("alert")).toContainText(enMessages.google_failed);
-  await expect(page.getByRole("alert")).toContainText("m***@example.com");
+  await expect(page).toHaveURL(/\/invite\?google=1&error=access_denied$/);
+  await expect(page.getByRole("alert")).toContainText("g***@example.com");
   await expect(email).toBeVisible();
   const log = fs.readFileSync(state().serverLog, "utf8");
   expect(log).not.toContain(new URL(invitation).pathname.split("/").at(-1)!);
-  expect(log).not.toContain("mika@example.com");
+  expect(log).not.toContain("google_cancel@example.com");
+  await page.getByRole("button", { name: enMessages.invite_submit, exact: true }).click();
+  await expect(page.getByRole("heading", { name: enMessages.login_code_heading, exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("google-login.png"), fullPage: true });
 });
 
-for (const ua of ["Line/15.0", "FBAN/FBIOS;FBAV/1", "Messenger/1", "Instagram 300", "LinkedInApp LIAPP/1"]) {
+for (const ua of ["Line/15.0", "FBAN/FBIOS;FBAV/1", "Messenger/1", "Instagram 300", "LinkedInApp LIAPP/1", "KAKAOTALK 26.1", "Mozilla/5.0 (Linux; Android 15; Pixel 9; wv) AppleWebKit/537.36 Version/4.0 Chrome/140.0 Mobile Safari/537.36"]) {
   test(`embedded browser ${ua} offers URL copying and email instead of Google`, async ({ browser }) => {
     test.skip(!enabled);
     const context = await browser.newContext({ userAgent: ua });
     const page = await context.newPage();
     try {
-      for (const path of ["/login", state().invites["mika@example.com"]]) {
+      for (const path of ["/login", state().invites["google_invitee@example.com"]]) {
         await page.goto(new URL(path, state().baseURL).toString());
         await expect(page.getByText(enMessages.google_open_browser, { exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: enMessages.google_copy_url, exact: true })).toBeVisible();
@@ -99,7 +102,7 @@ for (const mode of ["display-mode", "ios"]) {
         };
       }
     }, mode);
-    await page.goto(state().invites["mika@example.com"]);
+    await page.goto(state().invites["google_invitee@example.com"]);
     await expect(page.getByText(enMessages.google_open_browser, { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: enMessages.google_copy_url, exact: true }).click();
@@ -110,10 +113,17 @@ for (const mode of ["display-mode", "ios"]) {
 
 test("settings show connection date and allow disconnecting while retaining email login", async ({ page }) => {
   test.skip(!enabled);
-  await useMember(page, "style_preloads_reader@example.com"); await page.goto("/settings");
+  await useMember(page, "google_disconnect@example.com"); await page.goto("/settings");
   const section = page.locator("#settings-google");
   await expect(section).toContainText(/Connected on \d{4}-\d{2}-\d{2}/);
   await section.getByRole("button", { name: enMessages.google_disconnect, exact: true }).click();
   await expect(section).toContainText(enMessages.google_not_connected);
   await expect(section.getByRole("button", { name: enMessages.google_connect, exact: true })).toBeVisible();
+});
+
+test("a missing invitation cookie asks the visitor to reopen the email link", async ({ page }) => {
+  test.skip(!enabled);
+  await page.goto(`${state().baseURL}/invite?google=1&error=access_denied`);
+  await expect(page.getByText(enMessages.google_invitation_reopen, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: enMessages.google_continue, exact: true })).toHaveCount(0);
 });

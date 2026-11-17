@@ -2429,7 +2429,7 @@
   "google_copy_url": "复制此页面的 URL",
   "google_url_copied": "已复制 URL",
   "google_unverified": "Google 尚未验证此电子邮箱地址。",
-  "google_unmanaged": "此电子邮箱地址不由 Google 管理。",
+  "google_unmanaged": "此地址不是 Gmail 或 Google Workspace 地址。请改用邮件验证码继续。",
   "google_failed": "未能完成 Google 登录。",
   "google_invitation_email": "请使用与发送至 {email} 的邀请对应的 Google 账号。",
   "google_email_fallback": "请通过邮件验证码继续。如果已有账号，请先通过邮件验证码登录，再到设置中关联 Google。",
@@ -2441,5 +2441,6 @@
   "google_disconnect": "解除 Google 关联",
   "google_verify": "确认身份以关联或解除 Google 关联",
   "google_reauth_for": "请以 {who} 的身份进行验证，以更改 Google 登录设置。",
-  "google_privacy": "如果选择 Google 登录，Google 会知道你登录了 tomola。tomola 会收到你的电子邮箱地址和 Google 账号 ID；不会请求你的姓名或照片，也不会保存 Google 的访问令牌、刷新令牌或 ID 令牌。Google 的电子邮箱地址仅在注册时使用，不会单独保存。后续登录仅保存账号 ID 和关联日期。帖子和回复不会因登录而发送给 Google。只有在你选择使用 Google 继续后，tomola 才会与 Google 通信。"
+  "google_privacy": "如果选择 Google 登录，Google 会知道你登录了 tomola。tomola 会收到你的电子邮箱地址和 Google 账号 ID；不会请求你的姓名或照片，也不会保存 Google 的访问令牌、刷新令牌或 ID 令牌。Google 的电子邮箱地址仅在注册时使用，不会单独保存。后续登录仅保存账号 ID 和关联日期。帖子和回复不会因登录而发送给 Google。只有在你选择使用 Google 继续后，tomola 才会与 Google 通信。",
+  "google_invitation_reopen": "请重新打开邀请邮件中的链接。"
 }

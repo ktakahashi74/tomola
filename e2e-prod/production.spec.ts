@@ -61,13 +61,15 @@ test("every response carries the headers, and the page's inline scripts run unde
   const nonce = /script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)'/.exec(h["content-security-policy"])?.[1];
   expect(nonce, "a nonce in the CSP").toBeDefined();
   expect(h["content-security-policy"]).toBe(
-    `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+    `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'${process.env.E2E_GOOGLE_LOGIN === "1" ? " https://accounts.google.com" : ""}`,
   );
   expect(h["strict-transport-security"]).toBe("max-age=31536000");
   expect(h["x-content-type-options"]).toBe("nosniff");
   // Login and the other authorization pages leave the opener intact for pop-up OAuth clients; ordinary pages isolate it.
   expect(h["cross-origin-opener-policy"]).toBeUndefined();
-  expect((await request.get("/principles")).headers()["cross-origin-opener-policy"]).toBe("same-origin");
+  const publicHeaders = (await request.get("/principles")).headers();
+  expect(publicHeaders["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(publicHeaders["content-security-policy"]).toMatch(/; form-action 'self'$/);
   expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   expect(h["vary"]).toMatch(/Accept-Language/i);
   expect(h["vary"]).toMatch(/Cookie/i);

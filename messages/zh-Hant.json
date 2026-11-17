@@ -2429,7 +2429,7 @@
   "google_copy_url": "複製此頁面的 URL",
   "google_url_copied": "已複製 URL",
   "google_unverified": "Google 尚未驗證此電子郵件地址。",
-  "google_unmanaged": "此電子郵件地址不由 Google 管理。",
+  "google_unmanaged": "此地址不是 Gmail 或 Google Workspace 地址。請改用電子郵件驗證碼繼續。",
   "google_failed": "未能完成 Google 登入。",
   "google_invitation_email": "請使用與寄至 {email} 的邀請對應的 Google 帳戶。",
   "google_email_fallback": "請透過電子郵件驗證碼繼續。如果已有帳戶，請先透過電子郵件驗證碼登入，再到設定中連結 Google。",
@@ -2441,5 +2441,6 @@
   "google_disconnect": "解除 Google 連結",
   "google_verify": "確認身分以連結或解除 Google 連結",
   "google_reauth_for": "請以 {who} 的身分進行驗證，以變更 Google 登入設定。",
-  "google_privacy": "如果選擇 Google 登入，Google 會知道你登入了 tomola。tomola 會收到你的電子郵件地址和 Google 帳戶 ID；不會要求你的姓名或照片，也不會儲存 Google 的存取權杖、更新權杖或 ID 權杖。Google 的電子郵件地址僅在註冊時使用，不會另行儲存。後續登入僅保留帳戶 ID 和連結日期。貼文和回覆不會因登入而傳送給 Google。只有在你選擇使用 Google 繼續後，tomola 才會與 Google 通訊。"
+  "google_privacy": "如果選擇 Google 登入，Google 會知道你登入了 tomola。tomola 會收到你的電子郵件地址和 Google 帳戶 ID；不會要求你的姓名或照片，也不會儲存 Google 的存取權杖、更新權杖或 ID 權杖。Google 的電子郵件地址僅在註冊時使用，不會另行儲存。後續登入僅保留帳戶 ID 和連結日期。貼文和回覆不會因登入而傳送給 Google。只有在你選擇使用 Google 繼續後，tomola 才會與 Google 通訊。",
+  "google_invitation_reopen": "請重新開啟邀請電子郵件中的連結。"
 }

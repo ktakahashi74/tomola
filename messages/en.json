@@ -3000,7 +3000,7 @@
   "google_copy_url": "Copy this page’s URL",
   "google_url_copied": "URL copied",
   "google_unverified": "Google has not verified this email address.",
-  "google_unmanaged": "Google does not manage this email address.",
+  "google_unmanaged": "This address is not a Gmail or Google Workspace address. Continue with an email code instead.",
   "google_failed": "Google sign-in could not be completed.",
   "google_invitation_email": "Use the Google account for the invitation to {email}.",
   "google_email_fallback": "Continue with an email code. If you already have an account, sign in by email, then connect Google in settings.",
@@ -3012,5 +3012,6 @@
   "google_disconnect": "Disconnect Google",
   "google_verify": "Verify your identity to connect or disconnect Google",
   "google_reauth_for": "Verify your identity as {who} to change Google sign-in.",
-  "google_privacy": "If you choose Google sign-in, Google learns that you sign in to tomola. tomola receives your email address and Google account ID; it does not request your name or photo, or store Google access, refresh or ID tokens. Your Google email address is used during registration and is not stored separately. Only the account ID and connection date are kept for later sign-ins. Posts and replies are not sent to Google for sign-in. tomola contacts Google only after you choose to continue with Google."
+  "google_privacy": "If you choose Google sign-in, Google learns that you sign in to tomola. tomola receives your email address and Google account ID; it does not request your name or photo, or store Google access, refresh or ID tokens. Your Google email address is used during registration and is not stored separately. Only the account ID and connection date are kept for later sign-ins. Posts and replies are not sent to Google for sign-in. tomola contacts Google only after you choose to continue with Google.",
+  "google_invitation_reopen": "Open the link in your invitation email again."
 }

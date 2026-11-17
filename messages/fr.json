@@ -3054,7 +3054,7 @@
   "google_copy_url": "Copier l’URL de cette page",
   "google_url_copied": "URL copiée",
   "google_unverified": "Google n’a pas vérifié cette adresse e-mail.",
-  "google_unmanaged": "Google ne gère pas cette adresse e-mail.",
+  "google_unmanaged": "Cette adresse n’est pas une adresse Gmail ou Google Workspace. Continuez avec un code reçu par e-mail.",
   "google_failed": "La connexion avec Google n’a pas pu être terminée.",
   "google_invitation_email": "Utilisez le compte Google correspondant à l’invitation envoyée à {email}.",
   "google_email_fallback": "Continuez avec un code reçu par e-mail. Si vous avez déjà un compte, connectez-vous par e-mail, puis associez Google dans les paramètres.",
@@ -3066,5 +3066,6 @@
   "google_disconnect": "Dissocier Google",
   "google_verify": "Confirmer votre identité pour associer ou dissocier Google",
   "google_reauth_for": "Confirmez votre identité en tant que {who} pour modifier la connexion avec Google.",
-  "google_privacy": "Si vous choisissez la connexion avec Google, Google sait que vous vous connectez à tomola. tomola reçoit votre adresse e-mail et l’identifiant de votre compte Google ; il ne demande ni votre nom ni votre photo et ne conserve aucun jeton Google d’accès, d’actualisation ou d’identité. Votre adresse e-mail Google sert lors de l’inscription et n’est pas enregistrée séparément. Seuls l’identifiant du compte et la date d’association sont conservés pour les connexions suivantes. Les publications et les réponses ne sont pas envoyées à Google pour la connexion. tomola contacte Google uniquement après votre choix de continuer avec Google."
+  "google_privacy": "Si vous choisissez la connexion avec Google, Google sait que vous vous connectez à tomola. tomola reçoit votre adresse e-mail et l’identifiant de votre compte Google ; il ne demande ni votre nom ni votre photo et ne conserve aucun jeton Google d’accès, d’actualisation ou d’identité. Votre adresse e-mail Google sert lors de l’inscription et n’est pas enregistrée séparément. Seuls l’identifiant du compte et la date d’association sont conservés pour les connexions suivantes. Les publications et les réponses ne sont pas envoyées à Google pour la connexion. tomola contacte Google uniquement après votre choix de continuer avec Google.",
+  "google_invitation_reopen": "Ouvrez à nouveau le lien dans votre e-mail d’invitation."
 }

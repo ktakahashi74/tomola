@@ -6,7 +6,7 @@ import { googleLoginConfig } from "~/lib/auth/google-config.server";
 import { invitationCookie, readInvitationCookie } from "~/lib/auth/invitation-cookie.server";
 import { createInvitation } from "~/lib/invitations.server";
 import { isGoogleAuthEndpoint } from "~/lib/auth/endpoints.server";
-import { account, invitations, session, user } from "~/lib/db/schema";
+import { account, invitations, session, user, verification } from "~/lib/db/schema";
 import { createTestDb } from "./helpers/db";
 import { createProfile } from "~/lib/profiles.server";
 import { action as settingsAction } from "~/routes/settings";
@@ -14,6 +14,9 @@ import { action as authAction, loader as authLoader } from "~/routes/api.auth";
 import { noticeSources } from "~/lib/notice-sources.server";
 import { inviteUrl } from "~/lib/site-url";
 import { findValidInvitationByToken } from "~/lib/invitations.server";
+import { googleInvitationContext } from "~/lib/auth/google-policy.server";
+import { googleBrowserBlocked } from "~/components/google-login";
+import { action as inviteAction, loader as inviteLoader } from "~/routes/invite";
 
 vi.hoisted(() => vi.resetModules());
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -53,7 +56,7 @@ async function setup(claims: Record<string, unknown> = {}) {
   }));
   const request = (path: string, cookie = "", body?: unknown) => new Request(`${BASE}${path}`, { method: body ? "POST" : "GET", headers: { origin: BASE, cookie, ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const start = async (cookie = "", body: Record<string, unknown> = {}, link = false) => {
-    const response = await auth.handler(request(`/api/auth/${link ? "link-social" : "sign-in/social"}`, cookie, { provider: "google", callbackURL: link ? "/settings#settings-google" : "/", ...body }));
+    const response = await googleInvitationContext.run(readInvitationCookie(new Request(BASE, { headers: { cookie } }), SECRET), () => auth.handler(request(`/api/auth/${link ? "link-social" : "sign-in/social"}`, cookie, { provider: "google", callbackURL: link ? "/settings#settings-google" : "/", ...body })));
     const data = await response.json();
     expect(response.status, JSON.stringify(data)).toBe(200);
     return { url: new URL(data.url), cookie: cookies(response, cookie) };
@@ -124,7 +127,7 @@ describe("Google authorization-code registration", () => {
     expect(flow.url.searchParams.has("include_granted_scopes")).toBe(false);
     expect(flow.url.searchParams.has("login_hint")).toBe(false);
     const result = await h.callback(flow);
-    expect(result.headers.get("location")).toContain("error=google_invitation");
+    expect(result.headers.get("location")).toContain("error=account_not_linked");
     expect(await h.db.select().from(user)).toHaveLength(0);
   });
 
@@ -186,6 +189,19 @@ describe("Google authorization-code registration", () => {
 });
 
 describe("explicit Google connections", () => {
+  it("omits the member email from persisted link state while retaining session binding", async () => {
+    const h = await setup(); const invitation = await h.invite();
+    const cookie = cookies(await h.emailLogin());
+    const [member] = await h.db.select().from(user);
+    const flow = await h.start(cookie, {}, true);
+    const rows = await h.db.select().from(verification);
+    const states = rows.map(row => JSON.parse(row.value)).filter(value => value.link);
+    expect(states).toHaveLength(1);
+    expect(states[0].link).toMatchObject({ email: "", userId: member.id, encryptedSessionToken: expect.any(String) });
+    for (const secret of [member.email, invitation.token, `${BASE}/invite/`]) expect(JSON.stringify(rows)).not.toContain(secret);
+    expect((await h.callback(flow)).headers.get("location")).toBe("/settings#settings-google");
+    expect(await h.db.select().from(account)).toMatchObject([{ userId: member.id, providerId: "google" }]);
+  });
   it("requires fresh sessions to connect and disconnect, accepts different email, and signs in by subject without profile changes", async () => {
     const h = await setup(); await h.invite();
     const emailResult = await h.emailLogin(); const originalCookie = cookies(emailResult);
@@ -253,6 +269,19 @@ describe("explicit Google connections", () => {
     const log = JSON.stringify(writes);
     for (const value of ["alice@gmail.com", "fixture-access", "fixture-refresh", invitation.token]) expect(log).not.toContain(value);
   });
+
+  it("preserves other authentication diagnostics while Google is enabled", async () => {
+    const h = await setup();
+    const writes: unknown[][] = [];
+    vi.spyOn(console, "error").mockImplementation((...values) => { writes.push(values); });
+    const flow = await h.start();
+    await h.auth.handler(h.request(`/api/auth/callback/google?state=${flow.url.searchParams.get("state")}`, flow.cookie));
+    const context = await h.auth.$context;
+    context.logger.error("Passkey verification failed");
+    context.logger.error("MCP client metadata rejected");
+    expect(JSON.stringify(writes)).toContain("Passkey verification failed");
+    expect(JSON.stringify(writes)).toContain("MCP client metadata rejected");
+  });
 });
 
 describe("closed Google configuration and invitation cookie", () => {
@@ -285,6 +314,63 @@ describe("Google application routes and notices", () => {
     g.__tomolaAuth = Promise.resolve(h.auth); g.__tomolaDb = Promise.resolve(h.db);
     try { return await run(); } finally { g.__tomolaAuth = oldAuth; g.__tomolaDb = oldDb; }
   }
+  it("binds the submitted invitation rather than another tab's cookie and stores no secret in OAuth state", async () => {
+    const h = await setup(); const first = await h.invite(); const other = await h.invite("other@gmail.com");
+    await withAuth(h, async () => {
+      const request = new Request(`${BASE}/invite/${first.token}?openExternalBrowser=1`, { method: "POST", headers: { origin: BASE, cookie: other.cookie }, body: new URLSearchParams({ intent: "google-login" }) });
+      const redirect = await inviteAction({ request, params: { token: first.token } } as never) as Response;
+      const rows = await h.db.select().from(verification);
+      const states = rows.map(row => JSON.parse(row.value)).filter(value => value.serverContext);
+      expect(states).toHaveLength(1);
+      expect(states[0]).toMatchObject({ serverContext: { invitationId: first.id }, errorURL: "/invite?google=1" });
+      for (const secret of [first.token, other.token, first.email, other.email, `${BASE}/invite/`]) expect(JSON.stringify(rows)).not.toContain(secret);
+      const flow = { url: new URL(redirect.headers.get("location")!), cookie: cookies(redirect, other.cookie) };
+      expect((await h.callback(flow)).headers.get("location")).toBe("/onboarding");
+      expect(await h.db.select().from(invitations).where(eq(invitations.id, first.id))).toMatchObject([{ usedAt: expect.any(Date) }]);
+      expect(await h.db.select().from(invitations).where(eq(invitations.id, other.id))).toMatchObject([{ usedAt: null }]);
+    });
+  });
+  it("keeps client return URLs and additional data out of plaintext state", async () => {
+    const h = await setup(); const invite = await h.invite();
+    for (const callbackURL of [`/invite/${invite.token}`, `/%69nvite/${invite.token}`, `/login?email=${invite.email}&token=${invite.token}#${invite.token}`]) {
+      await h.start(invite.cookie, { callbackURL, errorCallbackURL: `${BASE}/invite/${invite.token}`, newUserCallbackURL: `/invite/${invite.token}`, additionalData: { email: invite.email, token: invite.token } });
+    }
+    const values = JSON.stringify(await h.db.select().from(verification));
+    for (const secret of [invite.token, invite.email, `${BASE}/invite/`]) expect(values).not.toContain(secret);
+  });
+  it("does not use an invitation cookie as proof at the public social API", async () => {
+    const h = await setup(); const invite = await h.invite();
+    const response = await h.auth.handler(h.request("/api/auth/sign-in/social", invite.cookie, { provider: "google" }));
+    const flow = { url: new URL((await response.json()).url), cookie: cookies(response, invite.cookie) };
+    expect((await h.callback(flow)).headers.get("location")).toContain("error=account_not_linked");
+    expect(await h.db.select().from(user)).toHaveLength(0);
+  });
+  it.each([{ email_verified: false }, { email: "alice@example.org" }])("returns the same ordinary login error for existing and absent addresses with %j", async claims => {
+    const h = await setup(claims);
+    const absent = await h.callback(await h.start());
+    await h.invite(typeof claims.email === "string" ? claims.email : "alice@gmail.com");
+    await h.emailLogin(typeof claims.email === "string" ? claims.email : "alice@gmail.com");
+    const existing = await h.callback(await h.start());
+    expect(absent.headers.get("location")).toBe("/login?google=1&error=account_not_linked");
+    expect(existing.headers.get("location")).toBe(absent.headers.get("location"));
+    expect(await h.db.select().from(account)).toHaveLength(0);
+  });
+  it("restores only a valid signed invitation and asks for the email link otherwise", async () => {
+    const h = await setup(); vi.stubEnv("BETTER_AUTH_SECRET", SECRET);
+    const invite = await h.invite();
+    await withAuth(h, async () => {
+      const load = (cookie: string, token?: string) => inviteLoader({ request: new Request(`${BASE}/invite?google=1&error=access_denied`, { headers: { cookie } }), params: { token } } as never);
+      expect(await load(invite.cookie)).toMatchObject({ email: invite.email, reopenInvitation: false });
+      for (const cookie of ["", `${invite.cookie}altered`, invitationCookie(new Request(BASE), invite.id, SECRET, new Date(Date.now() - 3600_000)).split(";")[0]]) {
+        expect(await load(cookie)).toMatchObject({ email: null, reopenInvitation: true });
+      }
+      expect(await load(invite.cookie, "invalid-token")).toMatchObject({ email: null });
+      for (const change of [{ expiresAt: new Date(Date.now() - 1) }, { revokedAt: new Date() }, { usedAt: new Date() }]) {
+        await h.db.update(invitations).set({ expiresAt: new Date(Date.now() + 86400_000), revokedAt: null, usedAt: null, ...change }).where(eq(invitations.id, invite.id));
+        expect(await load(invite.cookie)).toMatchObject({ email: null, reopenInvitation: true });
+      }
+    });
+  });
   it("clears the invitation cookie only on successful callback and closes both HTTP routes when disabled", async () => {
     const h = await setup(); const invite = await h.invite();
     await withAuth(h, async () => {
@@ -323,4 +409,9 @@ describe("Google application routes and notices", () => {
     vi.stubEnv("GOOGLE_LOGIN", "");
     expect(noticeSources("privacy").en).not.toContain("Google sign-in");
   });
+});
+
+it("recognizes additional embedded browsers while preserving ordinary browsers", () => {
+  for (const ua of ["KAKAOTALK 26.1", "NAVER(inapp; search; 2100)", "MicroMessenger/8.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9; wv) AppleWebKit/537.36"]) expect(googleBrowserBlocked(ua, false), ua).toBe(true);
+  for (const ua of ["Mozilla/5.0 Firefox/144.0", "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140.0 Mobile Safari/537.36", "NAVER Whale/4.0"]) expect(googleBrowserBlocked(ua, false), ua).toBe(false);
 });

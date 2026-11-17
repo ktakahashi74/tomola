@@ -946,6 +946,8 @@ to tomola; tomola receives an email and Google account ID. Posts and replies
 are not sent to Google for sign-in. The privacy section appears only while the
 feature is enabled, in both HTML and Markdown editions.
 
+The submitted invitation screen binds its verified invitation ID to server-side OAuth state. State return URLs contain no invitation token or address. Cancellation returns to `/invite`, which restores a valid invitation using the signed cookie; without it, the visitor must reopen the invitation email link. Google form redirects are permitted only on login, invitation and settings screens.
+
 No Google connection is made before the person presses the button. Provider
 redirects use `Referrer-Policy: no-referrer`. Known embedded app browsers and
 standalone home-screen apps instead show a browser-opening note and URL-copy

@@ -13,16 +13,18 @@ import {
   withSecurityHeaders,
 } from "~/lib/http/security-headers.server";
 
-it("permits Google form redirects only on authentication and settings screens when enabled", () => {
+it("permits Google form redirects only on login, invitation and settings screens when enabled", () => {
   vi.stubEnv("GOOGLE_LOGIN", "1"); vi.stubEnv("GOOGLE_CLIENT_ID", "fixture"); vi.stubEnv("GOOGLE_CLIENT_SECRET", "fixture");
   try {
-    for (const pathname of ["/login", "/invite/fixture", "/settings"]) {
+    for (const pathname of ["/login", "/invite/fixture", "/invite", "/settings", "/LOGIN/", "/log%69n.data", "/invite/fixture.data", "/settings.data"]) {
       const csp = securityHeaders({ nonce: "n", production: true, pathname })["Content-Security-Policy"];
       expect(csp).toContain("form-action 'self' https://accounts.google.com");
       expect(csp).toContain("connect-src 'self';");
       expect(csp).toContain("font-src 'self' data:;");
     }
-    expect(securityHeaders({ nonce: "n", production: true, pathname: "/t/1" })["Content-Security-Policy"]).not.toContain("google.com");
+    for (const pathname of ["/t/1", "/api/auth/callback/google", "/api/auth/sign-in/social", "/mcp/login", "/auth/confirm", "/onboarding", "/logout", "/login-other", "/settings/tokens", "/invite/a/b"]) {
+      expect(securityHeaders({ nonce: "n", production: true, pathname })["Content-Security-Policy"], pathname).not.toContain("google.com");
+    }
     vi.stubEnv("GOOGLE_LOGIN", "");
     expect(securityHeaders({ nonce: "n", production: true, pathname: "/login" })["Content-Security-Policy"]).not.toContain("google.com");
   } finally { vi.unstubAllEnvs(); }

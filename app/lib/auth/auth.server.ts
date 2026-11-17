@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getOAuthState, isAPIError } from "better-auth/api";
 import { googleLoginConfig } from "./google-config.server";
-import { prepareGoogleFlow, validateGoogleUser } from "./google-policy.server";
+import { finishGoogleFlow, prepareGoogleFlow, validateGoogleUser } from "./google-policy.server";
 import { getDb, type Db } from "~/lib/db/client.server";
 import { sessionAdapter } from "./session-adapter.server";
 import { RETENTION } from "~/lib/retention";
@@ -39,14 +39,13 @@ export function createAuth(db: Db, opts: AuthOptions) {
     account: { accountLinking: { disableImplicitLinking: true, allowDifferentEmails: true, allowUnlinkingAll: true, updateUserInfoOnLink: false }, updateAccountOnSignIn: false },
     logger: { level: "warn", log: (level, message, ...args) => {
       const write = level === "error" ? console.error : level === "warn" ? console.warn : console.info;
-      // Provider errors can contain codes, tokens or personal claims. Retain
-      // only the category while social authentication is configured.
-      write("[auth]", google ? "Authentication request failed" : safeErrorText([message, ...args]));
+      write("[auth]", safeErrorText([message, ...args]));
     } },
     hooks: { before: createAuthMiddleware(async ctx => {
-      await prepareGoogleFlow(ctx, opts.secret, !!google);
+      await prepareGoogleFlow(ctx, !!google);
       if (ctx.path === "/sign-in/magic-link" && isDeletedIdentity(undefined, ctx.body?.email)) return ctx.json({ status: true });
     }), after: createAuthMiddleware(async ctx => {
+      finishGoogleFlow(ctx);
       if (ctx.path !== "/passkey/generate-authenticate-options") return;
       const result = ctx.context.returned;
       if (result && typeof result === "object" && "challenge" in result && typeof result.challenge === "string") return ctx.json({ ...result, userVerification: "required" });
@@ -57,6 +56,15 @@ export function createAuth(db: Db, opts: AuthOptions) {
     // based on IPs, but the app has its own login rate limit (magic-link.server.ts) and an HTTP endpoint allowlist (endpoints.server.ts).
     advanced: { disableOriginCheck: false, ipAddress: { disableIpTracking: true } },
     databaseHooks: {
+      verification: {
+        create: { before: async (value, context) => {
+          if (context?.path !== "/link-social" || context.body?.provider !== "google") return;
+          const state = JSON.parse(value.value);
+          // With allowDifferentEmails, link.email is unused. Keep the required
+          // string empty; userId and the encrypted session token bind the link.
+          if (state.link) return { data: { ...value, value: JSON.stringify({ ...state, link: { ...state.link, email: "" } }) } };
+        } },
+      },
       account: {
         create: { before: async value => value.providerId === "google" ? { data: { accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null } } : undefined },
         update: { before: async (value, context) => context?.path === "/callback/:id" && context.params?.id === "google" ? { data: { ...value, accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null } } : undefined },

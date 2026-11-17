@@ -83,7 +83,10 @@ export const isHtml = (headers: Headers): boolean => (headers.get("content-type"
 
 // Header list, attaching only headers absent from the response.
 export function securityHeaders(opts: SecurityHeaderOptions): Record<string, string> {
-  const googleNavigation = !!googleLoginConfig() && (authenticationFlow(opts.pathname ?? "/") || opts.pathname === "/settings");
+  let path = opts.pathname ?? "/";
+  try { path = decodeURI(path); } catch { /* Invalid paths keep the default policy. */ }
+  path = path.replace(/\/_\.data$/, "/").replace(/\.data$/, "");
+  const googleNavigation = !!googleLoginConfig() && /^\/(?:login\/?|invite(?:\/[^/]+)?\/?|settings\/?)$/i.test(path);
   return {
     ...(opts.production ? { "Content-Security-Policy": contentSecurityPolicy(opts.nonce, googleNavigation), "Strict-Transport-Security": HSTS } : {}),
     "X-Content-Type-Options": "nosniff",

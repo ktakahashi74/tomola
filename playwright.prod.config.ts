@@ -22,6 +22,6 @@ export default defineConfig({
   projects: [{ name: "chromium-production", use: { ...devices["Desktop Chrome"], launchOptions: { args: ["--ignore-certificate-errors",
     // Route interception does not cover every redirected navigation. Google
     // tests additionally deny external DNS and proxies at the browser boundary.
-    ...(process.env.E2E_GOOGLE_LOGIN !== undefined ? ["--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost"] : []),
+    ...(process.env.E2E_GOOGLE_LOGIN !== undefined || process.env.E2E_BLOCK_EXTERNAL_DNS === "1" ? ["--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost"] : []),
   ] } } }],
 });

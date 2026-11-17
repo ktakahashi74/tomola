@@ -5,7 +5,7 @@ import { CopyTextButton } from "~/components/copy-text-button";
 import { m } from "~/paraglide/messages.js";
 
 export function googleBrowserBlocked(ua: string, standalone: boolean): boolean {
-  return standalone || /Line\/|\bFBAN\b|\bFBAV\b|FB_IAB|Messenger|Instagram|LinkedIn|\bLIAPP\b/i.test(ua);
+  return standalone || /Line\/|\bFBAN\b|\bFBAV\b|FB_IAB|Messenger|Instagram|LinkedIn|\bLIAPP\b|KAKAOTALK|NAVER[^\n]*inapp|MicroMessenger|; wv\)/i.test(ua);
 }
 
 // Wait for client detection before showing the button: standalone mode is not

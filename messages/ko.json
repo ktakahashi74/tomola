@@ -2947,7 +2947,7 @@
   "google_copy_url": "이 페이지의 URL 복사",
   "google_url_copied": "URL을 복사했습니다",
   "google_unverified": "Google에서 이 이메일 주소를 확인하지 않았습니다.",
-  "google_unmanaged": "Google에서 관리하는 이메일 주소가 아닙니다.",
+  "google_unmanaged": "이 주소는 Gmail 또는 Google Workspace 주소가 아닙니다. 이메일 코드로 계속하세요.",
   "google_failed": "Google 로그인을 완료하지 못했습니다.",
   "google_invitation_email": "{email} 주소로 보낸 초대와 일치하는 Google 계정을 사용하세요.",
   "google_email_fallback": "이메일 코드로 계속하세요. 이미 계정이 있다면 이메일 코드로 로그인한 뒤 설정에서 Google을 연결하세요.",
@@ -2959,5 +2959,6 @@
   "google_disconnect": "Google 연결 해제",
   "google_verify": "Google을 연결하거나 해제하려면 본인 확인하기",
   "google_reauth_for": "Google 로그인 설정을 변경하려면 {who}님의 본인 확인을 해 주세요.",
-  "google_privacy": "Google 로그인을 선택하면 Google은 회원님이 tomola에 로그인한다는 사실을 알게 됩니다. tomola는 이메일 주소와 Google 계정 ID를 받으며, 이름이나 사진을 요청하지 않고 Google 액세스·갱신·ID 토큰을 저장하지 않습니다. Google 이메일 주소는 가입 시 사용되며 별도로 저장하지 않습니다. 이후 로그인을 위해 계정 ID와 연결 날짜만 보관합니다. 로그인을 위해 게시물이나 답글을 Google에 보내지 않습니다. Google로 계속하기를 선택한 후에만 tomola가 Google과 통신합니다."
+  "google_privacy": "Google 로그인을 선택하면 Google은 회원님이 tomola에 로그인한다는 사실을 알게 됩니다. tomola는 이메일 주소와 Google 계정 ID를 받으며, 이름이나 사진을 요청하지 않고 Google 액세스·갱신·ID 토큰을 저장하지 않습니다. Google 이메일 주소는 가입 시 사용되며 별도로 저장하지 않습니다. 이후 로그인을 위해 계정 ID와 연결 날짜만 보관합니다. 로그인을 위해 게시물이나 답글을 Google에 보내지 않습니다. Google로 계속하기를 선택한 후에만 tomola가 Google과 통신합니다.",
+  "google_invitation_reopen": "초대 이메일의 링크를 다시 열어 주세요."
 }

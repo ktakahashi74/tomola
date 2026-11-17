@@ -2,6 +2,8 @@ import type { SeedMember } from "../e2e/member-fixtures";
 import { EARLY_MEMBERS } from "../e2e/early-members";
 
 export const PROD_MEMBERS: readonly SeedMember[] = [
+  { email: "google_controls@example.com", handle: "google_controls", homeArea: "en", uiLocale: "en" },
+  { email: "google_disconnect@example.com", handle: "google_disconnect", homeArea: "en", uiLocale: "en" },
   { email: "zask_prod@example.com", handle: "zask_prod", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   { email: "scribe_other_prod@example.com", handle: "scribe_other_prod", homeArea: "en", uiLocale: "en" },
   { email: "older_keep_prod@example.com", handle: "older_keep_prod", homeArea: "en", uiLocale: "en" },

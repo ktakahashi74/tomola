@@ -77,6 +77,15 @@ export async function findValidInvitationByToken(
   return row?.email && !isDeletedIdentity(undefined, row.email) ? { ...row, email: row.email } : null;
 }
 
+// A signed browser cookie can restore the invitation screen without retaining
+// its secret URL in OAuth state. Recheck the same lifetime and recipient rules.
+export async function findValidInvitationById(db: Db, id: string, now = new Date()): Promise<(Invitation & { email: string }) | null> {
+  const [row] = await db.select().from(invitations).where(and(
+    eq(invitations.id, id), isNull(invitations.usedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, now),
+  )).limit(1);
+  return row?.email && !isDeletedIdentity(undefined, row.email) ? { ...row, email: row.email } : null;
+}
+
 // Atomically consume exactly one valid invitation for the recipient, setting used_at and used_by for the new user. Return the affected count, 0 or 1.
 // A single UPDATE selects and marks the invitation used. The outer WHERE also checks used_at IS NULL, so the second concurrent attempt
 // waits for the first write, rechecks the condition, and affects zero rows. Concurrent registration cannot create two users from one invitation.
