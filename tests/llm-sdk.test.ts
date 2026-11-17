@@ -161,6 +161,26 @@ describe("@anthropic-ai/sdk (real client, fake fetch)", () => {
 });
 
 describe("@google/genai (real client, fake fetch)", () => {
+  it("keeps production generation and embedding clients on the beta API", async () => {
+    const { fetch, calls } = capture(body => body.requests
+      ? { embeddings: [{ values: Array(768).fill(1) }] }
+      : response("Hello"));
+    vi.stubGlobal("fetch", fetch);
+    vi.stubEnv("GOOGLE_GENAI_API_VERSION", "v1");
+    try {
+      await createGeminiEngine({ apiKey: "test-beta-api" }).translate({ text: "こんにちは", from: "ja", to: "en" });
+      await createGeminiEmbeddingEngine({ apiKey: "test-beta-api" }).embed({ text: "source", task: "query" });
+      expect(calls.map(call => call.url)).toEqual([
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+      ]);
+      expect(calls.every(call => call.method === "POST")).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("does not retry a 503 even when the supplied SDK client enables retries", async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ error: { code: 503, message: "unavailable", status: "UNAVAILABLE" } }), { status: 503, headers: { "content-type": "application/json" } }));
     const client = new GoogleGenAI({ apiKey: "test", httpOptions: { fetch, retryOptions: { attempts: 5 } } });

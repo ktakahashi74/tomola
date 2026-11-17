@@ -57,7 +57,8 @@ const clients = new Map<string, GeminiClient>();
 export function createGeminiClient(apiKey: string): GeminiClient {
   let client = clients.get(apiKey);
   if (!client) {
-    client = new GoogleGenAI({ apiKey, httpOptions: { timeout: REQUEST_TIMEOUT_MS, retryOptions: { attempts: 1 } } });
+    // Keep the existing endpoint and beta model support when the SDK's default API version changes.
+    client = new GoogleGenAI({ apiKey, apiVersion: "v1beta", httpOptions: { timeout: REQUEST_TIMEOUT_MS, retryOptions: { attempts: 1 } } });
     clients.set(apiKey, client);
   }
   return client;

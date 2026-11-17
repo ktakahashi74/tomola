@@ -1,4 +1,5 @@
 import { quietLogger as silent } from "./helpers/logger";
+import { GoogleGenAI } from "@google/genai";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
@@ -261,6 +262,27 @@ const gem = (text: string, promptTokenCount = 1000, candidatesTokenCount = 200):
 const fakeSet = (): EngineSet => ({ primary: createFakeEngine(), secondary: createFakeEngine(), judge: createFakeJudge() });
 
 describe("translate (budget gating and ledger)", () => {
+  it.each(["STOP", "MAX_TOKENS", "SAFETY", "MALFORMED_RESPONSE"])("bills SDK thinking tokens once for a %s response", async finishReason => {
+    const db = await createTestDb();
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      candidates: [{ content: { role: "model", parts: [{ text: "Reasoning", thought: true }, { text: "Hello $x$" }] }, finishReason }],
+      usageMetadata: { promptTokenCount: 1000, candidatesTokenCount: 200, thoughtsTokenCount: 30, totalTokenCount: 1230 },
+    }), { headers: { "content-type": "application/json" } }));
+    const primary = createGeminiEngine({ client: new GoogleGenAI({ apiKey: "test", httpOptions: { fetch } }) });
+    const running = translate(db, "primary", req, { now, engines: { primary, secondary: null, judge: null } });
+    if (finishReason === "STOP") {
+      await expect(running).resolves.toMatchObject({ text: "Hello $x$", inputTokens: 1000, outputTokens: 230, thoughtTokens: 30, costUsdMicro: 875 });
+    } else {
+      await expect(running).rejects.toMatchObject({
+        code: finishReason === "MAX_TOKENS" ? "truncated" : finishReason === "SAFETY" ? "refusal" : "invalid_output",
+        usage: { inputTokens: 1000, outputTokens: 230, thoughtTokens: 30 },
+      });
+    }
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await usageRows(db)).toMatchObject([{ purpose: "translate", inputTokens: 1000, outputTokens: 230, costUsdMicro: 875 }]);
+    expect(await getMonthlyCostMicro(db, now)).toBe(875);
+  });
+
   it("records each call in the ledger with its cost", async () => {
     const db = await createTestDb();
     const engines: EngineSet = { primary: geminiWith([gem("Hello $x$")]), secondary: null, judge: null };
