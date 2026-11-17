@@ -1,4 +1,4 @@
-export const TRANSLATION_JOB_KINDS = ["translate_entry", "translate_title", "measure_divergence", "retranslate_after_report", "translate_village", "translate_invitation_note", "prepare_figures", "read_figure", "translate_figure"] as const;
+export const TRANSLATION_JOB_KINDS = ["translate_entry", "translate_title", "refresh_edited_body", "measure_divergence", "retranslate_after_report", "translate_village", "translate_invitation_note", "prepare_figures", "read_figure", "translate_figure"] as const;
 
 export function translationConcurrency(env: Record<string, string | undefined> = process.env): number {
   const raw = env.TRANSLATION_CONCURRENCY?.trim() || "2";

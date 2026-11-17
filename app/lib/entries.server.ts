@@ -44,7 +44,7 @@ import { notifyForNewEntry, notifyMentions } from "~/lib/notifications.server";
 import { setCarriedLang } from "~/lib/reading-lang";
 import { enqueueEmbedding } from "~/lib/embeddings.server";
 import { lockReferenceTopics, syncEntryReferences, touchReferenceTopics } from "~/lib/related-discussions.server";
-import { cancelEntryJobs, carryOverUnchangedFields, enqueueTranslations, markHumanTranslationsStale, purgeEntryDerivatives, replaceSegments, resolveTitleReports } from "~/lib/translations.server";
+import { cancelEntryJobs, carryOverUnchangedFields, enqueueTranslations, markHumanTranslationsStale, previousBodyTranslationLangs, purgeEntryDerivatives, replaceSegments, resolveTitleReports } from "~/lib/translations.server";
 
 export { AI_ASSISTANCE, type AiAssistance };
 
@@ -622,6 +622,7 @@ export async function applyEntryEdit(
   const bindings = after.bindings ?? await bindMentionSpellings(tx, after.body, previous);
   const bodyUnchanged = before.body === after.body && JSON.stringify(previous) === JSON.stringify(bindings);
   const hash = sourceHash(after.title, after.body, lang);
+  const previousBodyLangs = await previousBodyTranslationLangs(tx, entryId);
   const mentions = await storeMentionSnapshot(tx, { entryId, revision: entry.mentionRevision + 1, sourceHash: hash, body: after.body, bindings });
   const rendered = after.preparedRender
     ? await renderEntryForWrite(after.preparedRender, { id: entryId, kind: entry.kind as "topic" | "reply", body: after.body, lang }, bindings, mentions)
@@ -674,7 +675,7 @@ export async function applyEntryEdit(
   await markHumanTranslationsStale(tx, entryId, hash, now);
   // Do not translate or embed hidden entries; requeue when unhidden.
   if (!before.hiddenAt) {
-    await enqueueTranslations(tx, { id: entryId, lang, sourceHash: hash });
+    await enqueueTranslations(tx, { id: entryId, lang, sourceHash: hash }, { previousBodyLangs, now });
     await enqueueEmbedding(tx, { id: entryId, sourceHash: hash });
   }
   // An alternative framing's title change alters the original's Markdown list. Hidden alternatives are absent from that list, so they do not change the original.

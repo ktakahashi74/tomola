@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
-import { entries, jobs, translations } from "./db/schema";
+import { entries, translations } from "./db/schema";
 import { isStale } from "./display";
 import { loadPickedTranslations, type DisplayInput } from "./entry-display.server";
 import { availabilityKey, loadTranslationAvailability } from "./translation-availability.server";
@@ -9,8 +9,7 @@ import { translationEstimate } from "./llm/metering.server";
 import { primaryEngineId, primaryModelOf } from "./llm/config.server";
 import { readPostTranslationWait } from "./translation-wait.server";
 import { translationWaitForAvailability } from "./translation-wait";
-import { enqueue } from "./jobs/queue.server";
-import { TRANSLATE_JOB, TRANSLATE_MAX_ATTEMPTS, translateDedupeKey } from "./translations.server";
+import { enqueueCurrentBodyTranslation } from "./translations.server";
 import type { Lang } from "./languages";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "./pagination";
 import type { StanceTag } from "./stances";
@@ -66,19 +65,7 @@ export async function requestBodyTranslations(db: Db, inputs: readonly DisplayIn
         const estimate = translationEstimate(primaryEngineId(), primaryModelOf(), { text: current.body, from: entry.lang, to: lang, field: "body" });
         if (budget.state === "stopped") { stopped = true; return; }
         if (budget.usedMicro + estimate > budget.budgetMicro) { paused.push(entry.id); return; }
-        const payload = { entryId: entry.id, lang, sourceHash: entry.sourceHash!, readRevision: current.mentionRevision };
-        const dedupeKey = translateDedupeKey(payload, entry.lang);
-        const [existing] = await tx.select({ status: jobs.status, payload: jobs.payload }).from(jobs)
-          .where(and(eq(jobs.dedupeKey, dedupeKey), inArray(jobs.status, ["queued", "running"])));
-        // Identical text can return with different mention bindings. Keep one
-        // rerun for that revision; repeated readers of the same revision do not
-        // reschedule it. The queue locks a running job before changing run_at.
-        const revision = (existing?.payload as { readRevision?: number } | undefined)?.readRevision;
-        await enqueue(tx, TRANSLATE_JOB, payload, { dedupeKey, priority: 1, maxAttempts: TRANSLATE_MAX_ATTEMPTS,
-          rescheduleRunning: existing?.status === "running" && revision !== current.mentionRevision });
-        await tx.update(jobs).set({ priority: sql`least(${jobs.priority}, 1)`,
-          payload: sql`${jobs.payload} || ${JSON.stringify({ readRevision: current.mentionRevision })}::jsonb` })
-          .where(and(eq(jobs.dedupeKey, dedupeKey), inArray(jobs.status, ["queued", "running"])));
+        await enqueueCurrentBodyTranslation(tx, { id: entry.id, ...current, sourceHash: current.sourceHash }, lang, { priority: 1 });
       });
     }
   }

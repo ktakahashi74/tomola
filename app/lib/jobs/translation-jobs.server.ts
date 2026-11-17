@@ -29,12 +29,15 @@ import {
   loadSentences,
   matchGlossary,
   RETRANSLATE_REPORT_JOB,
+  REFRESH_BODY_JOB,
+  enqueueCurrentBodyTranslation,
   type TranslateJobPayload,
 } from "~/lib/translations.server";
 import { recordRevision } from "~/lib/translation-revisions.server";
 import { titleBodyContext, TITLE_BODY_MAX_CHARS } from "~/lib/translation-terms";
 import { postTerminologyBodies, translationTermsFor } from "~/lib/translation-terms.server";
 import { firstSeenAtForSource } from "~/lib/translation-first-seen.server";
+import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
 import { joinResponsePostLine, localizeResponseBodies, prepareResponsePostTranslation } from "~/lib/response-line.server";
 import { DeferJob, enqueue, isFinalJobFailure, jobAttemptLimit, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
 
@@ -242,6 +245,26 @@ async function resolveAutomatically(db: Db, reportId: number, now: Date): Promis
 
 export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHandlers {
   const llm = (ctx: JobContext): LlmOptions => jobLlmOptions(ctx, deps.llm);
+
+  // Dispatch through the same revision key as browser requests. This job never
+  // calls a model itself, so readers and delayed work share one bounded attempt
+  // budget, paid-call recovery and budget-wait state.
+  const refreshEditedBody: JobHandler = async (job, ctx) => {
+    const p = z.object({ entryId: z.number().int().positive(), lang: z.enum(LANGS) }).parse(job.payload);
+    if (!isEnabledLang(p.lang)) return;
+    await ctx.db.transaction(async tx => {
+      const [entry] = await tx.select().from(entries).where(eq(entries.id, p.entryId)).for("no key update");
+      if (!entry?.sourceHash || entry.deletedAt || entry.hiddenAt || entry.lang === p.lang) return;
+      // An edit may have won the entry lock after this job was claimed. Its
+      // queue marker preserves a later run; do not dispatch before that delay.
+      const [currentJob] = await tx.select({ runAt: jobs.runAt }).from(jobs).where(eq(jobs.id, job.id));
+      if (!currentJob || currentJob.runAt.getTime() !== job.runAt.getTime()) return;
+      const input = { id: entry.id, kind: entry.kind as "topic" | "reply", lang: entry.lang as SourceLang, sourceHash: entry.sourceHash };
+      const state = (await loadTranslationAvailability(tx, [input], [p.lang], undefined, { currentOnly: true })).get(availabilityKey(entry.id, p.lang));
+      if (state === "available" || state === "unavailable") return;
+      await enqueueCurrentBodyTranslation(tx, { ...entry, sourceHash: entry.sourceHash }, p.lang, { editedRefresh: true });
+    });
+  };
 
   // Translate with primary; substitute secondary on refusal or repeated failure only when available. skipPrimary means this execution found primary failing; do not try it for later fields.
   const translateWithFallback = async (
@@ -687,7 +710,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     }
   };
 
-  return { [TITLE_TRANSLATE_JOB]: translateTitle, translate_entry: async (job, ctx) => {
+  return { [REFRESH_BODY_JOB]: refreshEditedBody, [TITLE_TRANSLATE_JOB]: translateTitle, translate_entry: async (job, ctx) => {
     const p = parsePayload(job);
     if (!p) return;
     const entry = await loadEntry(ctx.db, p);

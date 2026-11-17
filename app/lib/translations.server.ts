@@ -17,6 +17,9 @@ import { segmentSentences } from "~/lib/segment";
 
 export const TRANSLATE_JOB = "translate_entry";
 export const TITLE_TRANSLATE_JOB = "translate_title";
+export const REFRESH_BODY_JOB = "refresh_edited_body";
+export const EDITED_BODY_DELAY_MS = 10 * 60 * 1000;
+export const refreshBodyDedupeKey = (entryId: number, lang: Lang) => `refresh-body:${entryId}:${lang}`;
 export const DIVERGENCE_JOB = "measure_divergence";
 // One automatic retry after the first mistranslation report (app/lib/jobs/translation-jobs.server.ts). Payload is { reportId, entryId }.
 export const RETRANSLATE_REPORT_JOB = "retranslate_after_report";
@@ -39,17 +42,53 @@ export async function enqueueTitleTranslation(db: Db, payload: TranslateJobPaylo
   return res.created;
 }
 
+// The caller holds the entry lock. Readers and delayed refreshes share the
+// requested mention revision, including a necessary rerun of restored text.
+export async function enqueueCurrentBodyTranslation(
+  db: Db,
+  entry: { id: number; lang: string; sourceHash: string; mentionRevision: number },
+  lang: Lang,
+  opts: { priority?: number; editedRefresh?: true } = {},
+): Promise<void> {
+  const metadata = { readRevision: entry.mentionRevision, ...(opts.editedRefresh ? { editedRefresh: true } : {}) };
+  const payload = { entryId: entry.id, lang, sourceHash: entry.sourceHash, ...metadata };
+  const dedupeKey = translateDedupeKey(payload, entry.lang);
+  const [existing] = await db.select({ status: jobs.status, payload: jobs.payload }).from(jobs)
+    .where(and(eq(jobs.dedupeKey, dedupeKey), inArray(jobs.status, ["queued", "running"])));
+  const revision = (existing?.payload as { readRevision?: number } | undefined)?.readRevision;
+  await enqueue(db, TRANSLATE_JOB, payload, { dedupeKey, maxAttempts: TRANSLATE_MAX_ATTEMPTS, priority: opts.priority,
+    rescheduleRunning: existing?.status === "running" && revision !== entry.mentionRevision });
+  await db.update(jobs).set({
+    ...(opts.priority === undefined ? {} : { priority: sql`least(${jobs.priority}, ${opts.priority})` }),
+    payload: sql`${jobs.payload} || ${JSON.stringify(metadata)}::jsonb`,
+  }).where(and(eq(jobs.dedupeKey, dedupeKey), inArray(jobs.status, ["queued", "running"])));
+}
+
 export function divergenceDedupeKey(p: TranslateJobPayload): string {
   return `divergence:${p.entryId}:${p.lang}:${p.sourceHash}`;
+}
+
+// Called under the edit's entry lock, before a language change purges rows.
+// Outstanding refreshes preserve the earlier audience after that purge, so a
+// second edit still resets their delay even when no translation row remains.
+export async function previousBodyTranslationLangs(db: Db, entryId: number): Promise<string[]> {
+  const rows = await db.selectDistinct({ lang: translations.lang }).from(translations)
+    .where(and(eq(translations.entryId, entryId), eq(translations.field, "body"), inArray(translations.kind, ["primary", "secondary", "human"])));
+  const pending = await db.select({ lang: sql<string>`${jobs.payload}->>'lang'` }).from(jobs)
+    .where(and(sql`(${jobs.kind} = ${REFRESH_BODY_JOB} or (${jobs.kind} = ${TRANSLATE_JOB} and ${jobs.payload}->>'editedRefresh' = 'true'))`,
+      inArray(jobs.status, ["queued", "running"]), sql`${jobs.payload}->>'entryId' = ${String(entryId)}`));
+  return [...new Set([...rows, ...pending].map(row => row.lang))];
 }
 
 // On publication and source edits, titles go to every enabled target language;
 // bodies go to the configured audience. An unfinished source/language job is not
 // duplicated. Opening a language can still queue existing posts in bulk.
+// Edits also debounce refreshes of previously translated bodies outside that audience.
 // May run inside tx, passed as Db. Return the number enqueued after deduplication.
 export async function enqueueTranslations(
   db: Db,
   entry: { id: number; lang: string; sourceHash: string },
+  opts: { previousBodyLangs?: readonly string[]; now?: Date } = {},
 ): Promise<number> {
   await (await import("./jobs/source-language-jobs.server")).enqueueSourceLanguageCheck(db, entry);
   const [source] = await db.select({ kind: entries.kind, title: entries.title }).from(entries).where(eq(entries.id, entry.id));
@@ -58,7 +97,19 @@ export async function enqueueTranslations(
   for (const lang of enabledTargetLangs(entry.lang)) {
     const payload: TranslateJobPayload = { entryId: entry.id, lang, sourceHash: entry.sourceHash };
     if (source?.kind === "topic" && source.title?.trim() && await enqueueTitleTranslation(db, payload, entry.lang)) created++;
-    if (!bodyLangs.includes(lang)) continue;
+    if (!bodyLangs.includes(lang)) {
+      if (opts.previousBodyLangs?.includes(lang)) {
+        const runAt = new Date((opts.now ?? new Date()).getTime() + EDITED_BODY_DELAY_MS);
+        const res = await enqueue(db, REFRESH_BODY_JOB, { entryId: entry.id, lang }, {
+          dedupeKey: refreshBodyDedupeKey(entry.id, lang), runAt, rescheduleRunning: true,
+        });
+        // enqueue locks unfinished work. Reset queued work too, so repeated edits
+        // debounce from the last edit while running work retains its rerun marker.
+        await db.update(jobs).set({ runAt }).where(and(eq(jobs.id, res.id), eq(jobs.status, "queued")));
+        if (res.created) created++;
+      }
+      continue;
+    }
     // The same hash can return in a later source revision while the earlier job is still running.
     // Its save guard rejects the earlier revision, so request another run rather than losing the new work.
     const res = await enqueue(db, TRANSLATE_JOB, payload, { dedupeKey: translateDedupeKey(payload, entry.lang), rescheduleRunning: true, maxAttempts: TRANSLATE_MAX_ATTEMPTS });
@@ -70,7 +121,7 @@ export async function enqueueTranslations(
 // Cancel queued, not yet started translation, divergence, and embedding jobs for a post during deletion. Running jobs cannot be canceled,
 // but save neither translations nor embeddings if the post is deleted before completion (currentSourceHash, entryStillCurrent). Return the number canceled.
 export async function cancelEntryJobs(db: Db, entryId: number): Promise<number> {
-  const matching = and(inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, DIVERGENCE_JOB, RETRANSLATE_REPORT_JOB, "check_source_language"]), sql`${jobs.payload}->>'entryId' = ${String(entryId)}`)!;
+  const matching = and(inArray(jobs.kind, [TRANSLATE_JOB, TITLE_TRANSLATE_JOB, REFRESH_BODY_JOB, DIVERGENCE_JOB, RETRANSLATE_REPORT_JOB, "check_source_language"]), sql`${jobs.payload}->>'entryId' = ${String(entryId)}`)!;
   await discardPaidTranslationCalls(db, matching);
   const rows = await db
     .delete(jobs)
