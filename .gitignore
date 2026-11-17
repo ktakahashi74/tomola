@@ -15,6 +15,7 @@
 /.react-router/
 /build/
 /app/paraglide/
+/project.inlang/cache/
 /app/lib/i18n/review-counts.generated.json
 /app/lib/cn-tables.generated.mjs
 
