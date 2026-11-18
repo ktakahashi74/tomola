@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DetailsIssueReason, MarkdownNode } from "~/lib/markdown-details";
 import { m } from "~/paraglide/messages.js";
-import { BODY_MAX_LENGTH } from "~/lib/rich-editor";
+import { MAX_BODY_BYTES } from "~/lib/body-length";
 
 type Issue = { line: number; reason: DetailsIssueReason };
 
@@ -19,7 +19,8 @@ export function DetailsNotice() {
       clearTimeout(timer);
       const current = ++revision;
       const source = body.value;
-      if (source.length > BODY_MAX_LENGTH || !source.includes(":::")) { setIssues([]); return; }
+      // UTF-16 length never exceeds UTF-8 bytes, so this skips only bodies that cannot be accepted.
+      if (source.length > MAX_BODY_BYTES || !source.includes(":::")) { setIssues([]); return; }
       timer = setTimeout(() => {
         void import("~/lib/markdown-rules").then(({ createMarkdownProcessor }) => {
           if (current !== revision) return;
