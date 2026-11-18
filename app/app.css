@@ -168,7 +168,7 @@ main:focus {
    light-dark() keeps each pair together and follows the device unless the root overrides it. */
 :root {
   color-scheme: light dark;
-  --paper: #fbfaf7;
+  --paper: #ffffff;
   --dark-ground: #1a1917;
   --dark-ink: #e4e1db;
   --dark-surface: #2d2b27;
@@ -207,8 +207,8 @@ main:focus {
   --muted: light-dark(oklch(0.97 0 0), var(--dark-surface));
   --text-supporting: light-dark(#5f5f5f, #b7b1a7);
   --rule: light-dark(#e4e2dd, #44413a);
-  /* Keep the original paper-to-discussion OKLCH lightness gap and warm hue. */
-  --reading-discussion: light-dark(oklch(0.95511675 0.00412213 91.4464), #23211e);
+  /* A separate ground marks the discussion below the reading paper. */
+  --reading-discussion: light-dark(#f6f5f2, #23211e);
   --location-accent: light-dark(#7c2424, oklch(0.75 0.105 24.5));
   --muted-foreground: var(--text-supporting);
   --accent: light-dark(oklch(0.97 0 0), var(--dark-surface));

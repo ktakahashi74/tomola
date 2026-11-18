@@ -19,6 +19,13 @@ async function expectDocumentScheme(page: Page, scheme: ColorScheme | null) {
     await expect(page.locator("html")).not.toHaveAttribute("data-color-scheme");
     await expect(page.locator('meta[name="theme-color"][media]')).toHaveCount(2);
   }
+  const effectiveScheme = scheme ?? await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  await expect(page.locator("body")).toHaveCSS("background-color", effectiveScheme === "dark" ? "rgb(26, 25, 23)" : "rgb(255, 255, 255)");
+  const discussion = page.locator("[data-reading-discussion]");
+  if (await discussion.count()) {
+    await expect.poll(() => discussion.evaluate(element => getComputedStyle(element, "::before").backgroundColor))
+      .toBe(effectiveScheme === "dark" ? "rgb(35, 33, 30)" : "rgb(246, 245, 242)");
+  }
 }
 
 test("member appearance persists across pages and devices, saves without JavaScript and returns to matching the device", async ({ browser }) => {
@@ -54,7 +61,7 @@ test("member appearance persists across pages and devices, saves without JavaScr
     await page.goto("/t/new");
     await waitForClientRoute(page);
     await page.getByRole("textbox", { name: en.field_title, exact: true }).fill("Appearance account reading fixture");
-    await page.getByRole("textbox", { name: en.field_body, exact: true }).fill("A reading page uses the member's saved appearance.\n\n| Item | Value |\n| --- | --- |\n| Paper | Warm |\n\nA formula: $x^2 + y^2 = 1$.");
+    await page.getByRole("textbox", { name: en.field_body, exact: true }).fill("A reading page uses the member's saved appearance.\n\n| Item | Value |\n| --- | --- |\n| Paper | White |\n\nA formula: $x^2 + y^2 = 1$.");
     await page.getByRole("button", { name: en.submit_post, exact: true }).click();
     await expect(page).toHaveURL(url => /^\/t\/\d+$/.test(url.pathname));
     const articleUrl = page.url();

@@ -99,8 +99,8 @@ describe("the web app manifest", () => {
     expect(m.scope).toBe("/");
     expect(m.display).toBe("standalone");
     // The manifest has one palette: use the light paper. lang is unset (the same name in every language).
-    expect(m.background_color).toBe("#fbfaf7");
-    expect(m.theme_color).toBe("#fbfaf7");
+    expect(m.background_color).toBe("#ffffff");
+    expect(m.theme_color).toBe("#ffffff");
     expect(m.lang).toBeUndefined();
   });
 
