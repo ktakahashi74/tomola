@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { DocumentHeader } from "~/components/document-header";
 import { CopyTextButton } from "~/components/copy-text-button";
 import { siteUrl } from "~/lib/md/urls.server";
@@ -20,6 +20,11 @@ const subscribe = () => () => {};
 export default function Writing({ loaderData: { address } }: Route.ComponentProps) {
   const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(timer);
+  }, [copied]);
   return <>
     <DocumentHeader />
     <main className="min-w-0 space-y-6">
@@ -27,7 +32,7 @@ export default function Writing({ loaderData: { address } }: Route.ComponentProp
       <p className="text-lg font-semibold">{m.writing_guide_prompt()}</p>
       <fieldset disabled={!hydrated} className="min-w-0 space-y-2">
         <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded border bg-muted p-2 text-sm select-all"><code><a href={WRITING_MD_PATH} className="underline">{address}</a></code></pre>
-        <CopyTextButton text={address} label={copied ? m.connect_address_copied() : m.connect_copy_address()} copiedLabel={m.connect_address_copied()} failedLabel={m.connect_copy_failed()} onResult={setCopied} />
+        <CopyTextButton text={address} label={copied ? m.connect_address_copied() : m.connect_copy_address()} copiedLabel={m.connect_address_copied()} failedLabel={m.connect_copy_failed()} showCopied={copied} onResult={setCopied} />
       </fieldset>
       <ul className="list-disc space-y-2 pl-5">
         <li>{m.writing_guide_formats()}</li>

@@ -12,16 +12,18 @@ const number = (value: number) => value.toLocaleString("en-US");
 function imageHandoff(origin: string): string {
   return `### Upload images in the browser
 
-There is currently no image-upload tool for AI clients through MCP or the draft API. Give your user the image files and their alt text. After creating a draft, have them open its approval URL in the browser and upload the files there. Do not invent an upload endpoint or put external image URLs in place of managed images.
+There is currently no image-upload tool for AI clients through MCP or the draft API. Images can be uploaded only on topic writing screens: a new topic, a topic draft or a topic edit. Replies have no image-upload control; prepare text replies and put any needed figures in a topic or link to them. Give your user the image files and their alt text. After creating a topic draft, have them open its approval URL in the browser and upload the files there. Do not invent an upload endpoint or put external image URLs in place of managed images.
 
-On ${origin}/t/new or a draft's writing screen, use the image insertion button to choose one file at a time (or paste an image or drop a file onto the editor). The editor uploads it and inserts managed image Markdown at the cursor. A GIF or animated WebP upload creates a still poster and a motion version, inserting the linked pair. The poster is selected from a frame with content, not necessarily the first frame; the author can replace it with another uploaded still in the Markdown. Replace the default alt text with a description of the figure and, for motion, what the changes show. Keep the returned URLs; do not construct media IDs yourself.`;
+On ${origin}/t/new, a topic draft's writing screen or a topic edit screen, use the image insertion button to choose one file at a time (or paste an image or drop a file onto the editor). The editor uploads it and inserts managed image Markdown at the cursor. A GIF or animated WebP upload creates a still poster and a motion version, inserting the linked pair. The poster is selected from a frame with content, not necessarily the first frame; the author can replace it with another uploaded still in the Markdown. Replace the default alt text with a description of the figure and, for motion, what the changes show. Keep the returned URLs; do not construct media IDs yourself.
+
+Before revising a draft after the author adds images or edits in the browser, call \`tomola_draft_get\` with its \`id\` and build the revision from the current body, preserving image Markdown, alt text and the author's changes. Then send that revised body with \`tomola_draft_update\`; sending an old local copy replaces their work. The HTTP draft API has no read or update endpoint; for HTTP-created drafts, have the author reopen the current draft in the browser and revise that body there.`;
 }
 
 export function writingMarkdown(origin: string = siteOrigin()): string {
   const examples = markdownWritingExamples().map(example => `### ${example.label}\n\n\`\`\`\`markdown\n${example.markdown.trim()}\n\`\`\`\``).join("\n\n");
   return `# Write for tomola with your AI
 
-Use this guide when your user asks you to prepare a post or reply for tomola. Produce Markdown and any image files, then create a draft if your user has connected their account. The short page for people is ${origin}${WRITING_PATH}. Connection instructions: ${origin}${CONNECT_MD_PATH}.
+Use this guide when your user asks you to prepare a topic or reply for tomola. Produce Markdown, with any image files for topics, then create a draft if your user has connected their account. The short page for people is ${origin}${WRITING_PATH}. Connection instructions: ${origin}${CONNECT_MD_PATH}.
 
 ## Writing principles
 
@@ -36,7 +38,7 @@ Headings, bold and italic emphasis, links, ordered and unordered lists, tables, 
 
 Use \`:::details[Heading]\` on its own line and close it with \`:::\` on its own line. Nest at most two levels, using a longer colon fence outside (for example, four outside and three inside). Use no attributes and no other container names. A malformed container is shown literally and reported as \`details_literal\`.
 
-Use \`![description](/media/…)\` for an uploaded image. A still and motion pair uses \`[![description](still URL)](motion URL)\`. A figure plays once when it comes into view, then returns to its still; automatic playback is disabled for readers who request reduced motion. Readers can stop it or choose to play it again. With no JavaScript, the still links to the motion file.
+Use \`![description](/media/…)\` for an uploaded image. A still and motion pair uses \`[![description](still URL)](motion URL)\`. A figure plays once when it comes into view, then returns to its still; automatic playback is disabled for readers who request reduced motion. Readers can stop it or choose to play it again. With no JavaScript, a link below the still opens the motion version.
 
 Mention a member with \`@handle\`, using their unique username, not their display name. Mentions in code, links, email addresses and block quotes do not call members. See ${origin}/llms.txt for mention and notification rules.
 
@@ -45,7 +47,7 @@ Raw HTML, SVG, video and animated PNG are not supported. External images become 
 ## Limits
 
 - Topic body: ${number(MAX_TOPIC_BODY_LENGTH)} units after NFC normalization; East Asian wide/fullwidth code points count as two, other code points as one. Reply body: ${number(MAX_REPLY_BODY_LENGTH)} UTF-16 units. Both also have a UTF-8 limit of ${number(MAX_BODY_BYTES)} bytes. Markdown source counts toward these limits.
-- Images per post or reply: ${number(MEDIA_LIMITS.perPost)}. A still/motion pair uses two slots toward this limit. Still inputs: JPEG, PNG or WebP. Motion inputs: GIF or animated WebP.
+- Displayed images per topic: at most ${number(MEDIA_LIMITS.perPost)}. Excess images do not reject the draft or post; they become alt text (which may link to the image). A still/motion pair uses two slots toward this display limit. Upload controls are available only for topics, as described below. Still inputs: JPEG, PNG or WebP. Motion inputs: GIF or animated WebP.
 - Each uploaded file: at most ${number(MEDIA_LIMITS.inputBytes)} bytes. A still input: at most ${number(MEDIA_LIMITS.pixels)} pixels. Stored images are resized to a longest edge of at most ${number(MEDIA_LIMITS.edge)} pixels and rewritten as WebP with embedded metadata removed. Each stored still: at most ${number(MEDIA_LIMITS.storedBytes)} bytes.
 - Motion input: at most ${number(MOTION_LIMITS.width)} × ${number(MOTION_LIMITS.height)} pixels per frame, ${number(MOTION_LIMITS.frames)} frames, ${number(MOTION_LIMITS.durationMs / 1000)} seconds and ${number(MOTION_LIMITS.pixels)} total decoded pixels (width × height × frames). Each stored motion version: at most ${number(MOTION_LIMITS.storedBytes)} bytes, separately from its still poster. Files exceeding a processing or storage limit may be refused even below the other limits.
 
@@ -74,13 +76,13 @@ Check the original TeX, captions, attribution, footnotes and links after convers
 
 ### By hand
 
-Open ${origin}/t/new, switch to Markdown mode and paste the prepared Markdown. Upload image files as described below, check the preview and the selected original language, then let the author review and publish. The same image insertion works when editing a post.
+Open ${origin}/t/new, switch to Markdown mode and paste the prepared Markdown. Upload image files as described below, check the preview and the selected original language, then let the author review and publish. The same image insertion works when editing a topic.
 
 ### With an AI connection or script
 
-For MCP, follow ${origin}${CONNECT_MD_PATH} to connect the member account with draft permission. Use \`tomola_draft_create\` with \`kind: "topic"\`, optional \`title\`, \`body\` (Markdown) and \`lang\`. Replies use \`kind: "reply"\`, \`threadId\` and optional \`parentId\`. Revise the same draft with \`tomola_draft_update\` and its \`id\`. These tools can access only drafts owned by that authenticated client. Give the author the returned \`approvalUrl\`.
+For MCP, follow ${origin}${CONNECT_MD_PATH} to connect the member account with draft permission. Use \`tomola_draft_create\` with \`kind: "topic"\`, optional \`title\`, \`body\` (Markdown) and \`lang\`. Replies use \`kind: "reply"\`, \`threadId\` and optional \`parentId\`. Before every revision, call \`tomola_draft_get\` with its \`id\`, read the current body and apply your changes to it, preserving the author's image Markdown and edits. Send that revised body with \`tomola_draft_update\` and the same \`id\`, rather than sending an old local copy. These tools can access only drafts owned by that authenticated client. Give the author the returned \`approvalUrl\`.
 
-For HTTP, send \`POST ${origin}/api/drafts\` with a draft Bearer token and \`Content-Type: text/markdown\`; the body is Markdown with optional YAML frontmatter (for example \`type: topic\`, \`title\` and \`lang\`). A reply needs \`reply_to: p-<topic id>\` or \`reply_to: c-<reply id>\`. The response returns \`approve_url\`. Token setup, request examples, optional fields and errors: ${origin}/help/ai.md. Schema: ${origin}/api/openapi.json. Keep tokens out of the post and conversation.
+For HTTP, send \`POST ${origin}/api/drafts\` with a draft Bearer token and \`Content-Type: text/markdown\`; the body is Markdown with optional YAML frontmatter (for example \`type: topic\`, \`title\` and \`lang\`). A reply needs \`reply_to: p-<topic id>\` or \`reply_to: c-<reply id>\`. The response returns \`approve_url\`. This API creates drafts only; to revise one, have the author reopen it in the browser, read its current body and apply changes to that body, preserving images and edits. Token setup, request examples, optional fields and errors: ${origin}/help/ai.md. Schema: ${origin}/api/openapi.json. Keep tokens out of the post and conversation.
 
 ### Read the draft diagnostics
 

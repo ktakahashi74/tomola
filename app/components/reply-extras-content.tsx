@@ -10,6 +10,7 @@ import { FieldDescription } from "~/components/ui/field";
 import { LANG_LABELS, isLang, type Lang, type SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
+import { WRITING_PATH } from "~/lib/writing-paths";
 
 export type ReplyExtrasProps = { error?: string; errorId?: string; defaultLang: SourceLang; selectedLang?: string; autoLang: boolean; invalidatePreviewOnEdit: boolean; aiTools?: AiEditorToolsProps; nushiAvailable?: boolean };
 
@@ -31,6 +32,7 @@ export default function ReplyExtrasContent({ error, errorId, defaultLang, select
         <div className="space-y-2 ui-help text-muted-foreground">
           <FieldDescription>{m.writing_math_help()}</FieldDescription>
           <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
+          <FieldDescription><a href={WRITING_PATH} target="_blank" rel="noreferrer" className="underline">{m.writing_guide_title()}</a></FieldDescription>
         </div>
         {aiTools && <AiEditorTools {...aiTools} />}
       </div>

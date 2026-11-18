@@ -22,6 +22,8 @@ for (const [lang, locale, messages] of [["en", "en-US", en], ["ja", "ja-JP", ja]
       await page.keyboard.press("Enter");
       await expect(main.getByRole("status")).toHaveText(messages.connect_address_copied);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(address);
+      await expect(copy).toHaveText(messages.connect_copy_address, { timeout: 5000 });
+      await expect(main.getByRole("status")).toBeEmpty();
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -66,6 +68,25 @@ for (const [lang, locale, messages] of [["en", "en-US", en], ["ja", "ja-JP", ja]
       expect(location).toBeTruthy();
       await page.goto(`/t/${location![1]}/edit`);
       await checkTips();
+      await page.goto(`/t/${location![1]}`);
+      await waitForClientRoute(page);
+      const reply = page.locator('textarea[data-body-kind="reply"]').first();
+      await reply.fill("A text reply that keeps its content while opening the guide.");
+      const form = reply.locator("xpath=ancestor::form");
+      const more = form.locator("[data-reply-more]");
+      await more.locator("summary").click();
+      const link = more.getByRole("link", { name: messages.writing_guide_title, exact: true });
+      await expect(link).toHaveAttribute("href", "/writing");
+      await expect(link).toHaveAttribute("target", "_blank");
+      const popupPromise = page.waitForEvent("popup");
+      await link.click();
+      const popup = await popupPromise;
+      await expect(popup.getByRole("heading", { name: messages.writing_guide_title, exact: true })).toBeVisible();
+      const instructions = await popup.request.get("/writing.md");
+      expect(await instructions.text()).toContain("Replies have no image-upload control");
+      await popup.close();
+      await expect(reply).toHaveValue("A text reply that keeps its content while opening the guide.");
+      await expect(form.locator('input[type="file"]')).toHaveCount(0);
     } finally { await context.close(); }
   });
 }
