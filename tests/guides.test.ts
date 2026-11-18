@@ -178,6 +178,7 @@ describe("public guides", () => {
     expect(text).toContain(`${BASE}/principles.md`);
     expect(text).toContain("${BASE}/ai.txt, ${BASE}/help/ai.md, ${BASE}/api/openapi.json, ${BASE}/principles.md, ${BASE}/languages.md, ${BASE}/ai-use.md, ${BASE}/connect.md and ${BASE}/writing.md needs one of".replaceAll("${BASE}", BASE));
     expect(text).toContain("Publishing happens only in the member's browser");
+    expect(text).toContain("A client registered without media will receive invalid_scope if it requests media; reconnect and register the client again with media included.");
     expect(text).toContain("API and MCP credentials cannot publish");
     expect(text).toContain("does not prove that AI cannot use the passkey");
     expect(text).toContain("If the member has turned on passkey confirmation in settings");

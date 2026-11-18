@@ -820,16 +820,37 @@ describe("connecting an AI tool", () => {
     expect((await refused.json()).error).toBe("invalid_redirect_uri");
   });
 
-  it("keeps offline_access in authorization-server metadata only", async () => {
+  it("keeps optional media and offline_access in authorization-server metadata only", async () => {
     const { loader } = await import("~/routes/mcp-metadata");
     const resource = await (await loader({ request: new Request(`${base}/.well-known/oauth-protected-resource/mcp`) } as never)).json();
-    expect(resource.scopes_supported).toEqual(["read", "draft", "media"]);
+    expect(resource.scopes_supported).toEqual(["read", "draft"]);
     const server = await (await loader({ request: new Request(`${base}/.well-known/oauth-authorization-server/api/auth`) } as never)).json();
-    expect(server.scopes_supported).toEqual(expect.arrayContaining([...resource.scopes_supported, "offline_access"]));
+    expect(server.scopes_supported).toEqual(expect.arrayContaining([...resource.scopes_supported, "media", "offline_access"]));
     const challenge = await modern("server/discover", "not-a-token");
     expect(challenge.status).toBe(401);
-    expect(challenge.headers.get("www-authenticate")).toContain('scope="read draft media"');
+    expect(challenge.headers.get("www-authenticate")).toContain('scope="read draft"');
+    expect(challenge.headers.get("www-authenticate")).not.toContain("media");
     expect(challenge.headers.get("www-authenticate")).not.toContain("offline_access");
+  });
+
+  it("lets an existing client without media registration reach consent again using the MCP challenge scopes", async () => {
+    await relogin();
+    const clientId = await register({ scope: "read draft offline_access" });
+    // Current dynamic registration saves the server's whole scope set. Recreate
+    // the stored scope set of a client registered before image uploads existed.
+    await db.update(oauthClient).set({ scopes: ["read", "draft", "offline_access"] }).where(eq(oauthClient.clientId, clientId));
+    await authorize(clientId);
+    const challenge = await modern("server/discover", "not-a-token");
+    expect(challenge.status).toBe(401);
+    const scope = /\bscope="([^"]+)"/.exec(challenge.headers.get("www-authenticate")!)![1];
+    const response = await startAuthorize(clientId, { scope, prompt: "consent" });
+    expect(response.status).toBe(302);
+    const consentUrl = new URL(response.headers.get("location")!, base);
+    expect(consentUrl.pathname).toBe("/mcp/consent");
+    expect(await consentLoader({ request: new Request(consentUrl, { headers: { cookie } }) } as never)).toMatchObject({ clientId, scopes: ["read", "draft"] });
+    const unsupported = await startAuthorize(clientId, { scope: `${scope} media`, prompt: "consent" });
+    expect(unsupported.status).toBe(400);
+    expect(await unsupported.json()).toMatchObject({ error: "invalid_scope" });
   });
 
   it("issues 15-minute access tokens, and survives a refresh token used twice within 30 seconds but not after", async () => {

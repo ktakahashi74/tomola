@@ -3013,5 +3013,7 @@
   "writing_guide_formats": "Markdown, 수식, 이미지, 움직이는 그림의 작성법과 제한을 안내합니다.",
   "writing_guide_language": "한 언어로 작성하세요. 번역은 tomola가 제공합니다.",
   "writing_guide_rights": "직접 쓴 글이나 공개 허락을 받은 자료만 사용하고, 모든 이미지에 설명을 작성하세요.",
-  "writing_guide_publish": "AI는 초안까지 만들 수 있습니다. 내용을 확인하고 브라우저의 승인 화면에서 직접 공개하세요."
+  "writing_guide_publish": "AI는 초안까지 만들 수 있습니다. 내용을 확인하고 브라우저의 승인 화면에서 직접 공개하세요.",
+  "media_upload_permission": "이미지 올리기",
+  "media_upload_help": "계정에 이미지를 올릴 수 있으며 이미지 저장 공간과 업로드 횟수 한도를 사용합니다. 이미지를 게시하지는 않습니다."
 }

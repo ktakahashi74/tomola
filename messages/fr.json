@@ -3122,5 +3122,7 @@
   "writing_guide_formats": "Le guide présente Markdown, les formules, les images, les figures animées et leurs limites.",
   "writing_guide_language": "Écrivez dans une seule langue. tomola fournit les traductions.",
   "writing_guide_rights": "Utilisez vos propres textes ou des contenus que vous avez l’autorisation de publier. Décrivez chaque image.",
-  "writing_guide_publish": "Votre IA peut préparer un brouillon. Vous le relisez et le publiez depuis l’écran d’approbation du navigateur."
+  "writing_guide_publish": "Votre IA peut préparer un brouillon. Vous le relisez et le publiez depuis l’écran d’approbation du navigateur.",
+  "media_upload_permission": "Téléverser des images",
+  "media_upload_help": "Permet de téléverser des images sur votre compte et utilise votre espace de stockage et votre quota de téléversement d’images. Cela ne les publie pas."
 }

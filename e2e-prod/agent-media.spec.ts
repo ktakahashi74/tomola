@@ -6,7 +6,7 @@ import { test, expect, useMember, watchCsp, waitForClientRoute } from "./helpers
 
 test("image upload permission is opt-in for personal tokens and OAuth consent under production CSP", async ({ page, request }) => {
   const watch = await watchCsp(page);
-  await useMember(page, "media_prod@example.com");
+  await useMember(page, "upload_client_prod@example.com");
   await page.goto("/settings/tokens");
   await waitForClientRoute(page);
   const bytes = await sharp({ create: { width: 16, height: 8, channels: 3, background: "green" } }).png().toBuffer();

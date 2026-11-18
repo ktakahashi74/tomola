@@ -2,13 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { getAuth } from "~/lib/auth/auth.server";
 import { getDb, type Db } from "~/lib/db/client.server";
 import { rateLimits } from "~/lib/db/schema";
+import { safeErrorText } from "~/lib/error-text.server";
 import { siteOrigin } from "~/lib/http/csrf.server";
 import { withMcpAuth } from "~/lib/mcp/auth.server";
 import { MEDIA_LIMITS, MediaError, parseMediaPath } from "~/lib/media";
 import { processUploadedMedia, withReceiveSlot } from "~/lib/media-processing.server";
 import { putMedia, putUploadedMedia } from "~/lib/media-store.server";
 import { getWriter } from "~/lib/members.server";
-import { hitRateLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
+import { hitIpLimit, hitRateLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { errorResponse, memberResponse } from "./http.server";
 import { readApiMedia } from "./media-body.server";
 
@@ -62,9 +63,14 @@ export async function handleMediaUpload(request: Request, opts: { db?: Db } = {}
       };
       return memberResponse(request, JSON.stringify(result), { format: "json", status: 201, rate: rates[1] });
     });
-    if (response.status === 401) return fail(request, 401, "unauthorized", "Send a valid Bearer token. Cookies and URL tokens are not accepted.", { "WWW-Authenticate": response.headers.get("www-authenticate") ?? "Bearer" });
+    if (response.status === 401) {
+      const rate = await hitIpLimit(db, request, "anon");
+      if (rate && !rate.allowed) return fail(request, 429, "rate", "Too many requests without valid credentials. Try again after the rate window resets.", rateLimitHeaders(rate));
+      return fail(request, 401, "unauthorized", "Send a valid Bearer token. Cookies and URL tokens are not accepted.", { "WWW-Authenticate": response.headers.get("www-authenticate") ?? "Bearer" });
+    }
     return response;
   } catch (error) {
+    if (!(error instanceof MediaError)) console.error(`[media-api] unexpected error for ${request.method} ${new URL(request.url).pathname}:`, safeErrorText(error));
     const failure = error instanceof MediaError ? error : new MediaError("generic", 500);
     const busy = failure.status === 503;
     return fail(request, failure.status, busy ? "busy" : failure.code, busy ? "Image processing is busy. Try again shortly." : `Image upload failed: ${failure.code}.`, busy ? { "Retry-After": "1" } : {});

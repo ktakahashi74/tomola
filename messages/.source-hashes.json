@@ -4556,7 +4556,9 @@
   "writing_guide_formats": "f8a36eeced28084b",
   "writing_guide_language": "92fa132ecc67f2ef",
   "writing_guide_rights": "c08d941cd69941f0",
-  "writing_guide_publish": "118f2de4a18332c6"
+  "writing_guide_publish": "118f2de4a18332c6",
+  "media_upload_permission": "16d605b935ade8d2",
+  "media_upload_help": "c9ed8b19dff79ba1"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -11825,7 +11827,9 @@
   "writing_guide_formats": "f8a36eeced28084b",
   "writing_guide_language": "92fa132ecc67f2ef",
   "writing_guide_rights": "c08d941cd69941f0",
-  "writing_guide_publish": "118f2de4a18332c6"
+  "writing_guide_publish": "118f2de4a18332c6",
+  "media_upload_permission": "16d605b935ade8d2",
+  "media_upload_help": "c9ed8b19dff79ba1"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

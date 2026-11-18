@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { eq } from "drizzle-orm";
+import { DrizzleQueryError, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuth } from "~/lib/auth/auth.server";
 import { apiTokens, drafts, media, oauthConsent, profiles, rateLimits } from "~/lib/db/schema";
@@ -8,7 +8,7 @@ import { handleMediaUpload } from "~/lib/api/media-api.server";
 import { readApiMedia } from "~/lib/api/media-body.server";
 import { MEDIA_LIMITS, MediaError } from "~/lib/media";
 import * as processing from "~/lib/media-processing.server";
-import { hitRateLimit } from "~/lib/rate-limit.server";
+import { ANON_IP_LIMIT, hitRateLimit } from "~/lib/rate-limit.server";
 import { createApiToken, revokeApiToken } from "~/lib/tokens.server";
 import { loader as mediaFile } from "~/routes/media-file";
 import { handleDraftCreate } from "~/lib/api/drafts-api.server";
@@ -37,7 +37,7 @@ function request(body: BodyInit = new Uint8Array(source), token: string | null =
 }
 const upload = (body?: BodyInit, token?: string | null, headers?: Record<string, string>) => handleMediaUpload(request(body, token, headers));
 const counter = async (key: string) => (await h.db.select().from(rateLimits).where(eq(rateLimits.key, key)))[0]?.count ?? 0;
-const charge = (key: string, cost: number, limit = MEDIA_LIMITS.hourly) => hitRateLimit(h.db, { key, cost, limit, windowSeconds: 3600 });
+const charge = (key: string, cost: number, limit: number = MEDIA_LIMITS.hourly) => hitRateLimit(h.db, { key, cost, limit, windowSeconds: 3600 });
 const sharedKey = () => `media:member:${h.ids.hana}`;
 const apiKey = () => `media:api:${h.ids.hana}`;
 
@@ -118,6 +118,43 @@ describe("image API credentials and responses", () => {
       expect(result.status).toBe(405); expect(result.headers.get("allow")).toBe("POST"); expect(result.headers.get("access-control-allow-origin")).toBeNull();
     }
   });
+  it("shares the anonymous IP allowance for missing and invalid credentials without reading image bodies", async () => {
+    vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
+    const ip = "192.0.2.34", key = `ip:anon:${ip}`;
+    await charge(key, ANON_IP_LIMIT.limit - 2, ANON_IP_LIMIT.limit);
+    for (const [token, status] of [[null, 401], ["invalid", 401], [null, 429]] as const) {
+      const req = request(undefined, token, { "x-forwarded-for": ip });
+      const response = await handleMediaUpload(req);
+      expect(response.status).toBe(status);
+      expect(req.bodyUsed).toBe(false);
+      expect((await response.json()).error).toBe(status === 429 ? "rate" : "unauthorized");
+      if (status === 429) {
+        expect(response.headers.get("retry-after")).toMatch(/^\d+$/);
+        expect(response.headers.get("x-ratelimit-limit")).toBe(String(ANON_IP_LIMIT.limit));
+        expect(response.headers.get("x-ratelimit-remaining")).toBe("0");
+        expect(response.headers.get("x-ratelimit-reset")).toMatch(/^\d+$/);
+      }
+    }
+    expect(await counter(key)).toBe(ANON_IP_LIMIT.limit + 1);
+    expect((await upload(undefined, draftToken, { "x-forwarded-for": ip })).status).toBe(403);
+    expect((await upload(undefined, uploadToken, { "x-forwarded-for": ip })).status).toBe(201);
+    expect(await counter(key)).toBe(ANON_IP_LIMIT.limit + 1);
+    expect((await upload(undefined, null, { "x-forwarded-for": "192.0.2.35" })).status).toBe(401);
+    expect(await counter("ip:anon:192.0.2.35")).toBe(1);
+  });
+  it("logs unexpected query failures without bound values, request credentials or URL parameters", async () => {
+    const privateValue = "fictional-private-image-content";
+    const cause = Object.assign(new Error(`Database refused ${privateValue}`), { code: "08006" });
+    vi.spyOn(processing, "processUploadedMedia").mockRejectedValueOnce(new DrizzleQueryError("select $1", [privateValue], cause));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const req = new Request(`${BASE}/api/media?trace=${privateValue}`, request());
+    const response = await handleMediaUpload(req);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "generic", message: "Image upload failed: generic." });
+    expect(log).toHaveBeenCalledExactlyOnceWith("[media-api] unexpected error for POST /api/media:", "DrizzleQueryError: select $1\ncode: 08006");
+    expect(JSON.stringify(log.mock.calls)).not.toContain(privateValue);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(uploadToken);
+  });
 });
 
 describe("bounded image input and storage", () => {
@@ -137,11 +174,13 @@ describe("bounded image input and storage", () => {
     expect(await counter(apiKey())).toBe(4); expect(await counter(sharedKey())).toBe(4);
   });
   it("rejects unsupported types and damaged images with stable JSON errors, charging failed attempts", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     for (const [body, type] of [["<svg/>", "image/svg+xml"], ["not an image", "image/png"], ["text", "text/plain"]]) {
       const response = await upload(body, undefined, { "content-type": type });
       expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ error: expect.stringMatching(/^(type|generic)$/), message: expect.any(String) });
     }
     expect(await counter(sharedKey())).toBe(3); expect(await counter(apiKey())).toBe(3);
+    expect(log).not.toHaveBeenCalled();
   });
   it("rejects a known oversize before reading and cancels a chunked oversize without waiting for EOF", async () => {
     let read = 0, cancelled = false;

@@ -120,6 +120,7 @@ describe("connection data and discovery", () => {
     const pages = [await (await connect(args("/connect.md")) as Response).text(), await (await guide(args("/help/mcp.md")) as Response).text()];
     for (const text of pages) {
       for (const section of [connectAccountSection, connectVerificationSection, connectManualSection, connectSafetySection, appGuidesMarkdown, clientSetupMarkdown]) expect(text).toContain(section(plan));
+      expect(text).toContain("A client registered without media will receive invalid_scope if it requests media; reconnect and register the client again with media included.");
       const removal = text.indexOf("a read-only connection to the same site is no longer needed");
       expect(removal >= 0).toBe(publicReading);
       if (publicReading) expect(text.indexOf("tomola_draft_list")).toBeLessThan(removal);
