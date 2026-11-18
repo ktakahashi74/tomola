@@ -1,10 +1,13 @@
 import { expect, type Page } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 import { test } from "./editor-fixture";
-import { enMessages as en, useMember, titleField, waitForFormReady, waitForClientRoute, chooseEditorMode } from "./helpers";
+import { enMessages as en, useMember, titleField, waitForFormReady, waitForClientRoute, chooseEditorMode, state } from "./helpers";
 
 const body = (page: Page) => page.locator('textarea[name="body"]');
 const rich = (page: Page) => page.locator('[contenteditable="true"][role="textbox"]');
 const source = "## Start\n\n::::details[**Proof** and $x^2$]\n\nAn enclosed reference[^n].\n\n:::details[Inner]\n\n## Enclosed target\n\nInside.\n\n:::\n\n::::\n\n## End\n\n[^n]: A note.";
+const longSource = "Before.\n\n:::details[Supplement]\n\n## Enclosed target\n\nInside.\n\n:::\n\n## Continue\n\n" + Array.from({ length: 30 }, (_, index) => `Reading paragraph ${index + 1}.`).join("\n\n");
 
 async function compose(page: Page, text: string) {
   await page.goto("/t/new");
@@ -89,6 +92,110 @@ test("rich editing preserves valid, nested, list and literal source through a ro
   await expect(body(page)).toHaveValue(text + "!\n");
 });
 
+test("rich clipboard preserves a cut block and external plain Markdown", async ({ page }) => {
+  await useMember(page, "details_clipboard@example.com");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const blockSource = "::::details[**Outer**]\n\nA  line.\n\n:::details[Inner]\nBody\n:::\n\n::::";
+  const text = blockSource + "\n\nAfter";
+  await compose(page, text);
+  await chooseEditorMode(page, en.editor_mode_rich);
+  const block = rich(page).locator("[data-details-source]");
+  await expect(block).toHaveCount(1);
+  await block.click();
+  await expect(block).toHaveClass(/ProseMirror-selectednode/);
+  await page.keyboard.press("Control+x");
+  await expect(block).toHaveCount(0);
+  await rich(page).locator(":scope > p").last().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Control+v");
+  await expect(block).toHaveCount(1);
+  await expect(block.locator("pre")).toHaveText(blockSource);
+  await chooseEditorMode(page, en.editor_mode_markdown);
+  expect((await body(page).inputValue()).trimEnd()).toBe(text);
+
+  await body(page).fill("After");
+  await chooseEditorMode(page, en.editor_mode_rich);
+  await expect(rich(page)).toBeVisible();
+  await rich(page).locator(":scope > p").last().click();
+  await page.keyboard.press("Home");
+  await page.evaluate(text => navigator.clipboard.writeText(text), blockSource + "\n\n");
+  await page.keyboard.press("Control+v");
+  await expect(block).toHaveCount(1);
+  await expect(block.locator("pre")).toHaveText(blockSource);
+  await chooseEditorMode(page, en.editor_mode_markdown);
+  expect((await body(page).inputValue()).trimEnd()).toBe(text);
+});
+
+async function leaveFragmentBehind(page: Page) {
+  const article = page.locator("[data-reading-body]").first();
+  const hidden = article.getByRole("heading", { name: "Enclosed target", includeHidden: true });
+  const id = await hidden.getAttribute("id");
+  await page.evaluate(id => { location.hash = id!; }, id);
+  await expect(hidden).toBeFocused();
+  await article.locator("p").last().evaluate(node => {
+    node.tabIndex = 0;
+    node.scrollIntoView({ block: "center" });
+    node.focus({ preventScroll: true });
+  });
+  return { article, hidden, scroll: await page.evaluate(() => scrollY) };
+}
+
+test("switching translations keeps the reading position and leaves closed destinations alone", async ({ page }) => {
+  await useMember(page, "details_switch@example.com");
+  await publish(page, longSource);
+  const url = new URL(page.url());
+  url.searchParams.set("lang", "fr");
+  await page.goto(url.href);
+  const article = page.locator("[data-reading-body]").first();
+  await expect(article).toHaveAttribute("lang", "fr", { timeout: 45_000 });
+  const { hidden, scroll } = await leaveFragmentBehind(page);
+  await page.getByRole("link", { name: en.show_original, exact: true }).evaluate(node => (node as HTMLElement).click());
+  await expect(article).toHaveAttribute("lang", "en");
+  await expect(article.locator("details")).not.toHaveAttribute("open");
+  await expect(hidden).not.toBeFocused();
+  expect(Math.abs(await page.evaluate(() => scrollY) - scroll)).toBeLessThan(25);
+  await page.locator('details.reading-lang-menu a[hreflang="fr"]').first().evaluate(node => (node as HTMLElement).click());
+  await expect(article).toHaveAttribute("lang", "fr");
+  await expect(article.locator("details")).not.toHaveAttribute("open");
+  await expect(hidden).not.toBeFocused();
+  expect(Math.abs(await page.evaluate(() => scrollY) - scroll)).toBeLessThan(25);
+
+  // A destination with no closed ancestor needs no custom scroll or focus.
+  await article.locator("p").last().evaluate(node => { node.tabIndex = 0; node.focus({ preventScroll: true }); });
+  await page.evaluate(() => {
+    const heading = document.querySelector('[data-reading-body] > h2')!;
+    history.replaceState(history.state, "", `#${heading.id}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await expect(article.locator("p").last()).toBeFocused();
+  expect(Math.abs(await page.evaluate(() => scrollY) - scroll)).toBeLessThan(25);
+});
+
+test("an arriving translation does not reopen an old fragment or move focus back", async ({ page }) => {
+  await useMember(page, "details_arrival@example.com");
+  const hold = path.join(state().dir, "fake-body-translation-hold");
+  fs.writeFileSync(hold, longSource);
+  try {
+    await publish(page, longSource);
+    const url = new URL(page.url());
+    url.searchParams.delete("posted");
+    url.searchParams.set("lang", "fr");
+    await page.goto(url.href);
+    const article = page.locator("[data-reading-body]").first();
+    await expect(article).toHaveAttribute("lang", "en");
+    await expect(page.getByText(en.translation_working, { exact: true })).toBeVisible();
+    const { hidden, scroll } = await leaveFragmentBehind(page);
+    const control = page.locator("[data-member-menu-trigger]");
+    await control.evaluate(node => (node as HTMLElement).focus({ preventScroll: true }));
+    fs.unlinkSync(hold);
+    await expect(article).toHaveAttribute("lang", "fr", { timeout: 45_000 });
+    await expect(article.locator("details")).not.toHaveAttribute("open");
+    await expect(hidden).not.toBeFocused();
+    await expect(control).toBeFocused();
+    expect(Math.abs(await page.evaluate(() => scrollY) - scroll)).toBeLessThan(25);
+  } finally { if (fs.existsSync(hold)) fs.unlinkSync(hold); }
+});
+
 test("writing warns about literal containers without eagerly fetching the grammar", async ({ page }) => {
   await useMember(page, "details_notice@example.com");
   await compose(page, "Ordinary text");
@@ -97,6 +204,8 @@ test("writing warns about literal containers without eagerly fetching the gramma
   await expect(page.getByRole("status").filter({ hasText: en.draft_details_unclosed })).toContainText("1");
   await body(page).fill(":::details[Closed]\nBody\n:::");
   await expect(page.getByRole("status").filter({ hasText: en.draft_details_unclosed })).toHaveCount(0);
+  await body(page).fill(":::details[Title[^1]]\nBody\n:::\n\n[^1]: Note.");
+  await expect(page.getByRole("status").filter({ hasText: "a footnote reference in a summary" })).toContainText("Line 1");
 });
 
 test("native details remain operable without JavaScript", async ({ page, browser }) => {

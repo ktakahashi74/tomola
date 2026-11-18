@@ -2452,9 +2452,10 @@
   "details_close_all": "收起所有摺疊內容",
   "writing_details_help": "要新增摺疊內容，請以 :::details[標題] 開始一行，並用僅含 ::: 的一行結束。標題支援強調和 $公式$。摺疊內容中最多可再巢狀一層；巢狀時，外層多用一個冒號（::::details[標題] 和 ::::）。結束行的冒號數不得少於開始行。不支援屬性。",
   "editor_details_help": "請在 Markdown 模式下編輯此摺疊內容。",
-  "draft_details_literal": "第 {line} 行：此容器將按原文顯示。{reason}",
+  "draft_details_literal": "第 {line} 行：分隔行按原文顯示，內容正常排版。{reason}",
   "draft_details_name": "僅支援 details 名稱。",
   "draft_details_unclosed": "請新增僅含冒號的結束行，冒號數不得少於開始行。",
   "draft_details_attributes": "請移除容器屬性。",
-  "draft_details_depth": "巢狀總層數不得超過兩層。"
+  "draft_details_depth": "巢狀總層數不得超過兩層。",
+  "draft_details_summary_footnote": "第 {line} 行：摺疊標題中的註腳引用按原文顯示。請將引用移到正文中，以顯示註腳內容。"
 }

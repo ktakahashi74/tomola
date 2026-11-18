@@ -39,6 +39,6 @@ export function DetailsNotice() {
   }, []);
   const reasons = { name: m.draft_details_name, unclosed: m.draft_details_unclosed, attributes: m.draft_details_attributes, depth: m.draft_details_depth };
   return <div ref={root} role="status" className="ui-help text-notice-emphasis">
-    {issues.map(({ line, reason }, index) => <p key={index}>{m.draft_details_literal({ line, reason: reasons[reason]() })}</p>)}
+    {issues.map(({ line, reason }, index) => <p key={index}>{reason === "summary_footnote" ? m.draft_details_summary_footnote({ line }) : m.draft_details_literal({ line, reason: reasons[reason]() })}</p>)}
   </div>;
 }

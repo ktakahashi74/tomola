@@ -30,7 +30,7 @@ export const INVITATION_NOTE_PROMPT_VERSION = "invitation-note-v1";
 export const JUDGE_PROMPT_VERSION = "judge-v3";
 
 // The prompt version an engine reports for a request.
-export const promptVersionOf = (req: Pick<TranslationRequest, "chat" | "village" | "invitationNote" | "figure"> & { from?: SourceLang }): string => req.from === "other" ? "translate-other-v1" : req.figure ? "figure-translation-v4" : req.invitationNote ? INVITATION_NOTE_PROMPT_VERSION : req.chat ? CHAT_PROMPT_VERSION : req.village ? VILLAGE_PROMPT_VERSION : PROMPT_VERSION;
+export const promptVersionOf = (req: Pick<TranslationRequest, "chat" | "village" | "invitationNote" | "figure"> & { from?: SourceLang }): string => req.from === "other" ? "translate-other-v2" : req.figure ? "figure-translation-v4" : req.invitationNote ? INVITATION_NOTE_PROMPT_VERSION : req.chat ? CHAT_PROMPT_VERSION : req.village ? VILLAGE_PROMPT_VERSION : PROMPT_VERSION;
 
 // Per-request nonce on delimiter tags such as `<source-3f9a…>`, preventing user-input closing tags from ending a section.
 export function newNonce(): string {

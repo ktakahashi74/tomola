@@ -58,7 +58,6 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "villages_suspended@example.com", handle: "villages_suspended", homeArea: "en", uiLocale: "en" },
 ];
 export const MEMBER_FIXTURES: readonly SeedMember[] = [
-  ...["reading", "editor", "notice", "native"].map(name => ({ email: `details_${name}@example.com`, handle: `details_${name}`, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   { email: "zslug_creator@example.com", handle: "zslug_creator", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   ...["supp_flow_author", "supp_flow_reader", "supp_public_author"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["znushi_flow_owner", "znushi_flow_caller", "znushi_mod_owner"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
@@ -276,4 +275,5 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["discard", "held", "older", "hash", "edit", "errors", "focus", "top_press"].map(scenario => ({ email: `zwrite_${scenario}@example.com`, handle: `zwrite_${scenario}`, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["toggle", "nojs", "missing", "fallback_all", "unavailable", "unchanged"].flatMap(scenario => ["author", "reader"].map(role => ({ email: `figure_${scenario}_${role}@example.com`, handle: `figure_${scenario}_${role}`, homeArea: "en" as const, readLangs: ["ja" as const], uiLocale: "en" as const }))),
   ...["firstlook_author", "firstlook_stance", "firstlook_stance_peer", "firstlook_stance_unconsented", "firstlook_existing", "firstlook_existing_excluded", "firstlook_reader", "firstlook_writer", "firstlook_names", "firstlook_list_author", "firstlook_list_consent", "firstlook_paged_author", "firstlook_paged_consent"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
+  ...["reading", "editor", "notice", "native", "clipboard", "switch", "arrival"].map(name => ({ email: `details_${name}@example.com`, handle: `details_${name}`, homeArea: "en" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
 ];

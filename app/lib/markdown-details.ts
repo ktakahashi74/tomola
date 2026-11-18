@@ -2,7 +2,9 @@ import { directiveFromMarkdown } from "mdast-util-directive";
 import { directive } from "micromark-extension-directive";
 import type { Processor } from "unified";
 
-export type DetailsIssueReason = "name" | "unclosed" | "attributes" | "depth";
+export type DetailsIssueReason = "name" | "unclosed" | "attributes" | "depth" | "summary_footnote";
+
+type Position = { start: { offset?: number; line: number; column?: number }; end: { offset?: number } };
 
 export type MarkdownNode = {
   type: string;
@@ -13,12 +15,12 @@ export type MarkdownNode = {
   identifier?: string;
   attributes?: Record<string, unknown> | null;
   children?: MarkdownNode[];
-  position?: { start: { offset?: number; line: number; column?: number }; end: { offset?: number } };
+  position?: Position;
   data?: {
     detailsSource?: string;
     detailsIssue?: DetailsIssueReason;
     directiveLabel?: boolean;
-    position?: { opening: { start: { offset?: number }; end: { offset?: number } }; closing?: unknown };
+    position?: { opening: Position; closing?: Position };
     hName?: string;
     hProperties?: Record<string, unknown>;
   };
@@ -47,8 +49,20 @@ export function registerMarkdownDetails(processor: Processor) {
             : !node.data?.position?.closing ? "unclosed"
               : Object.keys(node.attributes ?? {}).length > 0 || /\}\s*$/.test(source.slice(node.data.position.opening.start.offset, node.data.position.opening.end.offset)) ? "attributes"
                 : depth >= 2 ? "depth" : undefined;
-          if (reason) return { type: "paragraph", position: node.position, data: { detailsIssue: reason, detailsSource: raw }, children: [{ type: "text", value: raw, position: node.position }] };
-          node.data = { ...node.data, detailsSource: raw };
+          node.data = { ...node.data, detailsSource: raw, detailsIssue: reason };
+          if (reason) {
+            // Retain the source wrapper for rich editing, but render only the
+            // delimiters literally and keep the parsed body blocks intact.
+            const literal = (position: Position): MarkdownNode => ({ type: "paragraph", position, children: [{ type: "text", value: source.slice(position.start.offset, position.end.offset), position }] });
+            const { opening, closing } = node.data.position!;
+            node.children = [literal(opening), ...(node.children ?? []).filter(child => !child.data?.directiveLabel), ...(closing ? [literal(closing)] : [])];
+          } else {
+            const inspectLabel = (child: MarkdownNode) => {
+              if (child.type === "footnoteReference") child.data = { ...child.data, detailsIssue: "summary_footnote" };
+              child.children?.forEach(inspectLabel);
+            };
+            node.children?.filter(child => child.data?.directiveLabel).forEach(inspectLabel);
+          }
           walk(node, depth + 1);
         } else if ("children" in node) walk(node, depth);
         return node;
@@ -71,6 +85,7 @@ export function detailsShape(tree: unknown): string | null {
   const flow = new Set(["root", "paragraph", "heading", "blockquote", "list", "listItem", "table", "tableRow", "tableCell", "code", "math", "thematicBreak", "html", "definition", "footnoteDefinition"]);
   const shape = (node: MarkdownNode): string => {
     if (node.type === "containerDirective") {
+      if (node.data?.detailsIssue) return (node.children ?? []).map(shape).join(",");
       found = true;
       return `details(${(node.children ?? []).filter(child => !child.data?.directiveLabel).map(shape).join(",")})`;
     }

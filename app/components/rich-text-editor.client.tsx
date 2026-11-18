@@ -34,7 +34,7 @@ const editorAttention = $remark("editorAttention", () => remarkEditorAttention);
 const detailsBlock = $node("details_block", () => ({
   group: "block", atom: true, selectable: true,
   attrs: { source: { default: "", validate: "string" } },
-  parseDOM: [],
+  parseDOM: [{ tag: "div[data-details-source]", getAttrs: dom => ({ source: dom.querySelector("pre")?.textContent ?? "" }) }],
   toDOM: node => ["div", { "data-details-source": "", contenteditable: "false", class: "editor-details-source" },
     ["p", {}, m.editor_details_help()], ["pre", {}, node.attrs.source]],
   parseMarkdown: {

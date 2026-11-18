@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LANGS } from "~/lib/languages";
 import { SOURCE_LANG_SPECS, TARGET_LANG_SPECS, sourceLangSpec } from "~/lib/llm/lang-specs";
-import { buildTranslationPrompt, CHAT_PROMPT_VERSION, PROMPT_VERSION, VILLAGE_PROMPT_VERSION } from "~/lib/llm/prompt.server";
+import { buildTranslationPrompt, CHAT_PROMPT_VERSION, PROMPT_VERSION, VILLAGE_PROMPT_VERSION, promptVersionOf } from "~/lib/llm/prompt.server";
 import type { TranslationRequest } from "~/lib/llm/types";
 
 // The four ways a text reaches the engine: a post or title (Markdown), a chat message, and the name and the description of a village.
@@ -57,6 +57,10 @@ describe("names, precedence and what counts as the first occurrence", () => {
 });
 
 describe("versions", () => {
+  it("records the details preservation instructions for other-language sources", () => {
+    expect(promptVersionOf({ from: "other" })).toBe("translate-other-v2");
+    expect(system({}, "other", "en")).toContain(":::details[");
+  });
   it("are raised for the three kinds of request", () => {
     expect([PROMPT_VERSION, CHAT_PROMPT_VERSION, VILLAGE_PROMPT_VERSION]).toEqual(["translate-v14", "chat-v4", "village-v2"]);
   });

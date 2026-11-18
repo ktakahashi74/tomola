@@ -409,7 +409,7 @@ export function checkStructure(source: string, translated: string, opts: { menti
   if (mismatches.length || code.countMismatch) flags.push(FLAG_STRUCTURE_MISMATCH);
   const quality = qualityMismatches(source, translated, opts);
   const mentions = missingMentions(opts.mentions ?? [], translated).map(lost => `mentions: ${lost} missing`);
-  if (code.contentChanged || quality.length || mentions.length) flags.push(FLAG_QUALITY_MISMATCH);
+  if ((code.contentChanged || quality.length || mentions.length) && !flags.includes(FLAG_QUALITY_MISMATCH)) flags.push(FLAG_QUALITY_MISMATCH);
   mismatches.push(...code.mismatches, ...quality, ...mentions);
   // Translated URLs must be a subset of original URLs. Removing is allowed; additions are invented links.
   const sourceLinks = extractLinks(source);

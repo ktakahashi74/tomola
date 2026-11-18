@@ -633,7 +633,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   }, [loaderData.replyTarget?.id, loaderData.replyTarget?.href, loaderData.replyTarget?.handle, location.key, replyFailed]);
   useDropNoticeParams(loaderData.edited !== null || (topic.placeholder === null && topic.posted) || replies.some(r => r.placeholder === null && r.posted));
   const replyInput = actionData?.intent === "reply" && "input" in actionData ? actionData.input as { body: string; lang: string } : undefined;
-  const readView = useMemo<ReplyReadView>(() => ({}), [topic.id, page]);
+  const readView = useMemo<ReplyReadView & { initializedDetails: Set<number> }>(() => ({ initializedDetails: new Set<number>() }), [topic.id, page]);
   const anchorView = useRef({ key: location.key, hash: location.hash, navigated: false });
   const replyById = useMemo(() => new Map(replies.map(r => [r.id, r])), [replies]);
   const displayedReplies = useMemo(() => loaderData.replyBranches
@@ -714,6 +714,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           {r.hidden && <HiddenMark action={r.hiddenAction} />}
           <TranslatedEntry
             key={displayKey(r.id, r.display)}
+            initializedDetails={readView.initializedDetails}
             id={r.id}
             kind="reply"
             lang={r.lang} langCode={r.langCode}
@@ -825,6 +826,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             <div className="reading-article-content space-y-2">
             <TranslatedEntry
               key={displayKey(topic.id, topic.display)}
+              initializedDetails={readView.initializedDetails}
               id={topic.id}
               kind="topic"
               lang={topic.lang} langCode={topic.langCode}

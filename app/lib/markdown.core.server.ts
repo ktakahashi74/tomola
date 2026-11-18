@@ -50,7 +50,8 @@ const sanitizeSchema: SanitizeOptions = {
 // 11: lexical CJK URL boundaries and source positions around literal autolinks.
 // 12: GFM 2.1 literal-text email candidates and punctuation-led domain rejection.
 // 13: bounded Markdown details containers and summary-only cards.
-export const RENDER_VERSION = 13;
+// 14: literal rejected delimiters and non-interactive summary references.
+export const RENDER_VERSION = 14;
 
 const DEFAULT_ID_PREFIX = "user-content-";
 
@@ -171,22 +172,28 @@ function footnoteOptions(lang: string | undefined) {
 function remarkDetails(options: { lang?: string }) {
   const locale = options.lang && isLocale(options.lang) ? options.lang : baseLocale;
   const labelText = (nodes: MarkdownNode[]): MarkdownNode[] => nodes.flatMap(node => {
-    if (node.type === "link" || node.type === "linkReference") return labelText(node.children ?? []);
+    if (node.type === "link" || node.type === "linkReference" || node.type === "mention") return labelText(node.children ?? []);
     if (node.type === "image" || node.type === "imageReference") return [{ type: "text", value: node.alt ?? "" }];
-    if (node.type === "footnoteReference") return [{ type: "text", value: node.label ?? node.identifier }];
+    if (node.type === "footnoteReference") return [{ type: "text", value: `[^${node.label ?? node.identifier}]` }];
     if ("children" in node) return [{ ...node, children: labelText(node.children as MarkdownNode[]) } as MarkdownNode];
     return [node];
   });
   return (tree: MarkdownNode) => {
     const walk = (node: MarkdownNode) => {
+      if (node.children) node.children = node.children.flatMap(child => {
+        if (child.type !== "containerDirective" || !child.data?.detailsIssue) return [child];
+        walk(child);
+        return child.children ?? [];
+      });
       if (node.type === "containerDirective") {
+        if (node.data?.detailsIssue) return;
         const label = node.children?.[0]?.data?.directiveLabel ? node.children?.shift() : undefined;
         const children = label && "children" in label ? labelText(label.children as MarkdownNode[]) : [];
         const summary = { type: "paragraph", data: { hName: "summary" }, children: children.length ? children : [{ type: "text", value: m.md_details({}, { locale }) || "Details" }] } as const;
         node.data = { ...node.data, hName: "details", hProperties: {} };
         node.children?.unshift(summary as unknown as MarkdownNode);
       }
-      if ("children" in node) (node.children as MarkdownNode[]).forEach(walk);
+      node.children?.forEach(walk);
     };
     walk(tree);
   };
@@ -229,9 +236,9 @@ export function inspectDraftRendering(markdown: string, lang: string) {
   const images: Array<{ src: string; line: number; excerpt: string }> = [];
   const links = new Map<number, HastNode>();
   const walk = (node: HastNode, visit: (node: HastNode) => void): void => { visit(node); node.children?.forEach(child => walk(child, visit)); };
-  const add = (kind: DraftIssue["kind"], node: HastNode, message: string) => {
+  const add = (kind: DraftIssue["kind"], node: HastNode, message: string, detailsReason?: DraftIssue["detailsReason"]) => {
     if (issues.length > MAX_DRAFT_ISSUES) return;
-    issues.push({ kind, location: { field: "body", line: node.position?.start.line ?? 1 }, excerpt: draftExcerpt(markdown.slice(node.position?.start.offset ?? 0, node.position?.end.offset ?? 0)), message });
+    issues.push({ kind, location: { field: "body", line: node.position?.start.line ?? 1 }, excerpt: draftExcerpt(markdown.slice(node.position?.start.offset ?? 0, node.position?.end.offset ?? 0)), message, ...(detailsReason ? { detailsReason } : {}) });
   };
   const processor = createFrontProcessor(DEFAULT_ID_PREFIX, lang, undefined, false, {
     before: tree => walk(tree, node => { if (node.tagName === "a" && typeof node.properties?.href === "string" && node.position?.start.offset !== undefined) links.set(node.position.start.offset, node); }),
@@ -247,9 +254,8 @@ export function inspectDraftRendering(markdown: string, lang: string) {
   const inspect = (node: MarkdownNode) => {
     const reason = node.data?.detailsIssue;
     if (reason && issues.length <= MAX_DRAFT_ISSUES) {
-      const messages = { name: "Only details containers are supported.", unclosed: "The container has no explicit closing line.", attributes: "Container attributes are not supported.", depth: "Only two levels of details containers are supported." };
-      add("details_literal", node as HastNode, `${messages[reason]} This container is displayed as literal text.`);
-      if (issues.at(-1)?.kind === "details_literal") issues.at(-1)!.detailsReason = reason;
+      const messages = { name: "Only details containers are supported.", unclosed: "The container has no explicit closing line.", attributes: "Container attributes are not supported.", depth: "Only two levels of details containers are supported.", summary_footnote: "A footnote reference in a summary is displayed as literal text. Move the reference to the body to show its note." };
+      add("details_literal", node as HastNode, reason === "summary_footnote" ? messages[reason] : `${messages[reason]} Only the delimiter lines are displayed as literal text; the body renders normally.`, reason);
     }
     if ("children" in node) (node.children as MarkdownNode[]).forEach(inspect);
   };

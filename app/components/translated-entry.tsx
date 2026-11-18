@@ -51,6 +51,7 @@ export function TranslatedEntry({
   quotable = false,
   onReportedChange,
   quoteHandle,
+  initializedDetails,
 }: {
   id: number;
   kind: "topic" | "reply";
@@ -81,6 +82,8 @@ export function TranslatedEntry({
   onReportedChange?: (translation: EntryDisplay["translation"]) => void;
   // The author's handle, carried with the quotable body so that a quotation can say where it comes from.
   quoteHandle?: string;
+  // The page retains initial navigation across translation-driven remounts.
+  initializedDetails?: Set<number>;
 }) {
   const location = useLocation();
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -131,7 +134,7 @@ export function TranslatedEntry({
           : { text: title, lang, fromBody: false };
   const bodyLang = showing || showingOlder ? (tr as NonNullable<typeof tr>).lang : lang;
   const bodyHtml = showing?.html ?? showingOlder?.html ?? html;
-  const details = useDetailsNavigation(bodyRef, bodyHtml);
+  const details = useDetailsNavigation(bodyRef, bodyHtml, initializedDetails, id);
   useEffect(() => {
     const body = bodyRef.current;
     body?.addEventListener("click", toggleFigure);

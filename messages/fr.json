@@ -3077,9 +3077,10 @@
   "details_close_all": "Fermer toutes les sections repliables",
   "writing_details_help": "Pour ajouter une section repliable, commencez une ligne par :::details[Résumé] et fermez-la par une ligne contenant uniquement :::. Le résumé accepte la mise en emphase et les $formules$. Vous pouvez imbriquer une section dans une autre : ajoutez un deux-points aux délimiteurs extérieurs (::::details[Résumé] et ::::). La fermeture doit comporter au moins autant de deux-points que l’ouverture. Les attributs ne sont pas pris en charge.",
   "editor_details_help": "Modifiez cette section repliable en mode Markdown.",
-  "draft_details_literal": "Ligne {line} : ce conteneur est affiché en texte brut. {reason}",
+  "draft_details_literal": "Ligne {line} : les lignes de délimitation sont affichées telles quelles ; le contenu est rendu normalement. {reason}",
   "draft_details_name": "Seul le nom details est pris en charge.",
   "draft_details_unclosed": "Ajoutez une ligne de fermeture composée uniquement de deux-points, au moins aussi nombreux qu’à l’ouverture.",
   "draft_details_attributes": "Retirez les attributs du conteneur.",
-  "draft_details_depth": "Limitez l’imbrication à deux niveaux."
+  "draft_details_depth": "Limitez l’imbrication à deux niveaux.",
+  "draft_details_summary_footnote": "Ligne {line} : une référence de note dans le résumé est affichée telle quelle. Déplacez la référence dans le corps du texte pour afficher la note."
 }

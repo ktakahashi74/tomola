@@ -1,39 +1,60 @@
 import { useEffect, useState, type RefObject } from "react";
 
-export function useDetailsNavigation(bodyRef: RefObject<HTMLDivElement | null>, html: string) {
+function reveal(body: HTMLDivElement, hash: string): number | undefined {
+  let id: string;
+  try { id = decodeURIComponent(hash.slice(1)); } catch { return; }
+  const target = document.getElementById(id);
+  if (!target || !body.contains(target)) return;
+  let opened = false;
+  for (let parent = target.parentElement; parent && parent !== body; parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement && !parent.open) {
+      parent.open = true;
+      opened = true;
+    }
+  }
+  if (!opened) return;
+  return requestAnimationFrame(() => {
+    if (!body.contains(target)) return;
+    target.scrollIntoView();
+    if (!target.hasAttribute("tabindex")) {
+      target.tabIndex = -1;
+      target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
+    }
+    target.focus({ preventScroll: true });
+  });
+}
+
+export function useDetailsNavigation(bodyRef: RefObject<HTMLDivElement | null>, html: string, initialized?: Set<number>, entryId = 0) {
   const available = html.includes("<details>");
   const [allOpen, setAllOpen] = useState(false);
+  // Initial fragment navigation belongs to mounting, not body replacements.
+  useEffect(() => {
+    if (initialized?.has(entryId)) return;
+    initialized?.add(entryId);
+    const frame = bodyRef.current ? reveal(bodyRef.current, location.hash) : undefined;
+    return () => { if (frame !== undefined) cancelAnimationFrame(frame); };
+  }, [bodyRef, initialized, entryId]);
   useEffect(() => {
     const body = bodyRef.current;
     if (!available || !body) return;
     const containers = () => Array.from(body.querySelectorAll("details"));
     const update = () => setAllOpen(containers().every(details => details.open));
     let frame = 0;
-    const reveal = (hash = location.hash) => {
-      let id: string;
-      try { id = decodeURIComponent(hash.slice(1)); } catch { return; }
-      const target = document.getElementById(id);
-      if (!target || !body.contains(target)) return;
-      for (let parent = target.parentElement; parent && parent !== body; parent = parent.parentElement) {
-        if (parent instanceof HTMLDetailsElement) parent.open = true;
+    const navigate = (hash = location.hash) => {
+      const next = reveal(body, hash);
+      if (next !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = next;
       }
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        target.scrollIntoView();
-        if (!target.hasAttribute("tabindex")) {
-          target.tabIndex = -1;
-          target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
-        }
-        target.focus({ preventScroll: true });
-      });
     };
-    const navigate = () => reveal();
+    const hashNavigation = () => navigate();
+    const restore = (event: PageTransitionEvent) => { if (event.persisted) navigate(); };
     const click = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
       if (!(link instanceof HTMLAnchorElement)) return;
       const url = new URL(link.href);
-      if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search && url.hash) reveal(url.hash);
+      if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search && url.hash) navigate(url.hash);
     };
     let printed: Map<HTMLDetailsElement, boolean> | undefined;
     const beforePrint = () => {
@@ -46,21 +67,20 @@ export function useDetailsNavigation(bodyRef: RefObject<HTMLDivElement | null>, 
       update();
     };
     update();
-    navigate();
     body.addEventListener("toggle", update, true);
     document.addEventListener("click", click);
-    window.addEventListener("hashchange", navigate);
-    window.addEventListener("popstate", navigate);
-    window.addEventListener("pageshow", navigate);
+    window.addEventListener("hashchange", hashNavigation);
+    window.addEventListener("popstate", hashNavigation);
+    window.addEventListener("pageshow", restore);
     window.addEventListener("beforeprint", beforePrint);
     window.addEventListener("afterprint", afterPrint);
     return () => {
       cancelAnimationFrame(frame);
       body.removeEventListener("toggle", update, true);
       document.removeEventListener("click", click);
-      window.removeEventListener("hashchange", navigate);
-      window.removeEventListener("popstate", navigate);
-      window.removeEventListener("pageshow", navigate);
+      window.removeEventListener("hashchange", hashNavigation);
+      window.removeEventListener("popstate", hashNavigation);
+      window.removeEventListener("pageshow", restore);
       window.removeEventListener("beforeprint", beforePrint);
       window.removeEventListener("afterprint", afterPrint);
     };

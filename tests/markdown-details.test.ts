@@ -21,6 +21,8 @@ import { createFakeEngine } from "~/lib/llm/engines/fake.server";
 import { isUsablePrimary } from "~/lib/display";
 import { decorateFigureHtml, figureImageIds } from "~/lib/figure-display.server";
 import { figurePath } from "~/lib/figure";
+import { MAX_DRAFT_ISSUES } from "~/lib/draft-issues";
+import { frozenMentionKey } from "~/lib/mentions-md.core.server";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -51,6 +53,22 @@ describe("bounded Markdown details", () => {
     expect(inspectDraftRendering(unclosed, "en").issues[0].detailsReason).toBe("unclosed");
   });
 
+  it("renders saved mentions in summaries as text while retaining body mention links", () => {
+    const mentions = new Map([[frozenMentionKey("@reader"), { handle: "reader", userId: "reader", publicId: "reader000001", prefix: "reader" }]]);
+    const html = renderMarkdown(fold("Ask @reader in the body.", "Ask **@reader** here"), { mentions });
+    expect(html).toContain("<summary>Ask <strong>@reader</strong> here</summary>");
+    expect(html).toContain('href="/u/id/reader000001"');
+  });
+
+  it.each([false, true])("keeps summary footnote references literal and renders notes referenced in the body: %s", bodyReference => {
+    const source = fold(bodyReference ? "Body[^1]." : "Body.", "Title [^1]") + "\n\n[^1]: Note text.";
+    const html = renderMarkdown(source);
+    expect(html).toContain("<summary>Title [^1]</summary>");
+    expect(html.includes('data-footnote-ref')).toBe(bodyReference);
+    expect(html.includes("Note text.")).toBe(bodyReference);
+    expect(inspectDraftRendering(source, "en").issues).toMatchObject([{ kind: "details_literal", detailsReason: "summary_footnote", location: { field: "body", line: 1 }, excerpt: "[^1]" }]);
+  });
+
   it("renders rich blocks, list containers, nested containers, and prefixed footnotes", () => {
     const body = "$$\nx^2\n$$\n\n| A | B |\n| - | - |\n| C | D |\n\n```bibtex\n@book{sample}\n```\n\n![Image](/media/" + "a".repeat(64) + "-10x10.webp)\n\nRef[^n].\n\n[^n]: Note.";
     const html = renderMarkdown(fold(body), { idPrefix: "p-1-", lang: "en" });
@@ -59,7 +77,7 @@ describe("bounded Markdown details", () => {
     const nested = fold(fold(fold("Deep", "Third"), "Second", 4), "First", 5);
     const result = renderMarkdown(nested);
     expect(result.match(/<details>/g)).toHaveLength(2);
-    expect(result).toContain(":::details[Third]\nDeep\n:::");
+    expect(result).toContain("<p>:::details[Third]</p><p>Deep</p><p>:::</p>");
     expect(inspectDraftRendering(nested, "en").issues).toMatchObject([{ kind: "details_literal", detailsReason: "depth", location: { field: "body", line: 3 } }]);
   });
 
@@ -68,12 +86,35 @@ describe("bounded Markdown details", () => {
     [":::details[Title]\nBody\n\n## Following\n\nVisible", "unclosed"],
     [":::details[Title]{#evil .c open name=n}\nBody\n:::", "attributes"],
     [":::details[Title]{}\nBody\n:::", "attributes"],
-  ])("keeps rejected containers as source text and reports why: %s", (source, reason) => {
+  ])("keeps rejected delimiter lines literal and reports why: %s", (source, reason) => {
     const html = renderMarkdown(source + "\n\nAfter");
     expect(html).not.toContain("<details");
-    expect(html).toContain(source);
-    expect(html).toContain("After");
+    expect(html).toContain(`<p>${source.split("\n")[0]}</p>`);
+    expect(html).toContain("<p>Body</p>");
+    expect(html).toContain("<p>After</p>");
+    if (reason === "unclosed") expect(html).toContain("<h2>Following</h2>\n<p>Visible</p>");
+    else expect(html).toContain("<p>:::</p>");
     expect(inspectDraftRendering(source, "en").issues).toMatchObject([{ kind: "details_literal", detailsReason: reason, location: { field: "body", line: 1 }, excerpt: source.slice(0, 80) }]);
+  });
+
+  it.each(["name", "unclosed", "attributes", "depth"])("renders rich body blocks inside rejected containers: %s", reason => {
+    const opening = reason === "name" ? ":::unknown[**Title**]" : reason === "attributes" ? ":::details[Title]{open}" : ":::details[Title]";
+    const content = "## Following\n\nVisible *emphasis*.\n\n$$\nx^2\n$$\n\n| A | B |\n| - | - |\n| C | D |\n\n```text\nCode\n```\n\nRef[^n].\n\n[^n]: Note.";
+    let source = opening + "\n\n" + content + (reason === "unclosed" ? "" : "\n:::");
+    if (reason === "depth") source = fold(fold(source, "Second", 4), "First", 5);
+    const html = renderMarkdown(source, { idPrefix: "p-1-" });
+    expect(html.match(/<details>/g) ?? []).toHaveLength(reason === "depth" ? 2 : 0);
+    expect(html).toContain(`<p>${opening}</p>`);
+    for (const tag of ['<h2 id="p-1-h-1">Following</h2>', "<em>emphasis</em>", 'class="katex-display"', "<table>", '<code class="language-text">Code', 'data-footnote-ref', "Note."]) expect(html).toContain(tag);
+    expect(inspectDraftRendering(source, "en").issues[0].detailsReason).toBe(reason);
+  });
+
+  it("does not overwrite a retained diagnostic when later issues exceed the limit", () => {
+    const source = Array.from({ length: MAX_DRAFT_ISSUES + 1 }, () => ":::unknown[Title]\nBody\n:::").join("\n\n") + "\n\n:::details[Title]{open}\nBody\n:::";
+    const issues = inspectDraftRendering(source, "en").issues;
+    // One extra issue lets the draft service report truncation.
+    expect(issues).toHaveLength(MAX_DRAFT_ISSUES + 1);
+    expect(issues.every(issue => issue.detailsReason === "name")).toBe(true);
   });
 
   it("keeps following blocks outside rejected explicitly closed containers", () => {
@@ -189,5 +230,11 @@ describe("translation details boundaries", () => {
     const result = await translateChecked(engine, { text: source, from: "en", to: "fr" });
     expect(result.attempts).toBe(2);
     expect(isUsablePrimary({ sourceHash: "source", flags: result.flags }, "source")).toBe(false);
+  });
+  it("records one quality flag when boundaries and paragraph counts both change", () => {
+    const result = checkStructure(source, "Before.\n\nAfter.");
+    expect(result.mismatches.some(value => value.includes("details boundaries"))).toBe(true);
+    expect(result.mismatches.some(value => value.includes("paragraph count"))).toBe(true);
+    expect(result.flags.filter(flag => flag === FLAG_QUALITY_MISMATCH)).toHaveLength(1);
   });
 });

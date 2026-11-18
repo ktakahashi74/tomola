@@ -3023,9 +3023,10 @@
   "details_close_all": "Close all collapsible sections",
   "writing_details_help": "To add a collapsible section, start a line with :::details[Summary] and close it with a line containing only :::. The summary supports emphasis and $math$. You can nest one section inside another: use one more colon on the outside (::::details[Summary] and ::::). Closing lines need at least as many colons as the opening. Attributes are not supported.",
   "editor_details_help": "Edit this collapsible section in Markdown mode.",
-  "draft_details_literal": "Line {line}: this container is shown as literal text. {reason}",
+  "draft_details_literal": "Line {line}: the delimiter lines are shown as literal text; the body renders normally. {reason}",
   "draft_details_name": "Only the name details is supported.",
   "draft_details_unclosed": "Add a colon-only closing line with at least as many colons as the opening.",
   "draft_details_attributes": "Remove the container attributes.",
-  "draft_details_depth": "Use no more than two nesting levels."
+  "draft_details_depth": "Use no more than two nesting levels.",
+  "draft_details_summary_footnote": "Line {line}: a footnote reference in a summary is shown as literal text. Move the reference to the body to show its note."
 }

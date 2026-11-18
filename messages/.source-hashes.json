@@ -2246,11 +2246,12 @@
   "details_close_all": "6f4b87366d08e9fa",
   "writing_details_help": "0780119226c06840",
   "editor_details_help": "3e4e218af4b76668",
-  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_literal": "92c7eb602b5d331f",
   "draft_details_name": "58886dd87ca30aea",
   "draft_details_unclosed": "2b19e9cda2626d8e",
   "draft_details_attributes": "c96cc203292222d8",
-  "draft_details_depth": "c2b3bcf17c1e3db3"
+  "draft_details_depth": "c2b3bcf17c1e3db3",
+  "draft_details_summary_footnote": "748e266e3ee63043"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4498,11 +4499,12 @@
   "details_close_all": "6f4b87366d08e9fa",
   "writing_details_help": "0780119226c06840",
   "editor_details_help": "3e4e218af4b76668",
-  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_literal": "92c7eb602b5d331f",
   "draft_details_name": "58886dd87ca30aea",
   "draft_details_unclosed": "2b19e9cda2626d8e",
   "draft_details_attributes": "c96cc203292222d8",
-  "draft_details_depth": "c2b3bcf17c1e3db3"
+  "draft_details_depth": "c2b3bcf17c1e3db3",
+  "draft_details_summary_footnote": "748e266e3ee63043"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7181,11 +7183,12 @@
   "details_close_all": "6f4b87366d08e9fa",
   "writing_details_help": "0780119226c06840",
   "editor_details_help": "3e4e218af4b76668",
-  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_literal": "92c7eb602b5d331f",
   "draft_details_name": "58886dd87ca30aea",
   "draft_details_unclosed": "2b19e9cda2626d8e",
   "draft_details_attributes": "c96cc203292222d8",
-  "draft_details_depth": "c2b3bcf17c1e3db3"
+  "draft_details_depth": "c2b3bcf17c1e3db3",
+  "draft_details_summary_footnote": "748e266e3ee63043"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9433,11 +9436,12 @@
   "details_close_all": "6f4b87366d08e9fa",
   "writing_details_help": "0780119226c06840",
   "editor_details_help": "3e4e218af4b76668",
-  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_literal": "92c7eb602b5d331f",
   "draft_details_name": "58886dd87ca30aea",
   "draft_details_unclosed": "2b19e9cda2626d8e",
   "draft_details_attributes": "c96cc203292222d8",
-  "draft_details_depth": "c2b3bcf17c1e3db3"
+  "draft_details_depth": "c2b3bcf17c1e3db3",
+  "draft_details_summary_footnote": "748e266e3ee63043"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11685,11 +11689,12 @@
   "details_close_all": "6f4b87366d08e9fa",
   "writing_details_help": "0780119226c06840",
   "editor_details_help": "3e4e218af4b76668",
-  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_literal": "92c7eb602b5d331f",
   "draft_details_name": "58886dd87ca30aea",
   "draft_details_unclosed": "2b19e9cda2626d8e",
   "draft_details_attributes": "c96cc203292222d8",
-  "draft_details_depth": "c2b3bcf17c1e3db3"
+  "draft_details_depth": "c2b3bcf17c1e3db3",
+  "draft_details_summary_footnote": "748e266e3ee63043"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",
