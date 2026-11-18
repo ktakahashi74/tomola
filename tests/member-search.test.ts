@@ -103,7 +103,10 @@ describe("member results on the search screen", () => {
     expect(memberSection).toContain("Sakura Ogawa");
     expect(memberSection.replace(/<[^>]*>/g, "")).toContain("Sakura Ogawa @native_name");
     expect(memberSection).not.toContain("<img");
-    expect(html).toMatch(/<section aria-labelledby="search-members-heading"[\s\S]*?<\/section><section class="space-y-2">/);
+    // The member section closes before the post results begin.
+    const membersEnd = html.indexOf("</section>", html.indexOf('aria-labelledby="search-members-heading"'));
+    expect(membersEnd).toBeGreaterThan(0);
+    expect(membersEnd).toBeLessThan(html.indexOf('href="/search.md?'));
     expect(html).toContain(m.search_no_results());
   });
 
