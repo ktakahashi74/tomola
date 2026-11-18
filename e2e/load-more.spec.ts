@@ -1,11 +1,25 @@
 import fs from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { deferred } from "../tests/helpers/deferred";
 import { enMessages as m, messageTitleField, state, restoreMember, waitForClientRoute, waitForFormReady } from "./helpers";
 
 const fixture = () => JSON.parse(fs.readFileSync(`${state().dir}/load-more.json`, "utf8")) as { path: string; ids: number[]; before: string };
 const rows = (page: Page) => page.locator('[data-reading-list="list"] li[id^="q-"]');
 const rowIds = (page: Page) => rows(page).evaluateAll(items => items.map(item => Number(item.id.slice(2))));
 const more = (page: Page) => page.locator('[data-reading-list="list"]').locator("[data-load-more]");
+
+async function pauseRequest(page: Page, match: (url: URL) => boolean, method = "GET") {
+  const arrived = deferred();
+  const release = deferred();
+  await page.route(match, async route => {
+    if (route.request().method() === method) {
+      arrived.resolve();
+      await release.promise;
+    }
+    await route.continue();
+  });
+  return { arrived: arrived.promise, release: release.resolve };
+}
 
 async function appendAndReturn(page: Page, path: string, ids: number[]) {
   await page.goto(path);
@@ -96,6 +110,62 @@ test("public readers append and return with frozen guest marks", async ({ page }
   await expect(rows(page).nth(39).getByText(m.list_new_post, { exact: true })).toHaveCount(0);
   await expect(page.locator("[data-seen-boundary]")).toHaveCount(1);
   await appendAndReturn(page, f.path, f.ids);
+});
+
+test("members and guests can open a post while the next batch is still loading", async ({ page }) => {
+  const path = "/?lang=en";
+  if (test.info().config.metadata.publicReading) await page.goto(path);
+  else await restoreMember(page, state().dir, "load_more_navigation@example.com", "load_more_navigation", path);
+  await waitForClientRoute(page);
+  const link = rows(page).first().locator("a.topic-title");
+  const title = (await link.innerText()).trim();
+  const destination = new URL((await link.getAttribute("href"))!, page.url()).pathname;
+  const chunk = await pauseRequest(page, url => url.searchParams.has("_reading_chunk"));
+  const navigation = await pauseRequest(page, url => url.pathname === `${destination}.data`);
+
+  try {
+    await more(page).click();
+    await chunk.arrived;
+    await expect(more(page)).toBeDisabled();
+    await link.click();
+    await navigation.arrived;
+    chunk.release();
+    await expect(more(page)).toBeEnabled();
+    await expect(rows(page)).toHaveCount(30);
+    expect(new URL(page.url()).searchParams.has("list_count")).toBe(false);
+    navigation.release();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe(destination);
+  } finally {
+    chunk.release();
+    navigation.release();
+  }
+});
+
+test("members and guests return to the same row after appending without reloading", async ({ page }) => {
+  const path = "/?lang=en";
+  if (test.info().config.metadata.publicReading) await page.goto(path);
+  else await restoreMember(page, state().dir, "load_more_history@example.com", "load_more_history", path);
+  await waitForClientRoute(page);
+  const latest = page.getByRole("link", { name: m.list_back_latest, exact: true });
+  await expect(latest).toHaveCount(0);
+  await more(page).click();
+  await expect(rows(page)).toHaveCount(60);
+  const expanded = page.url();
+  const ids = await rowIds(page);
+  const row = page.locator(`#q-${ids[40]}`);
+  const link = row.locator("a.topic-title");
+  await link.scrollIntoViewIfNeeded();
+  await link.focus();
+  const top = await row.evaluate(item => item.getBoundingClientRect().top);
+  await link.press("Enter");
+  await expect(page).toHaveURL(/\/t\/\d+/);
+  await page.goBack();
+  await waitForClientRoute(page);
+  await expect(page).toHaveURL(expanded);
+  await expect(latest).toBeVisible();
+  expect(await rowIds(page)).toEqual(ids);
+  await expect.poll(async () => Math.abs(await row.evaluate(item => item.getBoundingClientRect().top) - top)).toBeLessThan(2);
 });
 
 test("public readers without JavaScript follow a cursor link and return to latest", async ({ browser }) => {
@@ -224,11 +294,27 @@ test("public readers can sign in and follow a personal village without losing it
   await restoreMember(page, state().dir, "load_more_follower@example.com", "load_more_follower", "/u/load_more_author#village");
   await waitForClientRoute(page);
   const section = page.locator("#village");
-  await section.getByRole("button", { name: m.list_load_more, exact: true }).click();
+  const button = section.getByRole("button", { name: m.list_load_more, exact: true });
+  await button.click();
   await expect(section.locator("li.topic-row")).toHaveCount(60);
   const expanded = page.url();
-  await section.getByRole("button", { name: `${m.village_follow} @load_more_author` }).click();
-  await expect(section.getByRole("button", { name: `${m.village_following} @load_more_author` })).toBeVisible();
-  await expect(page).toHaveURL(expanded);
-  await expect(section.locator("li.topic-row")).toHaveCount(60);
+  const chunk = await pauseRequest(page, url => url.searchParams.has("_reading_chunk"));
+  const submission = await pauseRequest(page, url => url.pathname === "/u/load_more_author.data", "POST");
+  try {
+    await button.click();
+    await chunk.arrived;
+    await expect(button).toBeDisabled();
+    await section.getByRole("button", { name: `${m.village_follow} @load_more_author` }).click();
+    await submission.arrived;
+    chunk.release();
+    await expect(button).toBeEnabled();
+    await expect(section.locator("li.topic-row")).toHaveCount(60);
+    submission.release();
+    await expect(section.getByRole("button", { name: `${m.village_following} @load_more_author` })).toBeVisible();
+    await expect(page).toHaveURL(expanded);
+    await expect(section.locator("li.topic-row")).toHaveCount(60);
+  } finally {
+    chunk.release();
+    submission.release();
+  }
 });

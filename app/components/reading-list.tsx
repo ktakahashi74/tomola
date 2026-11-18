@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useContext, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { UNSAFE_DataRouterContext, useLocation, useNavigate } from "react-router";
 import { appendReadingItems, readingHref, readingLatestHref, READING_BATCH, READING_CHUNK_PARAM, READING_RESTORE_MAX, type ReadingChunk, type ReadingPage } from "~/lib/reading-page";
 import { readingVisitKey, useReadingPosition } from "~/lib/use-reading-position";
 import { buttonVariants } from "~/components/ui/button";
@@ -26,6 +26,7 @@ export function ReadingList<T extends { id: number }>(props: ListProps<T>) {
 function ReadingListView<T extends { id: number }>({ topics, list, anchor = "", companion, children }: ListProps<T>) {
   const location = useLocation();
   const navigate = useNavigate();
+  const router = useContext(UNSAFE_DataRouterContext)?.router;
   useReadingPosition();
   const container = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | null>(null);
@@ -47,9 +48,15 @@ function ReadingListView<T extends { id: number }>({ topics, list, anchor = "", 
   const atLimit = view.topics.length + READING_BATCH > READING_RESTORE_MAX;
 
   async function loadMore() {
-    if (request.current) return;
+    const visitKey = readingVisitKey(location);
+    if (!router || request.current || router.state.navigation.state !== "idle" || readingVisitKey(router.state.location) !== visitKey) return;
     const controller = new AbortController();
     request.current = controller;
+    // Router updates can arrive before React commits a render. Replacing the
+    // range address preserves the visit and may happen in either section.
+    const unsubscribe = router.subscribe(({ navigation, location }) => {
+      if (readingVisitKey(navigation.location ?? location) !== visitKey) controller.abort();
+    });
     setView({ ...view, pending: true, announcement: "", failed: false });
     try {
       const url = new URL(next, window.location.origin);
@@ -61,22 +68,26 @@ function ReadingListView<T extends { id: number }>({ topics, list, anchor = "", 
       const expanded = { ...view.list, next: chunk.list.next, count: merged.length };
 
       const update = addressUpdate.then(async () => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || router.state.navigation.state !== "idle") return false;
         const { search, hash } = window.location;
         await navigate({ pathname: location.pathname, search: readingHref(search, expanded, false, companion), hash }, {
           replace: true, preventScrollReset: true, defaultShouldRevalidate: false,
-          state: { ...location.state, readingVisitKey: readingVisitKey(location) },
+          state: { ...location.state, readingVisitKey: visitKey },
         });
+        return true;
       });
-      addressUpdate = update.catch(() => {});
-      await update;
-      if (controller.signal.aborted) return;
+      addressUpdate = update.then(() => {}, () => {});
+      if (!(await update) || controller.signal.aborted) return;
       setView({ ...view, topics: merged, list: expanded, pending: false, failed: false, announcement: m.list_added({ count: merged.length - view.topics.length }),
         focusId: chunk.list.next ? null : merged[view.topics.length]?.id ?? null });
     } catch {
       if (!controller.signal.aborted) setView({ ...view, pending: false, failed: true, announcement: "" });
     } finally {
-      if (request.current === controller) request.current = null;
+      unsubscribe();
+      if (request.current === controller) {
+        request.current = null;
+        setView(current => current.pending ? { ...current, pending: false } : current);
+      }
     }
   }
 

@@ -16,6 +16,8 @@ export async function seedLoadMore(db: Db, dir: string, baseURL: string) {
     { handle: "load_more_publisher", email: "load_more_publisher@example.com", homeArea: "en", uiLocale: "en" },
     { handle: "load_more_links", email: "load_more_links@example.com", homeArea: "en", uiLocale: "en" },
     { handle: "load_more_follower", email: "load_more_follower@example.com", homeArea: "en", uiLocale: "en" },
+    { handle: "load_more_navigation", email: "load_more_navigation@example.com", homeArea: "en", uiLocale: "en" },
+    { handle: "load_more_history", email: "load_more_history@example.com", homeArea: "en", uiLocale: "en" },
   ]);
   const [author] = await db.select().from(profiles).where(eq(profiles.handle, "load_more_author"));
   const [reader] = await db.select().from(profiles).where(eq(profiles.handle, "load_more_reader"));
