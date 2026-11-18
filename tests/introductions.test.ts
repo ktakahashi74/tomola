@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { m } from "~/paraglide/messages.js";
 import { deleteAccount } from "~/lib/account-delete.server";
 import { entries, profiles, translations, villages } from "~/lib/db/schema";
 import { hasVisibleIntroduction, listIntroductions } from "~/lib/introductions.server";
@@ -106,7 +107,7 @@ it("shows the empty list and writing prompt only until the reader has a visible 
     return renderInRouter(() => createElement(Introductions, { loaderData: loaded } as never), "/introductions");
   };
   const empty = await render();
-  expect(empty).toContain("No introductions yet.");
+  expect(empty).toContain(m.introductions_empty());
   expect(empty).toContain('href="/t/new?intro=1"');
   const [row] = await h.db.insert(entries).values({ kind: "topic", authorId: h.ids.intro_route_reader, lang: "ja", title: null, body: "読みたい話題", sourceHash: "intro-title-source" }).returning();
   await h.db.update(profiles).set({ introEntryId: row.id }).where(eq(profiles.userId, h.ids.intro_route_reader));
