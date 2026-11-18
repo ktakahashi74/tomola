@@ -2,7 +2,7 @@ import { toggleFigure } from "~/lib/figure";
 import { Badge } from "~/components/ui/badge";
 import { PendingText } from "~/components/pending-text";
 import { buttonVariants } from "~/components/ui/button";
-import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { TranslationLabel, translationFromText } from "~/components/translation-label";
 import { ReadingLangMenu } from "~/components/reading-lang-menu";
@@ -52,6 +52,7 @@ export function TranslatedEntry({
   onReportedChange,
   quoteHandle,
   initializedDetails,
+  motionHistory,
 }: {
   id: number;
   kind: "topic" | "reply";
@@ -84,10 +85,12 @@ export function TranslatedEntry({
   quoteHandle?: string;
   // The page retains initial navigation across translation-driven remounts.
   initializedDetails?: Set<number>;
+  // The page retains playback history across translation-driven remounts.
+  motionHistory?: Map<number, Set<string>>;
 }) {
   const location = useLocation();
   const bodyRef = useRef<HTMLDivElement>(null);
-  const playedMotion = useRef({ id, figures: new Set<string>() });
+  const playedMotion = useMemo(() => motionHistory ?? new Map<number, Set<string>>(), [motionHistory]);
   const [shown, setShown] = useState<Shown>(display.shown);
   const switchRef = useRef<HTMLAnchorElement>(null);
   const restoreSwitch = useRef(false);
@@ -138,12 +141,13 @@ export function TranslatedEntry({
   const details = useDetailsNavigation(bodyRef, bodyHtml, initializedDetails, id);
   useEffect(() => {
     const body = bodyRef.current;
-    if (playedMotion.current.id !== id) playedMotion.current = { id, figures: new Set<string>() };
+    let figures = playedMotion.get(id);
+    if (!figures) { figures = new Set<string>(); playedMotion.set(id, figures); }
     let active = true, disposeMotion: (() => void) | undefined;
-    if (body?.querySelector("[data-motion-figure]")) void import("~/lib/motion").then(({ activateMotionFigures }) => { if (active && body.isConnected) disposeMotion = activateMotionFigures(body, playedMotion.current.figures); });
+    if (body?.querySelector("[data-motion-figure]")) void import("~/lib/motion").then(({ activateMotionFigures }) => { if (active && body.isConnected) disposeMotion = activateMotionFigures(body, figures); });
     body?.addEventListener("click", toggleFigure);
     return () => { active = false; disposeMotion?.(); body?.removeEventListener("click", toggleFigure); };
-  }, [bodyHtml, id]);
+  }, [bodyHtml, id, playedMotion]);
   const info = reading ? (reading[current] ?? reading.original) : null;
   const switchLinks = options.map((option, index) => (
     <a

@@ -24,12 +24,36 @@ import { countMotionDelivery } from "~/lib/motion-delivery.server";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { addMember, closeTestDb, createTestDb } from "./helpers/db";
 import { motionImage } from "./helpers/motion-images";
+import { prepareMotionPlayback } from "~/lib/motion";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let db: Awaited<ReturnType<typeof createTestDb>>;
 beforeAll(async () => { db = await createTestDb(); await addMember(db, "motion-author", "motion_author"); await addMember(db, "motion-other", "motion_other"); });
 afterAll(async () => { await closeTestDb(db); });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+it.each([0, 10, 20, 300])("uses browser frame timing for a GIF with %i ms delays, including stored zero duration", async delay => {
+  const output = await rewriteMedia((await motionImage("gif", 4, 160, 100, delay)).bytes);
+  expect(output.durationMs).toBe(delay * 4);
+  const bytes = Uint8Array.from(output.bytes).buffer;
+  expect(prepareMotionPlayback(bytes)).toBe((delay <= 10 ? 100 : delay) * 4);
+  expect((await sharp(bytes, { animated: true }).metadata()).loop).toBe(0);
+  expect((await sharp(output.bytes, { animated: true }).metadata()).loop).toBe(3);
+});
+
+it("counts every WebP frame with the browser's short-delay threshold", async () => {
+  const { bytes } = await motionImage("webp", 5);
+  const delays = [0, 1, 10, 11, 100];
+  let frame = 0;
+  for (let offset = 12; offset + 8 <= bytes.length;) {
+    const size = bytes.readUInt32LE(offset + 4);
+    if (bytes.toString("ascii", offset, offset + 4) === "ANMF") bytes.writeUIntLE(delays[frame++], offset + 20, 3);
+    offset += 8 + size + size % 2;
+  }
+  expect(frame).toBe(delays.length);
+  expect(prepareMotionPlayback(Uint8Array.from(bytes).buffer)).toBe(411);
+  expect(() => prepareMotionPlayback(Uint8Array.from(bytes.subarray(0, -2)).buffer)).toThrow("Invalid motion image");
+});
 
 it.each(["gif", "webp"] as const)("rewrites %s with timing, looping, transparency and an informative still", async format => {
   const input = await motionImage(format);

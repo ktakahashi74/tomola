@@ -132,20 +132,36 @@ test("translated still figures explain the source-language motion", async ({ pag
   const figure = page.locator("[data-reading-body] [data-motion-figure]").first(), image = figure.locator("img").first();
   await expect(image).toHaveAttribute("src", /\.ja\.v\d+\.webp$/);
   const still = await image.getAttribute("src"); expect(requests).toEqual([]);
+  const fallback = figure.locator("[data-figure-fallback]");
+  await expect(fallback).toBeVisible();
+  const fallbackHeight = (await fallback.boundingBox())!.height;
+  const translationHeight = (await figure.locator("[data-translated-figure]").boundingBox())!.height;
+  const following = page.getByText("Text after the figure.", { exact: true });
+  const followingY = (await following.boundingBox())!.y;
   await figure.getByRole("button", { name: en.motion_show, exact: true }).click();
   await expect(figure.getByRole("status")).toHaveText(en.motion_original_text);
   await expect(image).toBeHidden();
+  await expect(fallback).toHaveCSS("visibility", "hidden");
+  expect((await fallback.boundingBox())!.height).toBe(fallbackHeight);
+  expect((await figure.locator("[data-translated-figure]").boundingBox())!.height).toBe(translationHeight);
+  expect((await following.boundingBox())!.y).toBe(followingY);
   await expect(figure.locator("img").last()).toHaveAttribute("src", /^data:image\/webp;playback=/);
   await figure.getByRole("button", { name: en.motion_show_still, exact: true }).click();
   await expect(image).toHaveAttribute("src", still!);
   await expect(image).toBeVisible();
+  await expect(fallback).toBeVisible();
   await expect(figure.getByRole("status")).toBeHidden();
   await page.reload();
   await expect(image).toBeVisible();
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await expect(image).toBeHidden();
+  await expect(fallback).toHaveCSS("visibility", "hidden");
+  expect((await fallback.boundingBox())!.height).toBe(fallbackHeight);
+  expect((await figure.locator("[data-translated-figure]").boundingBox())!.height).toBe(translationHeight);
+  expect((await following.boundingBox())!.y).toBe(followingY);
   await expect(figure.getByRole("status")).toHaveText(en.motion_original_text);
   await expect(image).toBeVisible();
+  await expect(fallback).toBeVisible();
   await expect(image).toHaveAttribute("src", still!);
   await expect(figure.getByRole("status")).toBeHidden();
   const beforeSwitch = requests.length;
@@ -155,6 +171,65 @@ test("translated still figures explain the source-language motion", async ({ pag
   await page.waitForTimeout(1400);
   expect(requests).toHaveLength(beforeSwitch);
   await expect(image).toBeVisible();
+});
+
+test("translation arrival preserves motion history across remounts", async ({ page }) => {
+  test.skip(process.env.E2E_MOTION_FIXTURES !== "1" || process.env.FIGURE_TRANSLATION !== "1", "Requires motion fixtures and figure translation");
+  const fixture = JSON.parse(fs.readFileSync(path.join(state().dir, "motion-figure.json"), "utf8"));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await useMember(page, "motion_figure_reader@example.com");
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/t/${fixture.pendingId}/translations*`, async route => {
+    if (route.request().postDataJSON()?.intent === "request") await gate;
+    await route.continue().catch(() => {});
+  });
+  const requests: string[] = [];
+  page.on("request", request => { if (new URL(request.url()).pathname === fixture.url) requests.push(request.url()); });
+  await page.goto(`/t/${fixture.pendingId}?lang=ja`);
+  const body = page.locator("[data-reading-body]");
+  const figure = body.locator("[data-motion-figure]").first(), image = figure.locator("img").first();
+  await expect(body).toHaveAttribute("lang", "en");
+  await expect(image).toBeHidden();
+  await expect(image).toBeVisible();
+  expect(requests).toHaveLength(1);
+  // Track even cached playback, which a second HTTP request would miss.
+  await page.evaluate(() => {
+    document.documentElement.dataset.replayedMotion = "false";
+    new MutationObserver(records => {
+      if (records.some(record => [...record.addedNodes].some(node => node instanceof Element && (node.matches('img[src^="data:image/webp"]') || node.querySelector('img[src^="data:image/webp"]'))))) document.documentElement.dataset.replayedMotion = "true";
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  release();
+  await expect(body).toHaveAttribute("lang", "ja");
+  await expect(image).toHaveAttribute("src", /\.ja\.v\d+\.webp$/);
+  await page.getByRole("link", { name: en.show_original, exact: true }).click();
+  await expect(body).toHaveAttribute("lang", "en");
+  await page.locator(".reading-lang-menu summary").click();
+  await page.locator(".reading-lang-menu").getByRole("link", { name: /日本語/ }).click();
+  await expect(body).toHaveAttribute("lang", "ja");
+  await page.waitForTimeout(1400);
+  await expect(image).toBeVisible();
+  expect(requests).toHaveLength(1);
+  await expect(page.locator("html")).toHaveAttribute("data-replayed-motion", "false");
+});
+
+test("zero-delay GIFs autoplay for a browser-adjusted cycle", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await useMember(page, "motion_prod@example.com");
+  const uploaded = await page.request.post("/media", { headers: { origin: state().baseURL }, multipart: { image: { name: "zero-delay.gif", mimeType: "image/gif", buffer: (await motionImage("gif", 12, 160, 100, 0)).bytes } } });
+  expect(uploaded.status()).toBe(201);
+  const { url, posterUrl } = await uploaded.json();
+  await page.goto("/t/new");
+  await page.locator('textarea[name="body"]').fill(`[![Zero-delay diagram](${posterUrl})](${url})`);
+  await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+  const figure = page.locator("[data-reading-body] [data-motion-figure]").first(), image = figure.locator("img").first();
+  await expect(figure).toHaveAttribute("data-motion-duration", "0");
+  await expect(image).toBeHidden();
+  await page.waitForTimeout(600);
+  await expect(image).toBeHidden();
+  await expect(image).toBeVisible();
+  await expect(figure.getByRole("button")).toHaveText(en.motion_show);
 });
 
 test("automatic playback stops on request or reduced motion, and printing uses the still", async ({ page }) => {

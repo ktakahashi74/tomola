@@ -1,23 +1,35 @@
 // Give each playback its own decoded image, starting at the first frame. The
 // in-memory WebP loops indefinitely; stored bytes and delivery stay unchanged.
 let playback = 0;
-async function playbackSource(bytes: ArrayBuffer): Promise<string> {
+export function prepareMotionPlayback(bytes: ArrayBuffer): number {
   const view = new DataView(bytes);
+  let animated = false, duration = 0;
   for (let offset = 12; offset + 8 <= bytes.byteLength;) {
     const size = view.getUint32(offset + 4, true), start = offset + 8;
     if (start + size > bytes.byteLength) throw new Error("Invalid motion image");
     if (view.getUint32(offset) === 0x414e494d && size === 6) {
       view.setUint16(start + 4, 0, true);
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(new Blob([bytes], { type: `image/webp;playback=${++playback}` }));
-      });
+      animated = true;
+    }
+    if (view.getUint32(offset) === 0x414e4d46 && size >= 16) {
+      const delay = view.getUint16(start + 12, true) + view.getUint8(start + 14) * 65536;
+      // Match browser timing, including zero-delay frames in older uploads.
+      duration += delay <= 10 ? 100 : delay;
     }
     offset = start + size + size % 2;
   }
-  throw new Error("Missing motion header");
+  if (!animated || !duration) throw new Error("Missing motion frames");
+  return duration;
+}
+async function playbackSource(bytes: ArrayBuffer) {
+  const duration = prepareMotionPlayback(bytes);
+  const source = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(new Blob([bytes], { type: `image/webp;playback=${++playback}` }));
+  });
+  return { source, duration };
 }
 
 // Upgrade the no-JS link only on pages with motion figures. An observer never
@@ -38,43 +50,45 @@ export function activateMotionFigures(root: HTMLElement, played = new Set<string
     const still = figure.querySelector<HTMLElement>("[data-translated-figure]")?.dataset.figureOriginal ?? image.getAttribute("src");
     const pair = `${url}:${still}`, occurrence = occurrences.get(pair) ?? 0;
     occurrences.set(pair, occurrence + 1);
-    const key = `${pair}:${occurrence}`, duration = Number(figure.dataset.motionDuration);
+    const key = `${pair}:${occurrence}`;
     const button = document.createElement("button");
     button.type = "button"; button.className = "underline cursor-pointer"; button.textContent = show;
     let mode: "auto" | "manual" | null = null, visible = false;
     let request: AbortController | undefined, animation: HTMLImageElement | undefined, timer: ReturnType<typeof setTimeout> | undefined;
     const note = figure.querySelector<HTMLElement>("[data-motion-note]");
+    const translated = figure.querySelector<HTMLElement>("[data-translated-figure]");
+    const explain = !!translated && translated.dataset.figureTranslated !== translated.dataset.figureOriginal;
+    // Reserve the translated figure's note row before playback as well.
+    if (note && explain) { note.hidden = false; note.style.visibility = "hidden"; }
     const controls = [...figure.querySelectorAll<HTMLElement>("[data-figure-toggle], [data-figure-fallback]")];
+    const controlVisibility = controls.map(control => control.style.visibility);
     const stop = () => {
       request?.abort(); request = undefined;
       clearTimeout(timer);
       animation?.remove(); animation = undefined;
       image.hidden = false;
       button.textContent = show;
-      note?.setAttribute("hidden", "");
-      if (mode) for (const control of controls) {
-        control.hidden = control.dataset.motionHidden === "true"; delete control.dataset.motionHidden;
-      }
+      if (note && explain) note.style.visibility = "hidden";
+      if (mode) controls.forEach((control, index) => { control.style.visibility = controlVisibility[index]; });
       mode = null;
     };
     const start = async (automatic: boolean) => {
       played.add(key);
       mode = automatic ? "auto" : "manual";
       button.textContent = back;
-      for (const control of controls) { control.dataset.motionHidden = String(control.hidden); control.hidden = true; }
+      for (const control of controls) control.style.visibility = "hidden";
       const pending = request = new AbortController();
       try {
         const response = await fetch(url, { signal: pending.signal });
         if (!response.ok) throw new Error("Motion unavailable");
-        const source = await playbackSource(await response.arrayBuffer());
+        const { source, duration } = await playbackSource(await response.arrayBuffer());
         if (pending.signal.aborted) return;
         const moving = animation = image.cloneNode() as HTMLImageElement;
         moving.hidden = false; moving.loading = "eager";
         moving.onload = () => {
           if (pending.signal.aborted) return;
           image.after(moving); image.hidden = true;
-          const translated = figure.querySelector<HTMLElement>("[data-translated-figure]");
-          note?.toggleAttribute("hidden", !translated || translated.dataset.figureTranslated === translated.dataset.figureOriginal);
+          if (note && explain) note.style.visibility = "";
           if (automatic) timer = setTimeout(stop, duration);
         };
         moving.onerror = () => { if (!pending.signal.aborted) stop(); };
@@ -83,14 +97,14 @@ export function activateMotionFigures(root: HTMLElement, played = new Set<string
     };
     const check = () => {
       if (reduced.matches && mode === "auto") stop();
-      if (visible && !mode && !printing && !reduced.matches && !played.has(key) && duration > 0) void start(true);
+      if (visible && !mode && !printing && !reduced.matches && !played.has(key)) void start(true);
     };
     visibility.set(image, value => { visible = value; check(); });
     observer?.observe(image);
     checks.push(check); stops.push(stop);
     button.onclick = () => { if (mode) stop(); else void start(false); };
     link.replaceWith(button);
-    cleanups.push(() => { stop(); button.replaceWith(link); });
+    cleanups.push(() => { stop(); if (note && explain) { note.hidden = true; note.style.visibility = ""; } button.replaceWith(link); });
   }
   const changed = () => { for (const check of checks) check(); };
   const beforePrint = () => { printing = true; for (const stop of stops) stop(); };

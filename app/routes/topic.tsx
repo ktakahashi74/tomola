@@ -599,6 +599,7 @@ function ReportResult({ entryId, result }: { entryId: number; result: Route.Comp
 export default function Topic({ loaderData, actionData }: Route.ComponentProps) {
   const { topic, replies, defaultLang, page, hasNextPage, aiOpen, operator, question, stanceTag, writeTag, langParam, loadedAt, follow, canReply } = loaderData;
   const location = useLocation();
+  const motionHistory = useMemo(() => ({ topicId: topic.id, entries: new Map<number, Set<string>>() }), [topic.id]);
   const returnTo = `${location.pathname}${location.search}`;
   const reportsRead = page === 1 && topic.placeholder === null && !topic.hidden;
   useEffect(() => {
@@ -714,6 +715,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
           {r.hidden && <HiddenMark action={r.hiddenAction} />}
           <TranslatedEntry
             key={displayKey(r.id, r.display)}
+            motionHistory={motionHistory.entries}
             initializedDetails={readView.initializedDetails}
             id={r.id}
             kind="reply"
@@ -826,6 +828,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             <div className="reading-article-content space-y-2">
             <TranslatedEntry
               key={displayKey(topic.id, topic.display)}
+              motionHistory={motionHistory.entries}
               initializedDetails={readView.initializedDetails}
               id={topic.id}
               kind="topic"

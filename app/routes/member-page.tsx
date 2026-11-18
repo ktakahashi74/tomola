@@ -3,7 +3,7 @@ import { nushiVoiceHistory } from "~/lib/nushi-voice-history.server";
 import { personalVillage } from "~/lib/personal-villages.server";
 import { createAvatarReport } from "~/lib/avatar-moderation.server";
 import { createDisplayNameReport } from "~/lib/display-name-moderation.server";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { setVillageFollow } from "~/lib/village-follows.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -82,6 +82,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export default function MemberPage({ loaderData, actionData }: Route.ComponentProps) {
   const { handle, own, intro, topics, page, hasNext, personal } = loaderData;
+  const motionHistory = useMemo(() => ({ handle, entries: new Map<number, Set<string>>() }), [handle]);
   const [reportOpen, setReportOpen] = useState(false);
   const [avatarReportOpen, setAvatarReportOpen] = useState(false);
   return (
@@ -100,7 +101,7 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
       {intro ? (
         <section id={`p-${intro.id}`} className="space-y-3">
           <h2 className="text-lg font-semibold">{m.member_page_intro_heading()}</h2>
-          <TranslatedEntry key={`${intro.id}:${intro.display.translation?.lang ?? "-"}:${intro.display.shown}`} {...intro} kind="topic" showHeading={false} meta={null} />
+          <TranslatedEntry key={`${intro.id}:${intro.display.translation?.lang ?? "-"}:${intro.display.shown}`} {...intro} motionHistory={motionHistory.entries} kind="topic" showHeading={false} meta={null} />
           <Link to={`/t/${intro.id}`} className="link-ui">{m.card_open()}</Link>
           <p><Link to="/introductions" className="link-ui">{m.introductions_read()}</Link></p>
         </section>
