@@ -171,7 +171,7 @@ describe("MCP ownership and output security", () => {
     const error = await denied.json();
     expect(error.result.isError).toBe(true);
     expect(parseBlocks(error.result.content[0].text)[0].body.trim()).toBe(`invalid_title: ${messageOf("invalid_title")}`);
-    for (const [args, code] of [[{ lang: "xx", body: "OK" }, "invalid_lang"], [{ body: "x".repeat(50_001) }, "body_too_long"]] as const) {
+    for (const [args, code] of [[{ lang: "xx", body: "OK" }, "invalid_lang"], [{ body: "x".repeat(100_001) }, "body_too_long"]] as const) {
       const rejected = await (await modern("tools/call", draftToken, { name: "tomola_draft_create", arguments: { kind: "topic", ...args } })).json();
       expect(rejected.result.isError).toBe(true);
       expect(rejected.result.content[0].text).toContain(`${code}:`);

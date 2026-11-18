@@ -80,6 +80,7 @@ export function EntryFields({
   const input = <MentionTextarea
     id={bodyId}
     name="body"
+    data-body-kind={previewKind ?? "topic"}
     dir="auto"
     {...bodyError}
     required

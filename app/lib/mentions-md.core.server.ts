@@ -20,7 +20,7 @@ export type MentionPiece = string | MentionMatch;
 
 export const frozenMentionKey = (spelling: string): string => `\0${spelling}`;
 
-// Limits of what one body can ask the database about (a body is at most 50,000 characters, so this is a ceiling, not a typical size).
+// Limits of what one body can ask the database about (a ceiling independent of body length, not a typical size).
 export const MAX_MENTION_CANDIDATES = 50;
 
 const markdown = createMarkdownProcessor();

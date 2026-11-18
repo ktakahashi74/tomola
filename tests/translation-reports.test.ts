@@ -11,6 +11,8 @@ import type { Lang } from "~/lib/languages";
 import { createFakeEngine } from "~/lib/llm/engines/fake.server";
 import { createTranslationReport, dismissReport, listOpenReports, resolveReportWithHumanTranslation } from "~/lib/translation-reports.server";
 import { addMember, createTestDb } from "./helpers/db";
+import { buildThreadMarkdown } from "~/lib/md/thread.server";
+import { offlineMarkdown } from "~/lib/site-export-format.server";
 
 const t0 = new Date("2026-10-05T00:00:00Z");
 
@@ -159,7 +161,7 @@ describe("resolving a report with a human translation", () => {
     const created = await report(db, topicId);
     if (!created.ok || created.id === null) throw new Error("report failed");
     expect(await resolveReportWithHumanTranslation(db, "op", created.id, "   ")).toEqual({ ok: false, error: "invalid_text" });
-    expect(await resolveReportWithHumanTranslation(db, "op", created.id, "x".repeat(50_001))).toEqual({ ok: false, error: "invalid_text" });
+    expect(await resolveReportWithHumanTranslation(db, "op", created.id, "x".repeat(1024 * 1024 + 1))).toEqual({ ok: false, error: "invalid_text" });
     expect(await resolveReportWithHumanTranslation(db, "op", 9999, "x")).toEqual({ ok: false, error: "not_found" });
     expect((await listOpenReports(db)).length).toBe(1);
     expect(await db.select().from(translations).where(eq(translations.kind, "human"))).toHaveLength(0);
@@ -178,6 +180,25 @@ describe("resolving a report with a human translation", () => {
     expect((await resolveReportWithHumanTranslation(db, "op", created.id, "  Fixed title  ")).ok).toBe(true);
     const [t] = await db.select().from(translations).where(and(eq(translations.kind, "human"), eq(translations.field, "title")));
     expect(t.text).toBe("Fixed title");
+  });
+
+  it("stores and renders a body translation longer than the original-text limit", async () => {
+    const { db, topicId } = await setup();
+    const created = await report(db, topicId);
+    if (!created.ok || created.id === null) throw new Error("report failed");
+    const text = "A translated paragraph.\n\n".repeat(5541) + "TRANSLATION END";
+    expect(text.length).toBeGreaterThan(133_000);
+    expect(await resolveReportWithHumanTranslation(db, "op", created.id, text)).toEqual({ ok: true, entryId: topicId });
+    const [saved] = await db.select().from(translations).where(and(eq(translations.entryId, topicId), eq(translations.kind, "human"), eq(translations.field, "body")));
+    expect(saved.text).toBe(text);
+    expect(saved.html).toContain("TRANSLATION END");
+    expect(saved.cardHtml).not.toContain("TRANSLATION END");
+    expect((await shown(db, topicId, "th")).translation?.html).toContain("TRANSLATION END");
+    const twin = await buildThreadMarkdown(db, topicId, { page: 1, lang: "th", sentences: false, k: null, readerId: "u2" });
+    expect(twin).toContain(text);
+    const exported = await offlineMarkdown(text, { page: "article.md", lang: "th", extension: "md", posts: new Map(), documents: new Set() });
+    expect(exported).toContain("TRANSLATION END");
+    expect(exported.length).toBeGreaterThan(133_000);
   });
 
   it("keeps the human translation (stale) when the original is edited, and machine translations are redone around it", async () => {

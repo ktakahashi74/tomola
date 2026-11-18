@@ -10,6 +10,11 @@ export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 export const DEFAULT_SECONDARY_GEMINI_MODEL = "gemini-3.6-flash";
 export const DEFAULT_JUDGE_GEMINI_MODEL = "gemini-3.6-flash";
 const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+// Long post translations measured about 110 output tokens/second. Allow 60/s of
+// the visible-output cap (thinking fallback cannot extend the shared deadline)
+// plus a minute for startup, with a two-minute floor and a fifteen-minute cap.
+export const translationTimeoutMs = (maxOutputTokens: number): number =>
+  Math.min(15 * 60 * 1000, Math.max(REQUEST_TIMEOUT_MS, Math.ceil(maxOutputTokens / 60 * 1000) + 60_000));
 // Gemini 3.x thinks by default. Thinking tokens consume maxOutputTokens and are charged as output. The source-based outputTokenLimit alone can make short texts
 // hit MAX_TOKENS before an answer. Observed 2026-10-01: first-call truncation in 3/5 gemini-3.5-flash retranslations of 300–900-character posts.
 // Add thinking allowance. Only actual output is charged, so a higher cap costs no more when thinking remains short.
@@ -120,6 +125,7 @@ export async function geminiComplete(
     thinkingEnv?: string;
     thinkingLevel?: ThinkingLevelName;
     signal?: AbortSignal;
+    postTranslation?: boolean;
   },
 ): Promise<GeminiCompletion> {
   const ladder: ReadonlyArray<ThinkingLevelName | null> = opts.thinking ? THINKING_LADDER[opts.thinking] : [opts.thinkingLevel ?? null];
@@ -130,8 +136,11 @@ export async function geminiComplete(
   let rejection: string | null = null;
   let response: GeminiResponse;
   // The same deadline covers all thinking-configuration fallbacks too.
-  const signal = AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(opts.signal ? [opts.signal] : [])]);
+  const timeout = opts.postTranslation ? translationTimeoutMs(opts.maxOutputTokens) : REQUEST_TIMEOUT_MS;
+  const deadline = performance.now() + timeout;
+  const signal = AbortSignal.any([AbortSignal.timeout(timeout), ...(opts.signal ? [opts.signal] : [])]);
   for (;;) {
+    signal.throwIfAborted();
     const level = ladder[rung];
     try {
       response = await client.models.generateContent({
@@ -145,7 +154,7 @@ export async function geminiComplete(
           ...(opts.json || opts.responseJsonSchema ? { responseMimeType: "application/json" } : {}),
           ...(opts.responseJsonSchema ? { responseJsonSchema: opts.responseJsonSchema } : {}),
           ...(level ? { thinkingConfig: { thinkingLevel: ThinkingLevel[level] } } : {}),
-          httpOptions: { timeout: REQUEST_TIMEOUT_MS, retryOptions: { attempts: 1 } },
+          httpOptions: { timeout: Math.max(1, Math.ceil(deadline - performance.now())), retryOptions: { attempts: 1 } },
         },
       });
       break;
@@ -238,6 +247,7 @@ export function createGeminiEngine(opts: {
           thinking,
           thinkingEnv,
           signal: req.signal,
+          postTranslation: req.postTranslation === true,
         });
       } catch (error) {
         // A call that came back but was not usable (cut off, refused) was billed too.

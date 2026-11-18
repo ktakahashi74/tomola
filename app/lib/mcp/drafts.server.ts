@@ -1,3 +1,4 @@
+import { bodyWithinLimits } from "../body-length";
 import { and, desc, eq, getTableColumns, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { drafts, villages, profiles } from "~/lib/db/schema";
@@ -20,6 +21,8 @@ function owned(userId: string, client: McpClientIdentity) {
 
 export async function createClientDraft(db: Db, userId: string, client: McpClientIdentity, input: unknown, now = new Date(), onBusy?: () => void) {
   if (input && typeof input === "object" && "body" in input && typeof input.body === "string") {
+    const kind = "kind" in input && input.kind === "reply" ? "reply" : "topic";
+    if (!bodyWithinLimits(input.body, kind)) return { ok: false as const, error: "body_too_long" as const };
     const bodyError = await checkBodyBudget(input.body, userId);
     if (bodyError) return { ok: false as const, error: bodyError };
   }
@@ -49,6 +52,7 @@ export async function updateClientDraft(db: Db, userId: string, client: McpClien
     if (typeof input !== "object" || input === null || Array.isArray(input)) return { ok: false as const, error: "invalid_draft" as const };
     const patch = input as Record<string, unknown>;
     if (typeof patch.body === "string") {
+      if (!bodyWithinLimits(patch.body, row.kind === "reply" ? "reply" : "topic")) return { ok: false as const, error: "body_too_long" as const };
       const bodyError = await checkBodyBudget(patch.body, userId);
       if (bodyError) return { ok: false as const, error: bodyError };
     }

@@ -1,3 +1,4 @@
+import { MAX_DRAFT_BYTES } from "./drafts-api.server";
 import { DRAFT_ISSUE_KINDS } from "~/lib/draft-issues";
 import { DRAFT_RESPONSE_GUIDE } from "./draft-response-guide";
 import { LANGS } from "~/lib/languages";
@@ -178,7 +179,7 @@ export function openApiDocument(): Record<string, unknown> {
           security: [{ draftToken: [] }],
           requestBody: {
             required: true,
-            content: { "text/markdown": { schema: { type: "string", maxLength: 262144 } }, "text/plain": { schema: { type: "string", maxLength: 262144 } } },
+            content: { "text/markdown": { schema: { type: "string", maxLength: MAX_DRAFT_BYTES } }, "text/plain": { schema: { type: "string", maxLength: MAX_DRAFT_BYTES } } },
           },
           responses: {
             "201": { description: "Draft created.", content: { "application/json": { schema: { $ref: "#/components/schemas/DraftCreated" } } } },
@@ -188,7 +189,7 @@ export function openApiDocument(): Record<string, unknown> {
             "401": { ...errorResponse("No valid draft token."), headers: { "WWW-Authenticate": { schema: { type: "string" } } } },
             "403": errorResponse("A read token cannot create drafts (wrong_token_kind), the account has not finished signing up (not_a_member), or the account is suspended by moderation (suspended; reading still works)."),
             "405": errorResponse("Only POST."),
-            "413": errorResponse("Larger than 256 KiB."),
+            "413": errorResponse("Larger than 384 KiB."),
             "415": errorResponse("Content-Type must be text/markdown or text/plain."),
             "503": errorResponse("Processing is busy. Try again shortly."),
             "429": { ...errorResponse("More than 30 drafts in an hour with this token (rate_limited, with Retry-After), or 100 API drafts already wait for the member (too_many_pending_drafts)."), headers: { "Retry-After": { schema: { type: "integer" } } } },

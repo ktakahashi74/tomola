@@ -1,3 +1,4 @@
+import { bodyWithinLimits } from "./body-length";
 import { resolvePostLanguage } from "./lang-detect";
 import { recordDraftPublication } from "./eval/signals.server";
 import { finishQuestionDraft } from "./ai-question-usage.server";
@@ -13,7 +14,6 @@ import {
   createReply,
   createTopic,
   hasNul,
-  MAX_BODY_LENGTH,
   MAX_TITLE_LENGTH,
   TITLE_CONTROL,
   type EntryError,
@@ -114,7 +114,6 @@ const fields = {
     .transform(titleOrNull),
   body: z
     .string()
-    .max(MAX_BODY_LENGTH)
     .refine((s) => !hasNul(s), { message: "nul" })
     .default(""),
   aiAssistance: z.enum(AI_ASSISTANCE).nullish(),
@@ -128,6 +127,8 @@ const createSchema = z.object({
   // Original question referenced by an alternative framing, set only at draft creation.
   altOf: z.number().int().positive().nullish(),
   stanceTag: z.enum(STANCE_TAGS).nullish(),
+}).superRefine((value, ctx) => {
+  if (!bodyWithinLimits(value.body, value.kind)) ctx.addIssue({ code: "custom", path: ["body"], message: "body_too_long" });
 });
 // Kind (topic/reply), reply target, and alternative-framing target (altOf) cannot change after creation. asksStance/stanceTag may change; undefined leaves them unchanged, null removes stanceTag.
 const updateSchema = z.object({ ...fields, asksStance: z.boolean().optional(), stanceTag: z.enum(STANCE_TAGS).nullish() });
@@ -140,7 +141,7 @@ function fieldError(issues: z.core.$ZodIssue[]): DraftError {
   if (field === "asksStance") return "invalid_asks_stance";
   if (field === "altOf") return "invalid_alt_of";
   if (field === "stanceTag") return "invalid_stance_tag";
-  if (field === "body") return issues[0]?.code === "custom" ? "body_unrenderable" : "body_too_long";
+  if (field === "body") return issues[0]?.message === "nul" ? "body_unrenderable" : "body_too_long";
   return "invalid_draft";
 }
 
@@ -296,6 +297,7 @@ async function updateDraftImplementation(
   const [existing] = await (opts.skipUnchanged ? query.for("update") : query);
   if (!existing) return { ok: false, error: "not_found" };
   const kind = existing.kind as "topic" | "reply";
+  if (!bodyWithinLimits(d.body, kind)) return { ok: false, error: "body_too_long" };
   // Question/reply-label combinations. Since altOf is immutable, do not check whether its target later became hidden/deleted here, which would block saving incomplete drafts.
   // createTopic checks original-question readability at publication. Removing asksStance while retaining altOf yields invalid_alt_of.
   const facts = await loadStanceAttrFacts(db, { kind, threadId: existing.threadId });
@@ -534,6 +536,7 @@ export async function publishDraft(...args: Parameters<typeof publishDraftImplem
   const [db, authorId, draftId] = args;
   const [draft] = await db.select().from(drafts).where(and(eq(drafts.id, draftId), eq(drafts.authorId, authorId)));
   if (!draft) return { ok: false, error: "not_found" };
+  if (!bodyWithinLimits(draft.body, draft.kind === "reply" ? "reply" : "topic")) return { ok: false, error: "body_too_long" };
   const budgetError = await checkBodyBudget(draft.body, authorId);
   if (budgetError) return { ok: false, error: budgetError };
   return withEntryRender(db, { kind: draft.kind as "topic" | "reply", body: draft.body, lang: draft.lang }, () => publishDraftImplementation(...args), authorId);

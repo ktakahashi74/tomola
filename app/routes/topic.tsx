@@ -985,7 +985,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
               nushiAvailable={loaderData.nushiAvailable}
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
               error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error"
-              errorText={actionData?.intent === "reply" && actionData.error ? entryErrorMessage(actionData.error) : undefined}
+              errorText={actionData?.intent === "reply" && actionData.error ? entryErrorMessage(actionData.error, "reply") : undefined}
               defaultLang={defaultLang} defaultBody={replyInput?.body} selectedLang={replyInput?.lang}
               actions={loaderData.respondWithPost && <div className="flex flex-wrap gap-2">
                 <SendButton>{m.submit_reply()}</SendButton>

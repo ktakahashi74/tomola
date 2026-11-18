@@ -111,7 +111,7 @@ describe("entries", () => {
         error: "body_required",
       });
     }
-    for (const tooLong of ["a".repeat(50_001), "x".repeat(50_001), "あ".repeat(50_001)]) {
+    for (const tooLong of ["a".repeat(100_001), "x".repeat(100_001), "あ".repeat(50_001)]) {
       expect(await createTopic(db, "u1", { lang: "en", title: "t", body: tooLong })).toEqual({
         ok: false,
         error: "body_too_long",

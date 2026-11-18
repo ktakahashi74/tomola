@@ -27,7 +27,7 @@ export type ProdState = {
   noPreload: Awaited<ReturnType<typeof noPreloadSmoke>>;
 };
 
-const EMAILS = ["boss@example.com", "mika@example.com", "pat@example.com", "kai@example.com", "reading_type@example.com", "editor_default_prod@example.com", "media_prod@example.com", "language_fallback_prod@example.com", "google_invitee@example.com", "google_cancel@example.com"];
+const EMAILS = ["long_body_limits@example.com", "boss@example.com", "mika@example.com", "pat@example.com", "kai@example.com", "reading_type@example.com", "editor_default_prod@example.com", "media_prod@example.com", "language_fallback_prod@example.com", "google_invitee@example.com", "google_cancel@example.com"];
 
 function run(cmd: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, what: string): string {
   const res = spawnSync(cmd, args, { cwd, env, encoding: "utf8" });

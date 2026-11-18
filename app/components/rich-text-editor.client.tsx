@@ -1,3 +1,5 @@
+import { bodyWithinLimits } from "~/lib/body-length";
+import { bodyLimitMessage } from "~/lib/entry-error-message";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { Editor, commandsCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, remarkStringifyOptionsCtx, rootCtx, serializerCtx, parserCtx } from "@milkdown/kit/core";
@@ -17,7 +19,7 @@ import { $prose, $remark, $inputRule, $node, callCommand, getMarkdown } from "@m
 import { Bold, Ellipsis, Italic, Link, Quote, List, ListOrdered, Table2, Undo2, Redo2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { BODY_MAX_LENGTH, EDITOR_BODY_REPLACED_EVENT, EDITOR_STRINGIFY_OPTIONS, preserveEditorSource, requiresMarkdownEditor } from "~/lib/rich-editor";
+import { EDITOR_BODY_REPLACED_EVENT, EDITOR_STRINGIFY_OPTIONS, preserveEditorSource, requiresMarkdownEditor } from "~/lib/rich-editor";
 import { startsWithFrontmatter } from "~/lib/text";
 import { parseMediaPath } from "~/lib/media";
 import { registerMediaEditor } from "~/lib/media-editor-client";
@@ -260,7 +262,7 @@ export function RichTextEditor({ invalid, describedBy, placeholder, tall = false
     const editor = Editor.make();
     const write = (value: string) => {
       body.value = value;
-      body.setCustomValidity(value.length > BODY_MAX_LENGTH ? m.error_body_too_long() : "");
+      body.setCustomValidity(bodyWithinLimits(value, body.dataset.bodyKind === "reply" ? "reply" : "topic") ? "" : bodyLimitMessage(body.dataset.bodyKind === "reply" ? "reply" : "topic"));
       body.dispatchEvent(new Event("input", { bubbles: true }));
     };
     const synchronize = () => {

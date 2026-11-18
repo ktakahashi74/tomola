@@ -1,4 +1,4 @@
-// Fixed calibration workload: the maximum ordinary post, in both languages.
+// Fixed calibration workload in both languages; independent of the current post limit.
 export function markdownSpecimen(lang: "en" | "ja"): string {
   const prose = lang === "ja"
     ? "議論では、根拠と推論を分けて示す。別の見方から読み直し、どの条件で結論が変わるかを考える。資料を共有し、問いへの応答を次の検討につなぐ。"

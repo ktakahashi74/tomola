@@ -30,6 +30,34 @@ const one = async (db: Db, id: number) => (await db.select().from(jobs).where(eq
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("the heartbeat of running jobs", () => {
+  it("retains a post translation lock through fifteen minutes and recovers a stopped worker", async () => {
+    const db = await createTestDb();
+    const { id } = await enqueue(db, "translate_entry", {}, { runAt: t0 });
+    let elapsed = 0;
+    const realNow = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow + elapsed);
+    let started!: () => void, release!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const worker = runDueJobs(db, { translate_entry: async () => { started(); await gate; } }, { now: t0, heartbeatMs: 10, logger: silent });
+    try {
+      await entered;
+      for (let minute = 3; minute <= 15; minute += 3) {
+        elapsed = minute * 60_000;
+        const target = t0.getTime() + elapsed;
+        for (let poll = 0; poll < 100 && (await one(db, id)).lockedAt!.getTime() < target; poll++) await sleep(10);
+        expect((await one(db, id)).lockedAt!.getTime()).toBeGreaterThanOrEqual(target);
+        expect(await runDueJobs(db, { translate_entry: async () => { throw new Error("Duplicate translation"); } }, { now: new Date(target), logger: silent })).toMatchObject({ recovered: 0, ran: 0 });
+      }
+    } finally { release(); await worker; clock.mockRestore(); }
+    expect(await one(db, id)).toMatchObject({ status: "done", attempts: 1 });
+    // A container that stops leaves a running row but no heartbeats. Its next
+    // worker recovers the row and retries after the existing stale-lock window.
+    const stopped = await enqueue(db, "translate_entry", {}, { runAt: t0 });
+    await db.update(jobs).set({ status: "running", attempts: 1, lockedAt: t0 }).where(eq(jobs.id, stopped.id));
+    expect(await runDueJobs(db, { translate_entry: async () => {} }, { now: new Date(t0.getTime() + STUCK_AFTER_MS + 1), logger: silent })).toMatchObject({ recovered: 1, done: 1 });
+    expect(await one(db, stopped.id)).toMatchObject({ status: "done", attempts: 2 });
+  });
   it("is every STUCK_AFTER_MS / 4", () => {
     expect(HEARTBEAT_MS).toBe(STUCK_AFTER_MS / 4);
   });

@@ -2,7 +2,7 @@ import { MarkdownBudgetError, MarkdownBusyError } from "~/lib/markdown-budget.se
 import type { Route } from "./+types/preview";
 import { requireMember } from "~/lib/auth/session.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
-import { MAX_BODY_LENGTH } from "~/lib/entries.server";
+import { bodyWithinLimits } from "~/lib/body-length";
 import { extractPasted, interpretFrontmatter } from "~/lib/entry-frontmatter.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { formString, isKindMismatch } from "~/lib/entry-form.server";
@@ -53,7 +53,7 @@ async function preview(request: Request) {
       lang ||= interpreted.declared.lang ?? "";
     }
   }
-  if (body.length > MAX_BODY_LENGTH) return Response.json({ error: "body_too_long" }, { status: 400 });
+  if (!bodyWithinLimits(body, formString(form, "kind") === "reply" || kind === "reply" ? "reply" : "topic")) return Response.json({ error: "body_too_long" }, { status: 400 });
   const bodyError = await checkBodyBudget(body, user.id);
   if (bodyError) return Response.json({ error: bodyError }, { status: 400 });
   // Match publication's language for typesetting and fixed footnote text, including automatic selection.

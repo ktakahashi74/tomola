@@ -1,14 +1,17 @@
+import type { BodyKind } from "./body-length";
 import { m } from "~/paraglide/messages.js";
 
 // Convert post-save errors into interface messages, shared by topic-new and topic.
-export function entryErrorMessage(error: string): string {
+export const bodyLimitMessage = (kind: BodyKind): string => kind === "topic" ? m.error_topic_body_too_long() : m.error_body_too_long();
+
+export function entryErrorMessage(error: string, kind: BodyKind = "topic"): string {
   if (error === "village_required") return m.village_required();
   if (error === "village_changed") return m.village_changed();
   if (error === "invalid_intro") return m.intro_error_invalid();
   if (error === "invalid_title") return m.error_title();
   if (error === "invalid_lang") return m.error_invalid_lang();
   if (error === "body_required") return m.error_body();
-  if (error === "body_too_long") return m.error_body_too_long();
+  if (error === "body_too_long") return bodyLimitMessage(kind);
   if (error === "body_too_complex") return m.error_body_too_complex();
   if (error === "body_unrenderable") return m.error_body_unrenderable();
   if (error === "frontmatter_invalid") return m.error_frontmatter();

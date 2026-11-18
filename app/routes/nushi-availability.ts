@@ -1,3 +1,4 @@
+import { bodyWithinLimits } from "~/lib/body-length";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { eq } from "drizzle-orm";
@@ -33,7 +34,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!rate.allowed) return Response.json({ calls: false }, { status: 429, headers: rateLimitHeaders(rate) });
   const form = await request.formData();
   const body = form.get("body");
-  return Response.json({ calls: typeof body === "string" && body.length <= 50_000 && await callsNushi(body) }, { headers: { "Cache-Control": "private, no-store" } });
+  return Response.json({ calls: typeof body === "string" && bodyWithinLimits(body, "topic") && await callsNushi(body) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export const middleware = [privateCacheMiddleware];

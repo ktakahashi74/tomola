@@ -114,7 +114,7 @@ export async function translate(db: Db, role: TranslationRole, req: TranslationR
   if (!engine) throw new LlmError("unavailable", `No ${role} translation engine is configured`);
   const spent: Spent = { costUsdMicro: 0 };
   // Report-triggered retranslation uses ledger purpose retry, separating it from ordinary translation in monthly cost breakdowns.
-  const result = await translateChecked(meteredEngine(db, engine, spent, opts, role === "retry" ? "retry" : "translate", role), req);
+  const result = await translateChecked(meteredEngine(db, engine, spent, opts, role === "retry" ? "retry" : "translate", role), { ...req, postTranslation: true });
   return { ...result, engine: engine.id, costUsdMicro: spent.costUsdMicro };
 }
 

@@ -1,3 +1,5 @@
+import { MAX_BODY_BYTES } from "../body-length";
+import { MAX_FRONTMATTER_LENGTH } from "../entry-frontmatter-types";
 import { and, eq } from "drizzle-orm";
 import { BEARER_PATTERN, bearerChallenge, errorResponse, guarded, memberResponse } from "~/lib/api/http.server";
 import type { Db } from "~/lib/db/client.server";
@@ -24,14 +26,15 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 // - Authenticate only with Authorization: Bearer tml_draft_... . Ignore cookies and ?k=; even with a cookie, a missing header produces 401.
 //   Read tokens receive 403 (wrong_token_kind). No Origin check is needed because cookies are rejected. Set no CORS headers.
 // - Rate limit draft creation to 30/hour per token (429 with Retry-After), counted after authentication and before reading the body.
-// - Require Content-Type text/markdown or text/plain, with only charset=utf-8; otherwise 415. Limit the body to 256 KiB; reject larger bodies with 413.
+// - Require Content-Type text/markdown or text/plain, with only charset=utf-8; otherwise 415. Limit the complete Markdown request to 384 KiB; reject larger bodies with 413.
 // - Validate like browser posts: title, body, language, AI disclosure and renderability. Replies also require a readable target.
 // - Questions accept frontmatter asks_stance: true (topics only), alt_of: p-<id> (alternative framing; questions only), and stance_tag (replies to questions only). Invalid values receive HTTP 400 invalid_asks_stance,
 //   invalid_alt_of or invalid_stance_tag. The API cannot write a stance itself: ignore keys such as stance in frontmatter; stance submission belongs exclusively to the browser panel.
 // - Success returns 201 { id, approve_url, lang, language, issues, issues_truncated, issues_notice?, issues_unavailable? }. Preserve via="api", token_id and received frontmatter (raw_frontmatter) in the draft.
 // - Errors are JSON { error, message }.
 
-export const MAX_DRAFT_BYTES = 256 * 1024;
+// Leave room for UTF-8 frontmatter around a body at its byte limit.
+export const MAX_DRAFT_BYTES = MAX_BODY_BYTES + 4 * MAX_FRONTMATTER_LENGTH;
 // Per-member limit on API-created drafts awaiting approval. A member can own 20 tokens, so a per-token rate limit alone could allow unbounded accumulation.
 // Once exceeded, no new drafts can be created until existing ones are published or deleted (429 too_many_pending_drafts).
 export const MAX_PENDING_API_DRAFTS = 100;

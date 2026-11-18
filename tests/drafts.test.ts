@@ -104,7 +104,7 @@ describe("createDraft, getDraft, listDrafts", () => {
     expect(await bad({ lang: "es" })).toEqual({ ok: false, error: "invalid_lang" });
     expect(await bad({ aiAssistance: "ghost" })).toEqual({ ok: false, error: "invalid_ai" });
     expect(await bad({ title: "t".repeat(201) })).toEqual({ ok: false, error: "invalid_title" });
-    expect(await bad({ body: "a".repeat(50_001) })).toEqual({ ok: false, error: "body_too_long" });
+    expect(await bad({ body: "a".repeat(100_001) })).toEqual({ ok: false, error: "body_too_long" });
     expect((await bad({ body: "a".repeat(50_000) })).ok).toBe(true);
     expect(await bad({ kind: "essay" })).toEqual({ ok: false, error: "invalid_draft" });
     expect(await createDraft(db, "u1", "nope")).toEqual({ ok: false, error: "invalid_draft" });
@@ -214,7 +214,7 @@ describe("updateDraft and deleteDraft", () => {
     const res = await createDraft(db, "u1", { kind: "topic", lang: "ja", title: "t", body: "b" });
     if (!res.ok) throw new Error("draft failed");
     expect(await updateDraft(db, "u1", res.id, { lang: "xx", body: "b" })).toEqual({ ok: false, error: "invalid_lang" });
-    expect(await updateDraft(db, "u1", res.id, { lang: "ja", body: "a".repeat(50_001) })).toEqual({
+    expect(await updateDraft(db, "u1", res.id, { lang: "ja", body: "a".repeat(100_001) })).toEqual({
       ok: false,
       error: "body_too_long",
     });

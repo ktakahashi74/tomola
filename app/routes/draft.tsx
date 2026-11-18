@@ -201,7 +201,7 @@ function DraftForm({ loaderData, actionData }: Route.ComponentProps) {
   const [intro, setIntro] = useState(false);
   const guardDraft = editorRound > 0 || draft.id !== loaderData.draft.id ? draft : originalDraft.current;
   const error = feedback?.error ?? undefined;
-  const errorText = feedback?.error ? (feedback.error === "draft_conflict" ? m.ai_write_conflict() : feedback.error === "not_found" ? m.ai_write_gone() : entryErrorMessage(feedback.error)) : undefined;
+  const errorText = feedback?.error ? (feedback.error === "draft_conflict" ? m.ai_write_conflict() : feedback.error === "not_found" ? m.ai_write_gone() : entryErrorMessage(feedback.error, draft.kind)) : undefined;
   // What follows the writing surface: how the last save or publish went, the newer saved version when another screen saved first, and the buttons.
   const status = <>
     {(savedHere.current && !feedback || feedback?.saved && !feedback.error) && <p role="status" className="text-success-foreground">{feedback?.altRemoved ? m.draft_alt_removed() : m.draft_saved()}</p>}

@@ -103,7 +103,7 @@ export function EntryEditForm({
             <Textarea {...entryFieldError(error, "note", errorId)} dir="auto" name="note" required rows={2} maxLength={500} defaultValue={values?.note ?? ""} />
           </FieldLabel>
         )}
-        {error && <p id={errorId} role="alert" className="text-destructive">{conflict?.message ?? errorText ?? entryErrorMessage(error)}{conflict && <> <a className="underline" href={conflict.href} target="_blank" rel="noreferrer noopener">{conflict.label}</a></>}</p>}
+        {error && <p id={errorId} role="alert" className="text-destructive">{conflict?.message ?? errorText ?? entryErrorMessage(error, entry.kind)}{conflict && <> <a className="underline" href={conflict.href} target="_blank" rel="noreferrer noopener">{conflict.label}</a></>}</p>}
         <div className="flex items-center gap-4">
           <SendButton>{m.save_changes()}</SendButton>
           {/* A plain link: leaving with unsaved changes asks first (the form's guard), like every other way of leaving. */}

@@ -1,3 +1,4 @@
+import { bodyLimitMessage } from "~/lib/entry-error-message";
 import { Button } from "~/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { m } from "~/paraglide/messages.js";
@@ -48,6 +49,7 @@ export function EntryPreview({ kind = "topic", fixedLang, pasteFrontmatter, inva
     try {
       const body = new FormData();
       body.set("body", textarea.value);
+      body.set("kind", kind);
       // Use the body's language for fixed footnote labels, as in post rendering.
       if (lang) body.set("lang", lang);
       if (pasteFrontmatter) body.set("frontmatter", pasteFrontmatter);
@@ -60,7 +62,7 @@ export function EntryPreview({ kind = "topic", fixedLang, pasteFrontmatter, inva
         return;
       }
       const error = type.includes("application/json") ? ((await res.json()) as { error?: string }).error : undefined;
-      if (error === "body_too_long") fail(m.error_body_too_long());
+      if (error === "body_too_long") fail(bodyLimitMessage(kind));
       else if (error === "body_too_complex") fail(m.error_body_too_complex());
       else if (error === "body_unrenderable") fail(m.error_body_unrenderable());
       else if (error === "frontmatter_invalid") fail(m.error_frontmatter());

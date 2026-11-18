@@ -30,7 +30,7 @@ export function ReplyFields({ owner, threadId, error, errorId, errorText, defaul
     <DraftKeeper owner={owner} scope={keeper?.scope ?? `reply:${threadId}`} family={keeper?.family} startBody={keeper?.startBody ?? ""} />
     <Field>
       <FieldLabel htmlFor={bodyId} className="sr-only">{m.field_body()}</FieldLabel>
-      <MentionTextarea id={bodyId} name="body" dir="auto" {...bodyError} required rows={1} placeholder={m.field_body_placeholder_reply()} defaultValue={defaultBody}
+      <MentionTextarea id={bodyId} name="body" data-body-kind="reply" dir="auto" {...bodyError} required rows={1} placeholder={m.field_body_placeholder_reply()} defaultValue={defaultBody}
         className="flex field-sizing-content min-h-10 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus:min-h-28 not-placeholder-shown:min-h-28 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm" />
     </Field>
     <BodyCounter />

@@ -343,11 +343,11 @@ test("import preserves frontmatter as body text, rejects overflow, and undo cann
   await page.getByRole("button", { name: en.ai_write_undo, exact: true }).click();
   await expect(page.getByText(en.ai_write_undo_changed, { exact: true })).toBeVisible();
   await expect(body()).toHaveValue(/After import$/);
-  await body().fill("x".repeat(49999));
+  await body().fill("x".repeat(99999));
   await candidate().fill("Keep this candidate");
   await page.getByRole("button", { name: en.ai_write_apply, exact: true }).click();
-  await expect(page.getByText(en.error_body_too_long, { exact: true })).toBeVisible();
-  await expect(body()).toHaveValue("x".repeat(49999));
+  await expect(page.getByText(en.error_topic_body_too_long, { exact: true })).toBeVisible();
+  await expect(body()).toHaveValue("x".repeat(99999));
   await expect(candidate()).toHaveValue("Keep this candidate");
 });
 

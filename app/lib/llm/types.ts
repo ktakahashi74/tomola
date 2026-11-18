@@ -28,6 +28,9 @@ export type GlossaryHint = {
 
 export type TranslationRequest = {
   signal?: AbortSignal;
+  // Only the post-translation pipeline extends deadlines; direct interactive
+  // callers, including Nushi translations, retain the ordinary two minutes.
+  postTranslation?: boolean;
   // Source Markdown, or the title itself when translating a topic title.
   text: string;
   from: SourceLang;

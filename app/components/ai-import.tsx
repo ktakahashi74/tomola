@@ -1,8 +1,10 @@
+import { bodyLimitMessage } from "~/lib/entry-error-message";
 import { useId, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
-import { appendAiText, replaceEditorBody } from "~/lib/ai-draft";
+import { appendAiText } from "~/lib/ai-draft";
+import { replaceEditorBody } from "~/lib/rich-editor";
 import { m } from "~/paraglide/messages.js";
 
 // `embedded`: drawn inside the AI help panel, open, under a heading, instead of behind a button of its own.
@@ -19,8 +21,9 @@ export function AiImport({ candidate, onCandidateChange, embedded = false }: { c
   function apply() {
     const body = editor();
     if (!body || !candidate.trim() || applied.current === candidate) return;
-    const result = appendAiText(body.value, candidate);
-    if (!result.ok) { setError(result.error === "body_too_long" ? m.error_body_too_long() : m.ai_write_empty()); return; }
+    const kind = body.dataset.bodyKind === "reply" ? "reply" : "topic";
+    const result = appendAiText(body.value, candidate, kind);
+    if (!result.ok) { setError(result.error === "body_too_long" ? bodyLimitMessage(kind) : m.ai_write_empty()); return; }
     applied.current = candidate;
     setHistory({ before: body.value, after: result.body });
     replaceEditorBody(body, result.body);

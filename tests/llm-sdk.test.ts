@@ -161,6 +161,31 @@ describe("@anthropic-ai/sdk (real client, fake fetch)", () => {
 });
 
 describe("@google/genai (real client, fake fetch)", () => {
+  it("overrides a client's two-minute timeout for a long queued post translation", async () => {
+    vi.useFakeTimers();
+    const deadline = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("deadline", "TimeoutError")), ms);
+      return controller.signal;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+      init!.signal!.addEventListener("abort", () => reject(new Error("HTTP deadline")), { once: true });
+      setTimeout(() => resolve(new Response(JSON.stringify(response("Complete translation.")), { headers: { "content-type": "application/json" } })), 191_000);
+      entered();
+    }));
+    try {
+      const client = new GoogleGenAI({ apiKey: "test", httpOptions: { timeout: 120_000, fetch } });
+      const running = createGeminiEngine({ client }).translate({ text: "a".repeat(100_000), from: "en", to: "ja", postTranslation: true });
+      const result = expect(running).resolves.toMatchObject({ text: "Complete translation." });
+      await started;
+      await vi.advanceTimersByTimeAsync(191_000);
+      await result;
+      expect(deadline).toHaveBeenCalledWith(900_000);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally { deadline.mockRestore(); vi.useRealTimers(); }
+  });
   it("keeps production generation and embedding clients on the beta API", async () => {
     const { fetch, calls } = capture(body => body.requests
       ? { embeddings: [{ values: Array(768).fill(1) }] }

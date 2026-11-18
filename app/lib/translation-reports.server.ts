@@ -1,3 +1,4 @@
+import { MAX_TRANSLATION_BODY_BYTES } from "./body-length";
 import { completeTranslationReports } from "./translation-report-results.server";
 import { lockReviewableEntry, rootTopic, rootTopicOn, reviewableWithTopic } from "./visibility.server";
 import { checkBodyBudget } from "./markdown.server";
@@ -7,7 +8,7 @@ import { z } from "zod";
 import type { Db } from "~/lib/db/client.server";
 import { entries, profiles, translationReports, translations } from "~/lib/db/schema";
 import { isStale, pickTranslation, SHOWN_KINDS, type ShownKind } from "~/lib/display";
-import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH, tryRenderTranslationHtml } from "~/lib/entries.server";
+import { MAX_TITLE_LENGTH, tryRenderTranslationHtml } from "~/lib/entries.server";
 import { isEnabledLang } from "~/lib/enabled-langs.server";
 import { enqueue } from "~/lib/jobs/queue.server";
 import { LANGS, type Lang } from "~/lib/languages";
@@ -348,7 +349,7 @@ async function resolveReportWithHumanTranslationImplementation(
     const field = report.field as "title" | "body";
     const parsed = z
       .string()
-      .max(field === "title" ? MAX_TITLE_LENGTH : MAX_BODY_LENGTH)
+      .refine((s) => field === "title" ? s.length <= MAX_TITLE_LENGTH : new TextEncoder().encode(s).byteLength <= MAX_TRANSLATION_BODY_BYTES)
       .refine((s) => s.trim().length > 0)
       .safeParse(text);
     if (!parsed.success) return { ok: false as const, error: "invalid_text" as const };

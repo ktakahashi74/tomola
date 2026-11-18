@@ -384,8 +384,8 @@ describe("POST /api/drafts: validation errors", () => {
     expect(bad.json.error).toBe("invalid_encoding");
   });
 
-  it("returns 413 above 256 KiB: by Content-Length without reading, and by counting a body sent without one", async () => {
-    expect(MAX_DRAFT_BYTES).toBe(262_144);
+  it("returns 413 above the complete-document limit: by Content-Length without reading, and by counting a body sent without one", async () => {
+    expect(MAX_DRAFT_BYTES).toBe(384 * 1024);
     const big = "x".repeat(MAX_DRAFT_BYTES + 1);
     const declared = await post(big);
     expect(declared.status).toBe(413);
@@ -393,7 +393,7 @@ describe("POST /api/drafts: validation errors", () => {
     // Even a falsely small Content-Length cannot bypass the actual byte count; send a stream.
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        for (let i = 0; i < 300; i++) controller.enqueue(new TextEncoder().encode("y".repeat(1024)));
+        for (let i = 0; i < MAX_DRAFT_BYTES / 1024 + 1; i++) controller.enqueue(new TextEncoder().encode("y".repeat(1024)));
         controller.close();
       },
     });
@@ -401,7 +401,7 @@ describe("POST /api/drafts: validation errors", () => {
     const { action } = await import("~/routes/api.drafts");
     const res = (await action({ request, params: {}, context: {} } as never)) as Response;
     expect(res.status).toBe(413);
-    // Exactly 256 KiB passes size validation, then gets 400 from the body-length limit.
+    // Exactly the complete-document limit passes size validation, then gets 400 from the body-length limit.
     const exact = await post("x".repeat(MAX_DRAFT_BYTES));
     expect(exact.status).toBe(400);
     expect(exact.json.error).toBe("body_too_long");

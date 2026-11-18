@@ -1,5 +1,5 @@
 import { enabledLangs } from "./enabled-langs.server";
-import { MAX_BODY_LENGTH } from "./entries.server";
+import { MAX_BODY_BYTES, MAX_REPLY_BODY_LENGTH, MAX_TOPIC_BODY_LENGTH } from "./body-length";
 
 export type DraftApiError =
   | "village_required"
@@ -35,7 +35,7 @@ const MESSAGES: Record<DraftApiError, string> = {
   thread_deleted: "The topic being replied to was deleted.",
   invalid_title: "The title is optional: when there is one, it is one line of at most 200 characters. A topic with asks_stance: true needs a title (the proposition).",
   body_required: "The body is empty.",
-  body_too_long: `The body is longer than ${MAX_BODY_LENGTH} characters.`,
+  body_too_long: `A topic body allows ${MAX_TOPIC_BODY_LENGTH} units after NFC normalization (wide/fullwidth characters count as two); a reply allows ${MAX_REPLY_BODY_LENGTH} JavaScript characters. Each body allows at most ${MAX_BODY_BYTES} UTF-8 bytes.`,
   body_too_complex: "This text has too much markup to process in time. Use less markup, or put runs of symbols inside a code block.",
   body_unrenderable: "The body cannot be displayed (for example, very deeply nested lists or quotes).",
   // lang must be one of the languages of this site (ENABLED_LANGS); the text is filled in when the message is built (messageOf).

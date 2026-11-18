@@ -1,5 +1,5 @@
 import { m } from "~/paraglide/messages.js";
-import { BODY_MAX_LENGTH } from "~/lib/rich-editor";
+import { bodyWithinLimits } from "./body-length";
 import { QUOTE_REFUSED_EVENT } from "~/lib/quote-events";
 
 const MAX_QUOTE_CHARACTERS = 1000;
@@ -79,7 +79,7 @@ export function attachQuoteReply(root: HTMLElement, setReplyTarget: (id: number)
     const quote = markdownQuote(selection.text) + (source ? `\n>\n> ${source}` : "");
     const value = textarea.value + (textarea.value ? "\n\n" : "") + quote + "\n\n";
     // Say so instead of silently doing nothing when the quotation would take the body past its limit.
-    if (value.length > BODY_MAX_LENGTH) { textarea.dispatchEvent(new Event(QUOTE_REFUSED_EVENT)); return; }
+    if (!bodyWithinLimits(value, textarea.dataset.bodyKind === "topic" ? "topic" : "reply")) { textarea.dispatchEvent(new Event(QUOTE_REFUSED_EVENT)); return; }
     if (selection.body.dataset.quoteKind === "reply") setReplyTarget(Number(selection.body.dataset.quoteEntry));
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, value);
     textarea.dispatchEvent(new Event("input", { bubbles: true }));

@@ -28,7 +28,7 @@ import { resolveDisplayLang } from "~/lib/display";
 import { loadReasonsPanel } from "~/lib/reasons.server";
 import { listNotifications } from "~/lib/notifications.server";
 import { isContentKind } from "~/lib/notifications";
-import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from "~/lib/entries.server";
+import { MAX_TITLE_LENGTH } from "~/lib/entries.server";
 import { STANCE_TAGS, POSITIONS } from "~/lib/stances";
 import { AI_ASSISTANCE } from "~/lib/ai-assistance";
 import { mcpUnauthorized, withMcpAuth, type McpAuth, type McpPrincipal } from "./auth.server";
@@ -48,7 +48,7 @@ const draftError = (code: string) => {
 const draftFields = {
   lang: z.enum(SOURCE_LANGS, { error: () => draftError("invalid_lang") }).optional(),
   title: z.string().max(MAX_TITLE_LENGTH, { error: () => draftError("invalid_title") }).nullable().optional(),
-  body: z.string().max(MAX_BODY_LENGTH, { error: () => draftError("body_too_long") }).optional(),
+  body: z.string().optional(),
   aiAssistance: z.enum(AI_ASSISTANCE, { error: () => draftError("invalid_ai") }).nullable().optional(),
   asksStance: z.boolean({ error: () => draftError("invalid_asks_stance") }).optional(), altOf: id.nullable().optional(),
   stanceTag: z.enum(STANCE_TAGS, { error: () => draftError("invalid_stance_tag") }).nullable().optional(),

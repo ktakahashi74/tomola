@@ -70,8 +70,8 @@ it("appends complete Markdown to the current body, preserving sources, comments 
   const body = "[Source](https://example.org/a)\n\nMy comment.\n\nA later note.";
   const candidate = "---\nlang: fr\ntitle: AI title\n---\n```md\nAI text\n```";
   expect(appendAiText(body, candidate)).toEqual({ ok: true, body: `${body}\n\n${candidate}` });
-  expect(appendAiText("x".repeat(49997), "x")).toMatchObject({ ok: true });
-  expect(appendAiText("x".repeat(49998), "x")).toEqual({ ok: false, error: "body_too_long" });
+  expect(appendAiText("x".repeat(99997), "x")).toMatchObject({ ok: true });
+  expect(appendAiText("x".repeat(99998), "x")).toEqual({ ok: false, error: "body_too_long" });
   expect(appendAiText(body, " \n")).toEqual({ ok: false, error: "empty" });
 });
 

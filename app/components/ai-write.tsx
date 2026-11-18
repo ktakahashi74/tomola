@@ -143,7 +143,7 @@ export function AiWrite({ ownerId, connectDraftLabel, draft, onSaved, kind = "to
         if (result.error === "account_changed") setNotice(m.ai_write_account_changed());
         else if (result.error === "draft_conflict") setNotice(m.ai_write_conflict());
         else if (result.error === "not_found") setNotice(m.ai_write_gone());
-        else setNotice(result.error ? entryErrorMessage(result.error) : m.ai_write_save_failed());
+        else setNotice(result.error ? entryErrorMessage(result.error, kind) : m.ai_write_save_failed());
         popup?.close();
         return;
       }

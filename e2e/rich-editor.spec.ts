@@ -5,7 +5,7 @@ import path from "node:path";
 import { expect, type Page, type Browser, type Locator } from "@playwright/test";
 import { richEditorTest as test } from "./editor-fixture";
 import { LANG_LABELS } from "../app/lib/languages";
-import { BODY_MAX_LENGTH } from "../app/lib/rich-editor";
+import { MAX_TOPIC_BODY_LENGTH as BODY_MAX_LENGTH } from "../app/lib/body-length";
 import { waitForClientRoute, captureScreenshot, useMember, clientHeaders, enMessages as en, formatMessage, state, titleField, waitForFormReady } from "./helpers";
 
 type Fixture = { invitations: Record<string, { email: string; invitation: string }>; body: string };
@@ -234,11 +234,11 @@ test("math and frontmatter stay in Markdown; native validation and a literal fro
     expect(await body(page).evaluate(element => (element as HTMLTextAreaElement).validity.valueMissing)).toBe(true);
     await paste(page, "", "x".repeat(BODY_MAX_LENGTH + 1));
     await page.getByRole("button", { name: en.submit_post, exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: en.error_body_too_long })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: en.error_topic_body_too_long })).toBeVisible();
     await expect(rich(page)).toBeVisible(); await expect(body(page)).toBeHidden();
     // The count that is too many is said beside the field, and nothing was cut.
     await expect(page.getByRole("status").filter({ hasText: /characters too many/ })).toBeVisible();
-    expect(await body(page).evaluate(element => (element as HTMLTextAreaElement).validationMessage)).toBe(en.error_body_too_long);
+    expect(await body(page).evaluate(element => (element as HTMLTextAreaElement).validationMessage)).toBe(en.error_topic_body_too_long);
     await mode(page, false);
     await body(page).fill("");
     expect(await body(page).evaluate(element => (element as HTMLTextAreaElement).validity.customError)).toBe(false);

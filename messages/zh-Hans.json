@@ -2467,5 +2467,7 @@
   "motion_delivery_counts": "{requests} 次请求 · {bytes} 字节",
   "motion_inspect": "查看配对图片",
   "motion_help": "上传 GIF 或动态 WebP 后，会插入静态图及其动画链接。可在 Markdown 栏中替换静态图。请避免闪烁，并在图片说明或正文中解释动画所表达的内容。 动画中的文字保留原文。",
-  "motion_error_type": "不支持此图片格式。请使用 JPEG、PNG、WebP 或 GIF。不支持动态 PNG 和视频。"
+  "motion_error_type": "不支持此图片格式。请使用 JPEG、PNG、WebP 或 GIF。不支持动态 PNG 和视频。",
+  "error_topic_body_too_long": "正文上限为10万（宽字符和全角字符按2计数），且UTF-8编码不超过256 KiB。",
+  "topic_body_count_over": "超出{count}"
 }

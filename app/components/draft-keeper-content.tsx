@@ -3,7 +3,7 @@ import { useLocation, useNavigation } from "react-router";
 import { afterInitialActivation } from "~/lib/initial-activation";
 import { baseOf, draftStoreForOwner, localDraftKey, orBlank, localDraftStore, rememberDraftOwner, removeLocalDraftFamily, type DraftStore, type LocalDraft } from "~/lib/local-draft";
 import { keepDraft, removeShownDraft, sameDraft, setAsideDrafts, type SetAsideDraft } from "~/lib/set-aside-drafts";
-import { replaceEditorBody } from "~/lib/ai-draft";
+import { replaceEditorBody } from "~/lib/rich-editor";
 import { QuietBoundary } from "~/components/quiet-boundary";
 import { m } from "~/paraglide/messages.js";
 

@@ -1,8 +1,8 @@
+import { bodyWithinLimits, type BodyKind } from "./body-length";
 import { buildOpenUrl, isValidTemplate, templateOf, type AiChoice } from "~/lib/open-in-ai";
-import { EDITOR_BODY_REPLACED_EVENT } from "~/lib/rich-editor";
 
 export const AI_WRITE_URL_LIMIT = 2000;
-export const AI_WRITE_BODY_LIMIT = 50000;
+
 // "question" asks for notes, never for text: it is never the default and its answer is not meant to be brought into the body.
 export const AI_WRITE_TASKS = ["introduce", "summarize", "translate", "revise", "question"] as const;
 export type AiWriteTask = typeof AI_WRITE_TASKS[number];
@@ -45,15 +45,8 @@ export function aiWriteDestination(choice: AiChoice, prompt: string): { url: str
   return { url, launchUrl };
 }
 
-export function appendAiText(body: string, candidate: string): { ok: true; body: string } | { ok: false; error: "empty" | "body_too_long" } {
+export function appendAiText(body: string, candidate: string, kind: BodyKind = "topic"): { ok: true; body: string } | { ok: false; error: "empty" | "body_too_long" } {
   if (!candidate.trim()) return { ok: false, error: "empty" };
   const combined = body + (body ? "\n\n" : "") + candidate;
-  return combined.length > AI_WRITE_BODY_LIMIT ? { ok: false, error: "body_too_long" } : { ok: true, body: combined };
-}
-
-// Notify native and React input listeners, including mentions and the existing preview.
-export function replaceEditorBody(textarea: HTMLTextAreaElement, body: string) {
-  textarea.value = body;
-  textarea.dispatchEvent(new Event(EDITOR_BODY_REPLACED_EVENT));
-  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  return !bodyWithinLimits(combined, kind) ? { ok: false, error: "body_too_long" } : { ok: true, body: combined };
 }

@@ -2,7 +2,6 @@ import { startsWithFrontmatter } from "./text";
 
 export const EDITOR_MODE_STORAGE_KEY = "tomola:editor-mode";
 export const EDITOR_BODY_REPLACED_EVENT = "tomola:body-replaced";
-export const BODY_MAX_LENGTH = 50_000;
 export const EDITOR_STRINGIFY_OPTIONS = { bullet: "-", emphasis: "*", rule: "-" } as const;
 
 export function prefersRichEditor(preference: string | null): boolean {
@@ -19,4 +18,11 @@ export function requiresMarkdownEditor(body: string): boolean {
 // serialization also restores the exact source when edits are undone.
 export function preserveEditorSource(source: string, initial: string, current: string): string {
   return initial === current ? source : current;
+}
+
+// Notify native and React input listeners, including mentions and the existing preview.
+export function replaceEditorBody(textarea: HTMLTextAreaElement, body: string) {
+  textarea.value = body;
+  textarea.dispatchEvent(new Event(EDITOR_BODY_REPLACED_EVENT));
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }

@@ -260,6 +260,8 @@ When post signing is enabled, an approximately two-minute, one-time challenge bi
 
 Signature evidence records an act of taking responsibility for particular content. It proves neither reading and understanding nor exclusive human use of a key. Unsigned posts do not receive signature evidence. Key enrollment, deletion, and recovery use authentication procedures separate from ordinary posting.
 
+Topic bodies allow 100,000 units: count Unicode code points after NFC normalization, with East Asian Width W/F counting as two and all others as one. The width table is pinned to Unicode 17.0.0. Replies retain their 50,000 UTF-16-unit limit. Each original body also has a 256 KiB UTF-8 byte limit. These checks are shared by posting, editing, drafts, publication, REST and MCP. Background Gemini post translations use the larger of two minutes or the visible-output token cap divided by 60 tokens/second plus 60 seconds, capped at fifteen minutes; thinking fallbacks share that deadline. Interactive calls retain two minutes. Translations may exceed source length; manual body corrections allow up to 1 MiB of UTF-8 text.
+
 HTML derived from Markdown is sanitized. Input validation, same-origin checks, CSP, rate limits, and body-size limits are used. Other people's posts are marked as untrusted external data for AI. These boundaries do not guarantee that every external AI resists prompt injection.
 
 ## 9. Operation and data handling

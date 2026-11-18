@@ -1,3 +1,4 @@
+import { bodyWithinLimits } from "./body-length";
 import { postAiMaterials } from "./db/schema";
 import { requestNushi } from "./nushi.server";
 import { readNushiAnswer } from "./nushi.server";
@@ -124,7 +125,7 @@ export type EntryError =
 export type EditError = EntryError | "not_found" | "forbidden" | "locked" | "edit_conflict";
 type Result = { ok: true; id: number } | { ok: false; error: EntryError; village?: string };
 
-export const MAX_BODY_LENGTH = 50_000;
+
 export const MAX_TITLE_LENGTH = 200;
 
 // Footnote-id prefix. Vary by entry because a page displays multiple entries; render after the id is assigned.
@@ -147,6 +148,11 @@ async function notifiable(body: string, mentions: MentionTargets): Promise<strin
   return (await matchMentions(body, mentions)).filter((m) => !m.quoted).map((m) => m.userId);
 }
 
+const bodySchema = (kind: "topic" | "reply") => z.string()
+  .refine((s) => bodyWithinLimits(s, kind), { message: "body_too_long" })
+  .refine((s) => s.trim().length > 0)
+  .refine((s) => !hasNul(s), { message: "nul" });
+
 const common = {
   suppressNushi: z.boolean().default(false),
   // Original languages are independent of the enabled translation and interface languages.
@@ -154,12 +160,7 @@ const common = {
   langCode: z.string().regex(/^[a-z]{2,3}$/).nullish(),
   langSource: z.enum(["explicit", "detected", "default", "checked"]).optional(),
   // Preserve the body exactly as submitted; the source is authoritative. Use trim only to check emptiness.
-  body: z
-    .string()
-    .max(MAX_BODY_LENGTH)
-    .refine((s) => s.trim().length > 0)
-    // PostgreSQL text cannot store NUL (U+0000) and would throw on save. Reject it here as an unrenderable body.
-    .refine((s) => !hasNul(s), { message: "nul" }),
+  body: bodySchema("topic"),
   // Optional: a post written on screen states none (stored as null); frontmatter and the API may set one.
   aiAssistance: z.enum(AI_ASSISTANCE).nullish(),
 };
@@ -195,6 +196,7 @@ const topicSchema = z
 // Replies: labels apply only to replies to questions. asksStance/altOf are unavailable on replies; attempts yield an invalid attribute combination.
 const replySchema = z.object({
   ...common,
+  body: bodySchema("reply"),
   parentId: z.number().int().positive().optional(),
   nushiParentId: z.number().int().positive().optional(),
   stanceTag: z.enum(STANCE_TAGS).nullish(),
@@ -211,7 +213,7 @@ function fieldError(issues: z.core.$ZodIssue[]): Exclude<EntryError, "invalid_in
   if (field === "altOf") return "invalid_alt_of";
   if (field === "stanceTag") return "invalid_stance_tag";
   if (issues[0]?.code === "custom" && issues[0].message === "nul") return "body_unrenderable";
-  return issues[0]?.code === "too_big" ? "body_too_long" : "body_required";
+  return issues[0]?.code === "too_big" || issues[0]?.message === "body_too_long" ? "body_too_long" : "body_required";
 }
 
 // Validate entry input without saving, using createTopic/createReply rules for title, body, language, AI disclosure, and renderability.
@@ -513,7 +515,7 @@ export async function deleteOwnEntry(
 // (checkStanceAttributes with mode: "edit"). stanceTag is the reply label; undefined leaves it unchanged, null removes it.
 const editAttributes = { asksStance: z.boolean().optional(), altOf: z.number().int().positive().nullish(), stanceTag: z.enum(STANCE_TAGS).nullish() };
 const topicEditSchema = z.object({ title: titleSchema, body: common.body, lang: z.enum(SOURCE_LANGS).optional(), ...editAttributes });
-const replyEditSchema = z.object({ body: common.body, lang: z.enum(SOURCE_LANGS).optional(), ...editAttributes });
+const replyEditSchema = z.object({ body: bodySchema("reply"), lang: z.enum(SOURCE_LANGS).optional(), ...editAttributes });
 
 // Editor modes. author: edit title/body (body/label for replies). author-locked: pinned question; title/body cannot change, so show guidance instead of a form.
 // moderator-fix: assigned source-language moderator/operator fixes typos in a pinned question. This is moderation action fix_entry, requiring an explanation and appearing in notifications, public records, and appeals,

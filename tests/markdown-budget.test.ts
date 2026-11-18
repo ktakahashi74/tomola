@@ -1,8 +1,9 @@
 import { Worker } from "node:worker_threads";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownExecutor, MARKDOWN_LIMITS, withMarkdownScope } from "~/lib/markdown-budget.server";
 import { markdownSpecimen } from "~/lib/markdown-specimen";
 import { denseMarkdown } from "./helpers/markdown-dense";
+import { longMarkdown } from "./helpers/long-markdown";
 import { markdownFixture, HELD_MARKDOWN, SLOW_MARKDOWN } from "./helpers/markdown-fixture";
 
 type Executor = ReturnType<typeof createMarkdownExecutor>;
@@ -21,6 +22,31 @@ afterEach(async () => {
 });
 
 describe("isolated Markdown processing", () => {
+  it("renders long bilingual articles within the calibrated budget", async () => {
+    const executor = pool({});
+    let cpuMs = 0;
+    const emit = Worker.prototype.emit;
+    const observe = vi.spyOn(Worker.prototype, "emit").mockImplementation(function (this: Worker, event: string | symbol, ...args: unknown[]) {
+      const reply = args[0] as { cpuMs?: number } | undefined;
+      if (event === "message" && typeof reply?.cpuMs === "number") cpuMs = reply.cpuMs;
+      return emit.call(this, event, ...args);
+    });
+    try {
+      await executor.initialize();
+      for (const lang of ["en", "ja"] as const) {
+        const source = longMarkdown(lang);
+        expect(source.length).toBe(lang === "en" ? 100_000 : 50_000);
+        expect(source.match(/\$x_/g)).toHaveLength(300);
+        expect(source.match(/```python/g)).toHaveLength(30);
+        const started = performance.now();
+        const html = await withMarkdownScope("write", "long-" + lang, () => executor.run<string>("renderMarkdown", [source, { lang }]));
+        console.info(`[long Markdown] ${lang}: ${source.length} characters, ${cpuMs.toFixed(1)} ms CPU, ${(performance.now() - started).toFixed(1)} ms wall, ${executor.cpuMs.toFixed(1)} ms CPU budget`);
+        expect(html).toContain("katex");
+        expect(html).toContain("print");
+        expect(html).toContain("footnote");
+      }
+    } finally { observe.mockRestore(); }
+  }, 60_000);
   it("counts concurrent same-key completions once and evicts only when actual cached bytes exceed the limit", async () => {
     const resultBytes = 3 * 1024 * 1024;
     const { f, executor } = controlled({ cpuMs: 1000 }, { holdFile: true, resultBytes });
