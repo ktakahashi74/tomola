@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { captureScreenshot, enMessages as en, useMember, waitForHydration } from "./helpers";
 
-test("members find villages by name and follow their links with the shared search placeholder", async ({ page }) => {
+test("members find villages by name and follow their links with the shared search placeholder", async ({ page }, testInfo) => {
   await useMember(page, "zvillage_search_reader@example.com", "/search?lang=en");
-  const enabled = process.env.E2E_PUBLIC_READING === "1" || process.env.E2E_VILLAGES === "1";
+  const enabled = testInfo.config.metadata.publicReading || process.env.E2E_VILLAGES === "1";
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/search?lang=en");

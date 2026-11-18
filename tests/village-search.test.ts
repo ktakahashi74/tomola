@@ -12,7 +12,9 @@ import { getMd } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { setTestMessages } from "./stubs/paraglide-messages";
+import { setTestLocale } from "./stubs/paraglide-runtime";
 import en from "../messages/en.json";
+import ja from "../messages/ja.json";
 
 let h: RouteHarness;
 let route: typeof import("~/routes/search");
@@ -22,11 +24,12 @@ beforeAll(async () => {
   h = await setupRouteHarness();
   await ensureLanguageVillages(h.db);
   setTestMessages({
-    village_language_name: params => en.village_language_name.replace("{language}", String(params?.language)),
-    language_name_en: () => en.language_name_en,
+    village_language_name: (params, options) => (options?.locale === "ja" ? ja : en).village_language_name.replace("{language}", String(params?.language)),
+    language_name_en: (_params, options) => (options?.locale === "ja" ? ja : en).language_name_en,
   });
   route = await import("~/routes/search");
   await h.signIn("village_seeker", { homeArea: "en", readLangs: ["en"] });
+  await h.signIn("original_reader", { homeArea: "en", readLangs: ["en", "ja"] });
   await h.signIn("not_enrolled", { profile: false });
   await h.db.update(profiles).set({ displayName: "Fieldwork reader" }).where(eq(profiles.userId, h.ids.village_seeker));
   const add = async (slug: string, name: string, description = "", kind = "open") => {
@@ -52,6 +55,8 @@ beforeAll(async () => {
   }
   for (let i = 0; i < 12; i++) {
     await add(`cap-${String(i).padStart(2, "0")}`, "Limit names");
+  }
+  for (let i = 0; i < 60; i++) {
     const stale = await add(`before-cap-${i}`, "Original unrelated");
     await h.db.insert(villageTranslations).values({ villageId: stale.id, lang: "en", name: "Limit names", state: "ready", sourceHash: "0".repeat(64) });
   }
@@ -78,10 +83,10 @@ describe("village matching", () => {
     expect(await slugs("読み方")).toEqual(["translated"]);
   });
 
-  it("matches only current ready translations in the display language, falling back to originals", async () => {
+  it("matches only current ready translations in the display language and returns original rows", async () => {
     expect(await slugs("Geometry")).toEqual(["translated"]);
     expect(await slugs("Euclidean")).toEqual(["translated"]);
-    expect((await searchVillages(h.db, "数学", "en"))[0].name).toBe("Geometry circle");
+    expect((await searchVillages(h.db, "Geometry", "en"))[0]).toMatchObject({ name: "数学の集い", description: "証明の読み方", language: null });
     expect(await slugs("géométrique")).toEqual([]);
     expect(await slugs("géométrique", "fr")).toEqual(["translated"]);
     expect(await slugs("Geometry", "fr")).toEqual([]);
@@ -111,6 +116,22 @@ describe("village matching", () => {
     expect(await slugs("Ranking")).toEqual(["rank-m", "rank-z", "rank-a", "rank-b"]);
     expect(await slugs("Limit")).toEqual(Array.from({ length: 10 }, (_, i) => `cap-${String(i).padStart(2, "0")}`));
   });
+
+  it("matches generated names in the interface language when the display language differs", async () => {
+    setTestLocale("ja");
+    try {
+      expect(await slugs(ja.village_language_name.replace("{language}", ja.language_name_en))).toContain("en");
+      expect(await slugs(en.village_language_name.replace("{language}", en.language_name_en))).not.toContain("en");
+    } finally { setTestLocale("en"); }
+  });
+
+  it("keeps later name matches ahead of descriptions across candidate batches", async () => {
+    await h.db.insert(villages).values([
+      ...Array.from({ length: 55 }, (_, i) => ({ slug: `batch-a-${String(i).padStart(2, "0")}`, name: "Other name", description: "Batch priority", kind: "open" })),
+      ...Array.from({ length: 12 }, (_, i) => ({ slug: `batch-z-${String(i).padStart(2, "0")}`, name: "Batch priority", kind: "open" })),
+    ]);
+    expect(await slugs("Batch priority")).toEqual(Array.from({ length: 10 }, (_, i) => `batch-z-${String(i).padStart(2, "0")}`));
+  });
 });
 
 describe("village results on the search screen", () => {
@@ -132,6 +153,19 @@ describe("village results on the search screen", () => {
     const translated = dataOf(await load("Geometry"));
     const translatedHtml = await renderInRouter(() => createElement(route.default, { loaderData: translated } as never), "/search");
     expect(translatedHtml).toContain("Geometry circle");
+    expect(translatedHtml).toContain('title="数学の集い"');
+  });
+
+  it("shows original names to readers of the source language while still matching translations", async () => {
+    const screen = dataOf(await route.loader(h.args(h.request("/search?q=Geometry", { as: "original_reader" }))));
+    expect(screen.villages).toMatchObject([{ slug: "translated", name: "数学の集い" }]);
+    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    expect(html).toContain('href="/v/translated"');
+    expect(html).toContain("数学の集い");
+    expect(html).not.toContain("Geometry circle");
+    expect(html).not.toContain('title="数学の集い"');
+    const overridden = dataOf(await route.loader(h.args(h.request("/search?q=Geometry&lang=en", { as: "original_reader" }))));
+    expect(overridden.villages).toMatchObject([{ slug: "translated", name: "Geometry circle", translation: { originalName: "数学の集い", shown: true } }]);
   });
 
   it("omits unmatched and scoped results, including an explicitly empty scope", async () => {

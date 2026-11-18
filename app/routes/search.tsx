@@ -12,13 +12,15 @@ import { LocalTime } from "~/components/local-time";
 import { PageHeader } from "~/components/page-header";
 import { AuthorLink } from "~/components/author-link";
 import { requireMember } from "~/lib/auth/session.server";
-import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
+import { displayLangFor, langCarry, screenReadLangsFor, villageReaderFor } from "~/lib/display-lang.server";
 import { languageLabel } from "~/lib/language-label";
 import { combinedHits, combinedSearch, type CombinedHit } from "~/lib/combined-search.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { checkQuery, MAX_QUERY_LENGTH } from "~/lib/search";
 import { searchMembers } from "~/lib/member-search.server";
 import { searchVillages } from "~/lib/village-search.server";
+import { localizeVillages } from "~/lib/village-translations.server";
+import { villageNameTitle, type WithVillageTranslation } from "~/lib/village-translation-view";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { villageName, villagePath } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
@@ -53,7 +55,7 @@ type SearchState = {
   q: string;
   hits: CombinedHit[];
   members: Awaited<ReturnType<typeof searchMembers>>;
-  villages: Awaited<ReturnType<typeof searchVillages>>;
+  villages: Array<Awaited<ReturnType<typeof searchVillages>>[number] & WithVillageTranslation>;
   literalOnly: boolean;
   lang: string;
   carryLang: string | null;
@@ -85,7 +87,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const result = await combinedSearch(db, checked.query, opts);
   const hits = await combinedHits(db, checked.query, result, opts);
   const members = villageScope === null ? await searchMembers(db, checked.query) : [];
-  const villages = villageScope === null && villagesEnabled() ? await searchVillages(db, checked.query, language.lang) : [];
+  const villages = villageScope === null && villagesEnabled() ? await localizeVillages(db, await searchVillages(db, checked.query, language.lang), villageReaderFor(request, profile)) : [];
   return view("results", checked.query, { hits, members, villages, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
 }
 
@@ -116,7 +118,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
         <section aria-labelledby="search-villages-heading" className="space-y-2">
           <h2 id="search-villages-heading" className="heading-2">{m.search_villages()}</h2>
           <ul className="divide-y">
-            {villages.map(village => <li key={village.slug} className="topic-row"><Link to={`${villagePath(village.slug)}${carryLang ? `?${new URLSearchParams({ lang })}` : ""}`} dir="auto" className="link-ui">{villageName(village)}</Link></li>)}
+            {villages.map(village => <li key={village.slug} className="topic-row"><Link to={`${villagePath(village.slug)}${carryLang ? `?${new URLSearchParams({ lang })}` : ""}`} title={villageNameTitle(village)} dir="auto" className="link-ui">{villageName(village)}</Link></li>)}
           </ul>
         </section>
       )}
