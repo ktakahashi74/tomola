@@ -13,6 +13,7 @@ import { CHAT_CONSENT_VERSION } from "~/lib/village-chat-consent";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
 import { chatAccess } from "~/lib/village-chat.server";
 import { handleKey } from "~/lib/handles";
+import { handlePrefixMatch } from "~/lib/member-matching.server";
 import { isMentionQuery } from "~/lib/mention-syntax";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 
@@ -27,9 +28,6 @@ import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 const HEADERS = { "Cache-Control": "private, no-store" };
 export const MAX_SUGGESTIONS = 8;
 
-// The prefix of a LIKE pattern: the characters that mean something in LIKE are escaped.
-const likePrefix = (key: string) => `${key.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-
 export async function loader({ request }: Route.LoaderArgs) {
   let member: Awaited<ReturnType<typeof requireMember>>;
   try {
@@ -42,7 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { user, db } = member;
   const rate = await hitMemberLimit(db, "mention-suggest", user.id);
   if (!rate.allowed) return Response.json({ error: "rate_limited" }, { status: 429, headers: { ...rateLimitHeaders(rate), ...HEADERS } });
-  const q = (new URL(request.url).searchParams.get("q") ?? "").normalize("NFKC").toLowerCase();
+  const q = handleKey(new URL(request.url).searchParams.get("q") ?? "");
   if (!isMentionQuery(q)) return Response.json({ handles: [] as string[] }, { headers: HEADERS });
   const slug = villageChatEnabled() ? new URL(request.url).searchParams.get("village") : null;
   const access = slug !== null ? await chatAccess(db, slug, user.id) : null;
@@ -51,7 +49,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const rows = await db
     .select({ handle: profiles.handle, displayName: profiles.displayName, displayNameLatin: profiles.displayNameLatin, homeArea: profiles.homeArea })
     .from(profiles)
-    .where(and(sql`${profiles.handleKey} LIKE ${likePrefix(handleKey(q))} ESCAPE '\\'`, ne(profiles.userId, user.id), village ? sql`exists (select 1 from ${villageMembers}
+    .where(and(handlePrefixMatch(q), ne(profiles.userId, user.id), village ? sql`exists (select 1 from ${villageMembers}
       inner join ${chatConsents} on ${chatConsents.villageId} = ${villageMembers.villageId} and ${chatConsents.userId} = ${villageMembers.userId}
         and ${chatConsents.version} = ${CHAT_CONSENT_VERSION}
       where ${villageMembers.villageId} = ${village.id} and ${villageMembers.userId} = ${profiles.userId})` : undefined))

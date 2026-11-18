@@ -63,6 +63,7 @@ export const publicOnly = [
 ] as const;
 export const bothModes = [
   ["introductions", ".*"],
+  ["member-search", ".*"],
   ["chat-nushi", ".*"],
   ["post-ai-materials", "authors attach"],
   ["post-ask-ai", "member questions|unverified answers"],

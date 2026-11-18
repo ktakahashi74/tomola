@@ -17,9 +17,10 @@ import { languageLabel } from "~/lib/language-label";
 import { combinedHits, combinedSearch, type CombinedHit } from "~/lib/combined-search.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { checkQuery, MAX_QUERY_LENGTH } from "~/lib/search";
+import { searchMembers } from "~/lib/member-search.server";
 import { m } from "~/paraglide/messages.js";
 
-// Member search combines independent literal matches with semantic neighbors, at most 20.
+// Post search combines independent literal matches with semantic neighbors, at most 20.
 // Count one request toward the shared search limit; an unavailable embedding leaves literal results usable.
 export function headers({ loaderHeaders }: Route.HeadersArgs) {
   const out = new Headers({ "Cache-Control": "private, no-store" });
@@ -48,6 +49,7 @@ type SearchState = {
   state: "start" | "results" | "too_long" | "rate_limited";
   q: string;
   hits: CombinedHit[];
+  members: Awaited<ReturnType<typeof searchMembers>>;
   literalOnly: boolean;
   lang: string;
   carryLang: string | null;
@@ -55,7 +57,7 @@ type SearchState = {
   villageScope?: string | null;
   retryMinutes: number;
 };
-const view = (state: SearchState["state"], q: string, extra: Partial<Omit<SearchState, "state" | "q">> = {}): SearchState => ({ state, q, hits: [], literalOnly: false, lang: "", carryLang: null, retryMinutes: 0, ...extra });
+const view = (state: SearchState["state"], q: string, extra: Partial<Omit<SearchState, "state" | "q">> = {}): SearchState => ({ state, q, hits: [], members: [], literalOnly: false, lang: "", carryLang: null, retryMinutes: 0, ...extra });
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, db, profile } = await requireMember(request);
@@ -78,11 +80,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const opts = { ...(villageId ? { villageId } : {}), readLangs: screenReadLangsFor(request, profile), displayLang: language.lang, carryLang: language.carryLang };
   const result = await combinedSearch(db, checked.query, opts);
   const hits = await combinedHits(db, checked.query, result, opts);
-  return view("results", checked.query, { hits, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
+  const members = villageScope === null ? await searchMembers(db, checked.query) : [];
+  return view("results", checked.query, { hits, members, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
 }
 
 export default function Search({ loaderData }: Route.ComponentProps) {
-  const { state, q, hits, retryMinutes, literalOnly, lang, carryLang } = loaderData;
+  const { state, q, hits, members, retryMinutes, literalOnly, lang, carryLang } = loaderData;
   return (
     <main className="space-y-4">
       <PageHeader title={m.search_title()} purpose={m.search_purpose()} />
@@ -104,6 +107,14 @@ export default function Search({ loaderData }: Route.ComponentProps) {
       </Form>
       {state === "too_long" && <p role="alert">{m.search_error_too_long({ max: MAX_QUERY_LENGTH })}</p>}
       {state === "rate_limited" && <p role="alert">{m.search_rate_limited({ minutes: retryMinutes })}</p>}
+      {state === "results" && members.length > 0 && (
+        <section aria-labelledby="search-members-heading" className="space-y-2">
+          <h2 id="search-members-heading" className="heading-2">{m.search_members()}</h2>
+          <ul className="divide-y">
+            {members.map(member => <li key={member.handle} className="topic-row"><AuthorLink handle={member.handle} name={member.name} byline /></li>)}
+          </ul>
+        </section>
+      )}
       {state === "results" && (
         <section className="space-y-2">
           <h2 className="heading-2">{m.search_results_for({ q, count: hits.length })}</h2>

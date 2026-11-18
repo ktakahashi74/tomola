@@ -233,6 +233,8 @@ On the first page of an unfiltered newest-first list, new-post marks compare cre
 
 Related discussions come from topic links in original posts, separately from AI recommendations. Semantic search compares multilingual query and post embeddings through pgvector, then displays results in the reader's language. Search similarity is not a truth score or a member reputation score.
 
+On the member search screen, searches without a village scope show up to ten matching members before post results. Handles match by prefix after removing a leading `@`; both display-name forms match by substring, with NFKC normalization and case ignored. Exact handles come first, then handle prefixes, then names, ordered by handle within each group. Results include the reader and suspended members, and exclude departed members. Matching runs inside the database and shares the post search query-length and request limits. This section is excluded from Markdown, API and MCP search results.
+
 The private saved list at `/saved` orders topics by save time. Saving is neither publicly exposed nor a recommendation signal. RSS at `/feed.xml` and `/v/:slug/feed.xml` supplies site and village topics only with `PUBLIC_READING=1`, restricted to visible topics readable without login. Saved lists and public feeds have separate access boundaries.
 
 ## 8. Authentication, permissions, and trust boundaries

@@ -83,6 +83,8 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["wide", "narrow"].flatMap(size => ["author", "reader", "other", "mod"].map(role => ({ email: `zresult_${size}_${role}@example.com`, handle: `zresult_${size}_${role}`, homeArea: "ja" as const, readLangs: ["ja" as const], uiLocale: "en" as const }))),
   ...["wide_author", "wide_reader", "narrow_author", "narrow_reader", "failure_author", "failure_reader", "public_author"].map(name => ({ email: `zsave_${name}@example.com`, handle: `zsave_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
   { email: "zliteral_reader@example.com", handle: "zliteral_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
+  { email: "zmember_search_reader@example.com", handle: "zmember_search_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
+  { email: "zmember_search_target@example.com", handle: "zmember_search_target", homeArea: "ja", readLangs: ["ja"], uiLocale: "en" },
   ...["en", "ja"].map(locale => ({ email: `writing_language_${locale}@example.com`, handle: `writing_language_${locale}`, homeArea: "ja" as const, readLangs: ["ja" as const, "en" as const], uiLocale: locale as "en" | "ja" })),
   { email: "writing_read_language@example.com", handle: "writing_read_language", homeArea: "ja", readLangs: ["ja", "en"], uiLocale: "en" },
   ...["new_md", "new_rich", "empty", "departure", "edit", "prefill", ...["markdown", "rich"].flatMap(mode => ["paste", "drop", "picker", "narrow"].map(action => `${mode}_${action}`))].map(scenario => ({ email: `writing_${scenario}@example.com`, handle: `writing_${scenario}`, homeArea: "en" as const, uiLocale: "en" as const })),

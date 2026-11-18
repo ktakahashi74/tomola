@@ -293,6 +293,8 @@ try {
   await seedAiUse(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedLiteralSearch } = await import("./seed-literal-search");
   await seedLiteralSearch(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
+  const { seedMemberSearch } = await import("./seed-member-search");
+  await seedMemberSearch(relatedDb);
   // Authentication scenarios keep their invitations and perform the UI flow.
   await createInvitation(relatedDb, { email: "auth_invited_comparison@example.com" });
   const publicInvite = await createInvitation(relatedDb, { email: "public_reading_writer@example.com" });
