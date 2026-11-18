@@ -295,6 +295,8 @@ try {
   await seedLiteralSearch(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedMemberSearch } = await import("./seed-member-search");
   await seedMemberSearch(relatedDb);
+  const { seedVillageSearch } = await import("./seed-village-search");
+  await seedVillageSearch(relatedDb);
   const { seedVillageInviteSuggestions } = await import("./seed-village-invite-suggestions");
   await seedVillageInviteSuggestions(relatedDb);
   // Authentication scenarios keep their invitations and perform the UI flow.

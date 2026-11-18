@@ -86,6 +86,7 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "zliteral_reader@example.com", handle: "zliteral_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   { email: "zmember_search_reader@example.com", handle: "zmember_search_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   { email: "zmember_search_target@example.com", handle: "zmember_search_target", homeArea: "ja", readLangs: ["ja"], uiLocale: "en" },
+  { email: "zvillage_search_reader@example.com", handle: "zvillage_search_reader", homeArea: "en", readLangs: ["en"], uiLocale: "en" },
   ...["en", "ja"].map(locale => ({ email: `writing_language_${locale}@example.com`, handle: `writing_language_${locale}`, homeArea: "ja" as const, readLangs: ["ja" as const, "en" as const], uiLocale: locale as "en" | "ja" })),
   { email: "writing_read_language@example.com", handle: "writing_read_language", homeArea: "ja", readLangs: ["ja", "en"], uiLocale: "en" },
   ...["new_md", "new_rich", "empty", "departure", "edit", "prefill", ...["markdown", "rich"].flatMap(mode => ["paste", "drop", "picker", "narrow"].map(action => `${mode}_${action}`))].map(scenario => ({ email: `writing_${scenario}@example.com`, handle: `writing_${scenario}`, homeArea: "en" as const, uiLocale: "en" as const })),

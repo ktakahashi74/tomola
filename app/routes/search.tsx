@@ -18,6 +18,9 @@ import { combinedHits, combinedSearch, type CombinedHit } from "~/lib/combined-s
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { checkQuery, MAX_QUERY_LENGTH } from "~/lib/search";
 import { searchMembers } from "~/lib/member-search.server";
+import { searchVillages } from "~/lib/village-search.server";
+import { villagesEnabled } from "~/lib/villages-enabled.server";
+import { villageName, villagePath } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 
 // Post search combines independent literal matches with semantic neighbors, at most 20.
@@ -50,6 +53,7 @@ type SearchState = {
   q: string;
   hits: CombinedHit[];
   members: Awaited<ReturnType<typeof searchMembers>>;
+  villages: Awaited<ReturnType<typeof searchVillages>>;
   literalOnly: boolean;
   lang: string;
   carryLang: string | null;
@@ -57,7 +61,7 @@ type SearchState = {
   villageScope?: string | null;
   retryMinutes: number;
 };
-const view = (state: SearchState["state"], q: string, extra: Partial<Omit<SearchState, "state" | "q">> = {}): SearchState => ({ state, q, hits: [], members: [], literalOnly: false, lang: "", carryLang: null, retryMinutes: 0, ...extra });
+const view = (state: SearchState["state"], q: string, extra: Partial<Omit<SearchState, "state" | "q">> = {}): SearchState => ({ state, q, hits: [], members: [], villages: [], literalOnly: false, lang: "", carryLang: null, retryMinutes: 0, ...extra });
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, db, profile } = await requireMember(request);
@@ -81,11 +85,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const result = await combinedSearch(db, checked.query, opts);
   const hits = await combinedHits(db, checked.query, result, opts);
   const members = villageScope === null ? await searchMembers(db, checked.query) : [];
-  return view("results", checked.query, { hits, members, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
+  const villages = villageScope === null && villagesEnabled() ? await searchVillages(db, checked.query, language.lang) : [];
+  return view("results", checked.query, { hits, members, villages, literalOnly: result.literalOnly, lang: opts.displayLang, carryLang: opts.carryLang, villageScope });
 }
 
 export default function Search({ loaderData }: Route.ComponentProps) {
-  const { state, q, hits, members, retryMinutes, literalOnly, lang, carryLang } = loaderData;
+  const { state, q, hits, members, villages, retryMinutes, literalOnly, lang, carryLang } = loaderData;
   return (
     <main className="space-y-4">
       <PageHeader title={m.search_title()} purpose={m.search_purpose()} />
@@ -107,6 +112,14 @@ export default function Search({ loaderData }: Route.ComponentProps) {
       </Form>
       {state === "too_long" && <p role="alert">{m.search_error_too_long({ max: MAX_QUERY_LENGTH })}</p>}
       {state === "rate_limited" && <p role="alert">{m.search_rate_limited({ minutes: retryMinutes })}</p>}
+      {state === "results" && villages.length > 0 && (
+        <section aria-labelledby="search-villages-heading" className="space-y-2">
+          <h2 id="search-villages-heading" className="heading-2">{m.search_villages()}</h2>
+          <ul className="divide-y">
+            {villages.map(village => <li key={village.slug} className="topic-row"><Link to={`${villagePath(village.slug)}${carryLang ? `?${new URLSearchParams({ lang })}` : ""}`} dir="auto" className="link-ui">{villageName(village)}</Link></li>)}
+          </ul>
+        </section>
+      )}
       {state === "results" && members.length > 0 && (
         <section aria-labelledby="search-members-heading" className="space-y-2">
           <h2 id="search-members-heading" className="heading-2">{m.search_members()}</h2>

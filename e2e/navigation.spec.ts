@@ -139,6 +139,7 @@ test("compact member navigation preserves badges, role links, filters, keyboard 
           await expect(menu.getByRole("menuitem", { name: messages.nav_search_label, exact: true })).toHaveCount(0);
           await expect(header.getByRole("link", { name: messages.nav_search_label, exact: true })).toHaveCount(size.width < 640 ? 1 : 0);
           await expect(header.getByRole("searchbox")).toHaveCount(size.width < 640 ? 0 : 1);
+          if (size.width >= 640) await expect(header.getByRole("searchbox")).toHaveAttribute("placeholder", messages.nav_search_placeholder);
           const panelBox = (await menu.boundingBox())!;
           expect(panelBox.x).toBeGreaterThanOrEqual(0);
           expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(size.width);

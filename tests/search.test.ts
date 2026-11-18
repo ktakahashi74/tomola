@@ -208,7 +208,7 @@ describe("GET /search (the page)", () => {
     expect(hit.title.translation).not.toBeNull();
     const { default: Search } = await import("~/routes/search");
     const html = await renderInRouter(() => createElement(Search, { loaderData: {
-      state: "results", members: [], q: "共生", hits: [{ ...hit, matchKind: "literal", excerpt: { ...hit.excerpt, unavailable: true } }], retryMinutes: 0,
+      state: "results", members: [], villages: [], q: "共生", hits: [{ ...hit, matchKind: "literal", excerpt: { ...hit.excerpt, unavailable: true } }], retryMinutes: 0,
     } } as never), "/search");
     const row = html.split('data-list-meta="">')[1].split("</div>")[0];
     const items = [...row.matchAll(/data-meta-item="(text|badge)">([\s\S]*?)(?=<span [^>]*data-meta-item=|$)/g)];
@@ -430,7 +430,7 @@ it("shows a reply excerpt when its titleless thread has no textual headline", as
 
   const { default: Search } = await import("~/routes/search");
   const html = await renderInRouter(
-    () => createElement(Search, { loaderData: { state: "results", members: [], q: "diagram implications", hits: [hit], retryMinutes: 0 } } as never),
+    () => createElement(Search, { loaderData: { state: "results", members: [], villages: [], q: "diagram implications", hits: [hit], retryMinutes: 0 } } as never),
     "/search?q=diagram%20implications",
   );
   expect(html).toContain(`<p dir="auto" lang="en" class="text-sm">${body}</p>`);
