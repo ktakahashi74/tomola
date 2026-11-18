@@ -2,9 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ImagePlus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { FieldDescription } from "~/components/ui/field";
 import { MEDIA_LIMITS, type MediaErrorCode } from "~/lib/media";
 import { mediaEditor } from "~/lib/media-editor-client";
 import { m } from "~/paraglide/messages.js";
+
+export function MediaUploadHelp() {
+  return <FieldDescription>{m.media_help()} {m.motion_help()}</FieldDescription>;
+}
 
 function failureMessage(code: MediaErrorCode): string {
   switch (code) {

@@ -1,3 +1,6 @@
+// Translated stills need E2E_MOTION_FIXTURES=1 FIGURE_TRANSLATION=1. Run with
+// those settings using pnpm test:e2e:prod e2e-prod/motion-figures.spec.ts; the
+// ordinary production suite keeps figure translation disabled.
 import { motionImage } from "../tests/helpers/motion-images";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,6 +14,9 @@ for (const reduced of [false, true]) test(`motion is fetched only after activati
   await useMember(page, reduced ? "motion_reduced_prod@example.com" : "motion_prod@example.com");
   await page.goto("/t/new");
   await page.locator('input[name="title"]').fill(`Motion diagram ${reduced}`);
+  await page.getByText(en.writing_tips, { exact: true }).click();
+  await expect(page.getByText(en.media_help, { exact: false })).toBeVisible();
+  await expect(page.getByText(en.motion_help, { exact: false })).toBeVisible();
   if (reduced) {
     await page.getByRole("button", { name: en.editor_mode_rich, exact: true }).click();
     await expect(page.locator('[contenteditable="true"]')).toBeVisible();
@@ -43,15 +49,16 @@ for (const reduced of [false, true]) test(`motion is fetched only after activati
   await expect(image).toHaveAttribute("src", urls[0]);
   const button = figure.getByRole("button");
   await expect(button).toHaveText(en.motion_show);
+  await expect(button).not.toHaveAttribute("aria-pressed");
   await expect(button).toBeVisible(); expect(fetched).toEqual([]);
   await button.focus(); await page.keyboard.press("Enter");
   await expect(image).toHaveAttribute("src", urls[1]);
-  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await expect(button).toHaveAccessibleName(en.motion_show_still);
   await expect.poll(() => fetched.length).toBe(1);
   await expect(figure.locator("[data-motion-note]")).toBeHidden();
   await figure.getByRole("button", { name: en.motion_show_still, exact: true }).click();
   await expect(image).toHaveAttribute("src", urls[0]);
-  await expect(button).toHaveAttribute("aria-pressed", "false");
+  await expect(button).toHaveAccessibleName(en.motion_show);
   if (!reduced) {
     const context = await browser.newContext({ javaScriptEnabled: false, ignoreHTTPSErrors: true, storageState: await page.context().storageState() });
     const native = await context.newPage();
@@ -62,6 +69,7 @@ for (const reduced of [false, true]) test(`motion is fetched only after activati
 });
 
 test("translated still figures explain the source-language motion", async ({ page }) => {
+  test.skip(process.env.E2E_MOTION_FIXTURES !== "1" || process.env.FIGURE_TRANSLATION !== "1", "Requires motion fixtures and figure translation");
   const fixture = JSON.parse(fs.readFileSync(path.join(state().dir, "motion-figure.json"), "utf8"));
   await useMember(page, "motion_figure_reader@example.com");
   const requests: string[] = [];

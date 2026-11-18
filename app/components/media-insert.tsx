@@ -1,8 +1,8 @@
 import { Component, type ReactNode, lazy, Suspense, useEffect, useState } from "react";
-import { FieldDescription } from "~/components/ui/field";
 import { m } from "~/paraglide/messages.js";
 import { afterInitialActivation } from "~/lib/initial-activation";
 const Upload = lazy(() => import("./media-upload-client"));
+const Help = lazy(() => import("./media-upload-client").then(module => ({ default: module.MediaUploadHelp })));
 
 class UploadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -25,5 +25,5 @@ export function MediaInsert({ compact = false }: { compact?: boolean } = {}) {
 }
 export function MediaInsertHelp() {
   const ready = useMediaReady();
-  return ready ? <FieldDescription>{m.media_help()} {m.motion_help()}</FieldDescription> : null;
+  return ready ? <UploadBoundary><Suspense fallback={null}><Help /></Suspense></UploadBoundary> : null;
 }

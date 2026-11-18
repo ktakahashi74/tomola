@@ -1747,7 +1747,7 @@
   "media_insert": "Insert image",
   "media_uploading": "Uploading the image…",
   "media_alt_placeholder": "Describe the image",
-  "media_help": "JPEG, PNG, WebP or GIF, up to 10 MB. Embedded metadata is removed. Still figures and descriptions can be translated; motion text uses the original language.",
+  "media_help": "JPEG, PNG or WebP, up to 10 MB each. Embedded data such as location is removed before saving. Text inside an image is not translated. A description is translated, and AI can read it.",
   "media_error_too_large": "The image is too large (up to 10 MB each).",
   "media_error_type": "This image format cannot be used. Use JPEG, PNG or WebP.",
   "media_error_rate": "You have sent many images in a short time. Try again later.",
@@ -3037,6 +3037,6 @@
   "motion_delivery_help": "Daily UTC totals without reader or image identifiers. Cached responses and HEAD requests are excluded.",
   "motion_delivery_counts": "{requests} requests · {bytes} bytes",
   "motion_inspect": "Inspect paired images",
-  "motion_help": "Upload a GIF or animated WebP to insert a still image linked to its motion version. You can replace the still image in Markdown. Avoid flashing and explain the motion in the image description or body.",
+  "motion_help": "Upload a GIF or animated WebP to insert a still image linked to its motion version. You can replace the still image in Markdown. Avoid flashing and explain the motion in the image description or body. Motion text stays in the original language.",
   "motion_error_type": "This image format cannot be used. Use JPEG, PNG, WebP or GIF. Animated PNG and video are not supported."
 }

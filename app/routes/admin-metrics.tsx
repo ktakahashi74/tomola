@@ -163,13 +163,14 @@ export default function AdminMetrics({ loaderData }: Route.ComponentProps) {
   const langRows = [...weeks, null].map((week) => ({ week, cells: questionLangs.filter((r) => r.weekStart === week) }));
   return (
     <main className="space-y-8">
+      <h1 className="text-2xl font-bold">{m.metrics_title()}</h1>
+      <p className="ui-help text-muted-foreground">{m.metrics_note()}</p>
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">{m.motion_delivery_title()}</h2>
         <p className="ui-help">{m.motion_delivery_help()}</p>
         <ul>{loaderData.motionDelivery.map(row => <li key={row.day}>{row.day}: {m.motion_delivery_counts({ requests: row.requests, bytes: row.bytes })}</li>)}</ul>
       </section>
-      <h1 className="text-2xl font-bold">{m.metrics_title()}</h1>
-      <p className="ui-help text-muted-foreground">{m.metrics_note()}</p>
+
       <p><Link className="underline" to="/admin/ai-question-reports">{loaderData.questionReportsLabel}</Link></p>
 
       <ReadingMetrics readings={loaderData.reading} />

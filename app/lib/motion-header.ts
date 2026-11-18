@@ -37,13 +37,13 @@ export function inspectMotion(bytes: Buffer) {
     if (!ended || !frames || !width || !height) throw new MediaError("type");
   } else {
     need(0, 12);
-    let animated = false;
+    let animated = false, extended = false;
     if (bytes.readUInt32LE(4) + 8 !== bytes.length) throw new MediaError("type");
     for (let offset = 12; offset < bytes.length;) {
       need(offset, 8);
       const kind = bytes.toString("ascii", offset, offset + 4), size = bytes.readUInt32LE(offset + 4), start = offset + 8;
       need(start, size + size % 2);
-      if (kind === "VP8X") { if (size !== 10) throw new MediaError("type"); animated = !!(bytes[start] & 2); width = bytes.readUIntLE(start + 4, 3) + 1; height = bytes.readUIntLE(start + 7, 3) + 1; if (animated) check(); }
+      if (kind === "VP8X") { if (extended || frames || size !== 10) throw new MediaError("type"); extended = true; animated = !!(bytes[start] & 2); width = bytes.readUIntLE(start + 4, 3) + 1; height = bytes.readUIntLE(start + 7, 3) + 1; if (animated) check(); }
       if (kind === "ANMF") {
         if (size < 16 || !animated) throw new MediaError("type");
         const x = bytes.readUIntLE(start, 3) * 2, y = bytes.readUIntLE(start + 3, 3) * 2, w = bytes.readUIntLE(start + 6, 3) + 1, h = bytes.readUIntLE(start + 9, 3) + 1;

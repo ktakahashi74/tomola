@@ -1292,7 +1292,7 @@
   "media_insert": "插入圖片",
   "media_uploading": "正在上傳圖片…",
   "media_alt_placeholder": "圖片說明",
-  "media_help": "JPEG、PNG、WebP 或 GIF，最大 10 MB。儲存前移除嵌入資訊。靜態圖與圖片說明可以翻譯；動畫中的文字保留原文。",
+  "media_help": "JPEG、PNG 或 WebP，每張最大 10 MB。儲存前會移除位置等內嵌資訊。圖片中的文字不會被翻譯。說明文字會被翻譯，AI 也能讀取。",
   "media_error_too_large": "圖片太大（每張最大 10 MB）。",
   "media_error_type": "無法使用此圖片格式。請使用 JPEG、PNG 或 WebP。",
   "media_error_rate": "您在短時間內上傳了很多圖片。請稍後再試。",
@@ -2466,6 +2466,6 @@
   "motion_delivery_help": "按 UTC 日期彙總，不記錄讀者或圖片的識別資訊。快取回應和 HEAD 請求不計入。",
   "motion_delivery_counts": "{requests} 次請求 · {bytes} 位元組",
   "motion_inspect": "查看配對圖片",
-  "motion_help": "上傳 GIF 或動態 WebP 後，會插入靜態圖及其動畫連結。可在 Markdown 欄中替換靜態圖。請避免閃爍，並在圖片說明或正文中解釋動畫所表達的內容。",
+  "motion_help": "上傳 GIF 或動態 WebP 後，會插入靜態圖及其動畫連結。可在 Markdown 欄中替換靜態圖。請避免閃爍，並在圖片說明或正文中解釋動畫所表達的內容。 動畫中的文字保留原文。",
   "motion_error_type": "不支援此圖片格式。請使用 JPEG、PNG、WebP 或 GIF。不支援動態 PNG 和影片。"
 }

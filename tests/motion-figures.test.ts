@@ -8,14 +8,17 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { MOTION_LIMITS, MEDIA_LIMITS, parseMediaPath } from "~/lib/media";
 import { inspectMotion } from "~/lib/motion-header";
 import { processUploadedMedia, rewriteMedia, withMediaSlot, withMotionSlot } from "~/lib/media-processing.server";
-import { deleteMedia, deleteMediaWithLog, listOwnMedia, pairedMedia, putMedia, putUploadedMedia, readMedia } from "~/lib/media-store.server";
+import { deleteMedia, deleteMediaWithLog, deleteOwnMedia, listOwnMedia, pairedMedia, putMedia, putUploadedMedia, readMedia } from "~/lib/media-store.server";
+import { setMemberAvatar } from "~/lib/member-avatar.server";
+import { setVillageIcon } from "~/lib/village-icon.server";
+import { topicShare } from "~/lib/share-preview.server";
 import { deleteAccount } from "~/lib/account-delete.server";
 import { canReadMedia, referencedMediaIds } from "~/lib/media-references.server";
 import { decorateMotionHtml, motionImages } from "~/lib/motion-display.server";
 import { prepareEntryFigureDisplay } from "~/lib/figure-display.server";
 import { publicFigureCondition } from "~/lib/figure-translation.server";
 import { createTopic, editEntry } from "~/lib/entries.server";
-import { entries, media, motionDelivery } from "~/lib/db/schema";
+import { entries, media, motionDelivery, motionPairs, profiles, villageMembers, villages } from "~/lib/db/schema";
 import { exportSite } from "~/lib/site-export.server";
 import { countMotionDelivery } from "~/lib/motion-delivery.server";
 import { renderMarkdown } from "~/lib/markdown.server";
@@ -82,6 +85,16 @@ it("rejects each container limit before any pixel decoder runs", async () => {
   await expect(rewriteMedia(Buffer.alloc(MEDIA_LIMITS.inputBytes + 1))).rejects.toMatchObject({ code: "too_large" });
 });
 
+it("rejects duplicate or late extended WebP headers before decoding", async () => {
+  const { bytes } = await motionImage("webp", 4);
+  const start = bytes.indexOf("VP8X"), header = bytes.subarray(start, start + 18);
+  for (const at of [start + 18, bytes.indexOf("ANMF") + 8 + bytes.readUInt32LE(bytes.indexOf("ANMF") + 4)]) {
+    const duplicate = Buffer.concat([bytes.subarray(0, at), header, bytes.subarray(at)]);
+    duplicate.writeUInt32LE(duplicate.length - 8, 4);
+    expect(() => inspectMotion(duplicate)).toThrow("media type");
+  }
+});
+
 it("serializes motion work, bounds waiting and leaves static slots available", async () => {
   const release: Array<() => void> = [], started: number[] = [];
   const work = (i: number) => withMotionSlot(async () => { started.push(i); await new Promise<void>(resolve => release.push(resolve)); });
@@ -109,8 +122,9 @@ it("fits the longest edge without enlarging and keeps all frames", async () => {
 
 it("binds explicit authored pairs, visibility, translation exclusion, export and deletion", async () => {
   vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5585");
-  const saved = await putUploadedMedia(db, "motion-author", await rewriteMedia((await motionImage()).bytes));
-  if (!("posterUrl" in saved)) throw new Error("poster missing");
+  const rewritten = await rewriteMedia((await motionImage()).bytes);
+  const saved = await putUploadedMedia(db, "motion-author", rewritten);
+  if (!("posterUrl" in saved) || typeof saved.posterUrl !== "string") throw new Error("poster missing");
   const body = `[![diagram](${saved.posterUrl})](${saved.url})`;
   const ids = referencedMediaIds(body); expect(ids).toHaveLength(2);
   const motionId = parseMediaPath(saved.url)!.id;
@@ -142,11 +156,135 @@ it("binds explicit authored pairs, visibility, translation exclusion, export and
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
   const replacement = await putMedia(db, "motion-author", await rewriteMedia(await sharp({ create: { width: 160, height: 100, channels: 3, background: "blue" } }).png().toBuffer()));
   expect(await editEntry(db, "motion-author", created.id, { body: `[![replacement](${replacement.url})](${saved.url})` }, { kind: "topic" })).toMatchObject({ ok: true });
-  expect(await pairedMedia(db, motionId)).toHaveLength(3);
+  await putUploadedMedia(db, "motion-author", rewritten);
+  expect(await pairedMedia(db, motionId)).toHaveLength(2);
+  const posterId = parseMediaPath(saved.posterUrl)!.id;
+  expect((await listOwnMedia(db, "motion-author")).find(image => image.id === posterId)).toMatchObject({ usedByOwnPosts: 0, related: [] });
+  expect(await deleteOwnMedia(db, "motion-author", posterId, 0)).toMatchObject({ status: "deleted" });
+  expect(await readMedia(db, motionId)).not.toBeNull();
   const actor = { id: "motion-other", scope: { operator: true, langs: [] } };
   expect(await deleteMediaWithLog(db, actor, { id: motionId, reason: "other", note: "Synthetic deletion", confirmedIds: "" })).toMatchObject({ ok: false, error: "confirm_required" });
   expect(await deleteMedia(db, parseMediaPath(replacement.url)!.id)).toBe(true);
   for (const id of [...ids, parseMediaPath(replacement.url)!.id]) expect(await readMedia(db, id)).toBeNull();
+});
+
+it("rebuilds relationships from all current posts and removes the last obsolete link", async () => {
+  const owner = "motion-edits";
+  await addMember(db, owner, "motion_edits");
+  const saved = await putUploadedMedia(db, owner, await rewriteMedia((await motionImage()).bytes));
+  if (!("posterUrl" in saved) || typeof saved.posterUrl !== "string") throw new Error("poster missing");
+  const body = `[![diagram](${saved.posterUrl})](${saved.url})`;
+  const first = await createTopic(db, owner, { title: "First diagram", body, lang: "en" });
+  const second = await createTopic(db, owner, { title: "Second diagram", body, lang: "en" });
+  if (!first.ok || !second.ok) throw new Error("topic missing");
+  const motionId = parseMediaPath(saved.url)!.id;
+  expect(await editEntry(db, owner, first.id, { body: "No image remains." }, { kind: "topic" })).toMatchObject({ ok: true });
+  expect(await pairedMedia(db, motionId)).toHaveLength(2);
+  expect(await editEntry(db, owner, second.id, { body: `![diagram](${saved.posterUrl})` }, { kind: "topic" })).toMatchObject({ ok: true });
+  expect(await pairedMedia(db, motionId)).toHaveLength(1);
+  expect(await deleteMedia(db, motionId)).toBe(true);
+  expect(await readMedia(db, parseMediaPath(saved.posterUrl)!.id)).not.toBeNull();
+});
+
+it("does not traverse a shared still into another animation when deleting", async () => {
+  const owner = "motion-shared";
+  await addMember(db, owner, "motion_shared");
+  const first = await putUploadedMedia(db, owner, await rewriteMedia((await motionImage("gif", 3)).bytes));
+  const second = await putUploadedMedia(db, owner, await rewriteMedia((await motionImage("gif", 4)).bytes));
+  if (!("posterUrl" in first) || typeof first.posterUrl !== "string") throw new Error("poster missing");
+  const body = `[![first](${first.posterUrl})](${first.url})\n\n[![second](${first.posterUrl})](${second.url})`;
+  expect(await createTopic(db, owner, { title: "Shared still", body, lang: "en" })).toMatchObject({ ok: true });
+  const firstId = parseMediaPath(first.url)!.id, secondId = parseMediaPath(second.url)!.id;
+  expect((await pairedMedia(db, firstId)).map(image => image.id)).not.toContain(secondId);
+  expect(await deleteMedia(db, firstId)).toBe(true);
+  expect(await readMedia(db, secondId)).not.toBeNull();
+});
+
+it("releases an upload pair when only its still is posted", async () => {
+  const owner = "motion-still-only";
+  await addMember(db, owner, "motion_still_only");
+  const rewritten = await rewriteMedia((await motionImage()).bytes);
+  const saved = await putUploadedMedia(db, owner, rewritten);
+  if (!("posterUrl" in saved) || typeof saved.posterUrl !== "string") throw new Error("poster missing");
+  const motionId = parseMediaPath(saved.url)!.id, stillId = parseMediaPath(saved.posterUrl)!.id;
+  expect(await createTopic(db, owner, { title: "Still only", body: `![diagram](${saved.posterUrl})`, lang: "en" })).toMatchObject({ ok: true });
+  await putUploadedMedia(db, owner, rewritten);
+  expect(await pairedMedia(db, motionId)).toHaveLength(1);
+  expect((await listOwnMedia(db, owner)).find(image => image.id === motionId)).toMatchObject({ usedByOwnPosts: 0, related: [] });
+  expect(await deleteOwnMedia(db, owner, motionId, 0)).toMatchObject({ status: "deleted" });
+  expect(await readMedia(db, stillId)).not.toBeNull();
+});
+
+it.each([false, true])("excludes identity images from authored and legacy pairs with village icon %s", async village => {
+  vi.stubEnv("VILLAGES", "1");
+  const owner = village ? "motion-icon" : "motion-avatar";
+  await addMember(db, owner, owner.replaceAll("-", "_"));
+  const saved = await putUploadedMedia(db, owner, await rewriteMedia((await motionImage()).bytes));
+  const motionId = parseMediaPath(saved.url)!.id;
+  const icon = await rewriteMedia(await sharp({ create: { width: 40, height: 40, channels: 3, background: "green" } }).png().toBuffer(), { avatar: true });
+  let villageId = "";
+  if (village) {
+    const [place] = await db.insert(villages).values({ slug: "motion-icon", kind: "open", name: "Diagram village" }).returning();
+    villageId = place.id;
+    await db.insert(villageMembers).values({ villageId, userId: owner, role: "owner" });
+  }
+  const setImage = (image: typeof icon | null) => village ? setVillageIcon(db, owner, "motion-icon", image) : setMemberAvatar(db, owner, image);
+  const identity = await setImage(icon), identityId = parseMediaPath(identity.url!)!.id;
+  expect(await createTopic(db, owner, { title: "Identity link", body: `[![identity](${identity.url})](${saved.url})`, lang: "en" })).toMatchObject({ ok: true });
+  expect((await pairedMedia(db, motionId)).map(image => image.id)).not.toContain(identityId);
+  // Old relationships must also be ignored when reading or deleting groups.
+  await db.insert(motionPairs).values({ motionId, stillId: identityId });
+  expect((await pairedMedia(db, motionId)).map(image => image.id)).not.toContain(identityId);
+  expect((await listOwnMedia(db, owner)).map(image => image.id)).not.toContain(identityId);
+  await setImage(null);
+  expect(await readMedia(db, identityId)).toBeNull();
+  expect(await readMedia(db, motionId)).not.toBeNull();
+  const current = await setImage(icon), currentId = parseMediaPath(current.url!)!.id;
+  await db.insert(motionPairs).values({ motionId, stillId: currentId });
+  expect(await deleteMediaWithLog(db, { id: "motion-other", scope: { operator: true, langs: [] } }, { id: motionId, reason: "other", note: "Remove the animated diagram" })).toMatchObject({ ok: true });
+  expect(await readMedia(db, currentId)).not.toBeNull();
+  if (village) expect((await db.select().from(villages).where(eq(villages.id, villageId)))[0].iconMediaId).toBe(currentId);
+  else expect((await db.select().from(profiles).where(eq(profiles.userId, owner)))[0].avatarMediaId).toBe(currentId);
+  await deleteMedia(db, currentId);
+  if (village) expect((await db.select().from(villages).where(eq(villages.id, villageId)))[0].iconMediaId).toBeNull();
+  else expect((await db.select().from(profiles).where(eq(profiles.userId, owner)))[0].avatarMediaId).toBeNull();
+});
+
+it("keeps animated images out of share previews while allowing linked stills", async () => {
+  vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5585");
+  const owner = "motion-share";
+  await addMember(db, owner, "motion_share");
+  const saved = await putUploadedMedia(db, owner, await rewriteMedia((await motionImage()).bytes));
+  if (!("posterUrl" in saved) || typeof saved.posterUrl !== "string") throw new Error("poster missing");
+  for (const paired of [false, true]) {
+    const body = paired ? `[![diagram](${saved.posterUrl})](${saved.url})` : `![diagram](${saved.url})`;
+    const created = await createTopic(db, owner, { title: "Shared diagram", body, lang: "en" });
+    if (!created.ok) throw new Error(created.error);
+    const [topic] = await db.select().from(entries).where(eq(entries.id, created.id));
+    const share = await topicShare(db, { ...topic, lang: "en" }, "");
+    if (paired) expect(share.image?.url).toBe(`http://localhost:5585${saved.posterUrl}`);
+    else expect(share.image).toBeNull();
+  }
+});
+
+it("links standalone motion and escapes descriptions exactly once, including over the display cap", async () => {
+  const stillId = "a".repeat(64), motionId = "b".repeat(64);
+  const still = `/media/${stillId}-10x10.webp`, motion = `/media/${motionId}-10x10.webp`;
+  const images = new Map([[stillId, { id: stillId, width: 10, height: 10, animated: false, uploadedBy: "author" }], [motionId, { id: motionId, width: 10, height: 10, animated: true, uploadedBy: "author" }]]);
+  const html = await renderMarkdown(`![A & B <tag> "quoted"](${motion})`);
+  const shown = decorateMotionHtml(html, html, "author", images);
+  expect(shown).toContain(`<a href="${motion}">A &amp; B &lt;tag&gt; &quot;quoted&quot;</a>`);
+  expect(shown).not.toContain("&amp;amp;");
+  const empty = await renderMarkdown(`![](${motion})`);
+  expect(decorateMotionHtml(empty, empty, "author", images)).toContain(`<a href="${motion}">View motion</a>`);
+  const linked = `<a href="${motion}"><img src="${motion}" alt="A &amp; B"></a>`;
+  expect(decorateMotionHtml(linked, linked, "author", images)).toBe(`<a href="${motion}">A &amp; B</a>`);
+  const emptyLinked = `<a href="${motion}"><img src="${motion}" alt=""></a>`;
+  expect(decorateMotionHtml(emptyLinked, emptyLinked, "author", images)).toBe(`<a href="${motion}">View motion</a>`);
+  const capped = Array(16).fill(`<a href="${motion}"><img src="${still}" alt="A &amp; B &#x3c;script&#62;"></a>`).join("");
+  const overflow = decorateMotionHtml(capped, capped, "author", images);
+  expect(overflow).toContain(`<a href="${motion}">A &amp; B &lt;script&gt;</a>`);
+  expect(overflow).not.toContain("&amp;amp;");
 });
 
 it("stores both assets atomically under the existing image-count quota", async () => {

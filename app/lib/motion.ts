@@ -7,14 +7,12 @@ export function activateMotionFigures(root: HTMLElement) {
     const url = link.getAttribute("href")!, show = link.textContent!, back = link.dataset.motionBack!;
     const button = document.createElement("button");
     button.type = "button"; button.className = "underline cursor-pointer"; button.textContent = show;
-    button.setAttribute("aria-pressed", "false");
     let still = "", moving = false;
     button.onclick = () => {
       if (!moving) still = image.getAttribute("src")!;
       moving = !moving;
       image.setAttribute("src", moving ? url : still);
       button.textContent = moving ? back : show;
-      button.setAttribute("aria-pressed", String(moving));
       const translated = figure.querySelector<HTMLElement>("[data-translated-figure]");
       figure.querySelector<HTMLElement>("[data-motion-note]")?.toggleAttribute("hidden", !moving || !translated || translated.dataset.figureTranslated === translated.dataset.figureOriginal);
       for (const element of figure.querySelectorAll<HTMLElement>("[data-figure-toggle], [data-figure-fallback]")) {

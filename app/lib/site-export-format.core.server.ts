@@ -1,3 +1,4 @@
+import { unescapeAttribute } from "./html-attribute";
 import { createMarkdownProcessor } from "~/lib/markdown-parser.core.server";
 import path from "node:path";
 import { defaultSchema } from "rehype-sanitize";
@@ -9,14 +10,6 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-function unescapeAttribute(text: string): string {
-  return text.replace(/&(?:amp|quot|apos|lt|gt|#\d+|#x[\da-f]+);/gi, entity => {
-    const named: Record<string, string> = { "&amp;": "&", "&quot;": '"', "&apos;": "'", "&lt;": "<", "&gt;": ">" };
-    if (named[entity.toLowerCase()]) return named[entity.toLowerCase()];
-    const code = entity[2].toLowerCase() === "x" ? parseInt(entity.slice(3, -1), 16) : parseInt(entity.slice(2, -1), 10);
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
-  });
-}
 
 export type ExportLinks = {
   page: string;

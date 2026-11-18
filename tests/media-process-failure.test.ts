@@ -2,17 +2,26 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MEDIA_LIMITS } from "~/lib/media";
-const spawned = vi.hoisted(() => ({ child: null as any }));
+const spawned = vi.hoisted(() => ({ child: null as any, spawn: vi.fn() }));
 const status = vi.hoisted(() => ({ readFile: vi.fn(async () => "VmRSS:\t100 kB") }));
-vi.mock("node:child_process", () => ({ spawn: () => spawned.child }));
+vi.mock("node:child_process", () => ({ spawn: (...args: unknown[]) => { spawned.spawn(...args); return spawned.child; } }));
 vi.mock("node:fs/promises", () => status);
 import { readMediaForm, rewriteMedia } from "~/lib/media-processing.server";
+import { motionImage } from "./helpers/motion-images";
 function child() {
   const process = Object.assign(new EventEmitter(), { pid: 12345, stdin: new PassThrough(), stdout: new PassThrough(), kill: vi.fn(() => { queueMicrotask(() => process.emit("close", null, "SIGKILL")); return true; }) });
   spawned.child = process; return process;
 }
 beforeEach(() => { vi.spyOn(globalThis.process, "kill").mockReturnValue(true); });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); status.readFile.mockResolvedValue("VmRSS:\t100 kB"); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); spawned.spawn.mockClear(); status.readFile.mockResolvedValue("VmRSS:\t100 kB"); });
+
+it("passes the allocator arena limit to the isolated motion decoder", async () => {
+  vi.stubEnv("MALLOC_ARENA_MAX", "2");
+  const bytes = (await motionImage()).bytes;
+  const process = child(), pending = expect(rewriteMedia(bytes)).rejects.toMatchObject({ code: "generic" });
+  expect(spawned.spawn.mock.calls.at(-1)?.[2].env.MALLOC_ARENA_MAX).toBe("2");
+  process.emit("close", 1); await pending;
+});
 
 it("kills native memory growth and cleans up its monitor and pipes", async () => {
   vi.useFakeTimers(); const process = child();

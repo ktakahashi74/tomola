@@ -69,8 +69,8 @@ export function firstMediaImage(markdown: string, origin: string = siteOrigin())
 
 // The image is previewed only if a reader who has not logged in is served it: it exists, was not deleted, is the size its address says, and is used by a post that is readable.
 async function publicImage(db: Db, found: { id: string; alt: string }, origin: string): Promise<ShareImage | null> {
-  const [row] = await db.select({ width: media.width, height: media.height }).from(media).where(and(eq(media.id, found.id), isNull(media.deletedAt)));
-  if (!row || !await canReadMedia(db, found.id, null)) return null;
+  const [row] = await db.select({ width: media.width, height: media.height, animated: media.animated }).from(media).where(and(eq(media.id, found.id), isNull(media.deletedAt)));
+  if (!row || row.animated || !await canReadMedia(db, found.id, null)) return null;
   return { url: `${origin}${mediaPath(found.id, row.width, row.height)}`, width: row.width, height: row.height, alt: found.alt };
 }
 

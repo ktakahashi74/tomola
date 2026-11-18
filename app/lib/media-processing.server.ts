@@ -89,7 +89,7 @@ export function rewriteMedia(bytes: Uint8Array, opts: { avatar?: boolean } = {})
     // keep the resident-set and wall-clock guards there, and log that boundary.
     const limited = motion && process.platform === "linux" && existsSync("/usr/bin/prlimit");
     if (motion && !limited) console.warn("motion decoder: OS address-space limit unavailable; RSS and deadline guards active");
-    const child = spawn(limited ? "/usr/bin/prlimit" : process.execPath, limited ? [`--as=${MOTION_LIMITS.addressBytes}`, `--data=${MOTION_LIMITS.dataBytes}`, "--", process.execPath, ...nodeArgs] : nodeArgs, { detached: process.platform !== "win32", stdio: ["pipe", "pipe", "ignore"], env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV } });
+    const child = spawn(limited ? "/usr/bin/prlimit" : process.execPath, limited ? [`--as=${MOTION_LIMITS.addressBytes}`, `--data=${MOTION_LIMITS.dataBytes}`, "--", process.execPath, ...nodeArgs] : nodeArgs, { detached: process.platform !== "win32", stdio: ["pipe", "pipe", "ignore"], env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV, ...(motion ? { MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX } : {}) } });
     const chunks: Buffer[] = [];
     let size = 0, closed = false, failure: MediaError | undefined, checking = false;
     const stop = (error: MediaError) => {

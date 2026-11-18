@@ -1,3 +1,4 @@
+import { unescapeAttribute } from "./html-attribute";
 import { and, inArray, isNull } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { media } from "./db/schema";
@@ -30,18 +31,24 @@ export function decorateMotionHtml(html: string, original: string, authorId: str
   };
   const authored = new Set(motionCandidates(original).filter(pair => valid(pair.motion, pair.still)).map(pair => `${pair.motion.id}:${pair.still.id}`));
   let shown = 0;
-  const stillImage = (raw: string) => {
+  const stillImage = (raw: string, linked = false) => {
     const parsed = path(attribute(raw, "src"));
-    if (parsed && (images.get(parsed.id)?.animated || shown >= MEDIA_LIMITS.perPost)) return escape(attribute(raw, "alt") || m.motion_show());
+    const animated = parsed && images.get(parsed.id)?.animated;
+    if (parsed && (animated || shown >= MEDIA_LIMITS.perPost)) {
+      const label = escape(unescapeAttribute(attribute(raw, "alt")) || (animated ? m.motion_show() : ""));
+      return animated && !linked
+        ? `<a href="/media/${parsed.id}-${parsed.width}x${parsed.height}.webp">${label}</a>`
+        : label;
+    }
     shown++;
     return raw;
   };
   return html.replace(new RegExp(`${pairs.source}|${imageTag.source}`, "gi"), raw => {
     if (/^<img\b/i.test(raw)) return stillImage(raw);
     const image = raw.match(imageTag)?.[0], motion = path(attribute(raw, "href")), still = image && path(attribute(image, "src"));
-    if (!image || !motion || !still || !valid(motion, still) || !authored.has(`${motion.id}:${still.id}`)) return raw.replace(imageTag, stillImage);
+    if (!image || !motion || !still || !valid(motion, still) || !authored.has(`${motion.id}:${still.id}`)) return raw.replace(imageTag, tag => stillImage(tag, true));
     // Keep the established display cap: a still and its motion each use a slot.
-    if (shown + 2 > MEDIA_LIMITS.perPost) return raw.replace(imageTag, tag => escape(attribute(tag, "alt")));
+    if (shown + 2 > MEDIA_LIMITS.perPost) return raw.replace(imageTag, tag => escape(unescapeAttribute(attribute(tag, "alt"))));
     shown += 2;
     const url = `/media/${motion.id}-${motion.width}x${motion.height}.webp`;
     return `<span class="inline-block max-w-full" data-motion-figure>${image}<span class="block ui-meta"><a href="${url}" ${interactive ? "data-motion-open" : ""} data-motion-back="${escape(m.motion_show_still())}">${escape(m.motion_show())}</a></span><span class="block ui-meta" data-motion-note hidden role="status">${escape(m.motion_original_text())}</span></span>`;

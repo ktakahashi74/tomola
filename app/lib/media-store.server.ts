@@ -58,7 +58,11 @@ export async function putUploadedMedia(db: Db, memberId: string, image: Rewritte
     await tx.select({ id: user.id }).from(user).where(eq(user.id, memberId)).for("update");
     await lockFigureMedia(tx);
     const motion = await putMedia(tx, memberId, image), poster = await putMedia(tx, memberId, image.poster!);
-    await tx.insert(motionPairs).values({ motionId: motion.url.slice(7, 71), stillId: poster.url.slice(7, 71) }).onConflictDoNothing();
+    const motionId = motion.url.slice(7, 71);
+    const [referenced] = await tx.select({ id: entries.id }).from(entryMedia).innerJoin(entries, eq(entries.id, entryMedia.entryId))
+      .where(and(inArray(entryMedia.mediaId, [motionId, poster.url.slice(7, 71)]), eq(entries.authorId, memberId))).limit(1);
+    // A repeated upload must not restore a poster superseded in current posts.
+    if (!referenced) await tx.insert(motionPairs).values({ motionId, stillId: poster.url.slice(7, 71) }).onConflictDoNothing();
     return { ...motion, posterUrl: poster.url };
   });
 }
@@ -87,24 +91,22 @@ export async function readFigureSource(db: Db, readingKey: string) {
   return image;
 }
 export async function pairedMedia(db: Db, id: string) {
-  const [source] = await db.select({ owner: media.uploadedBy }).from(media).where(eq(media.id, id));
+  const [source] = await db.select({ id: media.id, owner: media.uploadedBy, width: media.width, height: media.height, animated: media.animated, avatar: media.avatar, villageId: media.villageId }).from(media).where(and(eq(media.id, id), isNull(media.deletedAt)));
   if (!source) return [];
-  const images = await db.select({ id: media.id, width: media.width, height: media.height, animated: media.animated }).from(media).where(and(eq(media.uploadedBy, source.owner), isNull(media.deletedAt)));
+  if (source.avatar || source.villageId) return [{ id: source.id, width: source.width, height: source.height, animated: source.animated }];
+  const images = await db.select({ id: media.id, width: media.width, height: media.height, animated: media.animated }).from(media).where(and(eq(media.uploadedBy, source.owner), eq(media.avatar, false), isNull(media.villageId), isNull(media.deletedAt)));
   if (!images.length) return [];
   const pairs = await db.select().from(motionPairs).where(inArray(motionPairs.motionId, images.map(image => image.id)));
   const ids = pairGroups(pairs, new Set(images.map(image => image.id))).get(id);
   return images.filter(image => ids?.has(image.id));
 }
 function pairGroups(pairs: { motionId: string; stillId: string }[], active: Set<string>) {
-  const neighbors = new Map([...active].map(id => [id, [] as string[]]));
+  // Include only immediate pairs. Sharing a still must not join animations
+  // into a transitive deletion group.
+  const groups = new Map([...active].map(id => [id, new Set([id])]));
   for (const pair of pairs) if (active.has(pair.motionId) && active.has(pair.stillId)) {
-    neighbors.get(pair.motionId)!.push(pair.stillId); neighbors.get(pair.stillId)!.push(pair.motionId);
-  }
-  const groups = new Map<string, Set<string>>();
-  for (const id of active) if (!groups.has(id)) {
-    const group = new Set([id]);
-    for (const current of group) for (const next of neighbors.get(current)!) group.add(next);
-    for (const current of group) groups.set(current, group);
+    groups.get(pair.motionId)!.add(pair.stillId);
+    groups.get(pair.stillId)!.add(pair.motionId);
   }
   return groups;
 }
@@ -130,7 +132,7 @@ export async function listOwnMedia(db: Db, userId: string) {
   const images = await db.select({ id: media.id, animated: media.animated, width: media.width, height: media.height, byteSize: media.byteSize, uploadedAt: media.uploadedAt, usedByOwnPosts: count(entries.id) }).from(media)
     .leftJoin(entryMedia, eq(entryMedia.mediaId, media.id))
     .leftJoin(entries, and(eq(entries.id, entryMedia.entryId), eq(entries.authorId, userId), isNull(entries.deletedAt)))
-    .where(and(eq(media.uploadedBy, userId), eq(media.avatar, false), isNull(media.deletedAt))).groupBy(media.id)
+    .where(and(eq(media.uploadedBy, userId), eq(media.avatar, false), isNull(media.villageId), isNull(media.deletedAt))).groupBy(media.id)
     .orderBy(desc(media.uploadedAt), media.id).limit(MEDIA_LIMITS.storedCount);
   if (!images.length) return [];
   const active = new Set(images.map(image => image.id));
@@ -149,7 +151,7 @@ export async function deleteOwnMedia(db: Db, userId: string, id: string, confirm
   return db.transaction(async tx => {
     await lockFigureMedia(tx);
     const [image] = await tx.select({ id: media.id }).from(media)
-      .where(and(eq(media.id, id), eq(media.uploadedBy, userId), eq(media.avatar, false), isNull(media.deletedAt))).for("update");
+      .where(and(eq(media.id, id), eq(media.uploadedBy, userId), eq(media.avatar, false), isNull(media.villageId), isNull(media.deletedAt))).for("update");
     if (!image) return { status: "not_found" as const };
     const ids = (await pairedMedia(tx, id)).map(image => image.id);
     const [usage] = await tx.select({ count: sql<number>`count(distinct ${entries.id})`.mapWith(Number) }).from(entryMedia).innerJoin(entries, eq(entries.id, entryMedia.entryId))
