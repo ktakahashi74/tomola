@@ -990,15 +990,15 @@
   "settings_handle_too_soon": "次に変えられるのは {date} です。",
   "nav_my_page": "自分のビレッジ",
   "member_page_write_intro": "自己紹介を書く",
-  "member_page_intro_hint": "関心のあることや、ここで話したいことを書いてください。本名や所属は、書かなくてかまいません。",
-  "intro_checkbox": "自己紹介として投稿する（あなたのページの先頭に出ます）",
+  "member_page_intro_hint": "自己紹介は、自己紹介の一覧にも出ます。短くても書いておくと、ほかの会員があなたを見つけやすくなります。関心のあることや、ここで話したいことを書いてください。本名や所属は、書かなくてかまいません。",
+  "intro_checkbox": "自己紹介として投稿する（あなたのページの先頭と、自己紹介の一覧に出ます）",
   "intro_set": "自己紹介にする",
   "intro_unset": "自己紹介から外す",
   "member_page_intro_heading": "自己紹介",
   "member_page_topics_heading": "投稿",
   "member_page_topics_empty": "まだ投稿はありません。",
   "member_page_read_languages": "{count}言語で読まれています",
-  "disclosure_member_page": "ほかの会員は、あなたのページで、あなたの自己紹介と投稿の一覧を見ることができます。",
+  "disclosure_member_page": "ほかの会員は、あなたのページで、あなたの自己紹介と投稿の一覧を見ることができます。自己紹介は、会員向けの自己紹介の一覧にも出ます。",
   "intro_error_invalid": "自己紹介には、自分が書いた、立場を聞かない投稿を選んでください。削除や非表示の投稿は選べません。",
   "public_reading_reply": "返信や「なるほど」には、ログインが要ります。参加は招待制です。",
   "public_reading_stances": "立場の選択と結果は、会員に表示されます。",
@@ -2235,5 +2235,8 @@
   "google_verify": "Google との連携・解除のために本人確認をする",
   "google_reauth_for": "Google でのログインの設定を変えるため、{who} として本人確認をしてください。",
   "google_privacy": "Google でのログインを選ぶと、Google はあなたが tomola にログインすることを知ります。tomola は Google からメールアドレスと Google アカウントの ID を受け取ります。名前と写真は要求せず、Google のアクセス・更新・ID トークンは保存しません。Google のメールアドレスは登録時に使い、別には保存しません。以後のログインのために、アカウントの ID と連携した日だけを保存します。ログインのために投稿や返信を Google に送ることはありません。Google で続けることを選ぶまで、tomola から Google への通信は行いません。",
-  "google_invitation_reopen": "招待のメールのリンクをもう一度開いてください。"
+  "google_invitation_reopen": "招待のメールのリンクをもう一度開いてください。",
+  "introductions_title": "自己紹介",
+  "introductions_empty": "まだ自己紹介はありません。",
+  "introductions_read": "自己紹介を読む"
 }

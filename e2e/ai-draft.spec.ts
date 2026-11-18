@@ -509,7 +509,7 @@ test("reply and edit previews retain their existing behavior while an AI draft c
 test("unavailable browser storage still permits a choice and reuses it on the same draft", async () => {
   await page.goto("/t/new?intro=1");
   await waitForFormReady(page.locator('form[method="post"]').first());
-  await page.getByRole("checkbox", { name: en.intro_checkbox, exact: true }).uncheck();
+  await page.locator('label:has(input[name="intro"])').getByRole("checkbox").uncheck();
   await body().fill("https://example.org/a\n\nKeep my note");
   await page.evaluate(() => {
     const read = Storage.prototype.getItem;
@@ -518,8 +518,8 @@ test("unavailable browser storage still permits a choice and reuses it on the sa
     Storage.prototype.setItem = function (key, value) { if (key === "tomola.openInAi") throw new Error("unavailable"); return write.call(this, key, value); };
   });
   // Reloading the editor would reset the mock; remount by switching introduction mode.
-  await page.getByRole("checkbox", { name: en.intro_checkbox, exact: true }).check();
-  await page.getByRole("checkbox", { name: en.intro_checkbox, exact: true }).uncheck();
+  await page.locator('label:has(input[name="intro"])').getByRole("checkbox").check();
+  await page.locator('label:has(input[name="intro"])').getByRole("checkbox").uncheck();
   await openHelp();
   await ask().click();
   const dialog = page.getByRole("dialog");

@@ -23,6 +23,7 @@ export function WelcomeNotice({ welcome: { kind, text }, handle, passkeyOffer, v
     <p className="font-semibold">{text.hello}</p>
     <ul className="flex flex-wrap gap-x-4 gap-y-1">
       <li><Link to={`/u/${handle}`} className="underline">{text.writeIntro}</Link></li>
+      <li><Link to="/introductions" className="underline">{text.readIntros}</Link></li>
       {villages && <li><Link to="/villages" className="underline">{text.seeVillages}</Link></li>}
       {passkeyOffer && <li><Link to="/settings#settings-passkeys" className="underline">{text.addPasskey}</Link></li>}
     </ul>

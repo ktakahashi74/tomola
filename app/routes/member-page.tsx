@@ -102,11 +102,13 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
           <h2 className="text-lg font-semibold">{m.member_page_intro_heading()}</h2>
           <TranslatedEntry key={`${intro.id}:${intro.display.translation?.lang ?? "-"}:${intro.display.shown}`} {...intro} kind="topic" showHeading={false} meta={null} />
           <Link to={`/t/${intro.id}`} className="link-ui">{m.card_open()}</Link>
+          <p><Link to="/introductions" className="link-ui">{m.introductions_read()}</Link></p>
         </section>
       ) : own ? (
         <section className="space-y-2">
           <Link to="/t/new?intro=1" className="link-ui">{m.member_page_write_intro()}</Link>
           <p className="ui-help text-muted-foreground">{m.member_page_intro_hint()}</p>
+          <Link to="/introductions" className="link-ui">{m.introductions_read()}</Link>
         </section>
       ) : null}
       {personal && <section className="space-y-3" id="village" aria-labelledby="personal-village-heading">

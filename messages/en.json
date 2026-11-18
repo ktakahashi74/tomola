@@ -1543,8 +1543,8 @@
   "settings_handle_too_soon": "You can change it again on {date}.",
   "nav_my_page": "My village",
   "member_page_write_intro": "Write an introduction",
-  "member_page_intro_hint": "Write what you are interested in or what you would like to discuss here. You do not need to give your real name or affiliation.",
-  "intro_checkbox": "Post as my introduction (shown at the top of your page)",
+  "member_page_intro_hint": "Your introduction also appears in the list of introductions. Even a short one helps other members find you. Write what you are interested in or what you would like to discuss here. You do not need to give your real name or affiliation.",
+  "intro_checkbox": "Post as my introduction (shown at the top of your page and in the list of introductions)",
   "intro_set": "Use as my introduction",
   "intro_unset": "Stop using as my introduction",
   "member_page_intro_heading": "Introduction",
@@ -1565,7 +1565,7 @@
       }
     }
   ],
-  "disclosure_member_page": "Other members can see your introduction and a list of your posts on your page.",
+  "disclosure_member_page": "Other members can see your introduction and a list of your posts on your page. Your introduction also appears in the members' list of introductions.",
   "intro_error_invalid": "For your introduction, choose a post you wrote that does not ask for stances. Deleted or hidden posts cannot be selected.",
   "public_reading_reply": "Log in to reply or mark a post as Insightful. Membership is by invitation.",
   "public_reading_stances": "Only members can choose a stance and see the results.",
@@ -3013,5 +3013,8 @@
   "google_verify": "Verify your identity to connect or disconnect Google",
   "google_reauth_for": "Verify your identity as {who} to change Google sign-in.",
   "google_privacy": "If you choose Google sign-in, Google learns that you sign in to tomola. tomola receives your email address and Google account ID; it does not request your name or photo, or store Google access, refresh or ID tokens. Your Google email address is used during registration and is not stored separately. Only the account ID and connection date are kept for later sign-ins. Posts and replies are not sent to Google for sign-in. tomola contacts Google only after you choose to continue with Google.",
-  "google_invitation_reopen": "Open the link in your invitation email again."
+  "google_invitation_reopen": "Open the link in your invitation email again.",
+  "introductions_title": "Introductions",
+  "introductions_empty": "No introductions yet.",
+  "introductions_read": "Read introductions"
 }

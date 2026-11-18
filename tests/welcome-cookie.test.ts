@@ -42,7 +42,7 @@ it("makes the greeting's words on the server, only when there is a greeting to s
   expect(welcomeFor(request(""), "mari")).toBeNull();
   const greeting = welcomeFor(request("tomola.welcome=article"), "mari");
   expect(greeting?.kind).toBe("article");
-  expect(Object.keys(greeting!.text).sort()).toEqual(["addPasskey", "close", "connectAi", "hello", "joined", "label", "replyLink", "seeVillages", "writeIntro"]);
+  expect(Object.keys(greeting!.text).sort()).toEqual(["addPasskey", "close", "connectAi", "hello", "joined", "label", "readIntros", "replyLink", "seeVillages", "writeIntro"]);
 });
 
 it("offers the connection guide in both post-signup greetings", () => {
@@ -52,5 +52,6 @@ it("offers the connection guide in both post-signup greetings", () => {
     expect(html).toContain('href="/connect"');
     expect(html).toContain("<aside");
     expect(html).toContain(messageMarkup(kind === "home" ? welcome.text.hello : welcome.text.joined));
+    if (kind === "home") expect(html.indexOf('href="/introductions"')).toBeGreaterThan(html.indexOf('href="/u/mari"'));
   }
 });

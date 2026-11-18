@@ -1132,15 +1132,15 @@
   "settings_handle_too_soon": "您可以在 {date} 再次更改。",
   "nav_my_page": "我的村",
   "member_page_write_intro": "撰写个人简介",
-  "member_page_intro_hint": "写下您感兴趣的内容或您想在这里讨论的话题。您无需提供真实姓名或单位信息。",
-  "intro_checkbox": "作为我的自我介绍发布（显示在您个人主页的顶部）",
+  "member_page_intro_hint": "你的自我介绍也会出现在自我介绍列表中。即使写得很短，也能让其他会员更容易找到你。可以写下你感兴趣的事，或想在这里讨论的话题。不必填写真实姓名或所属机构。",
+  "intro_checkbox": "作为我的自我介绍发布（显示在你的页面顶部和自我介绍列表中）",
   "intro_set": "设为我的个人简介",
   "intro_unset": "不再作为我的自我介绍",
   "member_page_intro_heading": "个人简介",
   "member_page_topics_heading": "帖子",
   "member_page_topics_empty": "暂无帖子。",
   "member_page_read_languages": "已在 {count} 种语言中被阅读",
-  "disclosure_member_page": "其他成员可以在您的个人主页上看到您的自我介绍和帖子列表。",
+  "disclosure_member_page": "其他会员可以在你的页面上看到你的自我介绍和帖子列表。你的自我介绍也会出现在面向会员的自我介绍列表中。",
   "intro_error_invalid": "作为个人简介，请选择一篇由你撰写且不征求立场的帖子。无法选择已删除或已隐藏的帖子。",
   "public_reading_reply": "登录后即可进行回复或将帖子标记为“有启发”。会员加入采用邀请制。",
   "public_reading_stances": "只有成员才能选择立场并查看结果。",
@@ -2442,5 +2442,8 @@
   "google_verify": "确认身份以关联或解除 Google 关联",
   "google_reauth_for": "请以 {who} 的身份进行验证，以更改 Google 登录设置。",
   "google_privacy": "如果选择 Google 登录，Google 会知道你登录了 tomola。tomola 会收到你的电子邮箱地址和 Google 账号 ID；不会请求你的姓名或照片，也不会保存 Google 的访问令牌、刷新令牌或 ID 令牌。Google 的电子邮箱地址仅在注册时使用，不会单独保存。后续登录仅保存账号 ID 和关联日期。帖子和回复不会因登录而发送给 Google。只有在你选择使用 Google 继续后，tomola 才会与 Google 通信。",
-  "google_invitation_reopen": "请重新打开邀请邮件中的链接。"
+  "google_invitation_reopen": "请重新打开邀请邮件中的链接。",
+  "introductions_title": "自我介绍",
+  "introductions_empty": "还没有自我介绍。",
+  "introductions_read": "阅读自我介绍"
 }

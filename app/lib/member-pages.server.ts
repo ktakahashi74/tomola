@@ -10,6 +10,7 @@ import { safeErrorText } from "~/lib/error-text.server";
 import { withMarkdownRead } from "./markdown-budget.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { entries, handleHolds, profiles, translations, villages } from "~/lib/db/schema";
 import { renderEntryHtml } from "~/lib/entries.server";
@@ -61,6 +62,11 @@ export type MemberPageOptions = {
 const PAGE_SIZE = 20;
 const pageNumber = (value = 1) => Number.isSafeInteger(value) && value > 0 && Number.isSafeInteger((value - 1) * PAGE_SIZE) ? value : 1;
 
+// Member pages and the introductions list share the same visibility rule.
+export function visibleIntroduction(member: { userId: string | AnyPgColumn; introEntryId: number | AnyPgColumn }) {
+  return and(eq(entries.id, member.introEntryId), eq(entries.authorId, member.userId), eq(entries.kind, "topic"), eq(entries.asksStance, false), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace());
+}
+
 export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, opts: MemberPageOptions): Promise<MemberPageContent> {
   const page = pageNumber(opts.page);
   const personalPage = pageNumber(opts.personalPage);
@@ -88,7 +94,7 @@ export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, 
   let intro: MemberPageContent["intro"] = null;
   if (member.introEntryId !== null) {
     const [row] = await db.select({ id: entries.id, lang: entries.lang, title: entries.title, body: entries.body, sourceHash: entries.sourceHash, mentionRevision: entries.mentionRevision, html: entries.html, htmlVersion: entries.htmlVersion })
-      .from(entries).where(and(eq(entries.id, member.introEntryId), eq(entries.authorId, member.userId), eq(entries.kind, "topic"), eq(entries.asksStance, false), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace()));
+      .from(entries).where(visibleIntroduction({ userId: member.userId, introEntryId: member.introEntryId }));
     if (row) {
       let html = row.html;
       if (html === null || row.htmlVersion !== RENDER_VERSION) {

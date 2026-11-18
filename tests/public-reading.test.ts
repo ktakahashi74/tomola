@@ -208,7 +208,7 @@ describe("public reading configuration and browser boundaries", () => {
 
   it("keeps all excluded screens behind login", async () => {
     vi.stubEnv("PUBLIC_READING", "1");
-    const routes = ["search", "member-page", "following", "notifications", "settings", "drafts", "glossary", "moderation", "mod", "admin-roles"];
+    const routes = ["search", "member-page", "introductions", "following", "notifications", "settings", "drafts", "glossary", "moderation", "mod", "admin-roles"];
     for (const name of routes) {
       const mod = await import(`../app/routes/${name}.tsx`);
       expect(await h.outcome(async () => (await mod.loader(h.args(h.request(`/${name}`), { handle: "writer" })))), name).toMatchObject({ status: 302 });

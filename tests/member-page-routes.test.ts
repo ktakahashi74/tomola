@@ -106,6 +106,7 @@ describe("member-page read boundaries", () => {
       expect(html).toMatch(/<span\b[^>]*lang="ja"[^>]*>日本語<\/span>/);
       expect(html).toContain("Introduction secret-free body.");
       expect(html).toContain(`href="/t/${plainId}"`);
+      expect(html).toContain('href="/introductions"');
       expect(html).not.toMatch(/aria-pressed|data-position|name="position"|\/stance(?:\?|"|<)|\/vote/);
       expect(html).not.toContain("Main language");
       expect(html).not.toContain("Languages you read");
@@ -127,6 +128,7 @@ describe("member-page read boundaries", () => {
         expect(loaded.intro).toBeNull();
         expect(loaded.topics.map(topic => topic.id)).not.toContain(introId);
         expect(await renderPage(loaded)).not.toContain("Introduction secret-free body.");
+        expect((await renderPage(loaded)).includes('href="/introductions"')).toBe(as === "author_member");
       }
       await h.db.update(entries).set({ [field]: null }).where(eq(entries.id, introId));
     }

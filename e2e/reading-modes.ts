@@ -62,6 +62,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["introductions", ".*"],
   ["chat-nushi", ".*"],
   ["post-ai-materials", "authors attach"],
   ["post-ask-ai", "member questions|unverified answers"],

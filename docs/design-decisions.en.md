@@ -248,6 +248,8 @@ Machine-facing details should not clutter manual reading, while AI representatio
 
 **Current implementation.** Usernames normalize to lowercase ASCII letters, digits, `_` and `-`. A first rename is allowed at any time; subsequent new names require ninety days. Previous names are reserved for ninety days against other members' registration or renaming. Members may return to an active own reservation during the waiting period without changing the ordinary-rename timestamp. Member pages show displayable owned topics and an owned non-question introduction selected by the member. They are member-only and expose neither personal unnamed positions nor an overall reaction score.
 
+**Discover people through introductions.** The member-only `/introductions` list shares introduction eligibility with member pages. It includes suspended members and excludes departed members. Posts are ordered by creation time and ID, newest first, using the home topic rows and pagination. Links appear in the welcome notice, member pages with an introduction, and one's own page without an introduction. Posting and signup guidance disclose the listing. This adds neither person-following nor an all-member directory, and the list has no Markdown, MCP, API, feed or sitemap representation.
+
 **Destination preservation and limits.** Literal `@old-name` text remains in the original while the resolved recipient's public ID is saved. Mention links lead to the current name; name reuse and rerendering do not retarget another person. Translations use revision-bound saved mentions too. Renaming does not rewrite past source text. The properties of this implementation alone do not explain the choice of ninety days.
 
 ## 41 Separate village membership from post visibility

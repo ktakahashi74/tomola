@@ -1132,15 +1132,15 @@
   "settings_handle_too_soon": "您可以在 {date} 再次更改。",
   "nav_my_page": "我的村",
   "member_page_write_intro": "撰寫自我介紹",
-  "member_page_intro_hint": "寫下您感興趣的事物，或您想在這裡討論的話題。您不需要提供真實姓名或所屬單位。",
-  "intro_checkbox": "作為我的自我介紹貼文（顯示在您個人頁面的頂端）",
+  "member_page_intro_hint": "你的自我介紹也會出現在自我介紹列表中。即使寫得很短，也能讓其他會員更容易找到你。可以寫下你感興趣的事，或想在這裡討論的話題。不必填寫真實姓名或所屬機構。",
+  "intro_checkbox": "作為我的自我介紹發布（顯示在你的頁面頂端和自我介紹列表中）",
   "intro_set": "設為我的自我介紹",
   "intro_unset": "停止設為我的自我介紹",
   "member_page_intro_heading": "自我介紹",
   "member_page_topics_heading": "貼文",
   "member_page_topics_empty": "目前尚無貼文。",
   "member_page_read_languages": "已在 {count} 種語言中被閱讀",
-  "disclosure_member_page": "其他成員可以在您的個人頁面上看到您的自我介紹和貼文列表。",
+  "disclosure_member_page": "其他會員可以在你的頁面上看到你的自我介紹和貼文列表。你的自我介紹也會出現在會員專用的自我介紹列表中。",
   "intro_error_invalid": "自我介紹請選擇一篇由您撰寫且不詢問立場的貼文。無法選擇已刪除或已隱藏的貼文。",
   "public_reading_reply": "登入即可回覆或將貼文標記為「有啟發」。會員加入採邀請制。",
   "public_reading_stances": "只有會員可以選擇立場並查看結果。",
@@ -2442,5 +2442,8 @@
   "google_verify": "確認身分以連結或解除 Google 連結",
   "google_reauth_for": "請以 {who} 的身分進行驗證，以變更 Google 登入設定。",
   "google_privacy": "如果選擇 Google 登入，Google 會知道你登入了 tomola。tomola 會收到你的電子郵件地址和 Google 帳戶 ID；不會要求你的姓名或照片，也不會儲存 Google 的存取權杖、更新權杖或 ID 權杖。Google 的電子郵件地址僅在註冊時使用，不會另行儲存。後續登入僅保留帳戶 ID 和連結日期。貼文和回覆不會因登入而傳送給 Google。只有在你選擇使用 Google 繼續後，tomola 才會與 Google 通訊。",
-  "google_invitation_reopen": "請重新開啟邀請電子郵件中的連結。"
+  "google_invitation_reopen": "請重新開啟邀請電子郵件中的連結。",
+  "introductions_title": "自我介紹",
+  "introductions_empty": "還沒有自我介紹。",
+  "introductions_read": "閱讀自我介紹"
 }

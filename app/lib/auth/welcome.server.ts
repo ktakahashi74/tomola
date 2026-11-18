@@ -30,7 +30,7 @@ export const welcomeMiddleware: MiddlewareFunction = async ({ request }, next) =
 
 export type WelcomeData = {
   kind: WelcomeKind;
-  text: { label: string; joined: string; replyLink: string; hello: string; writeIntro: string; seeVillages: string; addPasskey: string; connectAi: string; close: string };
+  text: { label: string; joined: string; replyLink: string; hello: string; writeIntro: string; readIntros: string; seeVillages: string; addPasskey: string; connectAi: string; close: string };
 };
 
 // What the greeting says, in the language of this request, or null when there is nothing to greet. Made on the server so the words stay out of the page's script.
@@ -39,6 +39,6 @@ export function welcomeFor(request: Request, handle: string): WelcomeData | null
   if (!kind) return null;
   return { kind, text: {
     label: m.welcome_label(), joined: m.welcome_joined({ handle }), replyLink: m.welcome_reply_link(), hello: m.welcome_hello({ handle }),
-    writeIntro: m.welcome_write_intro(), seeVillages: m.welcome_see_villages(), addPasskey: m.welcome_add_passkey(), connectAi: m.connect_keep_using_link(), close: m.welcome_close(),
+    writeIntro: m.welcome_write_intro(), readIntros: m.introductions_read(), seeVillages: m.welcome_see_villages(), addPasskey: m.welcome_add_passkey(), connectAi: m.connect_keep_using_link(), close: m.welcome_close(),
   } };
 }

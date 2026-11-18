@@ -84,17 +84,17 @@ export async function exercisePrehydration(page: Page, info: TestInfo) {
       });
       if (scenario.earlyKind === "asksStance") await expect(form().getByRole("checkbox", { name: en.asks_stance_checkbox, exact: true })).toBeChecked();
       if (scenario.earlyKind === "ordinary") await expect(form().getByRole("checkbox", { name: en.asks_stance_checkbox, exact: true })).not.toBeChecked();
-      if (scenario.earlyKind === "intro") await expect(form().getByRole("checkbox", { name: en.intro_checkbox, exact: true })).toBeChecked();
+      if (scenario.earlyKind === "intro") await expect(form().locator('input[name="intro"]')).toBeChecked();
       await expect(titleField(page)).toHaveValue(scenario.title);
       await form().locator("[data-post-settings]").evaluate(element => { (element as HTMLDetailsElement).open = true; });
       await form().getByRole("combobox", { name: en.field_lang, exact: true }).click();
       await page.getByRole("listbox").getByRole("option", { name: "English", exact: true }).click();
       await expect(titleField(page)).toHaveValue(scenario.title);
-      for (const name of [en.asks_stance_checkbox, ...(introductionEntry ? [en.intro_checkbox] : [])]) {
-        const control = form().getByRole("checkbox", { name, exact: true });
+      for (const name of ["asksStance", ...(introductionEntry ? ["intro"] : [])]) {
+        const control = form().locator(`label:has(input[name="${name}"])`).getByRole("checkbox");
         await control.check();
         await expect(titleField(page)).toHaveValue(scenario.title);
-        if (name === en.asks_stance_checkbox) await expect(titleField(page)).toHaveJSProperty("required", !scenario.body.startsWith("---"));
+        if (name === "asksStance") await expect(titleField(page)).toHaveJSProperty("required", !scenario.body.startsWith("---"));
         await control.uncheck();
         await expect(titleField(page)).toHaveValue(scenario.title);
       }

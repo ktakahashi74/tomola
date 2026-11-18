@@ -231,6 +231,8 @@ try {
   await seedConfirmReasons(relatedDb);
   const { seedMembers } = await import("./seed-members");
   await seedMembers(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
+  const { seedIntroductions } = await import("./seed-introductions");
+  await seedIntroductions(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
   const { seedTranslationReportResults } = await import("./seed-translation-report-results");
   await seedTranslationReportResults(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
   const { seedReadingActions } = await import("./seed-reading-actions");

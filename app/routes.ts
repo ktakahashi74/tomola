@@ -138,6 +138,7 @@ export default [
         route("drafts/:id", "routes/draft.tsx"),
       ]),
       index("routes/home.tsx"),
+      route("introductions", "routes/introductions.tsx"),
       route("t/:id/ai-materials/:view?", "routes/post-ai-materials.tsx"),
       route("t/:id/ask", "routes/post-ask-ai.tsx"),
       route("following", "routes/following.tsx"),

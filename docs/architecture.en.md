@@ -69,6 +69,8 @@ Usernames are identifiers using lowercase ASCII letters, digits, `_` and `-`. Or
 
 `/u/:handle` is a member-only page listing the member's undeleted, unhidden topics in public-kind places. An owned non-question post can serve as an introduction. Pages show neither an overall reaction score nor personal unnamed positions. Mentions save the public ID resolved when written and link through `/u/id/:publicId` to the current username. Name reuse and rerendering do not retarget old mentions to another person.
 
+`/introductions` is a member-only list of introductions readable under the same conditions as member pages, ordered by post creation time and ID, newest first. Introductions by suspended members remain included; those of departed members do not. Links appear in the welcome notice and member pages. It uses the home topic rows and pagination and offers readers without an introduction a writing link and an explanation of where it appears. The list has no Markdown, MCP, API, feed or sitemap representation.
+
 ### 2.3 Village chat
 
 `VILLAGE_CHAT=1` requires `VILLAGES=1`; both default off. Ordinary chat access requires current village membership and acceptance of the current consent version. An owner or operator role alone grants no ordinary message access. Plain-text messages, committed per-village change sequences and read cursors use separate tables. Browser change fetches and content-free SSE signals synchronize them. SSE connections are managed within one process; periodic fetches catch changes from other processes.

@@ -57,7 +57,7 @@ test("new-post explanations follow the question choice and introduction entry po
     await expect(tips().getByText(ja.media_help, { exact: true })).toBeVisible();
     await snapshot("new-writing-tips", width);
     await page.goto("/t/new?intro=1");
-    await expect(page.getByRole("checkbox", { name: ja.intro_checkbox, exact: true })).toBeChecked();
+    await expect(page.locator('input[name="intro"]')).toBeChecked();
     await expect(page.getByRole("button", { name: ja.media_insert, exact: true })).toBeVisible();
     await snapshot("new-introduction", width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

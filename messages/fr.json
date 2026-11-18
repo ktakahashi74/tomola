@@ -1581,8 +1581,8 @@
   "settings_handle_too_soon": "Vous pourrez le modifier à nouveau le {date}.",
   "nav_my_page": "Mon village",
   "member_page_write_intro": "Rédiger une présentation",
-  "member_page_intro_hint": "Écrivez ce qui vous intéresse ou ce dont vous aimeriez discuter ici. Vous n'avez pas besoin de donner votre vrai nom ou votre affiliation.",
-  "intro_checkbox": "Publier comme ma présentation (affichée en haut de votre page)",
+  "member_page_intro_hint": "Votre présentation apparaît aussi dans la liste des présentations. Même courte, elle aide les autres membres à vous trouver. Écrivez ce qui vous intéresse ou ce dont vous aimeriez discuter ici. Vous n’avez pas besoin d’indiquer votre vrai nom ni votre affiliation.",
+  "intro_checkbox": "Publier comme ma présentation (affichée en haut de votre page et dans la liste des présentations)",
   "intro_set": "Utiliser comme présentation",
   "intro_unset": "Ne plus utiliser comme introduction",
   "member_page_intro_heading": "Présentation",
@@ -1604,7 +1604,7 @@
       }
     }
   ],
-  "disclosure_member_page": "Les autres membres peuvent voir votre présentation et la liste de vos publications sur votre page.",
+  "disclosure_member_page": "Les autres membres peuvent voir votre présentation et la liste de vos publications sur votre page. Votre présentation apparaît aussi dans la liste des présentations réservée aux membres.",
   "intro_error_invalid": "Pour votre présentation, choisissez une publication que vous avez rédigée et qui ne demande pas de position. Les publications supprimées ou masquées ne peuvent pas être sélectionnées.",
   "public_reading_reply": "Connectez-vous pour répondre ou marquer une publication comme Éclairante. L'adhésion se fait sur invitation.",
   "public_reading_stances": "Seuls les membres peuvent choisir une position et voir les résultats.",
@@ -3067,5 +3067,8 @@
   "google_verify": "Confirmer votre identité pour associer ou dissocier Google",
   "google_reauth_for": "Confirmez votre identité en tant que {who} pour modifier la connexion avec Google.",
   "google_privacy": "Si vous choisissez la connexion avec Google, Google sait que vous vous connectez à tomola. tomola reçoit votre adresse e-mail et l’identifiant de votre compte Google ; il ne demande ni votre nom ni votre photo et ne conserve aucun jeton Google d’accès, d’actualisation ou d’identité. Votre adresse e-mail Google sert lors de l’inscription et n’est pas enregistrée séparément. Seuls l’identifiant du compte et la date d’association sont conservés pour les connexions suivantes. Les publications et les réponses ne sont pas envoyées à Google pour la connexion. tomola contacte Google uniquement après votre choix de continuer avec Google.",
-  "google_invitation_reopen": "Ouvrez à nouveau le lien dans votre e-mail d’invitation."
+  "google_invitation_reopen": "Ouvrez à nouveau le lien dans votre e-mail d’invitation.",
+  "introductions_title": "Présentations",
+  "introductions_empty": "Il n’y a pas encore de présentations.",
+  "introductions_read": "Lire les présentations"
 }

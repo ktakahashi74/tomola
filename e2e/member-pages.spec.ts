@@ -52,7 +52,7 @@ test("the introduction default and question choice are mutually exclusive, and p
   await owner.getByRole("link", { name: en.member_page_write_intro, exact: true }).click();
   await expect(owner).toHaveURL(/\/t\/new\?intro=1$/);
   await waitForFormReady(owner.locator("form", { has: titleField(owner) }));
-  const intro = owner.getByRole("checkbox", { name: en.intro_checkbox, exact: true });
+  const intro = owner.locator('label:has(input[name="intro"])').getByRole("checkbox");
   const question = owner.getByRole("checkbox", { name: en.asks_stance_checkbox, exact: true });
   await expect(intro).toBeChecked();
   await expect(owner.getByRole("button", { name: en.ai_write_button, exact: true })).toHaveCount(0);
