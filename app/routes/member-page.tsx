@@ -117,9 +117,9 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
           {!own && <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={personal.following} name="intent" value={personal.following ? "unfollow" : "follow"}>{personal.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>}
         </div>
         {!own && <p className="ui-help text-muted-foreground">{m.member_page_village_follow_hint()}</p>}
-        {loaderData.nushiVoiceHref && <Link className="underline" to={loaderData.nushiVoiceHref}>{m.nushi_voice_title()}</Link>}
         <MemberTopics topics={personal.topics} own={own} />
         <Pagination page={personal.page} hasNext={personal.hasNext} pageParam="vpage" anchor="#village" />
+        {loaderData.nushiVoiceHref && <Link className="link-ui inline-block" to={loaderData.nushiVoiceHref}>{m.village_nushi_title()}</Link>}
       </section>}
       <section className="space-y-3" id="posts">
         <h2 className={personal || intro || own ? "text-lg font-semibold" : "sr-only"}>{personal ? m.member_page_elsewhere() : m.member_page_topics_heading()}</h2>

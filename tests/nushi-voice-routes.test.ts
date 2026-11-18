@@ -10,12 +10,14 @@ import { nushiFixture } from "./helpers/nushi";
 import { renderInRouter } from "./helpers/render-in-router";
 import { getProfile } from "~/lib/profiles.server";
 import { personalVoiceVillage, setNushiVoice } from "~/lib/nushi-voice.server";
+import { createTopic } from "~/lib/entries.server";
 
-const auth = vi.hoisted(() => ({ getReader: vi.fn(), requireWriter: vi.fn() }));
-vi.mock("~/lib/auth/session.server", () => ({ getReader: auth.getReader, requireWriter: auth.requireWriter }));
+const auth = vi.hoisted(() => ({ getReader: vi.fn(), requireWriter: vi.fn(), requireMember: vi.fn() }));
+vi.mock("~/lib/auth/session.server", () => ({ getReader: auth.getReader, requireWriter: auth.requireWriter, requireMember: auth.requireMember }));
 import Village, { loader as villageLoader, action as villageAction } from "~/routes/village";
 import VillageNushi, { loader as nushiLoader, action as nushiAction } from "~/routes/village-nushi";
 import { loader as personalLoader, action as personalAction } from "~/routes/personal-village-voice";
+import MemberPage, { loader as memberLoader } from "~/routes/member-page";
 
 beforeEach(() => setTestMessages(jsonMessages()));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); setTestMessages(); });
@@ -147,6 +149,46 @@ it("exposes only public style information on a personal village page and gates i
   vi.stubEnv("VILLAGE_NUSHI_VOICE", "0"); auth.getReader.mockClear();
   await expect(personalLoader(args)).rejects.toMatchObject({ init: { status: 404 } });
   expect(auth.getReader).not.toHaveBeenCalled();
+});
+
+it("links to the personal Nushi after posts and pagination, for the owner or readers with style history", async () => {
+  const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
+  const topic = await createTopic(f.db, "nushi-owner", { title: "Personal post", body: "A personal village post.", lang: "en", village: "@znushi_owner" });
+  expect(topic.ok).toBe(true);
+  const href = "/v/personal/znushi_owner#nushi-voice";
+  const args = { request: request("/u/znushi_owner"), params: { handle: "znushi_owner" } } as never;
+  const load = async (id: string) => {
+    auth.requireMember.mockResolvedValue({ db: f.db, user: { id }, profile: await getProfile(f.db, id) });
+    return memberLoader(args);
+  };
+  const render = async (id: string, visible: boolean) => {
+    const view = await load(id);
+    if (visible) expect(view).toHaveProperty("nushiVoiceHref", href);
+    else expect(view).not.toHaveProperty("nushiVoiceHref");
+    const html = await renderInRouter(() => createElement(MemberPage, { loaderData: { ...view, personal: { ...view.personal!, hasNext: true } } } as never), "/u/znushi_owner");
+    expect(html.includes(`href="${href}"`)).toBe(visible);
+    if (visible) {
+      expect(html).toContain(`<a class="link-ui inline-block" href="${href}"`);
+      expect(html).toContain(`>${renderToStaticMarkup(m.village_nushi_title())}</a>`);
+      const link = html.indexOf(`href="${href}"`);
+      expect(html.indexOf("Personal post")).toBeGreaterThan(-1);
+      expect(html.indexOf('rel="next"')).toBeGreaterThan(-1);
+      expect(link).toBeGreaterThan(html.indexOf("Personal post"));
+      expect(link).toBeGreaterThan(html.indexOf('rel="next"'));
+      expect(html).toContain("vpage=2#village");
+      expect(link).toBeLessThan(html.indexOf('id="posts"'));
+    }
+  };
+  await render("nushi-owner", true);
+  await render("nushi-caller", false);
+  const village = (await personalVoiceVillage(f.db, "znushi_owner"))!;
+  await setNushiVoice(f.db, "nushi-owner", village.id, "Brief.");
+  await render("nushi-caller", true);
+  await setNushiVoice(f.db, "nushi-owner", village.id, "");
+  await render("nushi-caller", true);
+  vi.stubEnv("VILLAGE_NUSHI_VOICE", "0");
+  await render("nushi-owner", false);
+  await render("nushi-caller", false);
 });
 
 it.each([false, true])("enforces writer ownership, length and origin at the action, personal=%s", async personal => {

@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
+import { clientHeaders, enMessages as en, messageTitleField, state, useMember, waitForClientRoute } from "./helpers";
 
 test("owners publish a speaking style and readers follow answer labels to its history", async ({ page, browser }) => {
   test.setTimeout(180_000);
@@ -122,16 +122,39 @@ test("owners publish a speaking style and readers follow answer labels to its hi
 test("a personal village's holder edits a style without exposing the member page", async ({ page, browser }) => {
   test.skip(process.env.VILLAGE_NUSHI_VOICE !== "1", "Speaking styles are disabled");
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.243"));
-  await useMember(page, "znushi_flow_owner@example.com", "/v/personal/znushi_flow_owner?lang=en");
+  await useMember(page, "znushi_flow_owner@example.com", "/t/new?lang=en");
   await waitForClientRoute(page);
-  await expect(page.locator("#nushi-voice [data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
-  const setting = page.locator("#village-management [data-nushi-voice-setting]");
-  await setting.locator('textarea[name="voice"]').fill("A polite personal village style.");
-  await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
-  await expect(page.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
+  await messageTitleField(page).fill("Personal Nushi browser post");
+  await page.getByLabel(en.field_body, { exact: true }).fill("A personal village post.");
+  await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+  await expect(page).toHaveURL(/\/t\/\d+/);
+  const memberPath = "/u/znushi_flow_owner?lang=en";
+  const voiceHref = "/v/personal/znushi_flow_owner#nushi-voice";
+  await page.goto(memberPath);
+  const link = page.locator("#village").getByRole("link", { name: en.village_nushi_title, exact: true });
+  await expect(link).toHaveAttribute("href", voiceHref);
+  await expect(page.locator("#village ul .topic-row")).toHaveCount(1);
+  expect(await link.evaluate(link => {
+    const posts = link.closest("#village")?.querySelector("ul");
+    return !!posts && !!(posts.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
   const guest = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.244") });
   try {
     const reader = await guest.newPage();
+    await useMember(reader, "znushi_flow_caller@example.com", memberPath);
+    const readerLink = reader.locator("#village").getByRole("link", { name: en.village_nushi_title, exact: true });
+    await expect(readerLink).toHaveCount(0);
+    await link.click();
+    await expect(page.locator("#nushi-voice [data-nushi-voice-text]")).toHaveText(en.nushi_voice_default);
+    const setting = page.locator("#village-management [data-nushi-voice-setting]");
+    await setting.locator('textarea[name="voice"]').fill("A polite personal village style.");
+    await setting.getByRole("button", { name: en.nushi_voice_save, exact: true }).click();
+    await expect(page.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
+    await reader.reload();
+    await expect(readerLink).toHaveAttribute("href", voiceHref);
+    await readerLink.click();
+    await expect(reader.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
+    await guest.clearCookies();
     for (const handle of ["zcn_flow_caller", "unknown_voice_handle"]) expect((await reader.request.get(`/v/personal/${handle}`)).status()).toBe(404);
     await reader.goto("/v/personal/znushi_flow_owner?lang=en");
     await expect(reader.locator("[data-nushi-voice-text]")).toHaveText("A polite personal village style.");
