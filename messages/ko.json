@@ -3007,5 +3007,11 @@
   "error_topic_body_too_long": "본문이 너무 깁니다. 100,000 이내로 줄여 주세요(너비가 넓은 문자와 전각 문자는 2로 계산).",
   "topic_body_count_over": "{count} 초과",
   "topic_body_limit_hint": "본문은 100,000까지입니다(너비가 넓은 문자와 전각 문자는 2로 계산).",
-  "error_body_too_many_special_characters": "이모지 등 특수 문자가 너무 많습니다. 일부를 줄여 주세요."
+  "error_body_too_many_special_characters": "이모지 등 특수 문자가 너무 많습니다. 일부를 줄여 주세요.",
+  "writing_guide_title": "AI에게 글쓰기를 맡길 때",
+  "writing_guide_prompt": "AI에게 tomola에 올릴 글을 써 달라고 할 때는 이 안내 페이지의 주소를 전달하세요.",
+  "writing_guide_formats": "Markdown, 수식, 이미지, 움직이는 그림의 작성법과 제한을 안내합니다.",
+  "writing_guide_language": "한 언어로 작성하세요. 번역은 tomola가 제공합니다.",
+  "writing_guide_rights": "직접 쓴 글이나 공개 허락을 받은 자료만 사용하고, 모든 이미지에 설명을 작성하세요.",
+  "writing_guide_publish": "AI는 초안까지 만들 수 있습니다. 내용을 확인하고 브라우저의 승인 화면에서 직접 공개하세요."
 }

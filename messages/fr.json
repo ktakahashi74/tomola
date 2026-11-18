@@ -3116,5 +3116,11 @@
   "error_topic_body_too_long": "Le texte est trop long. Réduisez-le à 100 000 (les caractères larges ou de pleine chasse comptent pour 2).",
   "topic_body_count_over": "{count} de trop",
   "topic_body_limit_hint": "Limite du texte : 100 000 (les caractères larges ou de pleine chasse comptent pour 2).",
-  "error_body_too_many_special_characters": "Il y a trop de caractères spéciaux, comme des émojis. Supprimez-en quelques-uns."
+  "error_body_too_many_special_characters": "Il y a trop de caractères spéciaux, comme des émojis. Supprimez-en quelques-uns.",
+  "writing_guide_title": "Écrire avec votre IA",
+  "writing_guide_prompt": "Si vous demandez à votre IA d’écrire pour tomola, donnez-lui l’adresse de ce guide.",
+  "writing_guide_formats": "Le guide présente Markdown, les formules, les images, les figures animées et leurs limites.",
+  "writing_guide_language": "Écrivez dans une seule langue. tomola fournit les traductions.",
+  "writing_guide_rights": "Utilisez vos propres textes ou des contenus que vous avez l’autorisation de publier. Décrivez chaque image.",
+  "writing_guide_publish": "Votre IA peut préparer un brouillon. Vous le relisez et le publiez depuis l’écran d’approbation du navigateur."
 }

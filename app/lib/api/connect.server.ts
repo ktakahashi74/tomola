@@ -2,6 +2,7 @@ import en from "../../../messages/en.json";
 import { AI_USE_GUIDANCE, AI_USE_GUIDANCE_TITLE } from "~/lib/api/ai-use-guidance.server";
 import { CONNECT_MD_PATH, CONNECT_PATH, CONNECTIONS_SETTINGS_PATH, MCP_SCOPES } from "~/lib/connect-paths";
 import { siteOrigin } from "~/lib/http/csrf.server";
+import { WRITING_MD_PATH } from "~/lib/writing-paths";
 import { publicReading } from "~/lib/public-reading.server";
 
 // How to connect an AI tool to this site, held as data in one place. /connect.md (for the AI), /connect (for people), /help/mcp.md and /help/ai.md are all made from
@@ -243,6 +244,8 @@ export function connectMarkdown(plan: ConnectPlan = connectPlan()): string {
   return `# Connect your AI to tomola
 
 Use these steps when your user asks to use ${plan.host}. This page is for the AI; the short page for people is ${plan.connectUrl}.
+
+To prepare Markdown and images for a post or reply, read ${plan.origin}${WRITING_MD_PATH}.
 
 ${connectAccountSection(plan)}
 ## Connect with Streamable HTTP

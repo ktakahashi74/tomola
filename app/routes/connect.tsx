@@ -9,6 +9,7 @@ import { getDb } from "~/lib/db/client.server";
 import { listConnections } from "~/lib/mcp/connections.server";
 import { withMarkdownRead } from "~/lib/markdown-budget.server";
 import { m } from "~/paraglide/messages.js";
+import { WRITING_PATH } from "~/lib/writing-paths";
 import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
 import type { Route } from "./+types/connect";
 
@@ -74,7 +75,7 @@ export default function Connect({ loaderData }: Route.ComponentProps) {
           </div>
         </fieldset>)}
       </div>
-      <p>{text.write}</p>
+      <p><span>{text.write}</span> <Link to={WRITING_PATH} className="underline">{m.writing_guide_title()}</Link></p>
       <p>{text.publish}</p>
       <section aria-labelledby="connect-offline-heading" className="space-y-3">
         <h2 id="connect-offline-heading" className="text-lg font-semibold">{text.offline}</h2>

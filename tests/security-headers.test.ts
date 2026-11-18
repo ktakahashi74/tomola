@@ -67,7 +67,7 @@ it("protects member root data on public documents while preserving guest and doc
   try {
     for (const mode of ["", "1"]) {
       vi.stubEnv("PUBLIC_READING", mode);
-      for (const path of ["/why.data", "/name.data", "/name/.data"]) {
+      for (const path of ["/why.data", "/name.data", "/name/.data", "/writing.data", "/writing/.data"]) {
         for (const [selection, cookie, expected] of [
           ["", "better-auth.session_token=present", "private, no-store"],
           ["?_routes=root", "better-auth.session_token=present", "private, no-store"],

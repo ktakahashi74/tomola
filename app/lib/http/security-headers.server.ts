@@ -132,7 +132,7 @@ export const securityHeadersMiddleware: MiddlewareFunction = async ({ context, r
   // On the server, next() returns a Response (typed as unknown).
   const url = new URL(request.url);
   const documentPath = url.pathname.replace(/\/_\.data$/, "/").replace(/\.data$/, "");
-  const publicStatic = /^\/(principles|why|name|connect|offline)\/?$/.test(documentPath);
+  const publicStatic = /^\/(principles|why|name|connect|writing|offline)\/?$/.test(documentPath);
   const memberOnly = /^\/(settings|notifications|drafts?|mod|admin|invites|onboarding|suspended|login|auth|mcp)(?:\/|$)/.test(documentPath);
   // Root data includes account appearance even on public information pages.
   // Document-only fetches still carry no member preference.

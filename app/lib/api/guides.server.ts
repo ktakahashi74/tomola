@@ -1,4 +1,5 @@
 import { operatorDocument } from "~/lib/operator-config.server";
+import { WRITING_MD_PATH } from "~/lib/writing-paths";
 import { DRAFT_RESPONSE_GUIDE } from "./draft-response-guide";
 import { accountsSection, connectPlan, connectPointer } from "~/lib/api/connect.server";
 import { AI_USE_GUIDANCE, AI_USE_GUIDANCE_TITLE } from "~/lib/api/ai-use-guidance.server";
@@ -77,6 +78,7 @@ Each page has a Markdown twin at the same URL plus \`.md\` (or \`.txt\`; identic
 ${publicReading() ? `- RSS feed of the newest topics (RSS 2.0, no credentials; 30 items, titles and the beginning of each post; \`?lang=<tag>\` gives titles and descriptions in that language): ${o}/feed.xml
 ${villagesEnabled() ? `- RSS feed of one village: ${o}/v/<slug>/feed.xml
 ` : ""}` : ""}- The principles of the site (public, no token needed; Japanese is the original. Add \`?lang=<tag>\` to choose an edition. Available editions (${principlesLangs().length}): ${principlesLangs().join(", ")}, independently of the posting and interface languages in ENABLED_LANGS. The frontmatter \`status\` gives each edition's review state; current states: ${principlesStatuses}): ${o}/principles.md
+- Writing Markdown, preparing images and creating drafts (public): ${o}${WRITING_MD_PATH}
 - This guide: ${o}/llms.txt. Usage policy: ${o}/ai.txt. Examples: ${o}/help/ai.md. OpenAPI 3.1: ${o}/api/openapi.json. Steps for connecting an AI tool (public): ${o}/connect.md
 
 The HTML pages link to their twin with <link rel="alternate" type="text/markdown">.
@@ -176,7 +178,7 @@ A member can call another member by writing \`@handle\` in the body of a topic o
 
 ## Authentication
 
-${publicReading() ? "Thread, home, latest and language-list Markdown twins can be read without credentials. Stance distributions, search, change feeds, the manifest, following and glossary require one of:" : `When public reading is disabled, every Markdown twin and read API above except this guide, ${o}/ai.txt, ${o}/help/ai.md, ${o}/api/openapi.json, ${o}/principles.md, ${o}/languages.md, ${o}/ai-use.md and ${o}/connect.md needs one of:`}
+${publicReading() ? "Thread, home, latest and language-list Markdown twins can be read without credentials. Stance distributions, search, change feeds, the manifest, following and glossary require one of:" : `When public reading is disabled, every Markdown twin and read API above except this guide, ${o}/ai.txt, ${o}/help/ai.md, ${o}/api/openapi.json, ${o}/principles.md, ${o}/languages.md, ${o}/ai-use.md, ${o}/connect.md and ${o}${WRITING_MD_PATH} needs one of:`}
 
 1. The browser session cookie.
 2. \`Authorization: Bearer tml_read_…\`: a read token (members create tokens at ${o}/settings/tokens).
@@ -307,6 +309,8 @@ Chinese is two languages, named by script: \`zh-Hans\` (Simplified characters, m
 The first block of a thread file is an overview (\`type: index\`): \`replies_readable\` counts the replies you can read now and \`reply_langs\` the original languages they are written in (a number, not a count per language), and \`replies_on_page\` lists the replies on this page. It is a count of what is readable, not proof of what you or anyone has read or processed. A post with \`unicode_review_reasons\` matched a fixed rule (\`bidi_control\` or \`tag_characters\`) and may deserve a person's look; that is not a finding of an attack or a violation, and a post without it is not thereby safe. Reading through Markdown, the API or MCP does not mark notifications as read or move unread positions; the ordinary pages in a browser still do, for a person or an AI driving a browser alike, and the \`o=\` receipt of an "Open in AI" link is a separate record.
 
 ## 4. Send a draft
+
+For supported Markdown, image preparation, limits and importing a blog post, read ${o}${WRITING_MD_PATH}.
 
 Posts under your name are only those you have confirmed: the API creates a draft, and you read it and publish it in the browser.
 

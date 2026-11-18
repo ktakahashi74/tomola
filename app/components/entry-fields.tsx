@@ -8,6 +8,7 @@ import { BodyCounter } from "~/components/body-counter";
 import { DetailsNotice } from "~/components/details-notice";
 import { MentionTextarea } from "~/components/mention-autocomplete";
 import type { Lang, SourceLang } from "~/lib/languages";
+import { WRITING_PATH } from "~/lib/writing-paths";
 import { m } from "~/paraglide/messages.js";
 
 // Shared post-form fields (body and language). No field asks how AI was used; only pasted frontmatter or the API carries ai_assistance.
@@ -108,6 +109,7 @@ export function EntryFields({
         <FieldDescription className="whitespace-pre-line">{m.writing_details_help()}</FieldDescription>
         <FieldDescription>{m.related_link_help()}</FieldDescription>
         {writingHelp}
+        <FieldDescription><a href={WRITING_PATH} target="_blank" rel="noreferrer" className="underline">{m.writing_guide_title()}</a></FieldDescription>
         <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
       </details>
       <div hidden={richActive}><EntryPreview kind={previewKind} fixedLang={fixedLang} pasteFrontmatter={pasteFrontmatter} invalidateOnEdit={invalidatePreviewOnEdit} selectedLang={previewLanguage ?? previewLang} /></div>

@@ -2476,5 +2476,11 @@
   "error_topic_body_too_long": "正文过长。请缩短至10万以内（宽字符和全角字符按2计数）。",
   "topic_body_count_over": "超出{count}",
   "topic_body_limit_hint": "正文上限为10万（宽字符和全角字符按2计数）。",
-  "error_body_too_many_special_characters": "表情符号等特殊字符过多。请减少一些。"
+  "error_body_too_many_special_characters": "表情符号等特殊字符过多。请减少一些。",
+  "writing_guide_title": "让 AI 帮您写作",
+  "writing_guide_prompt": "让 AI 为 tomola 撰写文章时，请把本指南的地址交给它。",
+  "writing_guide_formats": "指南介绍 Markdown、公式、图片、动态图的写法及其限制。",
+  "writing_guide_language": "请使用一种语言写作，翻译由 tomola 提供。",
+  "writing_guide_rights": "请使用自己的文字或已获准公开的内容，并为每张图片写下说明。",
+  "writing_guide_publish": "AI 可以准备草稿。请您核对内容，并在浏览器的批准页面亲自发布。"
 }

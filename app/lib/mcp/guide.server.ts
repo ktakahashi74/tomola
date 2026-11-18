@@ -1,3 +1,4 @@
+import { WRITING_MD_PATH } from "~/lib/writing-paths";
 import { DRAFT_RESPONSE_GUIDE } from "~/lib/api/draft-response-guide";
 import { accountsRequirement, clientReferencesMarkdown, clientSetupMarkdown, connectAccountSection, connectManualSection, connectPlan, connectSafetySection, connectVerificationSection } from "~/lib/api/connect.server";
 import { siteUrl } from "~/lib/md/urls.server";
@@ -25,6 +26,8 @@ ${clientSetupMarkdown(plan)}
 ${connectSafetySection(plan)}
 
 ## Available actions
+
+Before preparing a post or reply, read ${plan.origin}${WRITING_MD_PATH} for Markdown syntax, image preparation and limits.
 
 read: tomola_thread (original plus optional selected translation and version IDs), tomola_search, tomola_latest (optional sourceLang), tomola_activity (public changes or content-only notifications), tomola_stance_counts (aggregate counts and the shared daily reasons), tomola_glossary.
 

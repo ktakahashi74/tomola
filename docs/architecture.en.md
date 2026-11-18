@@ -107,6 +107,8 @@ When signing is enabled, an operation requires content-bound confirmation and a 
 
 ### 3.2 Drafts from external AI
 
+Authors can give their AI `/writing.md` (also `/writing.txt`, with identical content). This English guide covers syntax, limits, importing content and creating drafts. Body and image limits come from code constants, some syntax examples are shared with the rendering calibration specimen, and draft diagnostics reuse the existing guide. The short `/writing` page offers an address-copy button and key points. Both pages are readable without login and linked from new-post and edit writing tips, connection guidance and `llms.txt`. Authors upload images by opening the draft in their browser; the AI guide keeps this limitation in one section. The pages contain no member content or credentials.
+
 External AI can read posts and create drafts within the permissions granted by a member. Drafts are bound to that member and the creating client. A client's credentials do not provide access to drafts created in the browser or by another client.
 
 The member publishes in the browser. The AI-draft confirmation flow presents the full text, destination, last client, and changes. When the member has enabled signing, a passkey signature is added to this confirmation. API and MCP credentials cannot publish.

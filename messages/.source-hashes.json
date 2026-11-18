@@ -2270,7 +2270,13 @@
   "error_topic_body_too_long": "b644eb3bd1e0ce98",
   "topic_body_count_over": "5258aff1e9143b45",
   "topic_body_limit_hint": "015b585e8549d333",
-  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1",
+  "writing_guide_title": "164c092048fe3e8a",
+  "writing_guide_prompt": "e5b868ec035c495e",
+  "writing_guide_formats": "f8a36eeced28084b",
+  "writing_guide_language": "92fa132ecc67f2ef",
+  "writing_guide_rights": "c08d941cd69941f0",
+  "writing_guide_publish": "118f2de4a18332c6"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4542,7 +4548,13 @@
   "error_topic_body_too_long": "b644eb3bd1e0ce98",
   "topic_body_count_over": "5258aff1e9143b45",
   "topic_body_limit_hint": "015b585e8549d333",
-  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1",
+  "writing_guide_title": "164c092048fe3e8a",
+  "writing_guide_prompt": "e5b868ec035c495e",
+  "writing_guide_formats": "f8a36eeced28084b",
+  "writing_guide_language": "92fa132ecc67f2ef",
+  "writing_guide_rights": "c08d941cd69941f0",
+  "writing_guide_publish": "118f2de4a18332c6"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7245,7 +7257,13 @@
   "error_topic_body_too_long": "b644eb3bd1e0ce98",
   "topic_body_count_over": "5258aff1e9143b45",
   "topic_body_limit_hint": "015b585e8549d333",
-  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1",
+  "writing_guide_title": "164c092048fe3e8a",
+  "writing_guide_prompt": "e5b868ec035c495e",
+  "writing_guide_formats": "f8a36eeced28084b",
+  "writing_guide_language": "92fa132ecc67f2ef",
+  "writing_guide_rights": "c08d941cd69941f0",
+  "writing_guide_publish": "118f2de4a18332c6"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9517,7 +9535,13 @@
   "error_topic_body_too_long": "b644eb3bd1e0ce98",
   "topic_body_count_over": "5258aff1e9143b45",
   "topic_body_limit_hint": "015b585e8549d333",
-  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1",
+  "writing_guide_title": "164c092048fe3e8a",
+  "writing_guide_prompt": "e5b868ec035c495e",
+  "writing_guide_formats": "f8a36eeced28084b",
+  "writing_guide_language": "92fa132ecc67f2ef",
+  "writing_guide_rights": "c08d941cd69941f0",
+  "writing_guide_publish": "118f2de4a18332c6"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11789,7 +11813,13 @@
   "error_topic_body_too_long": "b644eb3bd1e0ce98",
   "topic_body_count_over": "5258aff1e9143b45",
   "topic_body_limit_hint": "015b585e8549d333",
-  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1",
+  "writing_guide_title": "164c092048fe3e8a",
+  "writing_guide_prompt": "e5b868ec035c495e",
+  "writing_guide_formats": "f8a36eeced28084b",
+  "writing_guide_language": "92fa132ecc67f2ef",
+  "writing_guide_rights": "c08d941cd69941f0",
+  "writing_guide_publish": "118f2de4a18332c6"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

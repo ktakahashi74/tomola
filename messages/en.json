@@ -3061,5 +3061,11 @@
   "error_topic_body_too_long": "The body is too long. Shorten it to 100,000 (wide/fullwidth characters count as 2).",
   "topic_body_count_over": "{count} characters too many",
   "topic_body_limit_hint": "Body limit: 100,000 (wide/fullwidth characters count as 2).",
-  "error_body_too_many_special_characters": "There are too many special characters, such as emoji. Remove some of them."
+  "error_body_too_many_special_characters": "There are too many special characters, such as emoji. Remove some of them.",
+  "writing_guide_title": "Writing with your AI",
+  "writing_guide_prompt": "If you ask your AI to write for tomola, give it this guide’s address.",
+  "writing_guide_formats": "The guide covers Markdown, math, images, animated figures and their limits.",
+  "writing_guide_language": "Write in one language. tomola supplies the translations.",
+  "writing_guide_rights": "Use your own writing or material you have permission to publish. Describe every image.",
+  "writing_guide_publish": "Your AI can prepare a draft. You review it and publish from the browser approval screen."
 }

@@ -11,6 +11,7 @@ export const FAST_TEST_FILES = [
   "tests/backup-scripts.test.ts",
   "tests/access-log.test.ts",
   "tests/ai-connect.test.ts",
+  "tests/writing-guide.test.ts",
   "tests/author-member-links.test.ts",
   "tests/body-limit.test.ts",
   "tests/body-length.test.ts",

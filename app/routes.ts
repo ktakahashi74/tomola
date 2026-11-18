@@ -113,7 +113,10 @@ export default [
   route("name", "routes/name.tsx"),
   route("name.md", "routes/name-md.ts", { id: "name-md" }),
   route("name.txt", "routes/name-md.ts", { id: "name-txt" }),
-  // How to connect an AI tool: the page for people and the steps for the AI. Public, outside the member layout.
+  // Writing and connection guidance for people and their AI. Public, outside the member layout.
+  route("writing", "routes/writing.tsx"),
+  route("writing.md", "routes/writing-md.ts", { id: "writing-md" }),
+  route("writing.txt", "routes/writing-md.ts", { id: "writing-txt" }),
   route("connect", "routes/connect.tsx"),
   route("connect.md", "routes/connect-md.ts", { id: "connect-md" }),
   route("connect.txt", "routes/connect-md.ts", { id: "connect-txt" }),

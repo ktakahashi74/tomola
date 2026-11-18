@@ -2269,5 +2269,11 @@
   "error_topic_body_too_long": "本文が長すぎます。10万以内にしてください（全角の字は2と数えます）。",
   "topic_body_count_over": "{count}超過",
   "topic_body_limit_hint": "本文は10万まで（全角の字は2と数えます）。",
-  "error_body_too_many_special_characters": "絵文字などの特殊な字が多すぎます。減らしてください。"
+  "error_body_too_many_special_characters": "絵文字などの特殊な字が多すぎます。減らしてください。",
+  "writing_guide_title": "AI に書いてもらう時の説明",
+  "writing_guide_prompt": "AI に tomola の文章を書いてもらう時は、この頁のアドレスを AI に渡してください。",
+  "writing_guide_formats": "Markdown、数式、画像、動く図の書き方と上限をまとめています。",
+  "writing_guide_language": "1 つの言語で書き、訳は tomola がつけます。",
+  "writing_guide_rights": "自分の文か、公開の了承を得たものを使い、画像には説明を書きます。",
+  "writing_guide_publish": "AI は下書きまで作れます。内容を確かめ、ブラウザーの承認の画面で本人が公開します。"
 }

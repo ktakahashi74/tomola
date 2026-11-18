@@ -98,6 +98,7 @@ export const bothModes = [
   ["translation-on-read", ".*"],
   ["mcp", "anonymous MCP"],
   ["ai-connect", ".*"],
+  ["writing-guide", ".*"],
   ["accessibility-controls", "route announcements"],
   ["privacy-page", "operator notices"],
   ["principles", ".*"],
