@@ -29,11 +29,17 @@ for (const [lang, locale, messages] of [["en", "en-US", en], ["ja", "ja-JP", ja]
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await captureScreenshot(page, { path: `writing-${lang}-${width}.png`, fullPage: true }, "writing-guide");
       }
-      const res = await page.request.get("/writing.md");
-      expect(res.status()).toBe(200);
-      expect(res.headers()["content-type"]).toBe("text/plain; charset=utf-8");
-      expect(res.headers()["cache-control"]).toBe("public, max-age=300");
-      expect(await res.text()).toContain(`canonical: ${new URL(page.url()).origin}/writing`);
+      for (const path of ["/writing.md", "/writing.txt"]) {
+        const res = await page.request.get(path);
+        expect(res.status()).toBe(200);
+        expect(res.headers()["content-type"]).toBe("text/plain; charset=utf-8");
+        expect(res.headers()["cache-control"]).toBe("public, max-age=300");
+        const instructions = await res.text();
+        expect(instructions).toContain(`canonical: ${new URL(page.url()).origin}/writing`);
+        expect(instructions).toContain(`POST ${new URL(page.url()).origin}/api/media`);
+        for (const text of ["“Upload images” explicitly selected", "separately granted media scope", "[![description](posterUrl)](url)", "chat-only AI", "review and publish in the browser"]) expect(instructions).toContain(text);
+        expect(instructions).not.toContain("There is currently no image-upload tool");
+      }
     } finally { await context.close(); }
   });
 

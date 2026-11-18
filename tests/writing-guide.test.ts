@@ -7,6 +7,7 @@ import { writingMarkdown } from "~/lib/api/writing.server";
 import { connectMarkdown, connectPlan } from "~/lib/api/connect.server";
 import { helpAiMd, llmsTxt } from "~/lib/api/guides.server";
 import { DRAFT_RESPONSE_GUIDE } from "~/lib/api/draft-response-guide";
+import { mediaUploadGuide } from "~/lib/api/media-guide.server";
 import { mcpConnectionGuide } from "~/lib/mcp/guide.server";
 import { markdownDetailsExample, markdownSpecimen, markdownWritingExamples } from "~/lib/markdown-specimen";
 import { inspectDraftRendering } from "~/lib/markdown.core.server";
@@ -59,18 +60,28 @@ describe("public writing instructions", () => {
     expect(examples.find(example => example.label === "Still and motion pair")?.markdown).toMatch(/\[!\[.+\]\(\/media\/[a-f0-9]{64}-800x450\.webp\)\]\(\/media\/[a-f0-9]{64}-800x450\.webp\)/);
   });
 
-  it("uses current limits and the shared draft diagnostics, with one image handoff", () => {
+  it("uses current limits and shares the upload instructions and draft diagnostics once", () => {
     const text = writingMarkdown(BASE);
     for (const value of [MAX_TOPIC_BODY_LENGTH, MAX_REPLY_BODY_LENGTH, MAX_BODY_BYTES, MEDIA_LIMITS.perPost, MEDIA_LIMITS.inputBytes, MEDIA_LIMITS.pixels, MEDIA_LIMITS.edge, MEDIA_LIMITS.storedBytes, MOTION_LIMITS.width, MOTION_LIMITS.height, MOTION_LIMITS.frames, MOTION_LIMITS.durationMs / 1000, MOTION_LIMITS.pixels, MOTION_LIMITS.storedBytes]) expect(text).toContain(formatted(value));
     expect(text).toContain(DRAFT_RESPONSE_GUIDE);
-    expect(text.match(/There is currently no image-upload tool/g)).toHaveLength(1);
+    expect(text.split(mediaUploadGuide(BASE))).toHaveLength(2);
+    expect(text).not.toMatch(/There is currently no image-upload tool|Images can be uploaded only on topic writing screens/);
     for (const item of ["tomola_draft_create", "tomola_draft_update", `POST ${BASE}/api/drafts`, "approvalUrl", "approve_url", "animated PNG", "MathJax", "alt text", "one original language", "permission to publish", "Avoid flashing", "once when it comes into view", "reduced motion"]) expect(text).toContain(item);
+  });
+
+  it("explains file uploads with separate permission and returned still or motion URLs", () => {
+    const text = writingMarkdown(BASE);
+    for (const instruction of [`POST ${BASE}/api/media`, "“Upload images” explicitly selected", "separately granted media scope", "Existing read/draft credentials do not gain this permission", "URLs are site-relative", "![description](url)", "[![description](posterUrl)](url)", "Use those URLs in the body of a draft", "review and publish in the browser", "A draft-only image remains readable only by its owner", "MCP does not import image URLs"]) expect(text).toContain(instruction);
+    expect(text).toContain("URLs returned by the image upload API or the writing screen after upload");
+    const fallback = text.split("### When your AI cannot upload images\n")[1];
+    for (const instruction of ["If you cannot send image files", "chat-only AI", "image files and their alt text", "open its approval URL in the browser and upload the files there", "Do not invent an upload endpoint", "external image URLs"]) expect(fallback).toContain(instruction);
   });
 
   it("limits image uploads to topics and describes overflow as a display limit", () => {
     const text = writingMarkdown(BASE);
-    const handoff = text.split("### Upload images in the browser\n")[1];
+    const handoff = text.split("### Images for topics\n")[1];
     const restriction = "Replies have no image-upload control";
+    expect(handoff).toContain("Images are supported only in topics, not replies");
     expect(handoff).toContain("a new topic, a topic draft or a topic edit");
     expect(handoff).toContain(restriction);
     expect(text.split(restriction)).toHaveLength(2);
@@ -85,7 +96,7 @@ describe("public writing instructions", () => {
   it("reads the current draft before revising and preserves browser changes in both instructions", () => {
     const text = writingMarkdown(BASE);
     const delivery = text.split("### With an AI connection or script\n")[1].split("### Read the draft diagnostics")[0];
-    const handoff = text.split("### Upload images in the browser\n")[1];
+    const handoff = text.split("### Images for topics\n")[1];
     for (const section of [delivery, handoff]) {
       expect(section.indexOf("tomola_draft_get")).toBeLessThan(section.indexOf("tomola_draft_update"));
       for (const instruction of ["current body", "preserving", "image Markdown", "edits", "old local copy"]) expect(section).toContain(instruction);

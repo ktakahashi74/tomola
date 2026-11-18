@@ -5,14 +5,19 @@ import { MEDIA_LIMITS, MOTION_LIMITS } from "~/lib/media";
 import { siteOrigin } from "~/lib/http/csrf.server";
 import { WRITING_PATH } from "~/lib/writing-paths";
 import { DRAFT_RESPONSE_GUIDE } from "./draft-response-guide";
+import { mediaUploadGuide } from "./media-guide.server";
 
 const number = (value: number) => value.toLocaleString("en-US");
 
-// Keep the current image handoff here so a future upload tool changes one section.
 function imageHandoff(origin: string): string {
-  return `### Upload images in the browser
+  return `### Images for topics
 
-There is currently no image-upload tool for AI clients through MCP or the draft API. Images can be uploaded only on topic writing screens: a new topic, a topic draft or a topic edit. Replies have no image-upload control; prepare text replies and put any needed figures in a topic or link to them. Give your user the image files and their alt text. After creating a topic draft, have them open its approval URL in the browser and upload the files there. Do not invent an upload endpoint or put external image URLs in place of managed images.
+Images are supported only in topics, not replies. Replies have no image-upload control; prepare text replies and put any needed figures in a topic or link to them.
+
+${mediaUploadGuide(origin)}
+### When your AI cannot upload images
+
+If you cannot send image files, for example from a chat-only AI, give your user the image files and their alt text. Images can also be uploaded on topic writing screens: a new topic, a topic draft or a topic edit. After creating a topic draft, have them open its approval URL in the browser and upload the files there. Do not invent an upload endpoint or put external image URLs in place of managed images.
 
 On ${origin}/t/new, a topic draft's writing screen or a topic edit screen, use the image insertion button to choose one file at a time (or paste an image or drop a file onto the editor). The editor uploads it and inserts managed image Markdown at the cursor. A GIF or animated WebP upload creates a still poster and a motion version, inserting the linked pair. The poster is selected from a frame with content, not necessarily the first frame; the author can replace it with another uploaded still in the Markdown. Replace the default alt text with a description of the figure and, for motion, what the changes show. Keep the returned URLs; do not construct media IDs yourself.
 
@@ -53,7 +58,7 @@ Raw HTML, SVG, video and animated PNG are not supported. External images become 
 
 ## Examples
 
-The managed image URLs below are invented examples of the required shape. Replace them with the URLs returned by the writing screen after upload.
+The managed image URLs below are invented examples of the required shape. Replace them with the URLs returned by the image upload API or the writing screen after upload.
 
 ${examples}
 

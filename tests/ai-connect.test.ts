@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SiteFooter } from "~/components/site-footer";
 import { accountsPointer, accountsSection, appGuidesMarkdown, clientSetupMarkdown, connectAccountSection, connectManualSection, connectMarkdown, connectPlan, connectPointer, connectSafetySection, connectVerificationSection, mcpServerName, shellQuote } from "~/lib/api/connect.server";
 import { mcpConnectionGuide } from "~/lib/mcp/guide.server";
+import { mediaUploadGuide } from "~/lib/api/media-guide.server";
 import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
@@ -131,6 +132,19 @@ describe("connection data and discovery", () => {
     const text = connectVerificationSection(connectPlan());
     expect(text).toContain("For a member connection requesting draft, also check that `tomola_draft_create` is listed, then call `tomola_draft_list`");
     expect(text).not.toContain("For every member connection");
+  });
+  it.each([false, true])("shares image upload instructions across writing and connection pages with public reading=%s", async publicReading => {
+    vi.stubEnv("PUBLIC_READING", publicReading ? "1" : "");
+    vi.stubEnv("BETTER_AUTH_URL", "https://forum.example.org");
+    const plan = connectPlan();
+    const connect = (await import("~/routes/connect-md")).loader;
+    const llms = (await import("~/routes/llms-txt")).loader;
+    const writing = (await import("~/routes/writing-md")).loader;
+    for (const [path, loader] of [["/connect.md", connect], ["/llms.txt", llms], ["/writing.md", writing], ["/writing.txt", writing]] as const) {
+      const text = await (await loader(args(path)) as Response).text();
+      expect(text.split(mediaUploadGuide(plan.origin)), path).toHaveLength(2);
+      expect(text, path).not.toMatch(/There is currently no image-upload tool|Images can be uploaded only on topic writing screens/);
+    }
   });
   it("does not offer anonymous setup when public reading is disabled", () => {
     const plan = connectPlan("https://forum.example.org", false);
