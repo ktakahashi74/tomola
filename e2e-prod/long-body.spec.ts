@@ -10,7 +10,7 @@ test("counts mixed-width topic text and preserves it when the limit is exceeded"
     await page.evaluate(key => localStorage.setItem(key, "markdown"), EDITOR_MODE_STORAGE_KEY);
     await page.goto("/t/new");
     const body = page.locator('textarea[name="body"]');
-    await expect(page.getByText(en.error_topic_body_too_long, { exact: true })).toBeVisible();
+    await expect(page.getByText(en.topic_body_limit_hint, { exact: true })).toBeVisible();
     const exact = "a".repeat(20_000) + "あ".repeat(40_000);
     await body.fill(exact);
     await expect(page.getByRole("status").filter({ hasText: "0 characters left" })).toBeVisible();
@@ -28,7 +28,10 @@ test("counts mixed-width topic text and preserves it when the limit is exceeded"
     await body.fill("a".repeat(99_998) + "か\u3099");
     await expect(page.getByRole("status").filter({ hasText: "0 characters left" })).toBeVisible();
     await body.fill("𝄞".repeat(65_536) + "a");
-    await expect(page.getByRole("status").filter({ hasText: en.error_topic_body_too_long })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: en.error_body_too_many_special_characters })).toBeVisible();
+    expect(await body.evaluate(element => (element as HTMLTextAreaElement).validationMessage)).toBe(en.error_body_too_many_special_characters);
+    await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+    await expect(body).toHaveValue("𝄞".repeat(65_536) + "a");
     expect(await body.evaluate(element => (element as HTMLTextAreaElement).checkValidity())).toBe(false);
     await body.fill("Mixed-width text. ");
     await page.getByRole("button", { name: en.editor_mode_rich, exact: true }).click();
@@ -45,5 +48,17 @@ test("counts mixed-width topic text and preserves it when the limit is exceeded"
     await expect(page.getByRole("alert").filter({ hasText: en.error_topic_body_too_long })).toBeVisible();
     await expect(rich).toBeVisible();
     await expect(body).toBeHidden();
+    await page.getByRole("button", { name: en.editor_mode_markdown, exact: true }).click();
+    await body.fill("Short. ");
+    await page.getByRole("button", { name: en.editor_mode_rich, exact: true }).click();
+    await expect(rich).toBeVisible();
+    await rich.evaluate(element => {
+      const data = new DataTransfer(); data.setData("text/plain", "𝄞".repeat(65_536));
+      element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    await expect(page.getByRole("status").filter({ hasText: en.error_body_too_many_special_characters })).toBeVisible();
+    await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: en.error_body_too_many_special_characters })).toBeVisible();
+    await expect(body).toHaveValue(/𝄞/);
   } finally { await context.close(); }
 });

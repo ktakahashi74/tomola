@@ -3,9 +3,9 @@ import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk
 import { LlmError } from "../errors.server";
 import { buildTranslationPrompt, cleanTranslation, outputTokenLimit, promptVersionOf } from "../prompt.server";
 import type { TranslationEngine, TranslationRequest, TranslationResult } from "../types";
+import { REQUEST_TIMEOUT_MS, translationTimeoutMs } from "../request-timeout";
 
 export const DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5";
-const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
 // Per-model Claude request shape: supported parameters vary by generation; avoid 400 errors after switching translation models.
 // API version 2026-10-21 removes temperature, top_p and top_k for every model.
@@ -53,12 +53,13 @@ export type ClaudeCompletion = { text: string; inputTokens: number; outputTokens
 // or empty output throws LlmError for the job to retry. Retain charged usage.
 export async function claudeComplete(
   client: ClaudeClient,
-  opts: { model: string; system: string; user: string; image?: { mimeType: "image/webp"; data: string }; maxTokens: number; signal?: AbortSignal },
+  opts: { model: string; system: string; user: string; image?: { mimeType: "image/webp"; data: string }; maxTokens: number; signal?: AbortSignal; postTranslation?: boolean },
 ): Promise<ClaudeCompletion> {
   const shape = claudeRequestShape(opts.model);
   // The SDK clears its fetch timeout when headers arrive. Keep a separate
   // deadline alive through response-body parsing as well.
-  const signal = AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(opts.signal ? [opts.signal] : [])]);
+  const timeout = opts.postTranslation ? translationTimeoutMs(opts.maxTokens) : REQUEST_TIMEOUT_MS;
+  const signal = AbortSignal.any([AbortSignal.timeout(timeout), ...(opts.signal ? [opts.signal] : [])]);
   // Explicit timeout prevents SDK rejection with 「ストリーミングが必要」 even for large outputs that may take minutes.
   const response = await client.messages.create(
     {
@@ -69,7 +70,7 @@ export async function claudeComplete(
       system: opts.system,
       messages: [{ role: "user", content: opts.image ? [{ type: "image", source: { type: "base64", media_type: opts.image.mimeType, data: opts.image.data } }, { type: "text", text: opts.user }] : opts.user }],
     },
-    { timeout: REQUEST_TIMEOUT_MS, maxRetries: 0, signal },
+    { timeout, maxRetries: 0, signal },
   ).catch(error => { signal.throwIfAborted(); throw error; });
   const u = response.usage;
   const usage = {
@@ -107,7 +108,7 @@ export function createClaudeEngine(opts: { apiKey?: string; model?: string; clie
         client = createClaudeClient(opts.apiKey);
       }
       const { system, user } = buildTranslationPrompt(req);
-      const out = await claudeComplete(client, { model, system, user, maxTokens: outputTokenLimit(req.text.length), signal: req.signal });
+      const out = await claudeComplete(client, { model, system, user, maxTokens: outputTokenLimit(req.text.length), signal: req.signal, postTranslation: req.postTranslation });
       return {
         text: cleanTranslation(out.text),
         model,

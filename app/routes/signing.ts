@@ -4,6 +4,7 @@ import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { issueSignedWrite, previewSignedWrite, SigningError, signingErrorResponse } from "~/lib/signing.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { MarkdownBusyError } from "~/lib/markdown-budget.server";
+import { MAX_BODY_BYTES } from "~/lib/body-length";
 
 export function loader() { return new Response("Method not allowed", { status: 405, headers: { Allow: "POST", "Cache-Control": "no-store" } }); }
 export async function action({ request }: Route.ActionArgs) {
@@ -16,7 +17,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (typeof body.pathname !== "string" || !Array.isArray(body.fields) || body.fields.length > 100) throw new SigningError("invalid_payload", 400);
     const form = new FormData();
     for (const pair of body.fields) {
-      if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string" || typeof pair[1] !== "string" || pair[0].length > 100 || pair[1].length > 150000) throw new SigningError("invalid_payload", 400);
+      if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string" || typeof pair[1] !== "string" || pair[0].length > 100 || pair[1].length > MAX_BODY_BYTES) throw new SigningError("invalid_payload", 400);
       form.append(pair[0], pair[1]);
     }
     if (body.pathname !== "/settings/delete-account" || form.get("intent") !== "delete-account") await requireWriter(request);

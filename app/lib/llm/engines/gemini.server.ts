@@ -3,18 +3,13 @@ import { LlmError } from "../errors.server";
 import { CHAT_THINKING_ENV, DEFAULT_TRANSLATION_THINKING, THINKING_ENV, THINKING_HEADROOM, THINKING_LADDER, THINKING_REPROBE_AFTER_MS, thinkingHeadroom, type ThinkingLevelName, type ThinkingSetting } from "../thinking";
 import { buildTranslationPrompt, cleanTranslation, estimateTokens, outputTokenLimit, promptVersionOf } from "../prompt.server";
 import type { TranslationEngine, TranslationRequest, TranslationResult } from "../types";
+import { REQUEST_TIMEOUT_MS, translationTimeoutMs } from "../request-timeout";
 
 // Shared light-model default for primary translation, chat, moderation and figure reading.
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 // Explicit Gemini secondary and judge roles use a different model from the default primary.
 export const DEFAULT_SECONDARY_GEMINI_MODEL = "gemini-3.6-flash";
 export const DEFAULT_JUDGE_GEMINI_MODEL = "gemini-3.6-flash";
-const REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
-// Long post translations measured about 110 output tokens/second. Allow 60/s of
-// the visible-output cap (thinking fallback cannot extend the shared deadline)
-// plus a minute for startup, with a two-minute floor and a fifteen-minute cap.
-export const translationTimeoutMs = (maxOutputTokens: number): number =>
-  Math.min(15 * 60 * 1000, Math.max(REQUEST_TIMEOUT_MS, Math.ceil(maxOutputTokens / 60 * 1000) + 60_000));
 // Gemini 3.x thinks by default. Thinking tokens consume maxOutputTokens and are charged as output. The source-based outputTokenLimit alone can make short texts
 // hit MAX_TOKENS before an answer. Observed 2026-10-01: first-call truncation in 3/5 gemini-3.5-flash retranslations of 300–900-character posts.
 // Add thinking allowance. Only actual output is charged, so a higher cap costs no more when thinking remains short.

@@ -184,7 +184,7 @@ describe("POST /preview", () => {
 
   it("returns a validation failure from the preview as a 400 JSON response", async () => {
     const { action } = await import("~/routes/preview");
-    const tooLong = (await action(args(await request("/preview", { as: "hana", form: { body: "a".repeat(50_001) } })))) as Response;
+    const tooLong = (await action(args(await request("/preview", { as: "hana", form: { body: "a".repeat(100_001) } })))) as Response;
     expect(tooLong.status).toBe(400);
     expect(await tooLong.json()).toEqual({ error: "body_too_long" });
 

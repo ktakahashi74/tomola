@@ -19,10 +19,12 @@ export default function BodyCounterContent() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => {
       const kind = body.dataset.bodyKind === "reply" ? "reply" : "topic";
+      const length = bodyLength(body.value, kind);
+      const bytesOver = new TextEncoder().encode(body.value).byteLength > MAX_BODY_BYTES;
       setKind(kind);
-      setLength(bodyLength(body.value, kind));
-      setBytesOver(new TextEncoder().encode(body.value).byteLength > MAX_BODY_BYTES);
-      body.setCustomValidity(bodyWithinLimits(body.value, kind) ? "" : bodyLimitMessage(kind));
+      setLength(length);
+      setBytesOver(bytesOver);
+      body.setCustomValidity(bodyWithinLimits(body.value, kind) ? "" : bodyLimitMessage(kind, bytesOver && length <= bodyLimit(kind)));
     };
     const refuse = () => { setRefused(true); clearTimeout(timer); timer = setTimeout(() => setRefused(false), 6000); };
     update();
@@ -33,9 +35,9 @@ export default function BodyCounterContent() {
   const limit = bodyLimit(kind), over = length - limit;
   const count = Math.abs(over).toLocaleString(getLocale());
   return <div ref={holder} className="empty:hidden">
-    {kind === "topic" && <p className="ui-help text-muted-foreground">{m.error_topic_body_too_long()}</p>}
+    {kind === "topic" && <p className="ui-help text-muted-foreground">{m.topic_body_limit_hint()}</p>}
     {length >= Math.floor(limit * 0.9) && <p role="status" className={`ui-help ${over > 0 ? "text-destructive" : "text-muted-foreground"}`}>{over > 0 ? kind === "topic" ? m.topic_body_count_over({ count }) : m.body_count_over({ count }) : m.body_count_left({ count })}</p>}
-    {bytesOver && over <= 0 && <p role="status" className="ui-help text-destructive">{bodyLimitMessage(kind)}</p>}
+    {bytesOver && over <= 0 && <p role="status" className="ui-help text-destructive">{m.error_body_too_many_special_characters()}</p>}
     {refused && <p role="status" className="ui-help text-destructive">{m.quote_over_limit()}</p>}
   </div>;
 }

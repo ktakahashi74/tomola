@@ -5,8 +5,9 @@ export const MAX_TOPIC_BODY_LENGTH = 100_000;
 export const MAX_REPLY_BODY_LENGTH = 50_000;
 export const MAX_BODY_BYTES = 256 * 1024;
 // Translations may expand beyond the source limit. Bound manual corrections
-// separately by bytes, leaving room for expansion without a source-length cap.
-export const MAX_TRANSLATION_BODY_BYTES = 1024 * 1024;
+// separately by bytes. Even sixfold form expansion (LF to CRLF plus percent
+// encoding) leaves 128 KiB for other fields under the 2 MiB request limit.
+export const MAX_TRANSLATION_BODY_BYTES = 320 * 1024;
 
 function wide(point: number): boolean {
   let low = 0, high = WIDE_RANGES.length - 1;

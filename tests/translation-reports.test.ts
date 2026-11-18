@@ -13,6 +13,7 @@ import { createTranslationReport, dismissReport, listOpenReports, resolveReportW
 import { addMember, createTestDb } from "./helpers/db";
 import { buildThreadMarkdown } from "~/lib/md/thread.server";
 import { offlineMarkdown } from "~/lib/site-export-format.server";
+import { MAX_TRANSLATION_BODY_BYTES } from "~/lib/body-length";
 
 const t0 = new Date("2026-10-05T00:00:00Z");
 
@@ -161,7 +162,7 @@ describe("resolving a report with a human translation", () => {
     const created = await report(db, topicId);
     if (!created.ok || created.id === null) throw new Error("report failed");
     expect(await resolveReportWithHumanTranslation(db, "op", created.id, "   ")).toEqual({ ok: false, error: "invalid_text" });
-    expect(await resolveReportWithHumanTranslation(db, "op", created.id, "x".repeat(1024 * 1024 + 1))).toEqual({ ok: false, error: "invalid_text" });
+    expect(await resolveReportWithHumanTranslation(db, "op", created.id, "x".repeat(MAX_TRANSLATION_BODY_BYTES + 1))).toEqual({ ok: false, error: "invalid_text" });
     expect(await resolveReportWithHumanTranslation(db, "op", 9999, "x")).toEqual({ ok: false, error: "not_found" });
     expect((await listOpenReports(db)).length).toBe(1);
     expect(await db.select().from(translations).where(eq(translations.kind, "human"))).toHaveLength(0);
@@ -199,6 +200,17 @@ describe("resolving a report with a human translation", () => {
     const exported = await offlineMarkdown(text, { page: "article.md", lang: "th", extension: "md", posts: new Map(), documents: new Set() });
     expect(exported).toContain("TRANSLATION END");
     expect(exported.length).toBeGreaterThan(133_000);
+  });
+
+  it("accepts a body correction at its byte limit and rejects one byte more", async () => {
+    const { db, topicId } = await setup();
+    const created = await report(db, topicId);
+    if (!created.ok || created.id === null) throw new Error("report failed");
+    const text = "訳".repeat(Math.floor(MAX_TRANSLATION_BODY_BYTES / 3)) + "a".repeat(MAX_TRANSLATION_BODY_BYTES % 3);
+    expect(await resolveReportWithHumanTranslation(db, "op", created.id, text + "a")).toEqual({ ok: false, error: "invalid_text" });
+    expect(await resolveReportWithHumanTranslation(db, "op", created.id, text)).toEqual({ ok: true, entryId: topicId });
+    const [saved] = await db.select().from(translations).where(eq(translations.kind, "human"));
+    expect(saved.text).toBe(text);
   });
 
   it("keeps the human translation (stale) when the original is edited, and machine translations are redone around it", async () => {

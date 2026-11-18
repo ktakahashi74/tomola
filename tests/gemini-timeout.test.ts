@@ -1,6 +1,7 @@
 import { FinishReason } from "@google/genai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGeminiEngine, geminiComplete, resetThinkingFallbacks, translationTimeoutMs, type GeminiClient } from "~/lib/llm/engines/gemini.server";
+import { createGeminiEngine, geminiComplete, resetThinkingFallbacks, type GeminiClient } from "~/lib/llm/engines/gemini.server";
+import { translationTimeoutMs } from "~/lib/llm/request-timeout";
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); resetThinkingFallbacks(); });
 const response = { text: "Translated.", candidates: [{ finishReason: FinishReason.STOP }] };

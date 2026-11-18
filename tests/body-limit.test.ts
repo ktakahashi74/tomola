@@ -2,6 +2,7 @@ import http from "node:http";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { MEDIA_LIMITS } from "~/lib/media";
+import { MAX_TRANSLATION_BODY_BYTES } from "~/lib/body-length";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -69,6 +70,15 @@ function send(port: number, opts: { path?: string; method?: string; headers?: Re
 }
 
 describe("bodyLimit with a Content-Length", () => {
+  it.each(["訳", "\n"])("lets a maximum correction through after browser form encoding of %j", async character => {
+    const { port } = await start(DEFAULT_MAX_REQUEST_BODY_BYTES);
+    const bytes = Buffer.byteLength(character);
+    const text = character.repeat(Math.floor((MAX_TRANSLATION_BODY_BYTES - 2) / bytes)) + "ok";
+    const encoded = new URLSearchParams({ reportId: "123", text: text.replace(/\r?\n/g, "\r\n") }).toString();
+    const length = Buffer.byteLength(encoded);
+    expect(length).toBeLessThan(DEFAULT_MAX_REQUEST_BODY_BYTES);
+    expect(await send(port, { path: "/admin/translations", headers: { "Content-Length": String(length), "Content-Type": "application/x-www-form-urlencoded" }, chunks: [encoded] })).toMatchObject({ status: 200, body: String(length) });
+  });
   it.each(["active", "idle"])("closes a stalled %s rejected upload at its deadline", async bound => {
     const { port, seen } = await start();
     let request!: http.ClientRequest;

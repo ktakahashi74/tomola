@@ -48,6 +48,30 @@ it.each(["claude", "gemini", "embedding"] as const)("cancels an in-flight %s SDK
 });
 
 describe("@anthropic-ai/sdk (real client, fake fetch)", () => {
+  it("overrides a client's two-minute timeout for a long queued translation", async () => {
+    vi.useFakeTimers();
+    const deadline = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("deadline", "TimeoutError")), ms);
+      return controller.signal;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+      init!.signal!.addEventListener("abort", () => reject(new Error("HTTP deadline")), { once: true });
+      setTimeout(() => resolve(new Response(JSON.stringify(message("Complete translation.")), { headers: { "content-type": "application/json" } })), 191_000);
+      entered();
+    }));
+    try {
+      const client = new Anthropic({ apiKey: "test", fetch, timeout: 120_000, maxRetries: 0 });
+      const result = expect(createClaudeEngine({ client }).translate({ text: "a".repeat(100_000), from: "en", to: "ja", postTranslation: true })).resolves.toMatchObject({ text: "Complete translation." });
+      await started;
+      await vi.advanceTimersByTimeAsync(191_000);
+      await result;
+      expect(deadline).toHaveBeenCalledWith(900_000);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally { deadline.mockRestore(); vi.useRealTimers(); }
+  });
   it("keeps the two-minute deadline while reading the response body after headers arrive", async () => {
     vi.useFakeTimers();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {

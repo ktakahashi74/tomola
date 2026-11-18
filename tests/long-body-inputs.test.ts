@@ -6,6 +6,7 @@ import { createClientDraft, updateClientDraft } from "~/lib/mcp/drafts.server";
 import { drafts } from "~/lib/db/schema";
 import { BASE, setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { createApiToken } from "~/lib/tokens.server";
+import { bodyWithinLimits, MAX_BODY_BYTES } from "~/lib/body-length";
 
 let h: RouteHarness;
 beforeAll(async () => { h = await setupRouteHarness(); await h.signIn("hana"); });
@@ -15,6 +16,22 @@ const client = { key: "long-body-client", id: "long-body-client", name: "Writer"
 const oversized = ["a".repeat(100_001), "あ".repeat(50_001), "𝄞".repeat(65_536) + "a"];
 
 describe("shared body limits at writing boundaries", () => {
+  it("previews a signed body with more than 150000 UTF-16 units and rejects oversized fields", async () => {
+    const { action } = await import("~/routes/signing");
+    const body = "a".repeat(45_952) + "𝔄".repeat(54_048);
+    expect(body.length).toBe(154_048);
+    expect(bodyWithinLimits(body, "topic")).toBe(true);
+    const send = async (body: string) => {
+      const session = h.request("/signing", { as: "hana" });
+      return action(h.args(new Request(session.url, { method: "POST", headers: { ...Object.fromEntries(session.headers), "content-type": "application/json" }, body: JSON.stringify({ intent: "preview", pathname: "/t/new", fields: [["lang", "en"], ["body", body]] }) }))) as Promise<Response>;
+    };
+    const preview = await send(body);
+    expect(preview.status).toBe(200);
+    expect(await preview.json()).toMatchObject({ content: { body } });
+    const rejected = await send("x".repeat(MAX_BODY_BYTES + 1));
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({ error: "invalid_payload" });
+  });
   it("accepts full topics through creation, editing, drafts, publication and MCP", async () => {
     for (const body of ["a".repeat(100_000), "あ".repeat(50_000), "𝄞".repeat(65_536)]) {
       const input = { lang: "en", title: "A long article", body };

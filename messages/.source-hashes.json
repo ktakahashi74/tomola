@@ -2262,8 +2262,10 @@
   "motion_inspect": "7861314fd45c599f",
   "motion_help": "7003f1016e35a77d",
   "motion_error_type": "bdcb603eb3692fe8",
-  "error_topic_body_too_long": "b0f534b674b2f837",
-  "topic_body_count_over": "5258aff1e9143b45"
+  "error_topic_body_too_long": "b644eb3bd1e0ce98",
+  "topic_body_count_over": "5258aff1e9143b45",
+  "topic_body_limit_hint": "015b585e8549d333",
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4527,8 +4529,10 @@
   "motion_inspect": "7861314fd45c599f",
   "motion_help": "7003f1016e35a77d",
   "motion_error_type": "bdcb603eb3692fe8",
-  "error_topic_body_too_long": "b0f534b674b2f837",
-  "topic_body_count_over": "5258aff1e9143b45"
+  "error_topic_body_too_long": "b644eb3bd1e0ce98",
+  "topic_body_count_over": "5258aff1e9143b45",
+  "topic_body_limit_hint": "015b585e8549d333",
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7223,8 +7227,10 @@
   "motion_inspect": "7861314fd45c599f",
   "motion_help": "7003f1016e35a77d",
   "motion_error_type": "bdcb603eb3692fe8",
-  "error_topic_body_too_long": "b0f534b674b2f837",
-  "topic_body_count_over": "5258aff1e9143b45"
+  "error_topic_body_too_long": "b644eb3bd1e0ce98",
+  "topic_body_count_over": "5258aff1e9143b45",
+  "topic_body_limit_hint": "015b585e8549d333",
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9488,8 +9494,10 @@
   "motion_inspect": "7861314fd45c599f",
   "motion_help": "7003f1016e35a77d",
   "motion_error_type": "bdcb603eb3692fe8",
-  "error_topic_body_too_long": "b0f534b674b2f837",
-  "topic_body_count_over": "5258aff1e9143b45"
+  "error_topic_body_too_long": "b644eb3bd1e0ce98",
+  "topic_body_count_over": "5258aff1e9143b45",
+  "topic_body_limit_hint": "015b585e8549d333",
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11753,8 +11761,10 @@
   "motion_inspect": "7861314fd45c599f",
   "motion_help": "7003f1016e35a77d",
   "motion_error_type": "bdcb603eb3692fe8",
-  "error_topic_body_too_long": "b0f534b674b2f837",
-  "topic_body_count_over": "5258aff1e9143b45"
+  "error_topic_body_too_long": "b644eb3bd1e0ce98",
+  "topic_body_count_over": "5258aff1e9143b45",
+  "topic_body_limit_hint": "015b585e8549d333",
+  "error_body_too_many_special_characters": "9a37c71bc6e421f1"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

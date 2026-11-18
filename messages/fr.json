@@ -3093,6 +3093,8 @@
   "motion_inspect": "Examiner les images associées",
   "motion_help": "Téléversez un GIF ou WebP animé pour insérer une image fixe liée à sa version animée. Vous pouvez remplacer l’image fixe dans le champ Markdown. Évitez les clignotements et expliquez le mouvement dans la description de l’image ou le texte. Le texte de l’animation reste dans la langue originale.",
   "motion_error_type": "Ce format d’image n’est pas accepté. Utilisez JPEG, PNG, WebP ou GIF. Les PNG animés et les vidéos ne sont pas pris en charge.",
-  "error_topic_body_too_long": "Limite du texte : 100 000 (les caractères larges ou de pleine chasse comptent pour 2) et 256 Kio en UTF-8.",
-  "topic_body_count_over": "{count} de trop"
+  "error_topic_body_too_long": "Le texte est trop long. Réduisez-le à 100 000 (les caractères larges ou de pleine chasse comptent pour 2).",
+  "topic_body_count_over": "{count} de trop",
+  "topic_body_limit_hint": "Limite du texte : 100 000 (les caractères larges ou de pleine chasse comptent pour 2).",
+  "error_body_too_many_special_characters": "Il y a trop de caractères spéciaux, comme des émojis. Supprimez-en quelques-uns."
 }

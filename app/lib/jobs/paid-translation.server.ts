@@ -28,7 +28,8 @@ function ordered(value: unknown): unknown {
 }
 
 export function translationCallKey(engine: Pick<TranslationEngine, "id" | "model">, req: TranslationRequest, purpose: string, role: string): string {
-  const { signal: _signal, ...input } = req;
+  // Cancellation and deadline policy do not change the purchased translation.
+  const { signal: _signal, postTranslation: _postTranslation, ...input } = req;
   return createHash("sha256").update(JSON.stringify(ordered({ engine: engine.id, model: engine.model, purpose, role, input }))).digest("hex");
 }
 export const hasPaidTranslationCall = (key: string): boolean => !!storage.getStore()?.calls[key];

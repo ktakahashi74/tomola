@@ -1,4 +1,4 @@
-import { bodyWithinLimits } from "~/lib/body-length";
+import { bodyLength, bodyLimit, bodyWithinLimits, MAX_BODY_BYTES } from "~/lib/body-length";
 import { bodyLimitMessage } from "~/lib/entry-error-message";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
@@ -262,7 +262,9 @@ export function RichTextEditor({ invalid, describedBy, placeholder, tall = false
     const editor = Editor.make();
     const write = (value: string) => {
       body.value = value;
-      body.setCustomValidity(bodyWithinLimits(value, body.dataset.bodyKind === "reply" ? "reply" : "topic") ? "" : bodyLimitMessage(body.dataset.bodyKind === "reply" ? "reply" : "topic"));
+      const kind = body.dataset.bodyKind === "reply" ? "reply" : "topic";
+      const bytesOnly = new TextEncoder().encode(value).byteLength > MAX_BODY_BYTES && bodyLength(value, kind) <= bodyLimit(kind);
+      body.setCustomValidity(bodyWithinLimits(value, kind) ? "" : bodyLimitMessage(kind, bytesOnly));
       body.dispatchEvent(new Event("input", { bubbles: true }));
     };
     const synchronize = () => {

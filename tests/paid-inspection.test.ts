@@ -4,8 +4,32 @@ import { chatMessages, chatMessageTranslations, entries, jobs, llmUsage, transla
 import { enqueue, runDueJobs } from "~/lib/jobs/queue.server";
 import { translate, type TranslationOutcome, type TranslationEngine } from "~/lib/llm/index.server";
 import * as markdown from "~/lib/markdown-budget.server";
+import { translationCallKey, withPaidTranslationCalls } from "~/lib/jobs/paid-translation.server";
+import { getBudgetState } from "~/lib/llm/usage.server";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+it.each([
+  ["primary", "stopped", 1_000_000],
+  ["secondary", "degraded", 900_000],
+] as const)("replays a legacy paid %s translation while the budget is %s", async (role, state, costUsdMicro) => {
+  const db = await createTestDb();
+  const now = new Date("2026-10-17T00:00:00Z");
+  const env = { LLM_MONTHLY_BUDGET_USD: "1" };
+  await db.insert(llmUsage).values({ engine: "claude", model: "claude-haiku-4-5", purpose: "translate", costUsdMicro, createdAt: now });
+  expect(await getBudgetState(db, now, env)).toBe(state);
+  const call = vi.fn<TranslationEngine["translate"]>();
+  const engine: TranslationEngine = { id: "claude", model: "claude-haiku-4-5", translate: call };
+  const req = { text: "A clear original.", from: "en", to: "ja" } as const;
+  const result = { text: "翻訳結果", model: engine.model, promptVersion: "fixture", inputTokens: 10, outputTokens: 2 };
+  const saved = { paidTranslationCalls: { [translationCallKey(engine, req, "translate", role)]: { result, costUsdMicro: 20 } } };
+  const save = vi.fn();
+  vi.spyOn(markdown, "markdownTask").mockResolvedValue({ flags: [], notes: [] } as never);
+  const out = await withPaidTranslationCalls(saved, save, () => translate(db, role, req, { now, env, engines: { primary: engine, secondary: engine, judge: null } }));
+  expect(out).toMatchObject({ text: result.text, costUsdMicro: 20, inputTokens: 10 });
+  expect(call).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  expect(await db.select().from(llmUsage)).toHaveLength(1);
+});
 it.each([1, 2])("resumes inspection after paid call %i without repeating either provider call", async busyAt => {
   const db = await createTestDb();
   let calls = 0;

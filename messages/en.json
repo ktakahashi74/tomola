@@ -3039,6 +3039,8 @@
   "motion_inspect": "Inspect paired images",
   "motion_help": "Upload a GIF or animated WebP to insert a still image linked to its motion version. You can replace the still image in Markdown. Avoid flashing and explain the motion in the image description or body. Motion text stays in the original language.",
   "motion_error_type": "This image format cannot be used. Use JPEG, PNG, WebP or GIF. Animated PNG and video are not supported.",
-  "error_topic_body_too_long": "Body limit: 100,000 (wide/fullwidth characters count as 2), and 256 KiB in UTF-8.",
-  "topic_body_count_over": "{count} characters too many"
+  "error_topic_body_too_long": "The body is too long. Shorten it to 100,000 (wide/fullwidth characters count as 2).",
+  "topic_body_count_over": "{count} characters too many",
+  "topic_body_limit_hint": "Body limit: 100,000 (wide/fullwidth characters count as 2).",
+  "error_body_too_many_special_characters": "There are too many special characters, such as emoji. Remove some of them."
 }
