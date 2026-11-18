@@ -1,5 +1,8 @@
 // Only used by operator screens, plus their header links. Shared and moderator strings still require review.
 export const OPERATOR_ONLY_KEYS: ReadonlySet<string> = new Set([
+  "motion_delivery_counts",
+  "motion_delivery_help",
+  "motion_delivery_title",
   "admin_invitations_col_created",
   "admin_invitations_col_email",
   "admin_invitations_col_expires",

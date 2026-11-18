@@ -27,6 +27,7 @@ test("a failed image module leaves the written post usable", async ({ browser })
     await moduleRoute.assertHit();
     await body(page).fill("Text survives a missing image module.");
     release();
+    await expect(page.getByText(m.media_unavailable)).toHaveCount(1);
     await expect(page.getByText(m.media_unavailable)).toBeVisible();
     await expect(body(page)).toHaveValue("Text survives a missing image module.");
     await page.getByRole("button", { name: m.submit_post, exact: true }).click();

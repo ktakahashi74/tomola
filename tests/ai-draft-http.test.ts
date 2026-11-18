@@ -79,7 +79,9 @@ it("reuses the draft allowance and rejects invalid language or oversized bodies"
   expect(rate.status).toBe(429);
   expect(rate.headers.has("retry-after")).toBe(true);
   expect((await save({ lang: "invalid" })).status).toBe(400);
-  expect((await save({ body: "x".repeat(50001) })).status).toBe(400);
+  for (const body of ["x".repeat(100_001), "あ".repeat(50_001)]) {
+    expect((await save({ body })).status).toBe(400);
+  }
 });
 
 it("saves and updates a reply draft with its fixed thread, parent and stance tag", async () => {

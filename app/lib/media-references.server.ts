@@ -48,7 +48,7 @@ export async function syncMediaReferences(db: Db, entryId: number, body: string,
     await db.delete(motionPairs).where(inArray(motionPairs.motionId, motionIds));
     if (found.length) await db.insert(motionPairs).values(found).onConflictDoNothing();
   }
-  await queueEntryFigures(db, entryId);
+  if (ids.length) await queueEntryFigures(db, entryId);
 }
 
 export async function canReadMedia(db: Db, id: string, viewer: Viewer | null): Promise<boolean> {

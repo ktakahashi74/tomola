@@ -12,6 +12,7 @@ const directory = path.join(process.cwd(), ".data/screen-trim/screenshots");
 // A question is an option on the post.
 const stance = (target = page) => target.getByRole("checkbox", { name: ja.asks_stance_checkbox, exact: true });
 const tips = (target = page) => target.locator("details[data-writing-tips]");
+const mediaHelp = `${ja.media_help} ${ja.motion_help}`;
 const snapshot = async (name: string, width: number) => {
   await page.evaluate(() => window.scrollTo(0, 0));
   await captureScreenshot(page, { path: path.join(directory, `${name}-${width}.png`), fullPage: true }, "e2e-screen-trim");
@@ -43,7 +44,7 @@ test("new-post explanations follow the question choice and introduction entry po
     expect(await page.locator("main form").evaluate(form => new FormData(form as HTMLFormElement).has("intro"))).toBe(false);
     // The title is named by its placeholder (no label or help text drawn); what only a question needs is said once a question is chosen.
     await expect(page.locator('input[name="title"]')).toHaveAttribute("placeholder", ja.field_title);
-    await expect(page.getByText(ja.media_help, { exact: true })).not.toBeVisible();
+    await expect(page.getByText(mediaHelp, { exact: true })).not.toBeVisible();
     expect(await page.locator("main").ariaSnapshot()).not.toContain(ja.asks_stance_help);
     await snapshot("new-normal", width);
     await page.getByRole("checkbox", { name: ja.asks_stance_checkbox, exact: true }).check();
@@ -54,7 +55,7 @@ test("new-post explanations follow the question choice and introduction entry po
     await expect(page.getByText(ja.asks_stance_help, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: ja.media_insert, exact: true })).toBeVisible();
     await tips().locator("summary").click();
-    await expect(tips().getByText(ja.media_help, { exact: true })).toBeVisible();
+    await expect(tips().getByText(mediaHelp, { exact: true })).toBeVisible();
     await snapshot("new-writing-tips", width);
     await page.goto("/t/new?intro=1");
     await expect(page.locator('input[name="intro"]')).toBeChecked();
@@ -121,11 +122,11 @@ test("CJK emphasis slants in articles, replies and previews without changing its
     await italic(page.locator("main form .longread em"));
     await page.goto(`${url}/edit`);
     await expect(page.getByRole("button", { name: ja.media_insert, exact: true })).toBeVisible();
-    await expect(page.getByText(ja.media_help, { exact: true })).not.toBeVisible();
+    await expect(page.getByText(mediaHelp, { exact: true })).not.toBeVisible();
     await tips().locator("summary").click();
-    await expect(tips().getByText(ja.media_help, { exact: true })).toBeVisible();
+    await expect(tips().getByText(mediaHelp, { exact: true })).toBeVisible();
     await page.goto(url);
     await openReplyMore(page);
-    await expect(page.locator("#reply").getByText(ja.media_help, { exact: true })).toHaveCount(0);
+    await expect(page.locator("#reply").getByText(mediaHelp, { exact: true })).toHaveCount(0);
   }
 });

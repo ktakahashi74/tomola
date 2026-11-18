@@ -208,8 +208,8 @@ test("an unsupported file displays the shared error without changing rich conten
   try {
     await mode(page, false); await body(page).fill("Unchanged prose."); await mode(page, true);
     const original = await body(page).inputValue();
-    await choose(page, en, Buffer.from("not an image"), "invalid.gif", "image/gif");
-    await expect(page.getByRole("alert")).toHaveText(en.media_error_type);
+    await choose(page, en, Buffer.from("\0\0\0\x18ftypmp42"), "pretend.png", "image/png");
+    await expect(page.getByRole("alert")).toHaveText(en.motion_error_type);
     await expect(body(page)).toHaveValue(original); await expect(rich(page).locator("img[src]")).toHaveCount(0);
   } finally { await context.close(); }
 });

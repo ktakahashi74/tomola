@@ -34,7 +34,8 @@ it("returns every invalid new-post value for a native form post", async () => {
   for (const form of [
     { title: "Retained title", body: "Retained text", lang: "xx" },
     { title: "Retained title", body: "---\nlang: xx\n---\nRetained text", lang: "" },
-    { title: "Retained title", body: "x".repeat(50001), lang: "en" },
+    { title: "Retained title", body: "x".repeat(100_001), lang: "en" },
+    { title: "Retained title", body: "あ".repeat(50_001), lang: "ja" },
   ]) {
     const result = await action(h.args(h.request("/t/new", { as: "safety_reader", form })));
     expect(result.data.values).toMatchObject(form);

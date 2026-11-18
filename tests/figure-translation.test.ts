@@ -13,7 +13,7 @@ import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import { createFigureReader } from "~/lib/figure-reading.server";
 import { figureBox } from "~/lib/figure-space.server";
 import { renderFigure } from "./helpers/figure-render";
-import { enqueueEntryFigures, READ_FIGURE_JOB, TRANSLATE_FIGURE_JOB } from "~/lib/figure-translation.server";
+import { enqueueEntryFigures, PREPARE_FIGURES_JOB, READ_FIGURE_JOB, TRANSLATE_FIGURE_JOB } from "~/lib/figure-translation.server";
 import { createFigureHandlers } from "~/lib/jobs/figure-jobs.server";
 import { runDueJobs } from "~/lib/jobs/queue.server";
 import { createFakeEngine } from "~/lib/llm/engines/fake.server";
@@ -51,6 +51,16 @@ beforeEach(() => {
   vi.stubEnv("FIGURE_TRANSLATION", "1"); vi.stubEnv("ENABLED_LANGS", "ja,en"); vi.stubEnv("BETTER_AUTH_URL", origin);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+it("keeps text-only posts and edits out of the figure preparation queue", async () => {
+  db = await createTestDb();
+  await addMember(db, "text-author", "text_author");
+  const topic = await createTopic(db, "text-author", { body: "Text without images.", lang: "en" });
+  if (!topic.ok) throw new Error(topic.error);
+  expect(await createReply(db, "text-author", topic.id, { body: "A text reply.", lang: "en" })).toMatchObject({ ok: true });
+  expect(await editEntry(db, "text-author", topic.id, { body: "Edited text without images." })).toMatchObject({ ok: true });
+  expect(await db.select().from(jobs).where(eq(jobs.kind, PREPARE_FIGURES_JOB))).toEqual([]);
+});
 
 async function world(imageBytes?: Buffer) {
   db = await createTestDb();

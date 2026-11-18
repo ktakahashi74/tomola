@@ -252,8 +252,8 @@ test("a draft sent through the API is approved in the browser and only there", a
   // A cookie session alone cannot create one.
   const cookieOnly = await context.request.post("/api/drafts", { headers: markdown, data: md });
   expect(cookieOnly.status()).toBe(401);
-  // Oversized body.
-  expect((await post({ ...markdown, Authorization: `Bearer ${draftToken}` }, "x".repeat(262_145))).status()).toBe(413);
+  // The complete Markdown request has a separate 384 KiB limit.
+  expect((await post({ ...markdown, Authorization: `Bearer ${draftToken}` }, "x".repeat(384 * 1024 + 1))).status()).toBe(413);
 
   // Create.
   const created = await post({ ...markdown, Authorization: `Bearer ${draftToken}` }, md);

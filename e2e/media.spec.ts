@@ -88,7 +88,7 @@ test("paste and drop use the upload endpoint; invalid contents leave the body un
   }
   const unchanged = await body().inputValue();
   await choose(Buffer.from("<svg></svg>"), "pretend.png", "image/png");
-  await expect(page.getByRole("alert")).toHaveText(en.media_error_type); await expect(body()).toHaveValue(unchanged);
+  await expect(page.getByRole("alert")).toHaveText(en.motion_error_type); await expect(body()).toHaveValue(unchanged);
 });
 test("a real paste containing text and an image keeps the default text insertion without uploading", async () => {
   await page.goto("/t/new"); await expect(button()).toBeVisible();

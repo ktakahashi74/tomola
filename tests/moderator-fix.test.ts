@@ -120,7 +120,9 @@ describe("who can fix what", () => {
     expect(await fix(JA_MOD, q, { title: "" })).toEqual({ ok: false, error: "invalid_title" });
     expect(await fix(JA_MOD, q, { title: "a\nb" })).toEqual({ ok: false, error: "invalid_title" });
     expect(await fix(JA_MOD, q, { body: "   " })).toEqual({ ok: false, error: "body_required" });
-    expect(await fix(JA_MOD, q, { body: "x".padEnd(50_001, "x") })).toEqual({ ok: false, error: "body_too_long" });
+    for (const body of ["x".padEnd(100_001, "x"), "あ".padEnd(50_001, "あ")]) {
+      expect(await fix(JA_MOD, q, { body })).toEqual({ ok: false, error: "body_too_long" });
+    }
     // A submission with no changes.
     const same = await row(q);
     expect(await fix(JA_MOD, q, { title: same.title!, body: same.body })).toEqual({ ok: false, error: "no_change" });

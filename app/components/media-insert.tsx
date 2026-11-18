@@ -4,11 +4,11 @@ import { afterInitialActivation } from "~/lib/initial-activation";
 const Upload = lazy(() => import("./media-upload-client"));
 const Help = lazy(() => import("./media-upload-client").then(module => ({ default: module.MediaUploadHelp })));
 
-class UploadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class UploadBoundary extends Component<{ children: ReactNode; hideFailure?: boolean }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
-    return this.state.failed ? <p role="status" className="ui-help text-muted-foreground">{m.media_unavailable()}</p> : this.props.children;
+    return this.state.failed ? this.props.hideFailure ? null : <p role="status" className="ui-help text-muted-foreground">{m.media_unavailable()}</p> : this.props.children;
   }
 }
 
@@ -25,5 +25,5 @@ export function MediaInsert({ compact = false }: { compact?: boolean } = {}) {
 }
 export function MediaInsertHelp() {
   const ready = useMediaReady();
-  return ready ? <UploadBoundary><Suspense fallback={null}><Help /></Suspense></UploadBoundary> : null;
+  return ready ? <UploadBoundary hideFailure><Suspense fallback={null}><Help /></Suspense></UploadBoundary> : null;
 }

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "../app/lib/db/client.server";
 import { entries, figureTranslations, translations, user } from "../app/lib/db/schema";
 import { createTopic, createReply } from "../app/lib/entries.server";
@@ -33,6 +33,9 @@ export async function seedFigureTranslation(db: Db, dir: string) {
   // Use the actual fake pipeline, with just the one target used by these cases.
   const result = await runDueJobs(db, createFigureHandlers({ llm: { env: { ...process.env, FIGURE_TRANSLATION: "1", TRANSLATION_PRIMARY: "fake", TRANSLATION_SECONDARY: "none", DIVERGENCE_JUDGE: "none", ENABLED_LANGS: "ja,en" } } }), { limit: 100 });
   if (result.failed || result.retried || result.deferred) throw new Error("Figure fixture generation failed");
+  const prepared = await db.select({ state: figureTranslations.state }).from(figureTranslations)
+    .where(and(inArray(figureTranslations.mediaId, Object.values(fixtures).map(fixture => fixture.url.slice(7, 71))), eq(figureTranslations.lang, "ja")));
+  if (prepared.length !== Object.keys(fixtures).length || prepared.some(row => row.state !== "ready")) throw new Error("Figure fixtures must be ready before customizing their display results");
   for (const scenario of ["toggle", "nojs", "fallback_all"]) {
     const id = fixtures[scenario].url.slice(7, 71);
     await db.update(figureTranslations).set({ ...(scenario === "fallback_all" ? { state: "skipped", bytes: null } : {}), labelResults: [
