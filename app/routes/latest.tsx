@@ -2,7 +2,8 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/latest";
 import { AsksFilter } from "~/components/asks-filter";
 import { OpenInAi } from "~/components/open-in-ai";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { getReader } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -40,13 +41,14 @@ export function meta({ location, matches }: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, db, profile } = await getReader(request);
   const asksOnly = parseAsks(request);
-  const result = await listTopics(db, { kind: "all" }, { page: parsePage(request), viewer: user ? await getViewer(db, user) : undefined, asksOnly });
+  const result = await listTopics(db, { kind: "all" }, { reading: readReadingRequest(request, "activity", parsePage(request)), page: parsePage(request), viewer: user ? await getViewer(db, user) : undefined, asksOnly });
   const url = new URL(request.url);
   const peekId = user ? readPeekParam(url) : null;
   return {
     reader: !user,
     langParam: langCarry(request),
     asksOnly,
+    list: result.list!,
     page: result.page,
     hasNext: result.hasNext,
     topics: await toTopicItems(db, result.topics, {
@@ -61,7 +63,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Latest({ loaderData }: Route.ComponentProps) {
-  const { topics, langParam, page, hasNext, aiOpen, asksOnly, stanceMessage } = loaderData;
+  const { topics, langParam, aiOpen, asksOnly, stanceMessage } = loaderData;
   return (
     <main className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -69,8 +71,7 @@ export default function Latest({ loaderData }: Route.ComponentProps) {
         <OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} />
       </div>
       <AsksFilter asksOnly={asksOnly} />
-      <TopicList reader={loaderData.reader} topics={topics} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
-      <Pagination page={page} hasNext={hasNext} />
+      <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList reader={loaderData.reader} topics={items} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>
     </main>
   );
 }

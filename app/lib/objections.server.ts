@@ -1,3 +1,5 @@
+import { cursorTime, readingCondition } from "~/lib/reading-page.server";
+import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { loadDisplayNames, selectDisplayName } from "./display-names.server";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { retainedAuthorColumn } from "./deleted-member.server";
@@ -63,12 +65,12 @@ function latestPerAuthor(db: Db, filter: ReturnType<typeof and>, limit: number) 
 }
 
 // All items, without per-author grouping, newest first; read limit+1 to detect the next page.
-function allNewest(db: Db, filter: ReturnType<typeof and>, limit: number, offset: number) {
+function allNewest(db: Db, filter: ReturnType<typeof and>, limit: number, offset: number, reading?: ReadingRequest) {
   return db
-    .select(columns)
+    .select({ ...columns, cursorTime: cursorTime(entries.createdAt) })
     .from(entries)
     .leftJoin(profiles, eq(profiles.userId, entries.authorId))
-    .where(filter)
+    .where(and(filter, readingCondition([entries.createdAt, entries.id], reading)))
     .orderBy(desc(entries.createdAt), desc(entries.id))
     .limit(limit)
     .offset(offset);
@@ -156,16 +158,22 @@ export async function loadObjectionPanel(db: Db, questionId: number, opts: Langs
 export async function listObjections(
   db: Db,
   questionId: number,
-  opts: Langs & { page: number },
-): Promise<{ alternatives: AltItem[]; objections: ObjectionItem[]; hasNext: boolean }> {
+  opts: Langs & { page: number; reading?: ReadingRequest; objectionReading?: ReadingRequest },
+): Promise<{ alternatives: AltItem[]; objections: ObjectionItem[]; hasNext: boolean; alternativesList?: { topics: AltItem[]; list: ReadingPage }; objectionsList?: { topics: ObjectionItem[]; list: ReadingPage } }> {
   if (!Number.isInteger(opts.page) || opts.page < 1) throw new RangeError("page must be a positive integer");
-  const offset = (opts.page - 1) * PAGE_SIZE;
+  const limit = opts.reading?.count ?? PAGE_SIZE, objectionLimit = opts.objectionReading?.count ?? PAGE_SIZE;
+  const offset = ((opts.reading?.page ?? opts.page) - 1) * PAGE_SIZE;
+  const objectionOffset = ((opts.objectionReading?.page ?? opts.page) - 1) * PAGE_SIZE;
   const [alternatives, objections] = await Promise.all([
-    allNewest(db, and(altFilter(questionId), writerNotExcluded), PAGE_SIZE + 1, offset),
-    allNewest(db, and(objectionFilter(questionId), writerNotExcluded), PAGE_SIZE + 1, offset),
+    allNewest(db, and(altFilter(questionId), writerNotExcluded), limit + 1, offset, opts.reading),
+    allNewest(db, and(objectionFilter(questionId), writerNotExcluded), objectionLimit + 1, objectionOffset, opts.objectionReading),
   ]);
-  const [altItems, objectionItems] = await Promise.all([toAltItems(db, alternatives.slice(0, PAGE_SIZE), opts), toObjectionItems(db, objections.slice(0, PAGE_SIZE), opts)]);
-  return { alternatives: altItems, objections: objectionItems, hasNext: alternatives.length > PAGE_SIZE || objections.length > PAGE_SIZE };
+  const [altItems, objectionItems] = await Promise.all([toAltItems(db, alternatives.slice(0, limit), opts), toObjectionItems(db, objections.slice(0, objectionLimit), opts)]);
+  const cursor = (row: typeof alternatives[number]) => ({ order: "created", keys: [row.cursorTime, row.id] });
+  return { alternatives: altItems, objections: objectionItems, hasNext: alternatives.length > limit || objections.length > objectionLimit,
+    ...(opts.reading ? { alternativesList: { topics: altItems, list: readingPage(alternatives.slice(0, limit), opts.reading, cursor, alternatives.length > limit) } } : {}),
+    ...(opts.objectionReading ? { objectionsList: { topics: objectionItems, list: readingPage(objections.slice(0, objectionLimit), opts.objectionReading, cursor, objections.length > objectionLimit) } } : {}),
+  };
 }
 
 // ---- All alternatives/objections for twin frontmatter/end block and manifest, without panel-style per-author filtering ----

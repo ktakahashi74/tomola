@@ -8,7 +8,8 @@ import { PageHeader } from "~/components/page-header";
 import { HomeInstallGuide } from "~/components/home-install-guide";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { OrderSwitch } from "~/components/order-switch";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { getReader } from "~/lib/auth/session.server";
@@ -72,7 +73,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   // "Following" (members only, and only where villages exist): the posts of the villages the member follows or has joined. Questions-only wins over it, as over long posts.
   const followingAvailable = !!user && villagesEnabled();
   const filter: ListFilter = asksOnly ? "asks" : followingAvailable && parseFollowing(request) ? "following" : long ? "long" : "all";
-  const result = await listTopics(db, user && filter === "following" ? { kind: "my-villages", userId: user.id } : { kind: "all" }, { page, viewer, order, asksOnly, titledOnly: filter === "long" });
+  const result = await listTopics(db, user && filter === "following" ? { kind: "my-villages", userId: user.id } : { kind: "all" }, { reading: readReadingRequest(request, order, page), page, viewer, order, asksOnly, titledOnly: filter === "long" });
   return {
     layout: "unified" as const,
     readingLanguage: readingLanguageChoice(request, profile),
@@ -83,6 +84,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     langParam: langCarry(request),
     order,
     filter,
+    list: result.list!,
     page: result.page,
     hasNext: result.hasNext,
     topics: await toTopicItems(db, result.topics, { ...opts, showVillage: true }),
@@ -97,7 +99,7 @@ export function action({}: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { topics, langParam, page, hasNext, aiOpen, order, filter, stanceMessage } = loaderData;
+  const { topics, langParam, page, aiOpen, order, filter, stanceMessage } = loaderData;
   return (
     <main className="space-y-4">
       {!loaderData.reader && <HomeInstallGuide />}
@@ -115,8 +117,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       />
       {loaderData.noVillagePlaces
         ? <p>{m.home_following_empty()} <Link to="/villages" className="link-prose">{m.nav_all_villages()}</Link></p>
-        : <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}
-      <Pagination page={page} hasNext={hasNext} />
+        : <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>}
     </main>
   );
 }

@@ -1,3 +1,5 @@
+import { useReadingSearch } from "~/lib/use-reading-search";
+import { clearReadingParams } from "~/lib/reading-page";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/following";
 import { Link, useLocation } from "react-router";
@@ -6,7 +8,8 @@ import { PageHeader } from "~/components/page-header";
 import { buttonVariants } from "~/components/ui/button";
 import { MoreInfo } from "~/components/ui/more-info";
 import { OpenInAi } from "~/components/open-in-ai";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { requireMember } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -43,7 +46,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const all = url.searchParams.get("all") === "1";
   const viewer = await getViewer(db, user);
-  const result = await listTopics(db, { kind: "followed", userId: user.id, unreadOnly: !all }, { page: parsePage(request), order: "activity", viewer, asksOnly });
+  const result = await listTopics(db, { kind: "followed", userId: user.id, unreadOnly: !all }, { reading: readReadingRequest(request, "activity", parsePage(request)), page: parsePage(request), order: "activity", viewer, asksOnly });
   // Distinguish a quiet follow list from a member who has no readable follows.
   const hasFollowedTopics = result.topics.length > 0 || (await listTopics(db, { kind: "followed", userId: user.id }, { limit: 1, viewer })).topics.length > 0;
   const peekId = readPeekParam(url);
@@ -53,6 +56,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     hasFollowedTopics,
     langParam: langCarry(request),
     asksOnly,
+    list: result.list!,
     page: result.page,
     hasNext: result.hasNext,
     topics: (await toTopicItems(db, result.topics, {
@@ -67,10 +71,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Following({ loaderData }: Route.ComponentProps) {
-  const { topics, langParam, page, hasNext, aiOpen, asksOnly, stanceMessage, all, hasFollowedTopics } = loaderData;
+  const { topics, langParam, aiOpen, asksOnly, stanceMessage, all, hasFollowedTopics } = loaderData;
   const location = useLocation();
+  const readingSearch = useReadingSearch();
   const filterTo = (showAll: boolean) => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(readingSearch);
+    clearReadingParams(params);
     params.delete("page");
     params.delete("vpage");
     params.delete("all");
@@ -104,14 +110,13 @@ export default function Following({ loaderData }: Route.ComponentProps) {
           <Link to={filterTo(true)} className={buttonVariants({ variant: "outline" })}>{m.following_filter_all()}</Link>
         </div>
       ) : (
-        <TopicList compactMeta
-          topics={topics}
+        <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta
+          topics={items}
           langParam={langParam}
           empty={m.following_empty()}
           stanceMessage={stanceMessage}
-        />
+        />}</ReadingList>
       )}
-      <Pagination page={page} hasNext={hasNext} />
     </main>
   );
 }

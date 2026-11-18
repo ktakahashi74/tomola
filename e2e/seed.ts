@@ -325,6 +325,9 @@ try {
   const { seedFirstLook } = await import("./seed-first-look");
   await seedFirstLook(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!));
 
+  const { seedLoadMore } = await import("./seed-load-more");
+  await seedLoadMore(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
+
   // Dedicated invitation for the display-language signup journey.
   {
     const invitation = await createInvitation(relatedDb, { email: "locale_signup@example.com" });

@@ -379,7 +379,7 @@ export async function visitListRow(page: Page, url: string, row: Locator) {
   await page.goto(url);
   for (let remaining = 100; remaining > 0; remaining--) {
     if (await row.count()) return;
-    const next = page.getByRole("link", { name: (await uiMessages(page)).page_next, exact: true }).first();
+    const next = page.getByRole("button", { name: (await uiMessages(page)).list_load_more, exact: true }).or(page.getByRole("link", { name: (await uiMessages(page)).list_load_more, exact: true })).first();
     if (!await next.count()) break;
     await page.goto((await next.getAttribute("href"))!);
   }
@@ -391,7 +391,7 @@ export async function allListIds(page: Page, url: string): Promise<number[]> {
   const ids: number[] = [];
   for (let remaining = 100; remaining > 0; remaining--) {
     ids.push(...await page.locator('li[id^="q-"]').evaluateAll(rows => rows.map(row => Number(row.id.slice(2)))));
-    const next = page.getByRole("link", { name: (await uiMessages(page)).page_next, exact: true }).first();
+    const next = page.getByRole("button", { name: (await uiMessages(page)).list_load_more, exact: true }).or(page.getByRole("link", { name: (await uiMessages(page)).list_load_more, exact: true })).first();
     if (!await next.count()) { await page.goto(url); return ids; }
     await page.goto((await next.getAttribute("href"))!);
   }

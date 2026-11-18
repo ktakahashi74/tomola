@@ -17,7 +17,8 @@ export function rememberViewingPosts(storage: StorageAccess, scope: string, post
       if (Array.isArray(item) && item.length === 2 && typeof item[0] === "string" && typeof item[1] === "string" && !Number.isNaN(Date.parse(item[1]))) records.set(item[0], item[1]);
     }
     const previous = records.get(scope) ?? null;
-    if (view.before === undefined) view.before = previous;
+    if (view.before !== undefined) return postMarks(posts, view.before);
+    view.before = previous;
     const newest = posts.reduce<string | null>((max, post) => max === null || post.createdAt > max ? post.createdAt : max, previous);
     records.delete(scope);
     if (newest !== null) records.set(scope, newest);

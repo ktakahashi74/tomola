@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { data, Link } from "react-router";
 import type { Route } from "./+types/topic-objections";
 import { AlternativeList, ObjectionList } from "~/components/objections-panel";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { getReader } from "~/lib/auth/session.server";
 import { entries } from "~/lib/db/schema";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -30,7 +31,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (question.hiddenAt && !canSeeHidden(user ? await getViewer(db, user) : undefined, question)) throw data("Not found", { status: 404 });
   const langs = { readLangs: screenReadLangsFor(request, profile), displayLang: displayLangFor(request, profile) };
   const [result, titles] = await Promise.all([
-    listObjections(db, id, { ...langs, page }),
+    listObjections(db, id, { ...langs, page, reading: readReadingRequest(request, "created", page, "list", 50), objectionReading: readReadingRequest(request, "created", page, "vlist", 50) }),
     loadTitleDisplays(db, [{ id, lang: question.lang as Lang, title: question.title, sourceHash: question.sourceHash }], langs, true),
   ]);
   const title = titles.get(id)!;
@@ -52,7 +53,7 @@ export function meta({ loaderData, matches }: Route.MetaArgs) {
 }
 
 export default function TopicObjections({ loaderData }: Route.ComponentProps) {
-  const { id, title, alternatives, objections, hasNext, page, langParam } = loaderData;
+  const { id, title, alternatives, objections, langParam } = loaderData;
   return (
     <main className="space-y-4">
       <h1 className="text-2xl font-bold">{m.objections_page_title()}</h1>
@@ -64,13 +65,12 @@ export default function TopicObjections({ loaderData }: Route.ComponentProps) {
       <p className="ui-help text-muted-foreground">{alternatives.length || objections.length ? m.objections_neutrality() : m.objections_help()}</p>
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">{m.objections_alternatives()}</h2>
-        <AlternativeList reader={loaderData.reader} items={alternatives} langParam={langParam} />
+        <ReadingList topics={alternatives} list={loaderData.alternativesList!.list} section="alternativesList">{items => <AlternativeList reader={loaderData.reader} items={items} langParam={langParam} />}</ReadingList>
       </section>
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">{m.objections_replies()}</h2>
-        <ObjectionList reader={loaderData.reader} items={objections} />
+        <ReadingList topics={objections} list={loaderData.objectionsList!.list} section="objectionsList">{items => <ObjectionList reader={loaderData.reader} items={items} />}</ReadingList>
       </section>
-      <Pagination page={page} hasNext={hasNext} />
       {!loaderData.reader && <p className="flex flex-wrap items-center gap-x-4 gap-y-1 ui-meta">
         <Link to={`/t/${id}?write=objection#reply`} className="underline">
           {m.objections_write()}

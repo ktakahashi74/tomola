@@ -15,7 +15,8 @@ import type { Route } from "./+types/member-page";
 import { ListMeta } from "~/components/list-meta";
 import { AuthorLink } from "~/components/author-link";
 import { LocalTime } from "~/components/local-time";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TranslatedEntry } from "~/components/translated-entry";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { parseIdSet } from "~/lib/display";
@@ -42,6 +43,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const personalPage = villagesEnabled() ? parsePageParam(query.get("vpage")) : 1;
   if (personalPage === null) throw data("Not found", { status: 404, headers: privateHeaders });
   const content = await loadMemberPageContent(db, member, {
+    reading: readReadingRequest(request, "created", parsePage(request), "list", 20),
+    personalReading: readReadingRequest(request, "created", personalPage, "vlist", 20),
     viewerId: user.id, readLangs: screenReadLangsFor(request, profile), displayLang: displayLangFor(request, profile), page: parsePage(request), personalPage,
     forceOriginal: parseIdSet(query.getAll("orig")), forceTranslation: parseIdSet(query.getAll("tr")), forceOlder: parseIdSet(query.getAll("old")),
   });
@@ -81,7 +84,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export default function MemberPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { handle, own, intro, topics, page, hasNext, personal } = loaderData;
+  const { handle, own, intro, topics, personal } = loaderData;
   const motionHistory = useMemo(() => ({ handle, entries: new Map<number, Set<string>>() }), [handle]);
   const [reportOpen, setReportOpen] = useState(false);
   const [avatarReportOpen, setAvatarReportOpen] = useState(false);
@@ -118,21 +121,19 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
           {!own && <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={personal.following} name="intent" value={personal.following ? "unfollow" : "follow"}>{personal.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>}
         </div>
         {!own && <p className="ui-help text-muted-foreground">{m.member_page_village_follow_hint()}</p>}
-        <MemberTopics topics={personal.topics} own={own} />
-        <Pagination page={personal.page} hasNext={personal.hasNext} pageParam="vpage" anchor="#village" />
+        <ReadingList topics={personal.topics} list={personal.list!} section="personal">{items => <MemberTopics topics={items} own={own} />}</ReadingList>
         {loaderData.nushiVoiceHref && <Link className="link-ui inline-block" to={loaderData.nushiVoiceHref}>{m.village_nushi_title()}</Link>}
       </section>}
       <section className="space-y-3" id="posts">
         <h2 className={personal || intro || own ? "text-lg font-semibold" : "sr-only"}>{personal ? m.member_page_elsewhere() : m.member_page_topics_heading()}</h2>
-        <MemberTopics topics={topics} own={own} />
-        <Pagination page={page} hasNext={hasNext} anchor="#posts" />
+        <ReadingList topics={topics} list={loaderData.list!}>{items => <MemberTopics topics={items} own={own} />}</ReadingList>
       </section>
     </main>
   );
 }
 
 function MemberTopics({ topics, own }: { topics: Route.ComponentProps["loaderData"]["topics"]; own: boolean }) {
-  return topics.length === 0 ? <p className="ui-help text-muted-foreground">{m.member_page_topics_empty()}</p> : <ul className="divide-y">{topics.map(topic => <li key={topic.id} className="topic-row">
+  return topics.length === 0 ? <p className="ui-help text-muted-foreground">{m.member_page_topics_empty()}</p> : <ul className="divide-y">{topics.map(topic => <li key={topic.id} id={`q-${topic.id}`} className="topic-row">
     <Link to={`/t/${topic.id}`} dir="auto" lang={topic.title.lang} className="topic-title link-ui" data-translation-pending={topic.title.pending || undefined}>{topic.title.text || m.headline_empty()}</Link>
     {" "}<LocalTime iso={topic.createdAtISO} className="topic-date ui-meta text-muted-foreground" />
     <ListMeta items={[

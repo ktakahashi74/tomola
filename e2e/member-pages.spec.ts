@@ -117,21 +117,23 @@ test("renaming updates author and own-page links while the written mention retai
   await ownPage(RENAMED);
 });
 
-test("member topics paginate 20 at a time, keep original language, and require membership", async () => {
+test("member topics append 30 at a time, keep original language, and require membership", async () => {
   const fixture = JSON.parse(fs.readFileSync(`${state().dir}/member-pagination.json`, "utf8")) as { handle: string; count: number };
   await owner.goto(`/u/${fixture.handle}`);
-  await expect(owner.locator("#posts li")).toHaveCount(20);
-  await expect(owner.locator('#posts span[lang="ja"]')).toHaveCount(20);
+  await expect(owner.locator("#posts li")).toHaveCount(30);
+  await expect(owner.locator('#posts span[lang="ja"]')).toHaveCount(30);
   await expect(owner.getByRole("link", { name: en.member_page_write_intro, exact: true })).toHaveCount(0);
   await expectMemberPageOnly(owner);
   const first = await owner.locator("#posts li > a").evaluateAll(links => links.map(link => link.getAttribute("href")));
-  await owner.getByRole("link", { name: en.page_next, exact: true }).click();
-  await expect(owner).toHaveURL(new RegExp(`/u/${fixture.handle}\\?page=2#posts$`));
-  await expect(owner.locator("#posts li")).toHaveCount(fixture.count - first.length);
-  const second = await owner.locator("#posts li > a").evaluateAll(links => links.map(link => link.getAttribute("href")));
-  expect(second.some(href => first.includes(href))).toBe(false);
-  await owner.getByRole("link", { name: en.page_prev, exact: true }).click();
-  await expect(owner.locator("#posts li")).toHaveCount(20);
+  await owner.locator("[data-load-more]").click();
+  await expect(owner).toHaveURL(/list_count=35/);
+  await expect(owner.locator("#posts li")).toHaveCount(fixture.count);
+  const expanded = await owner.locator("#posts li > a").evaluateAll(links => links.map(link => link.getAttribute("href")));
+  expect(expanded.slice(0, first.length)).toEqual(first);
+  expect(new Set(expanded).size).toBe(fixture.count);
+  await expect(owner.locator("[data-load-more]")).toHaveCount(0);
+  await owner.reload();
+  await expect(owner.locator("#posts li")).toHaveCount(fixture.count);
   const response = await owner.request.get(`/u/${RENAMED}`);
   expect(response.headers()["cache-control"]).toContain("private");
   expect((await owner.request.get(`/u/${RENAMED}.md`)).status()).toBe(404);

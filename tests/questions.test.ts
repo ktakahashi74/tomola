@@ -611,7 +611,7 @@ describe("another way of asking, and the objection panel", () => {
     // UI: ?page=
     type Page = { alternatives: unknown[]; hasNext: boolean; page: number };
     expect(await load<Page>("topic-objections", "hana", `/t/${q}/objections?page=2`, { id: String(q) })).toMatchObject({ page: 2, hasNext: false });
-    expect((await load<Page>("topic-objections", "hana", `/t/${q}/objections`, { id: String(q) })).alternatives).toHaveLength(50);
+    expect((await load<Page>("topic-objections", "hana", `/t/${q}/objections`, { id: String(q) })).alternatives).toHaveLength(30);
   });
 
   it("shows the excerpt of an objection as plain text, 160 characters at most", async () => {

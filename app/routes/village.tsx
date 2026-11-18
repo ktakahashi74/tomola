@@ -20,6 +20,8 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/village";
 import { OrderSwitch } from "~/components/order-switch";
 import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -95,7 +97,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const resolveId = operator && village.language ? parseIdOrNull(url.searchParams.get("resolveReport") ?? undefined) : null;
   const resolveReportId = resolveId !== null && await hasOpenVillageReport(db, village.id, { reportId: resolveId }) ? resolveId : null;
   const management = user && profile && !village.language ? await villageManagement(db, village.id, user.id, rosterPage, invitesPage) : emptyVillageManagement();
-  const result = await listTopics(db, { kind: "village", villageId: village.id }, { page: parsePage(request), viewer, order, asksOnly, titledOnly });
+  const result = await listTopics(db, { kind: "village", villageId: village.id }, { reading: readReadingRequest(request, order, parsePage(request)), page: parsePage(request), viewer, order, asksOnly, titledOnly });
   const peekId = user ? readPeekParam(url) : null;
   // The name and description in the reader's language when they were written in another; ?vorig=1 keeps the original. `source` is always the original, for the owner's form.
   const nushiPage = await villageNushiAvailable(db, village);
@@ -121,6 +123,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     order,
     unfiltered: !asksOnly && !titledOnly,
     langParam: langCarry(request),
+    list: result.list!,
     page: result.page,
     hasNext: result.hasNext,
     topics: await toTopicItems(db, result.topics, { readLangs: screenReadLangsFor(request, profile), displayLang: displayLangFor(request, profile), viewer: user && profile ? { userId: user.id, profile } : undefined, peek: new Set(peekId === null ? [] : [peekId]) }),
@@ -191,7 +194,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   return { ok: true };
 }
 export default function Village({ loaderData, actionData }: Route.ComponentProps) {
-  const { village, source, membership, following, topics, order, page, hasNext, langParam, stanceMessage, ended, operator, management, incoming, confirmingEnd } = loaderData;
+  const { village, source, membership, following, topics, order, page, langParam, stanceMessage, ended, operator, management, incoming, confirmingEnd } = loaderData;
   const location = useLocation();
   const membershipControl = useDismissibleDetails();
   const owner = membership?.owner ?? false;
@@ -241,8 +244,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       <OrderSwitch order={order} />
     </div>
     {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
-    <TopicList compactMeta trackNew={tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
-    <Pagination page={page} hasNext={hasNext} dropParams={["manage", "membersPage", "invitesPage", "notice"]} />
+    <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>
     {loaderData.nushiPage && <Link className="link-ui inline-block" to={`/v/${village.slug}/nushi`}>{m.village_nushi_title()}</Link>}
     {management.canReadRoster && <details id="village-roster" open={search.get("notice") === "remove-member" || management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
       {notice && search.get("notice") === "remove-member" && <p role="status">{notice}</p>}

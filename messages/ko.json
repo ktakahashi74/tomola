@@ -3015,5 +3015,8 @@
   "writing_guide_rights": "직접 쓴 글이나 공개 허락을 받은 자료만 사용하고, 모든 이미지에 설명을 작성하세요.",
   "writing_guide_publish": "AI는 초안까지 만들 수 있습니다. 내용을 확인하고 브라우저의 승인 화면에서 직접 공개하세요.",
   "media_upload_permission": "이미지 올리기",
-  "media_upload_help": "계정에 이미지를 올릴 수 있으며 이미지 저장 공간과 업로드 횟수 한도를 사용합니다. 이미지를 게시하지는 않습니다."
+  "media_upload_help": "계정에 이미지를 올릴 수 있으며 이미지 저장 공간과 업로드 횟수 한도를 사용합니다. 이미지를 게시하지는 않습니다.",
+  "list_load_more": "더 보기",
+  "list_added": "게시물 {count}개를 추가했습니다.",
+  "list_back_latest": "최신 글로 돌아가기"
 }

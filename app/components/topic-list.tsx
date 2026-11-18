@@ -1,3 +1,4 @@
+import { useReadingSearch } from "~/lib/use-reading-search";
 import { Badge } from "~/components/ui/badge";
 import { PendingText } from "~/components/pending-text";
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +51,7 @@ export function TopicList({
   trackNew?: boolean;
 }) {
   const location = useLocation();
+  const readingSearch = useReadingSearch();
   const marks = useNewPostMarks(trackNew ? location.pathname : undefined, topics, location.key);
   if (topics.length === 0) return <p className="ui-help text-muted-foreground">{empty}</p>;
   return (
@@ -87,10 +89,10 @@ export function TopicList({
                 questionId={t.id}
                 stance={t.stance}
                 distribution={t.distribution ?? null}
-                peekHref={peekHrefFor(location.pathname, location.search, t.id, `q-${t.id}`)}
+                peekHref={peekHrefFor(location.pathname, readingSearch, t.id, `q-${t.id}`)}
                 compact
                 message={stanceMessage?.questionId === t.id ? stanceMessage.message : null}
-                returnTo={stanceReturnTo(location.pathname, location.search, `q-${t.id}`)}
+                returnTo={stanceReturnTo(location.pathname, readingSearch, `q-${t.id}`)}
                 canChoose={t.canChoose ?? !t.hidden}
               />
             </div>

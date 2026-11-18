@@ -235,18 +235,19 @@ test("choosing a display language changes what is shown", async () => {
   await expect(somchai.getByRole("link", { name: `[th] ${TITLE}` })).toBeVisible();
 });
 
-test("the home is paged 30 rows at a time with ?page=, and keeps the order and the filter in the links", async () => {
+test("the home appends 30 rows and keeps the order and filter in cursor links", async () => {
   await hana.goto("/");
   await expect(hana.locator("main li[id^=q-]")).toHaveCount(30);
   const firstPage = await rowIds(hana);
   await expect(hana.getByRole("link", { name: TITLE, exact: true })).toBeVisible();
-  await hana.getByRole("link", { name: enMessages.page_next }).click();
-  await expect(hana).toHaveURL(/\?page=2$/);
-  await waitForClientRoute(hana);
-  expect(await hana.locator("main li[id^=q-]").count()).toBeGreaterThan(0);
-  expect((await rowIds(hana)).some(id => firstPage.includes(id))).toBe(false);
-  await hana.getByRole("link", { name: enMessages.page_prev }).click();
-  await expect(hana.locator("main li[id^=q-]")).toHaveCount(30);
+  await hana.locator("[data-load-more]").click();
+  await expect(hana.locator("main li[id^=q-]")).toHaveCount(60);
+  const expanded = await rowIds(hana);
+  expect(expanded.slice(0, 30)).toEqual(firstPage);
+  expect(new Set(expanded).size).toBe(60);
+  await expect(hana).toHaveURL(/list_count=60/);
+  await hana.reload();
+  expect(await rowIds(hana)).toEqual(expanded);
   // The order and the filter go with the page links
   await hana.goto("/?order=activity&long=1");
   await expect(hana.getByRole("link", { name: enMessages.home_order_activity })).toHaveAttribute("aria-current", "page");
@@ -254,7 +255,7 @@ test("the home is paged 30 rows at a time with ?page=, and keeps the order and t
   await expect(filter).toHaveText(enMessages.home_filter_long);
   await filter.click();
   await expect(hana.getByRole("link", { name: enMessages.home_filter_long })).toHaveAttribute("aria-current", "true");
-  await expect(hana.getByRole("link", { name: enMessages.page_next })).toHaveAttribute("href", "/?order=activity&long=1&page=2");
+  await expect(hana.locator("[data-load-more]")).toHaveAttribute("href", /\/\?order=activity&long=1&list_after=[A-Za-z0-9_-]+$/);
   // /latest keeps its own pages of 30.
   const latest = await hana.goto("/latest?page=2");
   expect(latest?.status()).toBe(200);

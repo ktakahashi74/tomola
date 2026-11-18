@@ -25,6 +25,8 @@ import { checkStanceAttributes, STANCE_TAGS, type StanceAttrError, type StanceTa
 import { loadStanceAttrFacts, touchAltOriginal, touchQuestion } from "~/lib/questions.server";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
 import { publicTopicPlace, rootTopic, rootTopicOn, undeletedTopic } from "~/lib/visibility.server";
+import { cursorTime, readingCondition } from "~/lib/reading-page.server";
+import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { afterPageBoundary } from "~/lib/page-boundary.server";
 import { hasUndeletedReply } from "~/lib/reply-placeholders.server";
 import {
@@ -1105,7 +1107,7 @@ export type TopicScope =
   | { kind: "village"; villageId: string }
   // The villages the member follows or has joined (public and not ended): the home's "Joined & followed villages" filter.
   | { kind: "my-villages"; userId: string };
-export type TopicPage = { topics: TopicSummary[]; page: number; limit: number; hasNext: boolean };
+export type TopicPage = { topics: TopicSummary[]; page: number; limit: number; hasNext: boolean; list?: ReadingPage };
 // List ordering is independent of the reader. Insightful counts only the topic post,
 // excluding moderated reactions; ties use newest creation and then newest id.
 export type TopicOrder = "created" | "activity" | "insightful";
@@ -1127,9 +1129,12 @@ export function visibleTo(viewer: Viewer | undefined): SQL | undefined {
 export async function listTopics(
   db: Db,
   scope: TopicScope = { kind: "all" },
-  opts: { page?: number; limit?: number; viewer?: Viewer; asksOnly?: boolean; titledOnly?: boolean; order?: TopicOrder } = {},
+  opts: { page?: number; limit?: number; viewer?: Viewer; asksOnly?: boolean; titledOnly?: boolean; order?: TopicOrder; reading?: ReadingRequest } = {},
 ): Promise<TopicPage> {
-  const { page, limit, offset } = checkPagination(opts);
+  const pagination = checkPagination(opts);
+  const page = opts.reading?.page ?? pagination.page;
+  const limit = opts.reading?.count ?? pagination.limit;
+  const offset = (page - 1) * pagination.limit;
   const created = opts.order === "created";
   const conditions: Array<SQL | undefined> = [eq(entries.kind, "topic"), isNull(entries.deletedAt), visibleTo(opts.viewer), publicTopicPlace()];
   // Questions-only filter (?asks=1).
@@ -1137,7 +1142,7 @@ export async function listTopics(
   // Long posts only (a topic with a title; see app/lib/long-post.ts). A topic without a title is a short remark.
   if (opts.titledOnly) conditions.push(isNotNull(entries.title));
   if (scope.kind === "langs") {
-    if (scope.langs.length === 0) return { topics: [], page, limit, hasNext: false };
+    if (scope.langs.length === 0) return { topics: [], page, limit, hasNext: false, ...(opts.reading ? { list: readingPage([], opts.reading, () => { throw new Error("Empty list"); }, false) } : {}) };
     const lang = opts.order === "created" ? entries.lang : topicListingStats.lang;
     conditions.push(inArray(lang, [...scope.langs]));
   } else if (scope.kind === "not-langs" && scope.langs.length > 0) {
@@ -1160,12 +1165,15 @@ export async function listTopics(
   const order = insightful
     ? [sql`${topicListingStats.insightfulCount} desc nulls last`, sql`${topicListingStats.createdAt} desc nulls last`, sql`${topicListingStats.topicId} desc nulls last`]
     : created ? [desc(entries.createdAt), desc(entries.id)] : [sql`${topicListingStats.lastActivityAt} desc nulls last`, sql`${topicListingStats.topicId} desc nulls last`];
+  conditions.push(readingCondition(keys, opts.reading));
   const boundaryBase = db.select({ ...(insightful ? { count: topicListingStats.insightfulCount } : {}), time, id: entries.id }).from(entries);
   const boundarySource = created ? boundaryBase : boundaryBase.innerJoin(topicListingStats, eq(topicListingStats.topicId, entries.id));
   const boundary = offset ? boundarySource.where(and(...conditions)).orderBy(...order).limit(1).offset(offset - 1) : undefined;
   const listingBase = db
     .select({
       id: entries.id,
+      cursorTime: cursorTime(time),
+      cursorCount: insightful ? topicListingStats.insightfulCount : sql<number>`0`,
       lang: entries.lang,
       langCode: entries.langCode,
       title: entries.title,
@@ -1184,6 +1192,7 @@ export async function listTopics(
   const rows = await listingSource.where(and(...conditions, afterPageBoundary(keys, boundary, true)))
     .orderBy(...order).limit(limit + 1);
   return {
+    ...(opts.reading ? { list: readingPage(rows.slice(0, limit), opts.reading, row => ({ order: opts.order ?? "activity", keys: [...(insightful ? [row.cursorCount] : []), row.cursorTime, row.id] }), rows.length > limit) } : {}),
     topics: rows.slice(0, limit).map((r) => ({
       id: r.id,
       hidden: r.hiddenAt !== null,

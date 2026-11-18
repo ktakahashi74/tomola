@@ -145,7 +145,7 @@ describe("the order and the filters of the stream", () => {
     const { default: Home } = await import("~/routes/home");
     const html = await renderInRouter(() => createElement(Home as never, { loaderData: { ...p1, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null, filter: "long", order: "activity" }, actionData: undefined, params: {}, matches: [] } as never), "/?order=activity&long=1&lang=en");
     // (the interface texts are empty in the unit tests; the words are checked in the browser tests)
-    expect(html).toContain('href="/?order=activity&amp;long=1&amp;lang=en&amp;page=2"');
+    expect(html).toMatch(/href="\/\?order=activity&amp;long=1&amp;lang=en&amp;list_after=[A-Za-z0-9_-]+"/);
     // the order switch: the current one is marked, and the link to the default order drops ?order=
     expect(html).toMatch(/<a aria-current="page" class="[^"]*" href="\/\?order=activity&amp;long=1&amp;lang=en"/);
     expect(html).toContain('href="/?long=1&amp;lang=en"');

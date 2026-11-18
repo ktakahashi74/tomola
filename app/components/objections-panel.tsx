@@ -14,7 +14,7 @@ export function AlternativeList({ items, langParam, reader = false }: { items: A
   return (
     <ul className="space-y-1">
       {items.map((a) => (
-        <li key={a.id}>
+        <li key={a.id} data-reading-id={a.id}>
           <Link to={`/t/${a.id}${lang}`} dir="auto" lang={a.title.lang} className="link-ui">
             {a.title.text}
           </Link>{" "}
@@ -34,7 +34,7 @@ export function ObjectionList({ items, reader = false }: { items: ObjectionItem[
   return (
     <ul className="space-y-1">
       {items.map((o) => (
-        <li key={o.id}>
+        <li key={o.id} data-reading-id={o.id}>
           <Link to={o.location} dir="auto" lang={o.lang} className="link-ui">
             {o.excerpt}
           </Link>{" "}

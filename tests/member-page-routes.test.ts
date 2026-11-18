@@ -1,3 +1,4 @@
+import { readingHref, type ReadingPage } from "~/lib/reading-page";
 import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -28,7 +29,7 @@ const must = <T extends { ok: boolean }>(result: T): Extract<T, { ok: true }> =>
 };
 const unwrap = <T = Record<string, unknown>>(value: unknown): T => ((value as { data?: unknown })?.data ?? value) as T;
 type PageData = {
-  handle: string; own: boolean; page: number; hasNext: boolean;
+  handle: string; own: boolean; page: number; hasNext: boolean; list: ReadingPage;
   intro: null | { id: number; lang: string; title: string | null; headline: string | null; html: string; display: unknown };
   topics: Array<{ id: number; lang: string; title: { text: string }; createdAtISO: string }>;
 };
@@ -88,7 +89,7 @@ describe("member-page read boundaries", () => {
   it("returns and renders only the introduction and topic rows, retaining original language without member preferences or statistics", async () => {
     for (const as of ["reader_member", "author_member"]) {
       const loaded = await pageData(as);
-      expect(Object.keys(loaded).sort()).toEqual(["avatarUrl", "handle", "hasDisplayName", "hasNext", "hasUploadedAvatar", "intro", "name", "nameLatin", "own", "page", "personal", "reported", "topics"]);
+      expect(Object.keys(loaded).sort()).toEqual(["avatarUrl", "handle", "hasDisplayName", "hasNext", "hasUploadedAvatar", "intro", "list", "name", "nameLatin", "own", "page", "personal", "reported", "topics"]);
       expect(loaded).toMatchObject({ name: null, hasDisplayName: false, reported: false });
       expect(loaded.own).toBe(as === "author_member");
       expect(loaded.intro?.id).toBe(introId);
@@ -134,11 +135,11 @@ describe("member-page read boundaries", () => {
     }
   });
 
-  it("paginates 20 newest topics without moving a topic when it receives a reply", async () => {
-    for (let index = 0; index < 19; index++) must(await createTopic(h.db, h.ids.author_member, { lang: "ja", title: `Paging ${index}`, body: "Paging body." }, { now: new Date(now.getTime() + index + 1) }));
+  it("loads 30 newest topics without moving a topic when it receives a reply", async () => {
+    for (let index = 0; index < 29; index++) must(await createTopic(h.db, h.ids.author_member, { lang: "ja", title: `Paging ${index}`, body: "Paging body." }, { now: new Date(now.getTime() + index + 1) }));
     const first = await pageData();
-    const second = await pageData("reader_member", "author_member", "?page=2");
-    expect(first.topics).toHaveLength(20);
+    const second = await pageData("reader_member", "author_member", readingHref("", first.list, true));
+    expect(first.topics).toHaveLength(30);
     expect(first.hasNext).toBe(true);
     expect(second.hasNext).toBe(false);
     expect(new Set([...first.topics, ...second.topics].map(topic => topic.id)).size).toBe(first.topics.length + second.topics.length);

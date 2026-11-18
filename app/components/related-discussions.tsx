@@ -4,7 +4,7 @@ import { m } from "~/paraglide/messages.js";
 
 export function RelatedDiscussionList({ rows }: { rows: RelatedDiscussion[] }) {
   return <ul className="space-y-3 text-sm [overflow-wrap:anywhere]">
-    {rows.map(row => <li key={row.id} data-related-topic={row.id} className="space-y-1">
+    {rows.map(row => <li key={row.id} data-reading-id={row.id} data-related-topic={row.id} className="space-y-1">
       <Link to={row.outgoing?.targetHref ?? row.incoming!.sourceHref} dir="auto" lang={row.title.lang} className="underline">{row.title.text}</Link>
       {(["outgoing", "incoming"] as const).map(kind => {
         const direction = row[kind];

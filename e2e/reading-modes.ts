@@ -1,6 +1,7 @@
 // One inventory for both development runs. Everything else runs privately.
 // Media delivery and deleted-parent visibility exercise both authority modes.
 export const publicOnly = [
+  ["load-more", "public readers"],
   ["post-ai-materials", "public readers read supplements"],
   ["village-nushi", ".*"],
   ["nushi-voice", ".*"],
@@ -63,6 +64,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["load-more", "members"],
   ["introductions", ".*"],
   ["member-search", ".*"],
   ["village-search", ".*"],

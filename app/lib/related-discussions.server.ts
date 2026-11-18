@@ -1,3 +1,5 @@
+import { readingPage, type ReadingRequest } from "~/lib/reading-page";
+import { cursorTime } from "~/lib/reading-page.server";
 import { withMarkdownPersistedRead } from "./markdown-budget.server";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -109,9 +111,9 @@ type Display = { readLangs: readonly Lang[]; displayLang: Lang; lang?: string | 
 
 // Shared qualification/grouping for HTML, loader data and Markdown. Every
 // endpoint and both topics must be public content, even for an operator.
-export async function listRelatedDiscussions(db: Db, topicId: number, opts: Display & { inline?: boolean; page?: number }) {
+export async function listRelatedDiscussions(db: Db, topicId: number, opts: Display & { inline?: boolean; page?: number; reading?: ReadingRequest }) {
   const links = await db.select({
-    sourceId: source.id, targetId: target.id, authorId: source.authorId, createdAt: source.createdAt,
+    cursorTime: cursorTime(source.createdAt), sourceId: source.id, targetId: target.id, authorId: source.authorId, createdAt: source.createdAt,
     sourceTopicId: sourceTopic.id, targetTopicId: targetTopic.id,
     sourceTitle: sourceTopic.title, sourceLang: sourceTopic.lang, sourceHash: sourceTopic.sourceHash,
     targetTitle: targetTopic.title, targetLang: targetTopic.lang, targetHash: targetTopic.sourceHash,
@@ -124,7 +126,7 @@ export async function listRelatedDiscussions(db: Db, topicId: number, opts: Disp
       isNull(source.deletedAt), isNull(source.hiddenAt), isNull(target.deletedAt), isNull(target.hiddenAt),
       isNull(sourceTopic.deletedAt), isNull(sourceTopic.hiddenAt), isNull(targetTopic.deletedAt), isNull(targetTopic.hiddenAt)))
     .orderBy(sql`${source.createdAt} desc`, sql`${source.id} desc`, asc(target.id));
-  type Group = { id: number; authorId: string; title: string | null; lang: SourceLang; sourceHash: string | null; incoming?: typeof links[number]; outgoing?: typeof links[number] };
+  type Group = { id: number; authorId: string; title: string | null; lang: SourceLang; sourceHash: string | null; boundary: typeof links[number]; incoming?: typeof links[number]; outgoing?: typeof links[number] };
   const groups = new Map<number, Group>();
   for (const link of links) {
     if (link.sourceTopicId === link.targetTopicId) continue;
@@ -132,7 +134,7 @@ export async function listRelatedDiscussions(db: Db, topicId: number, opts: Disp
     const id = outgoing ? link.targetTopicId : link.sourceTopicId;
     let group = groups.get(id);
     if (!group) {
-      group = { id, authorId: link.authorId, title: outgoing ? link.targetTitle : link.sourceTitle, lang: (outgoing ? link.targetLang : link.sourceLang) as Lang, sourceHash: outgoing ? link.targetHash : link.sourceHash };
+      group = { id, boundary: link, authorId: link.authorId, title: outgoing ? link.targetTitle : link.sourceTitle, lang: (outgoing ? link.targetLang : link.sourceLang) as Lang, sourceHash: outgoing ? link.targetHash : link.sourceHash };
       groups.set(id, group);
     }
     const direction = outgoing ? "outgoing" : "incoming";
@@ -150,6 +152,21 @@ export async function listRelatedDiscussions(db: Db, topicId: number, opts: Disp
       if (chosen.length === 5) break;
     }
   } else chosen = [...groups.values()].slice((page - 1) * 20, page * 20);
+  // The first reference is the representative in the existing SQL order:
+  // newest source time/id, then oldest target ID (including reply targets).
+  const cursor = (group: Group) => ({ order: "related", keys: [group.boundary.cursorTime, group.boundary.sourceId, Number.MAX_SAFE_INTEGER - group.boundary.targetId] });
+  let list;
+  if (opts.reading && !opts.inline) {
+    const compare = (a: (string | number)[], b: (string | number)[]) => {
+      for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; }
+      return 0;
+    };
+    const request = opts.reading;
+    if ([request.after, request.start].some(value => value && value.keys.length !== 3)) throw new Response("Invalid list cursor", { status: 400 });
+    const candidates = [...groups.values()].filter(group => (!request.after || compare(cursor(group).keys, request.after.keys) < 0) && (!request.start || compare(cursor(group).keys, request.start.keys) <= 0));
+    chosen = candidates.slice((request.page - 1) * 20, (request.page - 1) * 20 + request.count);
+    list = readingPage(chosen, request, cursor, candidates.length > (request.page - 1) * 20 + request.count);
+  }
   const pageCount = Math.max(1, Math.ceil(groups.size / 20));
   const titles = await loadTitleDisplays(db, chosen, { readLangs: [...opts.readLangs], displayLang: opts.displayLang }, opts.typesetTitles ?? false);
   const representatives = chosen.flatMap(group => [group.incoming, group.outgoing].filter(link => link !== undefined));
@@ -158,9 +175,10 @@ export async function listRelatedDiscussions(db: Db, topicId: number, opts: Disp
   const href = (id: number, threadId: number) => locations.get(id)?.state === "visible" ? (locations.get(id) as { href: string }).href : `/t/${threadId}${opts.lang ? `?lang=${opts.lang}` : ""}#p-${id}`;
   const direction = (link: typeof links[number] | undefined): RelatedDirection | null => link ? { sourceHref: href(link.sourceId, link.sourceTopicId), targetHref: href(link.targetId, link.targetTopicId) } : null;
   return {
+    ...(list ? { list } : {}),
     rows: chosen.map(group => ({ id: group.id, title: { text: titles.get(group.id)!.text, lang: titles.get(group.id)!.lang }, incoming: direction(group.incoming), outgoing: direction(group.outgoing) })),
     omitted: opts.inline ? chosen.length < groups.size : false,
-    hasNext: page < pageCount, pageCount,
+    hasNext: list ? list.next !== null : page < pageCount, pageCount,
   };
 }
 

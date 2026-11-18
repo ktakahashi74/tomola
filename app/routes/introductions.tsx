@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/introductions";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { requireMember } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -16,22 +17,22 @@ export function meta() { return [{ title: `${m.introductions_title()} · ${m.sit
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { user, profile, db } = await requireMember(request);
-  const [result, hasIntro] = await Promise.all([listIntroductions(db, { page: parsePage(request) }), hasVisibleIntroduction(db, user.id)]);
+  const [result, hasIntro] = await Promise.all([listIntroductions(db, { reading: readReadingRequest(request, "created", parsePage(request)), page: parsePage(request) }), hasVisibleIntroduction(db, user.id)]);
   return {
+    list: result.list!,
     page: result.page, hasNext: result.hasNext, hasIntro, langParam: langCarry(request),
     topics: await toTopicItems(db, result.topics, { readLangs: screenReadLangsFor(request, profile), displayLang: displayLangFor(request, profile) }),
   };
 }
 
 export default function Introductions({ loaderData }: Route.ComponentProps) {
-  const { topics, hasIntro, langParam, page, hasNext } = loaderData;
+  const { topics, hasIntro, langParam } = loaderData;
   return <main className="space-y-4">
     <h1 className="text-2xl font-bold">{m.introductions_title()}</h1>
     {!hasIntro && <section className="space-y-2" data-introduction-prompt>
       <Link to="/t/new?intro=1" className="link-ui">{m.member_page_write_intro()}</Link>
       <p className="ui-help text-muted-foreground">{m.member_page_intro_hint()}</p>
     </section>}
-    <TopicList compactMeta topics={topics} order="created" langParam={langParam} empty={m.introductions_empty()} />
-    <Pagination page={page} hasNext={hasNext} />
+    <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta topics={items} order="created" langParam={langParam} empty={m.introductions_empty()} />}</ReadingList>
   </main>;
 }

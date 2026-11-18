@@ -1,3 +1,5 @@
+import { useReadingSearch } from "~/lib/use-reading-search";
+import { clearReadingParams } from "~/lib/reading-page";
 import { ChevronDown } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { m } from "~/paraglide/messages.js";
@@ -8,10 +10,12 @@ export type ListFilter = "all" | "asks" | "long" | "following";
 
 export function AsksFilter({ asksOnly, filter, withLong = false, withFollowing = false, collapsed = false }: { asksOnly?: boolean; filter?: ListFilter; withLong?: boolean; withFollowing?: boolean; collapsed?: boolean }) {
   const location = useLocation();
+  const readingSearch = useReadingSearch();
   const prefix = m.filter_prefix();
   const current: ListFilter = filter ?? (asksOnly ? "asks" : "all");
   const to = (target: ListFilter) => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(readingSearch);
+    clearReadingParams(params);
     params.delete("page");
     params.delete("asks");
     params.delete("long");

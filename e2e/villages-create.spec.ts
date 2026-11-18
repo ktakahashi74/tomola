@@ -195,11 +195,16 @@ test("pages invitations and keeps the roster open on return without carrying ros
   await expect(page.locator("#village-roster")).toHaveAttribute("open", "");
   await roster.getByRole("link", { name: m.page_next, exact: true }).click();
   await expect(page).toHaveURL(/membersPage=2#village-roster$/);
-  const nextTopics = page.getByRole("navigation", { name: m.page_nav, exact: true }).getByRole("link", { name: m.page_next, exact: true });
+  const nextTopics = page.locator("[data-load-more]");
   expect(await nextTopics.getAttribute("href")).not.toContain("membersPage");
   expect(await nextTopics.getAttribute("href")).not.toContain("invitesPage");
+  const firstTopicIds = await page.locator("li.topic-row").evaluateAll(rows => rows.map(row => row.id));
   await nextTopics.click();
-  await expect(page).toHaveURL(/\?page=2$/);
+  await expect(page).toHaveURL(/list_count=/);
+  const expandedTopicIds = await page.locator("li.topic-row").evaluateAll(rows => rows.map(row => row.id));
+  expect(expandedTopicIds.slice(0, firstTopicIds.length)).toEqual(firstTopicIds);
+  expect(expandedTopicIds.length).toBeGreaterThan(firstTopicIds.length);
+  expect(new Set(expandedTopicIds).size).toBe(expandedTopicIds.length);
   const context = await browser.newContext({ javaScriptEnabled: false });
   try {
     const native = await context.newPage();

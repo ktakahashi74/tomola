@@ -1,3 +1,5 @@
+import { useReadingSearch } from "~/lib/use-reading-search";
+import { clearReadingParams } from "~/lib/reading-page";
 import { Link, useLocation } from "react-router";
 import type { TopicOrder } from "~/lib/entries.server";
 import { m } from "~/paraglide/messages.js";
@@ -6,8 +8,10 @@ import { m } from "~/paraglide/messages.js";
 // The current query (?lang=, the filter) is carried and the page goes back to the first. The default order has no ?order= in its link.
 export function OrderSwitch({ order, compact = false }: { order: TopicOrder; compact?: boolean }) {
   const location = useLocation();
+  const readingSearch = useReadingSearch();
   const to = (target: TopicOrder) => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(readingSearch);
+    clearReadingParams(params);
     params.delete("page");
     params.delete("manage");
     params.delete("notice");

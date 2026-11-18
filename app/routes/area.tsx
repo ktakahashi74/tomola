@@ -7,7 +7,8 @@ import { OriginalLanguageFilter } from "~/components/original-language-filter";
 import { OpenInAi } from "~/components/open-in-ai";
 import { PageHeader } from "~/components/page-header";
 import { OrderSwitch } from "~/components/order-switch";
-import { Pagination } from "~/components/pagination";
+import { ReadingList } from "~/components/reading-list";
+import { readReadingRequest } from "~/lib/reading-page";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { getReader } from "~/lib/auth/session.server";
@@ -60,7 +61,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const result = await listTopics(
     db,
     { kind: "langs", langs: [lang] },
-    { page: parsePage(request), viewer: user ? await getViewer(db, user) : undefined, order, asksOnly, titledOnly: filter === "long" },
+    { reading: readReadingRequest(request, order, parsePage(request)), page: parsePage(request), viewer: user ? await getViewer(db, user) : undefined, order, asksOnly, titledOnly: filter === "long" },
   );
   const url = new URL(request.url);
   const peekId = user ? readPeekParam(url) : null;
@@ -71,6 +72,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     order,
     filter,
     langParam: langCarry(request),
+    list: result.list!,
     page: result.page,
     hasNext: result.hasNext,
     topics: await toTopicItems(db, result.topics, {
@@ -86,7 +88,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export default function Area({ loaderData }: Route.ComponentProps) {
-  const { lang, topics, langParam, page, hasNext, aiOpen, order, filter, stanceMessage } = loaderData;
+  const { lang, topics, langParam, page, aiOpen, order, filter, stanceMessage } = loaderData;
   return (
     <main className="space-y-3">
       <PageHeader
@@ -101,8 +103,7 @@ export default function Area({ loaderData }: Route.ComponentProps) {
         <OrderSwitch order={order} />
         <AsksFilter filter={filter} withLong />
       </div>
-      <TopicList compactMeta showOriginalLanguage={false} trackNew={tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={topics} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />
-      <Pagination page={page} hasNext={hasNext} />
+      <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta showOriginalLanguage={false} trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>
     </main>
   );
 }

@@ -1,3 +1,5 @@
+import { cursorTime, readingCondition } from "~/lib/reading-page.server";
+import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { memberAvatarUrl } from "./member-avatar.server";
 import { selectDisplayNamePresentation } from "./display-names.server";
 import { personalVillage } from "./personal-villages.server";
@@ -45,9 +47,10 @@ export type MemberPageContent = {
   own: boolean;
   intro: null | { id: number; lang: Lang; title: string | null; headline: string; html: string; display: EntryDisplay };
   topics: { id: number; lang: Lang; title: TitleDisplay; createdAtISO: string; village?: PublicVillage; readLanguageCount?: number }[];
-  personal: null | { following: boolean; topics: MemberPageContent["topics"]; page: number; hasNext: boolean };
+  personal: null | { following: boolean; topics: MemberPageContent["topics"]; page: number; hasNext: boolean; list?: ReadingPage };
   page: number;
   hasNext: boolean;
+  list?: ReadingPage;
 };
 export type MemberPageOptions = {
   viewerId: string;
@@ -55,6 +58,8 @@ export type MemberPageOptions = {
   displayLang: Lang;
   page: number;
   personalPage?: number;
+  reading?: ReadingRequest;
+  personalReading?: ReadingRequest;
   forceOriginal?: ReadonlySet<number>;
   forceTranslation?: ReadonlySet<number>;
   forceOlder?: ReadonlySet<number>;
@@ -68,18 +73,18 @@ export function visibleIntroduction(member: { userId: string | AnyPgColumn; intr
 }
 
 export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, opts: MemberPageOptions): Promise<MemberPageContent> {
-  const page = pageNumber(opts.page);
-  const personalPage = pageNumber(opts.personalPage);
+  const page = pageNumber(opts.reading?.page ?? opts.page);
+  const personalPage = pageNumber(opts.personalReading?.page ?? opts.personalPage);
   // Dedicated projection: no reaction counts, distributions or viewer stances are loaded.
   const personal = villagesEnabled() ? await personalVillage(db, member.userId) : null;
   const condition = and(eq(entries.authorId, member.userId), eq(entries.kind, "topic"), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace());
-  const readRows = (own: boolean, page: number) => db.select({ id: entries.id, lang: entries.lang, title: entries.title, body: entries.body, sourceHash: entries.sourceHash, createdAt: entries.createdAt, village: villages })
+  const readRows = (own: boolean, page: number, reading?: ReadingRequest) => db.select({ cursorTime: cursorTime(entries.createdAt), id: entries.id, lang: entries.lang, title: entries.title, body: entries.body, sourceHash: entries.sourceHash, createdAt: entries.createdAt, village: villages })
     .from(entries).leftJoin(villages, eq(villages.id, entries.villageId))
-    .where(and(condition, personal ? own ? eq(entries.villageId, personal.id) : or(isNull(entries.villageId), ne(entries.villageId, personal.id)) : undefined))
-    .orderBy(desc(entries.createdAt), desc(entries.id)).limit(PAGE_SIZE + 1).offset((page - 1) * PAGE_SIZE);
-  const [rows, personalRows] = await Promise.all([readRows(false, page), personal ? readRows(true, personalPage) : Promise.resolve([])]);
-  const visible = rows.slice(0, PAGE_SIZE).map(row => ({ ...row, lang: row.lang as Lang }));
-  const personalVisible = personalRows.slice(0, PAGE_SIZE).map(row => ({ ...row, lang: row.lang as Lang }));
+    .where(and(condition, readingCondition([entries.createdAt, entries.id], reading), personal ? own ? eq(entries.villageId, personal.id) : or(isNull(entries.villageId), ne(entries.villageId, personal.id)) : undefined))
+    .orderBy(desc(entries.createdAt), desc(entries.id)).limit((reading?.count ?? PAGE_SIZE) + 1).offset((page - 1) * PAGE_SIZE);
+  const [rows, personalRows] = await Promise.all([readRows(false, page, opts.reading), personal ? readRows(true, personalPage, opts.personalReading) : Promise.resolve([])]);
+  const visible = rows.slice(0, opts.reading?.count ?? PAGE_SIZE).map(row => ({ ...row, lang: row.lang as Lang }));
+  const personalVisible = personalRows.slice(0, opts.personalReading?.count ?? PAGE_SIZE).map(row => ({ ...row, lang: row.lang as Lang }));
   const titles = await loadTitleDisplays(db, [...visible, ...personalVisible], opts, true);
   const own = opts.viewerId === member.userId;
   const visibleIds = [...visible, ...personalVisible].map(row => row.id);
@@ -114,6 +119,8 @@ export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, 
       intro = { id: row.id, lang: row.lang as Lang, title: row.title, headline: (await headlineFromBody(row.body)), html, display: displays.get(row.id)! };
     }
   }
+  const list = opts.reading ? readingPage(visible, opts.reading, row => ({ order: "created", keys: [row.cursorTime, row.id] }), rows.length > opts.reading.count) : undefined;
+  const personalList = opts.personalReading ? readingPage(personalVisible, opts.personalReading, row => ({ order: "created", keys: [row.cursorTime, row.id] }), personalRows.length > opts.personalReading.count) : undefined;
   const displayName = selectDisplayNamePresentation(member);
   return {
     avatarUrl: memberAvatarUrl(member),
@@ -125,9 +132,10 @@ export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, 
     own,
     intro,
     topics: visible.map(row => contentRow(row, true)),
-    personal: personal ? { following: await isFollowingVillage(db, opts.viewerId, personal.id), topics: personalVisible.map(row => contentRow(row, false)), page: personalPage, hasNext: personalRows.length > PAGE_SIZE } : null,
+    personal: personal ? { following: await isFollowingVillage(db, opts.viewerId, personal.id), topics: personalVisible.map(row => contentRow(row, false)), page: personalPage, hasNext: personalRows.length > (opts.personalReading?.count ?? PAGE_SIZE), ...(personalList ? { list: personalList } : {}) } : null,
     page,
-    hasNext: rows.length > PAGE_SIZE,
+    hasNext: rows.length > (opts.reading?.count ?? PAGE_SIZE),
+    ...(list ? { list } : {}),
   };
 }
 

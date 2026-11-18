@@ -2484,5 +2484,8 @@
   "writing_guide_rights": "請使用自己的文字或已獲准公開的內容，並為每張圖片寫下說明。",
   "writing_guide_publish": "AI 可以準備草稿。請您核對內容，並在瀏覽器的核准頁面親自發布。",
   "media_upload_permission": "上傳圖片",
-  "media_upload_help": "允許向你的帳戶上傳圖片，並使用圖片儲存空間和上傳額度。不會發布圖片。"
+  "media_upload_help": "允許向你的帳戶上傳圖片，並使用圖片儲存空間和上傳額度。不會發布圖片。",
+  "list_load_more": "載入更多",
+  "list_added": "已新增 {count} 篇貼文。",
+  "list_back_latest": "返回最新貼文"
 }

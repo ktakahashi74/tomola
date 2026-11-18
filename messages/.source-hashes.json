@@ -2278,7 +2278,10 @@
   "writing_guide_rights": "c08d941cd69941f0",
   "writing_guide_publish": "118f2de4a18332c6",
   "media_upload_permission": "16d605b935ade8d2",
-  "media_upload_help": "c9ed8b19dff79ba1"
+  "media_upload_help": "c9ed8b19dff79ba1",
+  "list_load_more": "dfe60ca92e8c3f1e",
+  "list_added": "cae15233c6e3e2ae",
+  "list_back_latest": "e77895cff993be70"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4558,7 +4561,10 @@
   "writing_guide_rights": "c08d941cd69941f0",
   "writing_guide_publish": "118f2de4a18332c6",
   "media_upload_permission": "16d605b935ade8d2",
-  "media_upload_help": "c9ed8b19dff79ba1"
+  "media_upload_help": "c9ed8b19dff79ba1",
+  "list_load_more": "dfe60ca92e8c3f1e",
+  "list_added": "cae15233c6e3e2ae",
+  "list_back_latest": "e77895cff993be70"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7269,7 +7275,10 @@
   "writing_guide_rights": "c08d941cd69941f0",
   "writing_guide_publish": "118f2de4a18332c6",
   "media_upload_permission": "16d605b935ade8d2",
-  "media_upload_help": "c9ed8b19dff79ba1"
+  "media_upload_help": "c9ed8b19dff79ba1",
+  "list_load_more": "dfe60ca92e8c3f1e",
+  "list_added": "cae15233c6e3e2ae",
+  "list_back_latest": "e77895cff993be70"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9549,7 +9558,10 @@
   "writing_guide_rights": "c08d941cd69941f0",
   "writing_guide_publish": "118f2de4a18332c6",
   "media_upload_permission": "16d605b935ade8d2",
-  "media_upload_help": "c9ed8b19dff79ba1"
+  "media_upload_help": "c9ed8b19dff79ba1",
+  "list_load_more": "dfe60ca92e8c3f1e",
+  "list_added": "cae15233c6e3e2ae",
+  "list_back_latest": "e77895cff993be70"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11829,7 +11841,10 @@
   "writing_guide_rights": "c08d941cd69941f0",
   "writing_guide_publish": "118f2de4a18332c6",
   "media_upload_permission": "16d605b935ade8d2",
-  "media_upload_help": "c9ed8b19dff79ba1"
+  "media_upload_help": "c9ed8b19dff79ba1",
+  "list_load_more": "dfe60ca92e8c3f1e",
+  "list_added": "cae15233c6e3e2ae",
+  "list_back_latest": "e77895cff993be70"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",
