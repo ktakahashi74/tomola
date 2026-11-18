@@ -2239,5 +2239,15 @@
   "google_invitation_reopen": "招待のメールのリンクをもう一度開いてください。",
   "introductions_title": "自己紹介",
   "introductions_empty": "まだ自己紹介はありません。",
-  "introductions_read": "自己紹介を読む"
+  "introductions_read": "自己紹介を読む",
+  "md_details": "くわしく",
+  "details_open_all": "折りたたみをすべて開く",
+  "details_close_all": "すべて閉じる",
+  "writing_details_help": "折りたたみは、行の先頭を :::details[見出し] とし、::: だけの行で閉じる。見出しには強調と $数式$ を書ける。折りたたみの中に、もう一つまで入れられる。入れ子では外側のコロンを 1 つ増やす（::::details[見出し] と ::::）。閉じる行のコロンは、開く行と同じ数か、それより多くする。属性は使えない。",
+  "editor_details_help": "この折りたたみは Markdown 欄で編集する。",
+  "draft_details_literal": "{line} 行目：この容器は文字のまま表示される。{reason}",
+  "draft_details_name": "名前は details だけを使える。",
+  "draft_details_unclosed": "開く行と同じ数以上のコロンだけの行で閉じる。",
+  "draft_details_attributes": "容器の属性を取り除く。",
+  "draft_details_depth": "入れ子は全体で 2 段までにする。"
 }

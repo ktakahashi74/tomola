@@ -9,6 +9,9 @@ export function markdownSpecimen(lang: "en" | "ja"): string {
     parts.push("- first\n  - second\n    - third\n\n> A quoted observation.\n> Another sentence.\n\n");
     parts.push("| Observation | Explanation |\n| --- | --- |\n| A | B |\n| C | D |\n\n");
     parts.push("```python\nvalues = [1, 2, 3]\nprint(sum(values))\n```\n\n");
+    parts.push(lang === "ja"
+      ? "::::details[**補足**と $x^2$]\n\n実験の設定や証明をここに書く。\n\n:::details[条件]\n\n内側より外側のコロンを 1 つ増やす。入れ子は 2 段まで。\n\n:::\n\n::::\n\n"
+      : "::::details[**Supplement** and $x^2$]\n\nWrite experimental settings or a proof here.\n\n:::details[Conditions]\n\nUse one more colon on the outside when nesting, up to two levels.\n\n:::\n\n::::\n\n");
     for (let i = 0; i < 30; i++) {
       const n = section * 30 + i;
       parts.push(`[${lang === "ja" ? "資料" : "Source"} ${n}](https://example.org/p/${n}) `);

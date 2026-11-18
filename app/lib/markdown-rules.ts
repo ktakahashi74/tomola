@@ -14,9 +14,11 @@ import remarkParse from "remark-parse";
 import { unified, type Processor } from "unified";
 import { urlAutolinkLiteral } from "./url-autolink";
 import { urlTextAutolinks } from "./url-autolink-text";
+import { registerMarkdownDetails } from "./markdown-details";
 
 // One grammar for saved renders, extracts, translation checks and Milkdown.
 export function remarkMarkdownRules(this: Processor) {
+  registerMarkdownDetails(this);
   const data = this.data();
   const autolink = gfmAutolinkLiteralFromMarkdown();
   // Lexical tokens carry source positions. The decoded-text fallback discards

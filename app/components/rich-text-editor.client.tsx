@@ -13,7 +13,7 @@ import { liftListItem } from "@milkdown/kit/prose/schema-list";
 import { wrappingInputRule } from "@milkdown/kit/prose/inputrules";
 import { markRule } from "@milkdown/kit/prose";
 import { closeHistory, undoDepth, redoDepth } from "@milkdown/kit/prose/history";
-import { $prose, $remark, $inputRule, callCommand, getMarkdown } from "@milkdown/kit/utils";
+import { $prose, $remark, $inputRule, $node, callCommand, getMarkdown } from "@milkdown/kit/utils";
 import { Bold, Ellipsis, Italic, Link, Quote, List, ListOrdered, Table2, Undo2, Redo2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -21,6 +21,7 @@ import { BODY_MAX_LENGTH, EDITOR_BODY_REPLACED_EVENT, EDITOR_STRINGIFY_OPTIONS, 
 import { startsWithFrontmatter } from "~/lib/text";
 import { parseMediaPath } from "~/lib/media";
 import { registerMediaEditor } from "~/lib/media-editor-client";
+import type { MarkdownNode } from "~/lib/markdown-details";
 import { remarkMarkdownRules } from "~/lib/markdown-rules";
 import { remarkEditorAttention } from "~/lib/editor-markdown";
 import { mentionQueryAt } from "~/lib/mention-syntax";
@@ -30,6 +31,21 @@ import "./rich-text-editor.css";
 
 const markdownRules = $remark("markdownRules", () => remarkMarkdownRules);
 const editorAttention = $remark("editorAttention", () => remarkEditorAttention);
+const detailsBlock = $node("details_block", () => ({
+  group: "block", atom: true, selectable: true,
+  attrs: { source: { default: "", validate: "string" } },
+  parseDOM: [],
+  toDOM: node => ["div", { "data-details-source": "", contenteditable: "false", class: "editor-details-source" },
+    ["p", {}, m.editor_details_help()], ["pre", {}, node.attrs.source]],
+  parseMarkdown: {
+    match: node => node.type === "containerDirective",
+    runner: (state, node, type) => state.addNode(type, { source: (node as unknown as MarkdownNode).data?.detailsSource ?? "" }),
+  },
+  toMarkdown: {
+    match: node => node.type.name === "details_block",
+    runner: (state, node) => { state.addNode("containerDirective", undefined, undefined, { name: "details", data: { detailsSource: node.attrs.source } }); },
+  },
+}));
 const orderedListInput = $inputRule(ctx => wrappingInputRule(/^1\. $/, orderedListSchema.type(ctx), { order: 1 },
   (_match, node) => node.childCount + node.attrs.order === 1));
 const doubleTildeInput = $inputRule(ctx => markRule(/(?<![\w:/~])(~~)(.+?)\1(?!~)$/, strikethroughSchema.type(ctx)));
@@ -435,7 +451,7 @@ export function RichTextEditor({ invalid, describedBy, placeholder, tall = false
       }));
     }).use(commonmark.filter(plugin => plugin !== wrapInOrderedListInputRule))
       .use(gfm.filter(plugin => plugin !== remarkGFMPlugin.plugin && plugin !== remarkGFMPlugin.options && plugin !== strikethroughInputRule))
-      .use(markdownRules).use(editorAttention).use(orderedListInput).use(doubleTildeInput).use(clipboard).use(history).use(emptyHint).use(mentions).use(bridge);
+      .use(markdownRules).use(editorAttention).use(detailsBlock).use(orderedListInput).use(doubleTildeInput).use(clipboard).use(history).use(emptyHint).use(mentions).use(bridge);
     instance.current = editor;
     const activate = () => {
       if (cancelled || isComposing()) return;

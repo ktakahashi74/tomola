@@ -14,6 +14,7 @@ import { LANG_LABELS, type Lang, type SourceLang } from "~/lib/languages";
 import type { ReadingInfo, ReadingVersions } from "~/lib/reading";
 import { languageLabel } from "~/lib/language-label";
 import { m } from "~/paraglide/messages.js";
+import { useDetailsNavigation } from "~/lib/details-navigation";
 
 const BodyTranslationWait = lazy(() => import("~/components/body-translation-wait"));
 
@@ -74,7 +75,7 @@ export function TranslatedEntry({
   readingLanguage?: { choice: ReadingLanguageChoice; translating?: ReadonlySet<Lang> };
   toolsBefore?: ReactNode;
   toolsAfter?: ReactNode;
-  readingActions?: (lang: SourceLang) => { actions: ReactNode; actionMenu: ReactNode };
+  readingActions?: (lang: SourceLang, details: { available: boolean; allOpen: boolean; toggle: () => void }) => { actions: ReactNode; actionMenu: ReactNode };
   quotable?: boolean;
   // Tells the page which translation is shown now (the one a report of a wrong translation is about), for a control that the page draws outside this component. Called after every change of the version shown.
   onReportedChange?: (translation: EntryDisplay["translation"]) => void;
@@ -130,6 +131,7 @@ export function TranslatedEntry({
           : { text: title, lang, fromBody: false };
   const bodyLang = showing || showingOlder ? (tr as NonNullable<typeof tr>).lang : lang;
   const bodyHtml = showing?.html ?? showingOlder?.html ?? html;
+  const details = useDetailsNavigation(bodyRef, bodyHtml);
   useEffect(() => {
     const body = bodyRef.current;
     body?.addEventListener("click", toggleFigure);
@@ -244,7 +246,7 @@ export function TranslatedEntry({
         </div>
       ) : translationControls}
       {display.needsCurrent && (display.wait?.kind === "stopped" ? <span role="status" className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span> : <Suspense fallback={<PendingText short />}><BodyTranslationWait entryId={id} /></Suspense>)}
-      {(info || readingActions) && <ReadingToc headings={info?.headings ?? []} lang={bodyLang} bodyRef={bodyRef} {...readingActions?.(bodyLang)} />}
+      {(info || readingActions) && <ReadingToc headings={info?.headings ?? []} lang={bodyLang} bodyRef={bodyRef} {...readingActions?.(bodyLang, details)} />}
       <div ref={bodyRef} dir="auto" lang={bodyLang} className={reading ? "longread" : "longread longread-compact"} data-reading-body={reading ? "" : undefined} data-quote-entry={quotable ? id : undefined} data-quote-kind={quotable ? kind : undefined} data-quote-handle={quotable ? quoteHandle : undefined} data-quote-translated={quotable && (showing || showingOlder) ? "1" : undefined} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       {footer?.(showing ?? (showingOlder ? (tr as NonNullable<typeof tr>) : null))}
     </>

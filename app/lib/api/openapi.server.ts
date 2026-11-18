@@ -239,6 +239,7 @@ export function openApiDocument(): Record<string, unknown> {
               { type: "object", required: ["field", "line"], properties: { field: { const: "body" }, line: { type: "integer", minimum: 1 } } },
             ] },
             excerpt: { type: "string", maxLength: 80 }, message: { type: "string" },
+            detailsReason: { type: "string", enum: ["name", "unclosed", "attributes", "depth"] },
           },
         },
         SourceLang: { type: "string", enum: [...LANGS, "other"], description: "Original post language. Other languages are accepted for writing and translated into every enabled target language." },

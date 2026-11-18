@@ -2446,5 +2446,15 @@
   "google_invitation_reopen": "請重新開啟邀請電子郵件中的連結。",
   "introductions_title": "自我介紹",
   "introductions_empty": "還沒有自我介紹。",
-  "introductions_read": "閱讀自我介紹"
+  "introductions_read": "閱讀自我介紹",
+  "md_details": "了解詳情",
+  "details_open_all": "展開所有摺疊內容",
+  "details_close_all": "收起所有摺疊內容",
+  "writing_details_help": "要新增摺疊內容，請以 :::details[標題] 開始一行，並用僅含 ::: 的一行結束。標題支援強調和 $公式$。摺疊內容中最多可再巢狀一層；巢狀時，外層多用一個冒號（::::details[標題] 和 ::::）。結束行的冒號數不得少於開始行。不支援屬性。",
+  "editor_details_help": "請在 Markdown 模式下編輯此摺疊內容。",
+  "draft_details_literal": "第 {line} 行：此容器將按原文顯示。{reason}",
+  "draft_details_name": "僅支援 details 名稱。",
+  "draft_details_unclosed": "請新增僅含冒號的結束行，冒號數不得少於開始行。",
+  "draft_details_attributes": "請移除容器屬性。",
+  "draft_details_depth": "巢狀總層數不得超過兩層。"
 }

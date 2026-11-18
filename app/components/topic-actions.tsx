@@ -5,9 +5,10 @@ import { SaveButton } from "~/components/save-button";
 import type { Lang, SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
 
-export function TopicActions({ topicId, originalLang, readingLang, mdUrl, mdPath, reader, saved, returnTo, canReply = false }: {
+export function TopicActions({ topicId, originalLang, readingLang, mdUrl, mdPath, reader, saved, returnTo, canReply = false, details }: {
   topicId: number; originalLang: SourceLang; readingLang: SourceLang; mdUrl: string; mdPath: string;
   reader: boolean; saved: boolean | null; returnTo: string; canReply?: boolean;
+  details?: { available: boolean; allOpen: boolean; toggle: () => void };
 }) {
   const save = saved !== null && <SaveButton topicId={topicId} saved={saved} returnTo={`${returnTo}#p-${topicId}`} />;
   const openAndShare = <div className="flex flex-wrap items-start gap-1">
@@ -16,6 +17,7 @@ export function TopicActions({ topicId, originalLang, readingLang, mdUrl, mdPath
   </div>;
   return <div data-reading-actions="" className="flex flex-col items-start gap-3">
     {openAndShare}{save}
+    {details?.available && <button type="button" className="ui-meta underline" onClick={details.toggle}>{details.allOpen ? m.details_close_all() : m.details_open_all()}</button>}
     {canReply && <Link to={`${returnTo}#reply`} className="ui-meta underline">{m.reply_write_title()}</Link>}
   </div>;
 }

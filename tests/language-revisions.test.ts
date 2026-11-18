@@ -42,9 +42,15 @@ it("uses the same message language names for villages on the server and in the b
   expect(villageName({ language: "ja", name: "Named village" }, "en")).toBe("Named village");
 });
 
-it("requires both post and chat prompt versions to change when shared rules or language specifications change", () => {
+it("pins post rules and their prompt version when Markdown instructions change", () => {
   const text = LANGS.map(to => translationSystemPrompt(to === "ja" ? "en" : "ja", to, "fixed")).join("\n");
   expect({ post: PROMPT_VERSION, chat: CHAT_PROMPT_VERSION, shared: createHash("sha256").update(text).digest("hex") },
-    "Shared translation rules changed: review the change and bump both PROMPT_VERSION and CHAT_PROMPT_VERSION before updating this fingerprint.")
-    .toEqual({ post: "translate-v13", chat: "chat-v4", shared: "c758bba686b9cfd05f54cacb353a30e2ad2a503b629ed8ad73fec0c24a3515b1" });
+    "Review changed instructions and bump the affected prompt versions before updating this fingerprint.")
+    .toEqual({ post: "translate-v14", chat: "chat-v4", shared: "66140d79329868ed0ce21c164ed8702d065188e7af03da08e83421dcc80ca4ac" });
+});
+
+it("keeps the plain-text chat prompt unchanged by post-only Markdown rules", () => {
+  const text = LANGS.map(to => translationSystemPrompt(to === "ja" ? "en" : "ja", to, "fixed", true)).join("\n");
+  expect({ version: CHAT_PROMPT_VERSION, hash: createHash("sha256").update(text).digest("hex") })
+    .toEqual({ version: "chat-v4", hash: "340c63abe37ffc7d4e3f4ecc110e3d86f5209d4a14be5372544eac9e88a3a589" });
 });

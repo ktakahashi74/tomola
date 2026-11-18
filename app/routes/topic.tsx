@@ -834,8 +834,9 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
               display={topic.display}
               reading={topic.reading}
               readingLanguage={{ choice: loaderData.readingLanguage, translating: new Set(translating) }}
-              readingActions={readingLang => {
+              readingActions={(readingLang, details) => {
                 const actions = <TopicActions topicId={topic.id} originalLang={topic.lang} readingLang={readingLang}
+                  details={details}
                   {...aiOpen} reader={loaderData.reader} saved={loaderData.saved} returnTo={returnTo} canReply={canReply} />;
                 return { actions, actionMenu: <ReadingActionMenu>{actions}</ReadingActionMenu> };
               }}

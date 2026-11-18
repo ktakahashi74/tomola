@@ -58,6 +58,6 @@ describe("names, precedence and what counts as the first occurrence", () => {
 
 describe("versions", () => {
   it("are raised for the three kinds of request", () => {
-    expect([PROMPT_VERSION, CHAT_PROMPT_VERSION, VILLAGE_PROMPT_VERSION]).toEqual(["translate-v13", "chat-v4", "village-v2"]);
+    expect([PROMPT_VERSION, CHAT_PROMPT_VERSION, VILLAGE_PROMPT_VERSION]).toEqual(["translate-v14", "chat-v4", "village-v2"]);
   });
 });

@@ -38,3 +38,7 @@
   max-height: 40vh;
   overflow-y: auto;
 }
+
+.editor-details-source { border: 1px solid var(--border); padding: .75em; }
+.editor-details-source > p { font-family: var(--font-ui); font-size: .875rem; }
+.editor-details-source > pre { white-space: pre-wrap; overflow-wrap: anywhere; }

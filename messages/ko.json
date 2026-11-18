@@ -2964,5 +2964,15 @@
   "google_invitation_reopen": "초대 이메일의 링크를 다시 열어 주세요.",
   "introductions_title": "자기소개",
   "introductions_empty": "아직 자기소개가 없습니다.",
-  "introductions_read": "자기소개 읽기"
+  "introductions_read": "자기소개 읽기",
+  "md_details": "자세히",
+  "details_open_all": "모든 접기 영역 펼치기",
+  "details_close_all": "모든 접기 영역 접기",
+  "writing_details_help": "접기 영역을 추가하려면 :::details[제목]으로 줄을 시작하고 :::만 있는 줄로 닫으세요. 제목에는 강조와 $수식$을 쓸 수 있습니다. 접기 영역 안에 한 단계 더 중첩할 수 있으며, 바깥쪽에는 콜론을 하나 더 쓰세요(::::details[제목]과 ::::). 닫는 줄의 콜론 수는 여는 줄 이상이어야 합니다. 속성은 지원하지 않습니다.",
+  "editor_details_help": "이 접기 영역은 Markdown 모드에서 편집하세요.",
+  "draft_details_literal": "{line}번째 줄: 이 컨테이너는 원문 그대로 표시됩니다. {reason}",
+  "draft_details_name": "이름은 details만 지원합니다.",
+  "draft_details_unclosed": "여는 줄 이상의 콜론만 있는 닫는 줄을 추가하세요.",
+  "draft_details_attributes": "컨테이너 속성을 제거하세요.",
+  "draft_details_depth": "중첩은 전체 두 단계까지만 사용하세요."
 }

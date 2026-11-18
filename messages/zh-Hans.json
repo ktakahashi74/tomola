@@ -2446,5 +2446,15 @@
   "google_invitation_reopen": "请重新打开邀请邮件中的链接。",
   "introductions_title": "自我介绍",
   "introductions_empty": "还没有自我介绍。",
-  "introductions_read": "阅读自我介绍"
+  "introductions_read": "阅读自我介绍",
+  "md_details": "了解详情",
+  "details_open_all": "展开所有折叠内容",
+  "details_close_all": "收起所有折叠内容",
+  "writing_details_help": "要添加折叠内容，请以 :::details[标题] 开始一行，并用仅含 ::: 的一行结束。标题支持强调和 $公式$。折叠内容中最多可再嵌套一层；嵌套时，外层多用一个冒号（::::details[标题] 和 ::::）。结束行的冒号数不得少于开始行。不支持属性。",
+  "editor_details_help": "请在 Markdown 模式下编辑此折叠内容。",
+  "draft_details_literal": "第 {line} 行：此容器将按原文显示。{reason}",
+  "draft_details_name": "仅支持 details 名称。",
+  "draft_details_unclosed": "请添加仅含冒号的结束行，冒号数不得少于开始行。",
+  "draft_details_attributes": "请移除容器属性。",
+  "draft_details_depth": "嵌套总层数不得超过两层。"
 }

@@ -2240,7 +2240,17 @@
   "google_invitation_reopen": "d1f7e3a33002dfa9",
   "introductions_title": "b5fcd45555f952c3",
   "introductions_empty": "05ba104d10fa9c24",
-  "introductions_read": "9b202818ea37967c"
+  "introductions_read": "9b202818ea37967c",
+  "md_details": "dc3decbb93847518",
+  "details_open_all": "ab71eb900da90784",
+  "details_close_all": "6f4b87366d08e9fa",
+  "writing_details_help": "0780119226c06840",
+  "editor_details_help": "3e4e218af4b76668",
+  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_name": "58886dd87ca30aea",
+  "draft_details_unclosed": "2b19e9cda2626d8e",
+  "draft_details_attributes": "c96cc203292222d8",
+  "draft_details_depth": "c2b3bcf17c1e3db3"
  },
  "fr": {
   "install_guide_intro": "56c1efd040194a82",
@@ -4482,7 +4492,17 @@
   "google_invitation_reopen": "d1f7e3a33002dfa9",
   "introductions_title": "b5fcd45555f952c3",
   "introductions_empty": "05ba104d10fa9c24",
-  "introductions_read": "9b202818ea37967c"
+  "introductions_read": "9b202818ea37967c",
+  "md_details": "dc3decbb93847518",
+  "details_open_all": "ab71eb900da90784",
+  "details_close_all": "6f4b87366d08e9fa",
+  "writing_details_help": "0780119226c06840",
+  "editor_details_help": "3e4e218af4b76668",
+  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_name": "58886dd87ca30aea",
+  "draft_details_unclosed": "2b19e9cda2626d8e",
+  "draft_details_attributes": "c96cc203292222d8",
+  "draft_details_depth": "c2b3bcf17c1e3db3"
  },
  "de": {
   "site_name": "9f815107c11fb1b4",
@@ -7155,7 +7175,17 @@
   "google_invitation_reopen": "d1f7e3a33002dfa9",
   "introductions_title": "b5fcd45555f952c3",
   "introductions_empty": "05ba104d10fa9c24",
-  "introductions_read": "9b202818ea37967c"
+  "introductions_read": "9b202818ea37967c",
+  "md_details": "dc3decbb93847518",
+  "details_open_all": "ab71eb900da90784",
+  "details_close_all": "6f4b87366d08e9fa",
+  "writing_details_help": "0780119226c06840",
+  "editor_details_help": "3e4e218af4b76668",
+  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_name": "58886dd87ca30aea",
+  "draft_details_unclosed": "2b19e9cda2626d8e",
+  "draft_details_attributes": "c96cc203292222d8",
+  "draft_details_depth": "c2b3bcf17c1e3db3"
  },
  "zh-Hans": {
   "install_guide_intro": "56c1efd040194a82",
@@ -9397,7 +9427,17 @@
   "google_invitation_reopen": "d1f7e3a33002dfa9",
   "introductions_title": "b5fcd45555f952c3",
   "introductions_empty": "05ba104d10fa9c24",
-  "introductions_read": "9b202818ea37967c"
+  "introductions_read": "9b202818ea37967c",
+  "md_details": "dc3decbb93847518",
+  "details_open_all": "ab71eb900da90784",
+  "details_close_all": "6f4b87366d08e9fa",
+  "writing_details_help": "0780119226c06840",
+  "editor_details_help": "3e4e218af4b76668",
+  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_name": "58886dd87ca30aea",
+  "draft_details_unclosed": "2b19e9cda2626d8e",
+  "draft_details_attributes": "c96cc203292222d8",
+  "draft_details_depth": "c2b3bcf17c1e3db3"
  },
  "ko": {
   "install_guide_intro": "56c1efd040194a82",
@@ -11639,7 +11679,17 @@
   "google_invitation_reopen": "d1f7e3a33002dfa9",
   "introductions_title": "b5fcd45555f952c3",
   "introductions_empty": "05ba104d10fa9c24",
-  "introductions_read": "9b202818ea37967c"
+  "introductions_read": "9b202818ea37967c",
+  "md_details": "dc3decbb93847518",
+  "details_open_all": "ab71eb900da90784",
+  "details_close_all": "6f4b87366d08e9fa",
+  "writing_details_help": "0780119226c06840",
+  "editor_details_help": "3e4e218af4b76668",
+  "draft_details_literal": "4c7f79d67a6fdedf",
+  "draft_details_name": "58886dd87ca30aea",
+  "draft_details_unclosed": "2b19e9cda2626d8e",
+  "draft_details_attributes": "c96cc203292222d8",
+  "draft_details_depth": "c2b3bcf17c1e3db3"
  },
  "th": {
   "site_name": "9f815107c11fb1b4",

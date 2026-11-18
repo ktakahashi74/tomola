@@ -27,6 +27,7 @@ export type CardNode = {
   properties?: Record<string, unknown>;
   children?: CardNode[];
   value?: string;
+  detailsSummary?: boolean;
 };
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -70,7 +71,7 @@ function codeLines(pre: CardNode): number {
 function rowsOf(node: CardNode): number {
   if (node.type !== "element") return 0;
   if (node.tagName === "pre") return isDisplayMath(node) ? 0 : codeLines(node);
-  const own = node.tagName === "li" || node.tagName === "tr" ? 1 : 0;
+  const own = node.detailsSummary || node.tagName === "li" || node.tagName === "tr" ? 1 : 0;
   return own + (node.children ?? []).reduce((n, c) => n + rowsOf(c), 0);
 }
 
@@ -107,7 +108,7 @@ function cutWithin(node: CardNode, state: CutState): CardNode | null {
     return node;
   }
   if (node.type !== "element") return node;
-  if (node.tagName === "li") {
+  if (node.tagName === "li" || node.detailsSummary) {
     if (state.rowsLeft <= 0) {
       state.cut = true;
       return null;
@@ -217,7 +218,16 @@ function unlinkFootnoteMarks(node: CardNode): void {
 // The tree of the card version of a rendered post (a hast root before KaTeX), or null when the card is the same as the full text (nothing was cut and there is no footnotes section).
 // The returned tree is a copy: running KaTeX on it does not touch the tree it was made from.
 export function buildCardTree(root: CardNode): CardNode | null {
-  const blocks = (root.children ?? []).filter((c) => !isBlank(c));
+  let details = false;
+  const summarize = (node: CardNode): CardNode => {
+    if (node.tagName === "details") {
+      details = true;
+      const summary = node.children?.find(child => child.tagName === "summary");
+      return { type: "element", tagName: "p", detailsSummary: true, properties: {}, children: summary?.children ?? [] };
+    }
+    return node.children ? { ...node, children: node.children.map(summarize) } : node;
+  };
+  const blocks = (summarize(root).children ?? []).filter((c) => !isBlank(c));
   const footnotes = blocks.some(isFootnotes);
   const body = blocks.filter((c) => !isFootnotes(c));
   const kept: CardNode[] = [];
@@ -240,7 +250,7 @@ export function buildCardTree(root: CardNode): CardNode | null {
     total += cost;
     rows += blockRows;
   }
-  if (!cut && !footnotes) return null;
+  if (!cut && !footnotes && !details) return null;
   const children: CardNode[] = [];
   kept.forEach((block, i) => {
     if (i > 0) children.push({ type: "text", value: "\n" });

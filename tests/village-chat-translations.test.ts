@@ -252,7 +252,7 @@ it("passes neutralized untrusted context through the normal engine and decodes p
   expect(prompt!.user).toContain("<\u200b/conversation_context-fixed>");
   expect(prompt!.user.match(/<\/conversation_context-fixed>/g)).toHaveLength(1);
   expect(buildTranslationPrompt({ text: "Original", from: "en", to: "ja" }).system).not.toContain("10. The");
-  expect(PROMPT_VERSION).toBe("translate-v13");
+  expect(PROMPT_VERSION).toBe("translate-v14");
   await recordUsage(w.db, { engine: "fake", model: "fake-1", purpose: "chat", inputTokens: 1, outputTokens: 1 });
 });
 

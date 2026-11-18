@@ -63,6 +63,7 @@ export default defineConfig({
       "@milkdown/kit/prose", "@milkdown/kit/prose/inputrules", "remark-cjk-friendly", "remark-cjk-friendly-gfm-strikethrough",
       "mdast-util-gfm-autolink-literal", "mdast-util-gfm-footnote", "mdast-util-gfm-strikethrough", "mdast-util-gfm-table", "mdast-util-gfm-task-list-item",
       "micromark-extension-gfm-footnote", "micromark-extension-gfm-strikethrough", "micromark-extension-gfm-table", "micromark-extension-gfm-task-list-item",
+      "micromark-extension-directive", "mdast-util-directive",
     ],
   },
 });

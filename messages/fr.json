@@ -3071,5 +3071,15 @@
   "google_invitation_reopen": "Ouvrez à nouveau le lien dans votre e-mail d’invitation.",
   "introductions_title": "Présentations",
   "introductions_empty": "Il n’y a pas encore de présentations.",
-  "introductions_read": "Lire les présentations"
+  "introductions_read": "Lire les présentations",
+  "md_details": "En savoir plus",
+  "details_open_all": "Ouvrir toutes les sections repliables",
+  "details_close_all": "Fermer toutes les sections repliables",
+  "writing_details_help": "Pour ajouter une section repliable, commencez une ligne par :::details[Résumé] et fermez-la par une ligne contenant uniquement :::. Le résumé accepte la mise en emphase et les $formules$. Vous pouvez imbriquer une section dans une autre : ajoutez un deux-points aux délimiteurs extérieurs (::::details[Résumé] et ::::). La fermeture doit comporter au moins autant de deux-points que l’ouverture. Les attributs ne sont pas pris en charge.",
+  "editor_details_help": "Modifiez cette section repliable en mode Markdown.",
+  "draft_details_literal": "Ligne {line} : ce conteneur est affiché en texte brut. {reason}",
+  "draft_details_name": "Seul le nom details est pris en charge.",
+  "draft_details_unclosed": "Ajoutez une ligne de fermeture composée uniquement de deux-points, au moins aussi nombreux qu’à l’ouverture.",
+  "draft_details_attributes": "Retirez les attributs du conteneur.",
+  "draft_details_depth": "Limitez l’imbrication à deux niveaux."
 }

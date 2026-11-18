@@ -12,6 +12,7 @@ import { rehypeTypesetText } from "~/lib/typeset-markdown.core.server";
 import { m } from "~/paraglide/messages.js";
 import { baseLocale, isLocale, type Locale } from "~/paraglide/runtime.js";
 import { draftExcerpt, MAX_DRAFT_ISSUES, type DraftIssue } from "~/lib/draft-issues";
+import type { MarkdownNode } from "./markdown-details";
 
 // remark-math produces code elements with class="language-math math-inline|math-display".
 // Keep those through sanitization, then render with rehype-katex; KaTeX output is outside sanitization.
@@ -22,6 +23,7 @@ import { draftExcerpt, MAX_DRAFT_ISSUES, type DraftIssue } from "~/lib/draft-iss
 const sanitizeSchema: SanitizeOptions = {
   ...defaultSchema,
   clobber: ["name"],
+  tagNames: [...defaultSchema.tagNames!, "details", "summary"],
   attributes: {
     ...defaultSchema.attributes,
     code: [["className", /^language-./, "math-inline", "math-display"]],
@@ -47,7 +49,8 @@ const sanitizeSchema: SanitizeOptions = {
 // 10: machine-translation typography and English word language spans in CJK bodies.
 // 11: lexical CJK URL boundaries and source positions around literal autolinks.
 // 12: GFM 2.1 literal-text email candidates and punctuation-led domain rejection.
-export const RENDER_VERSION = 12;
+// 13: bounded Markdown details containers and summary-only cards.
+export const RENDER_VERSION = 13;
 
 const DEFAULT_ID_PREFIX = "user-content-";
 
@@ -165,6 +168,30 @@ function footnoteOptions(lang: string | undefined) {
   };
 }
 
+function remarkDetails(options: { lang?: string }) {
+  const locale = options.lang && isLocale(options.lang) ? options.lang : baseLocale;
+  const labelText = (nodes: MarkdownNode[]): MarkdownNode[] => nodes.flatMap(node => {
+    if (node.type === "link" || node.type === "linkReference") return labelText(node.children ?? []);
+    if (node.type === "image" || node.type === "imageReference") return [{ type: "text", value: node.alt ?? "" }];
+    if (node.type === "footnoteReference") return [{ type: "text", value: node.label ?? node.identifier }];
+    if ("children" in node) return [{ ...node, children: labelText(node.children as MarkdownNode[]) } as MarkdownNode];
+    return [node];
+  });
+  return (tree: MarkdownNode) => {
+    const walk = (node: MarkdownNode) => {
+      if (node.type === "containerDirective") {
+        const label = node.children?.[0]?.data?.directiveLabel ? node.children?.shift() : undefined;
+        const children = label && "children" in label ? labelText(label.children as MarkdownNode[]) : [];
+        const summary = { type: "paragraph", data: { hName: "summary" }, children: children.length ? children : [{ type: "text", value: m.md_details({}, { locale }) || "Details" }] } as const;
+        node.data = { ...node.data, hName: "details", hProperties: {} };
+        node.children?.unshift(summary as unknown as MarkdownNode);
+      }
+      if ("children" in node) (node.children as MarkdownNode[]).forEach(walk);
+    };
+    walk(tree);
+  };
+}
+
 // The part of the pipeline up to the sanitized, external-image-free tree (hast). The card version is cut from this tree (before KaTeX), so that a formula is never cut in the middle.
 function rehypeHeadingIds(options: { prefix: string }) {
   return (tree: HastNode) => {
@@ -183,6 +210,7 @@ function rehypeHeadingIds(options: { prefix: string }) {
 function createFrontProcessor(idPrefix: string, lang: string | undefined, headingIdPrefix: string | undefined, translation = false, diagnostics?: { before: (tree: HastNode) => void; after: (tree: HastNode) => void; image: (node: HastNode) => void }) {
   const processor = createMarkdownProcessor()
     .use(remarkMentions)
+    .use(remarkDetails, { lang })
     .use(remarkRehype, { clobberPrefix: idPrefix, ...footnoteOptions(lang) })
     .use(rehypeMentionLinks)
     .use(rehypePrefixFootnoteLabel, { prefix: idPrefix });
@@ -215,7 +243,18 @@ export function inspectDraftRendering(markdown: string, lang: string) {
     image: node => add("image_not_rendered", node, "This image becomes a link or text. Use uploaded media within the per-post image limit if an image is intended."),
   });
   const file = { value: markdown, data: {} };
-  const tree = processor.runSync(processor.parse(file), file);
+  const parsed = processor.parse(file);
+  const inspect = (node: MarkdownNode) => {
+    const reason = node.data?.detailsIssue;
+    if (reason && issues.length <= MAX_DRAFT_ISSUES) {
+      const messages = { name: "Only details containers are supported.", unclosed: "The container has no explicit closing line.", attributes: "Container attributes are not supported.", depth: "Only two levels of details containers are supported." };
+      add("details_literal", node as HastNode, `${messages[reason]} This container is displayed as literal text.`);
+      if (issues.at(-1)?.kind === "details_literal") issues.at(-1)!.detailsReason = reason;
+    }
+    if ("children" in node) (node.children as MarkdownNode[]).forEach(inspect);
+  };
+  inspect(parsed as unknown as MarkdownNode);
+  const tree = processor.runSync(parsed, file);
   walk(tree, node => {
     if (node.tagName === "img" && typeof node.properties?.src === "string") images.push({ src: node.properties.src, line: node.position?.start.line ?? 1, excerpt: draftExcerpt(markdown.slice(node.position?.start.offset ?? 0, node.position?.end.offset ?? 0)) });
   });

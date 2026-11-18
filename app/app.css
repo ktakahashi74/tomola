@@ -825,3 +825,7 @@ form[action="/save"] button[aria-pressed="true"] svg { fill: currentColor; }
   .topic-row > .topic-date { grid-column: 2; grid-row: 2; }
   .topic-row:has(> .topic-date) > [data-list-meta] { grid-column: 1; grid-row: 2; }
 }
+
+.longread details { margin-block: 1em; padding-inline-start: 1em; border-inline-start: 2px solid var(--border); }
+.longread details > summary { cursor: pointer; font-weight: 600; }
+.longread details[open] > summary { margin-block-end: .75em; }

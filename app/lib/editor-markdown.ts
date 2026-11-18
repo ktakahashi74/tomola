@@ -1,4 +1,5 @@
 import type { Processor } from "unified";
+import type { MarkdownNode } from "./markdown-details";
 
 const HTML_BLOCK_NAMES = new Set(("address article aside base basefont blockquote body caption center col colgroup dd details dialog dir div dl dt fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu menuitem nav noframes ol optgroup option p param search section summary table tbody td tfoot th thead title tr track ul").split(" "));
 function isPhrasingHtml(value: string): boolean {
@@ -40,6 +41,14 @@ export function remarkEditorAttention(this: Processor) {
   // boundary as an empty typing paragraph when adopting a prefilled document.
   // Milkdown's doc schema omits the final empty paragraph on serialization.
   return (tree: { type: string; children?: Array<{ type: string; children?: unknown[] }> }, file: { value: unknown }) => {
+    const containsDetails = (node: MarkdownNode): boolean => node.data?.detailsSource !== undefined || !!node.children?.some(containsDetails);
+    // Preserve the enclosing list or quote too: regenerating its prefixes can
+    // change the container source even when only an adjacent paragraph is edited.
+    for (const node of (tree as MarkdownNode).children ?? []) {
+      if (!containsDetails(node)) continue;
+      node.type = "containerDirective";
+      node.data = { detailsSource: String(file.value).slice(node.position?.start.offset, node.position?.end.offset) };
+    }
     const children = tree.children;
     const last = children?.at(-1);
     if (children && last && !(last.type === "paragraph" && last.children?.length === 0) && /\r?\n[\t ]*\r?\n[\t ]*$/.test(String(file.value))) {

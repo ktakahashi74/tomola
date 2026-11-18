@@ -191,7 +191,7 @@ describe("translation evaluation", () => {
     expect(points).toHaveLength(set.cases.reduce((n, c) => n + c.to.length * c.checks.length, 0));
     expect(points.every(p => p.preserved)).toBe(true);
     const [run] = await db.select().from(translationEvalRuns);
-    expect(run).toMatchObject({ sameProvider: true, translator: { provider: "fake", promptVersion: "translate-v13" }, judge: { provider: "fake" }, calls: first.calls });
+    expect(run).toMatchObject({ sameProvider: true, translator: { provider: "fake", promptVersion: "translate-v14" }, judge: { provider: "fake" }, calls: first.calls });
     const second = await runEvaluation(db, set, env);
     await db.update(translationEvalPoints).set({ preserved: false, severe: true }).where(and(eq(translationEvalPoints.runId, second.id), eq(translationEvalPoints.caseId, "E01"), eq(translationEvalPoints.to, "en")));
     const [latest] = await evaluationHistory(db);

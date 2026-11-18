@@ -51,6 +51,7 @@ function extractHeadings(html: string): ReadingInfo["headings"] {
   const headings: ReadingInfo["headings"] = [];
   let open: { id: string; name: string; contentStart: number } | null = null;
   let position = 0;
+  let detailsDepth = 0;
   while ((position = html.indexOf("<", position)) !== -1) {
     // A "<" that does not start a tag name is plain text; it must not open a quote scan.
     TAG_START.lastIndex = position;
@@ -61,8 +62,10 @@ function extractHeadings(html: string): ReadingInfo["headings"] {
     const end = tagEnd(html, position);
     if (end < 0) break;
     const tag = html.slice(position, end);
+    if (/^<details(?:\s|>)/.test(tag)) detailsDepth++;
+    else if (/^<\/details\s*>/.test(tag)) detailsDepth = Math.max(0, detailsDepth - 1);
     const heading = HEADING_TAG.exec(tag);
-    if (heading) {
+    if (heading && detailsDepth === 0) {
       if (open && heading[1] && heading[2] === open.name) {
         headings.push({ id: open.id, depth: Number(open.name[1]) as 2 | 3, text: textOf(html.slice(open.contentStart, position)).replace(/\s+/g, " ").trim() });
         open = null;

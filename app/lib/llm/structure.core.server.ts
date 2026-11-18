@@ -1,6 +1,7 @@
 import { createMarkdownProcessor } from "~/lib/markdown-parser.core.server";
 import { FLAG_LINK_MISMATCH, FLAG_QUALITY_MISMATCH, FLAG_STRUCTURE_MISMATCH } from "./flags";
 import { chatParts } from "../village-chat";
+import { detailsShape } from "../markdown-details";
 
 // Translation structure checks: compare code-block counts and parsed math, and ensure fenced/inline code contents are character-for-character identical in the same order,
 // including comments/docstrings; require translation absolute-link URLs and image src values to be a subset of
@@ -397,6 +398,12 @@ export function checkStructure(source: string, translated: string, opts: { menti
   const b = countStructure(translated);
   const mismatches: string[] = [];
   const flags: string[] = [];
+  if (detailsShape(markdown.parse(source)) !== detailsShape(markdown.parse(translated))) {
+    mismatches.push("details boundaries or nesting changed: preserve every container around the same flow blocks");
+    // Structure warnings alone remain readable. A moved details boundary can
+    // hide prose, so also use the existing preservation-failure hide policy.
+    flags.push(FLAG_QUALITY_MISMATCH);
+  }
   if (a.codeBlocks !== b.codeBlocks) mismatches.push(`code blocks: ${a.codeBlocks} -> ${b.codeBlocks}`);
   const code = checkCodeContent(source, translated, { skipFenced: a.codeBlocks !== b.codeBlocks });
   if (mismatches.length || code.countMismatch) flags.push(FLAG_STRUCTURE_MISMATCH);

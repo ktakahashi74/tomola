@@ -5,6 +5,7 @@ import { EntryLanguage } from "~/components/entry-language";
 import { entryErrorMessage } from "~/lib/entry-error-message";
 import { EntryPreview } from "~/components/entry-preview";
 import { BodyCounter } from "~/components/body-counter";
+import { DetailsNotice } from "~/components/details-notice";
 import { MentionTextarea } from "~/components/mention-autocomplete";
 import type { Lang, SourceLang } from "~/lib/languages";
 import { m } from "~/paraglide/messages.js";
@@ -98,10 +99,12 @@ export function EntryFields({
         {BodyEditor ? <BodyEditor id={bodyId} lang={editorLang ?? fixedLang ?? defaultLang} pasteFrontmatter={pasteFrontmatter} placeholder={bodyPlaceholder} tall={tall} onActiveChange={setRichActive} invalid={bodyError["aria-invalid"]} describedBy={bodyError["aria-describedby"]}>{input}</BodyEditor> : input}
       </Field>
       <BodyCounter />
+      <DetailsNotice />
       {bodyAccessory}
       <details data-writing-tips hidden={richActive} className="space-y-2 ui-help text-muted-foreground">
         <summary className="cursor-pointer ui-meta">{m.writing_tips()}</summary>
         <FieldDescription>{m.writing_math_help()}</FieldDescription>
+        <FieldDescription className="whitespace-pre-line">{m.writing_details_help()}</FieldDescription>
         <FieldDescription>{m.related_link_help()}</FieldDescription>
         {writingHelp}
         <FieldDescription><a href="/connect" target="_blank" rel="noreferrer" className="underline">{m.footer_connect()}</a></FieldDescription>
