@@ -23,7 +23,7 @@ export function motionCandidates(html: string) {
     return motion && still ? [{ motion, still }] : [];
   });
 }
-type Image = { id: string; width: number; height: number; animated: boolean; uploadedBy: string };
+type Image = { id: string; width: number; height: number; animated: boolean; uploadedBy: string; durationMs: number | null };
 export function decorateMotionHtml(html: string, original: string, authorId: string, images: ReadonlyMap<string, Image>, interactive = true) {
   const valid = (motion: ReturnType<typeof path>, still: ReturnType<typeof path>) => {
     const a = motion && images.get(motion.id), b = still && images.get(still.id);
@@ -51,11 +51,11 @@ export function decorateMotionHtml(html: string, original: string, authorId: str
     if (shown + 2 > MEDIA_LIMITS.perPost) return raw.replace(imageTag, tag => escape(unescapeAttribute(attribute(tag, "alt"))));
     shown += 2;
     const url = `/media/${motion.id}-${motion.width}x${motion.height}.webp`;
-    return `<span class="inline-block max-w-full" data-motion-figure>${image}<span class="block ui-meta"><a href="${url}" ${interactive ? "data-motion-open" : ""} data-motion-back="${escape(m.motion_show_still())}">${escape(m.motion_show())}</a></span><span class="block ui-meta" data-motion-note hidden role="status">${escape(m.motion_original_text())}</span></span>`;
+    return `<span class="inline-block max-w-full" data-motion-figure data-motion-duration="${images.get(motion.id)!.durationMs ?? 0}">${image}<span class="block ui-meta"><a href="${url}" ${interactive ? "data-motion-open" : ""} data-motion-back="${escape(m.motion_show_still())}">${escape(m.motion_show())}</a></span><span class="block ui-meta" data-motion-note hidden role="status">${escape(m.motion_original_text())}</span></span>`;
   });
 }
 export async function motionImages(db: Db, html: string[]) {
   const ids = [...new Set(html.flatMap(value => [...value.matchAll(/\/media\/([a-f0-9]{64})-/g)].map(match => match[1])))];
-  const rows = ids.length ? await db.select({ id: media.id, width: media.width, height: media.height, animated: media.animated, uploadedBy: media.uploadedBy }).from(media).where(and(inArray(media.id, ids), isNull(media.deletedAt))) : [];
+  const rows = ids.length ? await db.select({ id: media.id, width: media.width, height: media.height, animated: media.animated, uploadedBy: media.uploadedBy, durationMs: media.durationMs }).from(media).where(and(inArray(media.id, ids), isNull(media.deletedAt))) : [];
   return new Map(rows.map(row => [row.id, row]));
 }

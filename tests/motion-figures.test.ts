@@ -134,6 +134,11 @@ it("binds explicit authored pairs, visibility, translation exclusion, export and
   expect(await canReadMedia(db, motionId, null)).toBe(true);
   const html = await renderMarkdown(body);
   const images = await motionImages(db, [html]);
+  expect(images.get(motionId)?.durationMs).toBe(rewritten.durationMs);
+  expect(decorateMotionHtml(html, html, "motion-author", images)).toContain(`data-motion-duration="${rewritten.durationMs}"`);
+  const passive = decorateMotionHtml(html, html, "motion-author", images, false);
+  expect(passive).not.toContain("data-motion-open");
+  expect(passive).toContain(`href="${saved.url}"`);
   const repeated = await renderMarkdown(Array(16).fill(body).join("\n\n"));
   expect(decorateMotionHtml(repeated, repeated, "motion-author", images).match(/data-motion-figure/g)).toHaveLength(15);
   expect(decorateMotionHtml(html, html, "motion-author", images)).toContain("data-motion-figure");
@@ -270,7 +275,7 @@ it("keeps animated images out of share previews while allowing linked stills", a
 it("links standalone motion and escapes descriptions exactly once, including over the display cap", async () => {
   const stillId = "a".repeat(64), motionId = "b".repeat(64);
   const still = `/media/${stillId}-10x10.webp`, motion = `/media/${motionId}-10x10.webp`;
-  const images = new Map([[stillId, { id: stillId, width: 10, height: 10, animated: false, uploadedBy: "author" }], [motionId, { id: motionId, width: 10, height: 10, animated: true, uploadedBy: "author" }]]);
+  const images = new Map([[stillId, { id: stillId, width: 10, height: 10, animated: false, uploadedBy: "author", durationMs: null }], [motionId, { id: motionId, width: 10, height: 10, animated: true, uploadedBy: "author", durationMs: 1000 }]]);
   const html = await renderMarkdown(`![A & B <tag> "quoted"](${motion})`);
   const shown = decorateMotionHtml(html, html, "author", images);
   expect(shown).toContain(`<a href="${motion}">A &amp; B &lt;tag&gt; &quot;quoted&quot;</a>`);

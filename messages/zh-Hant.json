@@ -2470,7 +2470,7 @@
   "motion_delivery_help": "按 UTC 日期彙總，不記錄讀者或圖片的識別資訊。快取回應和 HEAD 請求不計入。",
   "motion_delivery_counts": "{requests} 次請求 · {bytes} 位元組",
   "motion_inspect": "查看配對圖片",
-  "motion_help": "上傳 GIF 或動態 WebP 後，會插入靜態圖及其動畫連結。可在 Markdown 欄中替換靜態圖。請避免閃爍，並在圖片說明或正文中解釋動畫所表達的內容。動畫中的文字保留原文。",
+  "motion_help": "上傳 GIF 或動態 WebP 後，會插入靜態圖及其動畫連結。圖片至少有一半進入螢幕時，動畫會播放一次，然後恢復靜態圖。啟用減少動態效果設定時，會等到點選「查看動畫」後才播放。可在 Markdown 欄中替換靜態圖。請避免閃爍，並在圖片說明或正文中解釋動畫所表達的內容。動畫中的文字保留原文。",
   "motion_error_type": "不支援此圖片格式。請使用 JPEG、PNG、WebP 或 GIF。不支援動態 PNG 和影片。",
   "error_topic_body_too_long": "本文過長。請縮短至10萬以內（寬字元和全形字元以2計算）。",
   "topic_body_count_over": "超出{count}",

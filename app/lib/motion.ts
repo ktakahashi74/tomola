@@ -1,25 +1,108 @@
-// Upgrade the ordinary no-JS link in place. No animation URL enters an image
-// source, preload or prefetch until the reader explicitly presses the button.
-export function activateMotionFigures(root: HTMLElement) {
+// Give each playback its own decoded image, starting at the first frame. The
+// in-memory WebP loops indefinitely; stored bytes and delivery stay unchanged.
+let playback = 0;
+async function playbackSource(bytes: ArrayBuffer): Promise<string> {
+  const view = new DataView(bytes);
+  for (let offset = 12; offset + 8 <= bytes.byteLength;) {
+    const size = view.getUint32(offset + 4, true), start = offset + 8;
+    if (start + size > bytes.byteLength) throw new Error("Invalid motion image");
+    if (view.getUint32(offset) === 0x414e494d && size === 6) {
+      view.setUint16(start + 4, 0, true);
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(new Blob([bytes], { type: `image/webp;playback=${++playback}` }));
+      });
+    }
+    offset = start + size + size % 2;
+  }
+  throw new Error("Missing motion header");
+}
+
+// Upgrade the no-JS link only on pages with motion figures. An observer never
+// fetches motion before half the still is visible, or with reduced motion.
+export function activateMotionFigures(root: HTMLElement, played = new Set<string>()) {
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let printing = window.matchMedia("print").matches;
+  const checks: Array<() => void> = [], stops: Array<() => void> = [], cleanups: Array<() => void> = [];
+  const occurrences = new Map<string, number>();
+  const visibility = new Map<Element, (visible: boolean) => void>();
+  const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => {
+    for (const entry of entries) visibility.get(entry.target)?.(entry.isIntersecting && entry.intersectionRatio >= 0.5);
+  }, { threshold: 0.5 });
   for (const link of root.querySelectorAll<HTMLAnchorElement>("a[data-motion-open]")) {
     const figure = link.closest<HTMLElement>("[data-motion-figure]")!, image = figure.querySelector<HTMLImageElement>("img");
     if (!image) continue;
     const url = link.getAttribute("href")!, show = link.textContent!, back = link.dataset.motionBack!;
+    const still = figure.querySelector<HTMLElement>("[data-translated-figure]")?.dataset.figureOriginal ?? image.getAttribute("src");
+    const pair = `${url}:${still}`, occurrence = occurrences.get(pair) ?? 0;
+    occurrences.set(pair, occurrence + 1);
+    const key = `${pair}:${occurrence}`, duration = Number(figure.dataset.motionDuration);
     const button = document.createElement("button");
     button.type = "button"; button.className = "underline cursor-pointer"; button.textContent = show;
-    let still = "", moving = false;
-    button.onclick = () => {
-      if (!moving) still = image.getAttribute("src")!;
-      moving = !moving;
-      image.setAttribute("src", moving ? url : still);
-      button.textContent = moving ? back : show;
-      const translated = figure.querySelector<HTMLElement>("[data-translated-figure]");
-      figure.querySelector<HTMLElement>("[data-motion-note]")?.toggleAttribute("hidden", !moving || !translated || translated.dataset.figureTranslated === translated.dataset.figureOriginal);
-      for (const element of figure.querySelectorAll<HTMLElement>("[data-figure-toggle], [data-figure-fallback]")) {
-        if (moving) { element.dataset.motionHidden = String(element.hidden); element.hidden = true; }
-        else { element.hidden = element.dataset.motionHidden === "true"; delete element.dataset.motionHidden; }
+    let mode: "auto" | "manual" | null = null, visible = false;
+    let request: AbortController | undefined, animation: HTMLImageElement | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+    const note = figure.querySelector<HTMLElement>("[data-motion-note]");
+    const controls = [...figure.querySelectorAll<HTMLElement>("[data-figure-toggle], [data-figure-fallback]")];
+    const stop = () => {
+      request?.abort(); request = undefined;
+      clearTimeout(timer);
+      animation?.remove(); animation = undefined;
+      image.hidden = false;
+      button.textContent = show;
+      note?.setAttribute("hidden", "");
+      if (mode) for (const control of controls) {
+        control.hidden = control.dataset.motionHidden === "true"; delete control.dataset.motionHidden;
       }
+      mode = null;
     };
+    const start = async (automatic: boolean) => {
+      played.add(key);
+      mode = automatic ? "auto" : "manual";
+      button.textContent = back;
+      for (const control of controls) { control.dataset.motionHidden = String(control.hidden); control.hidden = true; }
+      const pending = request = new AbortController();
+      try {
+        const response = await fetch(url, { signal: pending.signal });
+        if (!response.ok) throw new Error("Motion unavailable");
+        const source = await playbackSource(await response.arrayBuffer());
+        if (pending.signal.aborted) return;
+        const moving = animation = image.cloneNode() as HTMLImageElement;
+        moving.hidden = false; moving.loading = "eager";
+        moving.onload = () => {
+          if (pending.signal.aborted) return;
+          image.after(moving); image.hidden = true;
+          const translated = figure.querySelector<HTMLElement>("[data-translated-figure]");
+          note?.toggleAttribute("hidden", !translated || translated.dataset.figureTranslated === translated.dataset.figureOriginal);
+          if (automatic) timer = setTimeout(stop, duration);
+        };
+        moving.onerror = () => { if (!pending.signal.aborted) stop(); };
+        moving.src = source;
+      } catch { if (!pending.signal.aborted) stop(); }
+    };
+    const check = () => {
+      if (reduced.matches && mode === "auto") stop();
+      if (visible && !mode && !printing && !reduced.matches && !played.has(key) && duration > 0) void start(true);
+    };
+    visibility.set(image, value => { visible = value; check(); });
+    observer?.observe(image);
+    checks.push(check); stops.push(stop);
+    button.onclick = () => { if (mode) stop(); else void start(false); };
     link.replaceWith(button);
+    cleanups.push(() => { stop(); button.replaceWith(link); });
   }
+  const changed = () => { for (const check of checks) check(); };
+  const beforePrint = () => { printing = true; for (const stop of stops) stop(); };
+  const afterPrint = () => { printing = false; changed(); };
+  reduced.addEventListener("change", changed);
+  window.addEventListener("beforeprint", beforePrint);
+  window.addEventListener("afterprint", afterPrint);
+  return () => {
+    observer?.disconnect();
+    reduced.removeEventListener("change", changed);
+    window.removeEventListener("beforeprint", beforePrint);
+    window.removeEventListener("afterprint", afterPrint);
+    for (const cleanup of cleanups) cleanup();
+  };
 }

@@ -87,6 +87,7 @@ export function TranslatedEntry({
 }) {
   const location = useLocation();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const playedMotion = useRef({ id, figures: new Set<string>() });
   const [shown, setShown] = useState<Shown>(display.shown);
   const switchRef = useRef<HTMLAnchorElement>(null);
   const restoreSwitch = useRef(false);
@@ -137,10 +138,12 @@ export function TranslatedEntry({
   const details = useDetailsNavigation(bodyRef, bodyHtml, initializedDetails, id);
   useEffect(() => {
     const body = bodyRef.current;
-    if (body?.querySelector("[data-motion-figure]")) void import("~/lib/motion").then(({ activateMotionFigures }) => { if (body.isConnected) activateMotionFigures(body); });
+    if (playedMotion.current.id !== id) playedMotion.current = { id, figures: new Set<string>() };
+    let active = true, disposeMotion: (() => void) | undefined;
+    if (body?.querySelector("[data-motion-figure]")) void import("~/lib/motion").then(({ activateMotionFigures }) => { if (active && body.isConnected) disposeMotion = activateMotionFigures(body, playedMotion.current.figures); });
     body?.addEventListener("click", toggleFigure);
-    return () => body?.removeEventListener("click", toggleFigure);
-  }, [bodyHtml]);
+    return () => { active = false; disposeMotion?.(); body?.removeEventListener("click", toggleFigure); };
+  }, [bodyHtml, id]);
   const info = reading ? (reading[current] ?? reading.original) : null;
   const switchLinks = options.map((option, index) => (
     <a

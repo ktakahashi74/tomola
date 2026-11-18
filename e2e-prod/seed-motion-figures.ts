@@ -13,7 +13,7 @@ import { runDueJobs } from "../app/lib/jobs/queue.server";
 
 export async function seedMotionFigures(db: Db, dir: string) {
   const [author] = await db.select({ id: user.id }).from(user).where(eq(user.email, "motion_figure_author@example.com"));
-  const saved = await putUploadedMedia(db, author.id, await rewriteMedia((await motionImage("gif", 8, 360, 200)).bytes));
+  const saved = await putUploadedMedia(db, author.id, await rewriteMedia((await motionImage("gif", 4, 360, 200, 300)).bytes));
   if (!("posterUrl" in saved)) throw new Error("Motion poster missing");
   // Match the fake reader's invented label and box so this case exercises a
   // translated still rather than the legitimate external-label fallback.
