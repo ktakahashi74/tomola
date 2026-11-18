@@ -136,7 +136,7 @@ describe("author names open the member page", () => {
   });
 
   it("links search authors while retaining results without an author profile", async () => {
-    const html = await renderInRouter(() => createElement(Search, { loaderData: { state: "results", q: "body", hits: [hit(1, "search_writer"), hit(2, null)], retryMinutes: 0 }, params: {}, matches: [] } as never), "/search?q=body&lang=en");
+    const html = await renderInRouter(() => createElement(Search, { loaderData: { state: "results", q: "body", hits: [hit(1, "search_writer"), hit(2, null)], members: [], retryMinutes: 0 }, params: {}, matches: [] } as never), "/search?q=body&lang=en");
     expect(memberLinks(html)).toEqual([link("search_writer")]);
     expect(html).toContain('href="/t/2?lang=en"');
     expect(html).not.toContain("@null");
