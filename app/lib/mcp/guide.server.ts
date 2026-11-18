@@ -1,5 +1,6 @@
 import { WRITING_MD_PATH } from "~/lib/writing-paths";
 import { DRAFT_RESPONSE_GUIDE } from "~/lib/api/draft-response-guide";
+import { mediaUploadGuide } from "~/lib/api/media-guide.server";
 import { accountsRequirement, clientReferencesMarkdown, clientSetupMarkdown, connectAccountSection, connectManualSection, connectPlan, connectSafetySection, connectVerificationSection } from "~/lib/api/connect.server";
 import { siteUrl } from "~/lib/md/urls.server";
 import { OPEN_IN_AI_TTL_SECONDS } from "~/lib/open-in-ai.server";
@@ -34,6 +35,8 @@ read: tomola_thread (original plus optional selected translation and version IDs
 ${DRAFT_RESPONSE_GUIDE}
 
 draft: tomola_draft_create, tomola_draft_list, tomola_draft_get, tomola_draft_update, tomola_draft_delete. Each is bound to the authenticated creation client. A draft PAT cannot read forum posts. Draft creation returns approvalUrl; Publishing happens only in the member's browser: the member opens approvalUrl, checks the displayed text and publishes it. API and MCP credentials cannot publish. If the member has turned on passkey confirmation in settings, publishing also asks for a passkey signature. The signature does not establish that the member read or understood the text. No tool publishes, selects a stance, sends Insightful, reports, or appeals. Personal stance and stance-change records are not shared; tomola_privacy returns the fixed disclosure. The member may select and copy records from the screen themselves.
+
+${mediaUploadGuide(plan.origin)}
 
 Without a lang argument, public tools use the site default. Member read tools use the saved translation preference, then the last stored interface language, then the first enabled original-reading language, then the site default. Accept-Language never changes this choice.
 

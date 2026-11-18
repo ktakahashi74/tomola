@@ -823,12 +823,12 @@ describe("connecting an AI tool", () => {
   it("keeps offline_access in authorization-server metadata only", async () => {
     const { loader } = await import("~/routes/mcp-metadata");
     const resource = await (await loader({ request: new Request(`${base}/.well-known/oauth-protected-resource/mcp`) } as never)).json();
-    expect(resource.scopes_supported).toEqual(["read", "draft"]);
+    expect(resource.scopes_supported).toEqual(["read", "draft", "media"]);
     const server = await (await loader({ request: new Request(`${base}/.well-known/oauth-authorization-server/api/auth`) } as never)).json();
     expect(server.scopes_supported).toEqual(expect.arrayContaining([...resource.scopes_supported, "offline_access"]));
     const challenge = await modern("server/discover", "not-a-token");
     expect(challenge.status).toBe(401);
-    expect(challenge.headers.get("www-authenticate")).toContain('scope="read draft"');
+    expect(challenge.headers.get("www-authenticate")).toContain('scope="read draft media"');
     expect(challenge.headers.get("www-authenticate")).not.toContain("offline_access");
   });
 

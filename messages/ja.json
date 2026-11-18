@@ -2275,5 +2275,7 @@
   "writing_guide_formats": "Markdown、数式、画像、動く図の書き方と上限をまとめています。",
   "writing_guide_language": "1 つの言語で書き、訳は tomola がつけます。",
   "writing_guide_rights": "自分の文か、公開の了承を得たものを使い、画像には説明を書きます。",
-  "writing_guide_publish": "AI は下書きまで作れます。内容を確かめ、ブラウザーの承認の画面で本人が公開します。"
+  "writing_guide_publish": "AI は下書きまで作れます。内容を確かめ、ブラウザーの承認の画面で本人が公開します。",
+  "media_upload_permission": "画像を上げる",
+  "media_upload_help": "アカウントに画像を上げ、画像の保存量とアップロード回数の枠を使います。公開はしません。"
 }

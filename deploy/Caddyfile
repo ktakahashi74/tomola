@@ -24,7 +24,7 @@
 	# Include React Router fetcher paths; path matching excludes the query string.
 	@imageUpload {
 		method POST
-		path_regexp ^/(media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+		path_regexp ^/(api/media|media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
 	}
 	request_body @imageUpload {
 		max_size 10551296
@@ -32,7 +32,7 @@
 	@ordinaryBody {
 		not {
 			method POST
-			path_regexp ^/(media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+			path_regexp ^/(api/media|media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
 		}
 	}
 	request_body @ordinaryBody {

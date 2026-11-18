@@ -10,6 +10,14 @@ import { bodyLimit, DEFAULT_MAX_REQUEST_BODY_BYTES, DRAIN_TIMEOUT_MS, IMAGE_UPLO
 
 // Body limit (server/body-limit.ts): oversized Content-Length yields 413 before reading; chunked bodies are counted and rejected with 413 when over the limit.
 const MAX = 100;
+it("allows API image bodies above the ordinary limit and returns JSON for oversized known and chunked API requests", async () => {
+  const { port } = await start();
+  expect((await send(port, { path: "/api/media", chunks: [Buffer.alloc(101)] })).status).toBe(200);
+  for (const headers of [{ "content-length": String(MEDIA_LIMITS.requestBytes + 1) }, {}] as Record<string, string>[]) {
+    const result = await send(port, { path: "/api/media", headers, chunks: [Buffer.alloc(MEDIA_LIMITS.requestBytes + 1)] });
+    expect(result.status).toBe(413); expect(JSON.parse(result.body)).toMatchObject({ error: "too_large", message: expect.any(String) });
+  }
+});
 let server: http.Server | undefined;
 afterEach(async () => {
   const running = server;
@@ -216,7 +224,7 @@ it("keeps Caddy image paths and body limits aligned with the app", () => {
   expect(patterns).toHaveLength(2);
   expect(patterns[0]).toBe(patterns[1]);
   const caddyPath = new RegExp(patterns[0]);
-  const accepted = ["/media", "/settings/avatar", "/v/a/icon", "/v/1/icon", "/v/pictures-1/icon", "/v/a-b-2/icon"];
+  const accepted = ["/api/media", "/media", "/settings/avatar", "/v/a/icon", "/v/1/icon", "/v/pictures-1/icon", "/v/a-b-2/icon"];
   const rejected = [
     "/media/x", "/mediax", "/settings/avatarx", "/v/a/icon/x", "/v/A/icon", "/v//icon",
     "/v/-a/icon", "/v/a-/icon", "/v/a--b/icon", "/v/a_b/icon", "/v/a.b/icon", "/v/a/b/icon",

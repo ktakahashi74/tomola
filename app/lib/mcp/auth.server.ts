@@ -32,7 +32,7 @@ export async function withMcpAuth(request: Request, deps: { db: Db; auth: McpAut
     const profile = await getActiveMember(deps.db, result.token.userId);
     if (!profile) return mcpUnauthorized(deps.baseURL);
     const [token] = await deps.db.select({ name: apiTokens.name }).from(apiTokens).where(eq(apiTokens.id, result.token.id));
-    return next({ userId: result.token.userId, profile, scopes: new Set([result.token.kind]), client: {
+    return next({ userId: result.token.userId, profile, scopes: new Set([result.token.kind, ...(result.token.mediaUpload ? ["media"] : [])]), client: {
       key: `token:${result.token.id}`, id: `token:${result.token.id}`, name: token?.name ?? "Personal access token", uri: null, tokenId: result.token.id,
     } });
   }

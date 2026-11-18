@@ -2482,5 +2482,7 @@
   "writing_guide_formats": "指南介绍 Markdown、公式、图片、动态图的写法及其限制。",
   "writing_guide_language": "请使用一种语言写作，翻译由 tomola 提供。",
   "writing_guide_rights": "请使用自己的文字或已获准公开的内容，并为每张图片写下说明。",
-  "writing_guide_publish": "AI 可以准备草稿。请您核对内容，并在浏览器的批准页面亲自发布。"
+  "writing_guide_publish": "AI 可以准备草稿。请您核对内容，并在浏览器的批准页面亲自发布。",
+  "media_upload_permission": "上传图片",
+  "media_upload_help": "允许向你的账户上传图片，并使用图片存储空间和上传额度。不会发布图片。"
 }

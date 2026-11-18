@@ -1,4 +1,5 @@
 export const SAME_ORIGIN_EXCEPTIONS = {
+  'api.media.ts': 'Image uploads require an explicit Bearer media permission; browser sessions are never accepted.',
   'api.auth.ts': 'Passkey and OAuth endpoints authenticate their own credentials in the auth handler.',
   'api.drafts.ts': 'Draft writes authenticate a Bearer token instead of a browser session.',
   'mcp.ts': 'Member tools authenticate Bearer or OAuth credentials in the MCP handler.',

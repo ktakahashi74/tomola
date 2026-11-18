@@ -37,6 +37,7 @@ export type ApiTokenSummary = {
   id: number;
   name: string;
   kind: ApiTokenKind;
+  mediaUpload: boolean;
   createdAt: Date;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
@@ -48,6 +49,7 @@ function toSummary(row: typeof apiTokens.$inferSelect): ApiTokenSummary {
     id: row.id,
     name: row.name,
     kind: row.kind as ApiTokenKind,
+    mediaUpload: row.mediaUpload,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
@@ -70,13 +72,14 @@ function cleanName(raw: unknown): string | null {
 export async function createApiToken(
   db: Db,
   userId: string,
-  input: { name: unknown; kind: unknown; expiresInDays?: unknown },
+  input: { name: unknown; kind: unknown; mediaUpload?: boolean; expiresInDays?: unknown },
   opts: { now?: Date } = {},
 ): Promise<{ ok: true; token: string; summary: ApiTokenSummary } | { ok: false; error: TokenError }> {
   const name = cleanName(input.name);
   if (name === null) return { ok: false, error: "invalid_name" };
   if (!isApiTokenKind(input.kind)) return { ok: false, error: "invalid_kind" };
   const kind = input.kind;
+  if (input.mediaUpload && kind !== "draft") return { ok: false, error: "invalid_kind" };
   const days = input.expiresInDays === undefined ? 90 : input.expiresInDays === null || input.expiresInDays === "none" ? null : [30, 90, 365, "30", "90", "365"].includes(input.expiresInDays as number) ? Number(input.expiresInDays) : NaN;
   if (days !== null && !Number.isFinite(days)) return { ok: false, error: "invalid_expiry" };
   const now = opts.now ?? new Date();
@@ -92,7 +95,7 @@ export async function createApiToken(
     if (Number(active.n) >= MAX_ACTIVE_TOKENS) return { ok: false as const, error: "too_many_tokens" as const };
     const [row] = await tx
       .insert(apiTokens)
-      .values({ userId, name, kind, tokenHash: hashToken(token), createdAt: now, expiresAt })
+      .values({ userId, name, kind, mediaUpload: input.mediaUpload === true, tokenHash: hashToken(token), createdAt: now, expiresAt })
       .returning();
     return { ok: true as const, token, summary: toSummary(row) };
   });
@@ -129,7 +132,7 @@ export async function revokeAllApiTokens(db: Db, userId: string, opts: { now?: D
   return rows.length;
 }
 
-export type TokenAuth = { id: number; userId: string; name: string; kind: ApiTokenKind };
+export type TokenAuth = { id: number; userId: string; name: string; kind: ApiTokenKind; mediaUpload: boolean };
 
 // Validate plaintext tokens (valid unless revoked). Return "invalid" without distinguishing malformed, missing, or revoked tokens.
 // Update last_used_at on use, at most once per minute. The caller checks the kind (read or draft).
@@ -153,5 +156,5 @@ export async function authenticateToken(
       .set({ lastUsedAt: now })
       .where(and(eq(apiTokens.id, row.id), or(isNull(apiTokens.lastUsedAt), lte(apiTokens.lastUsedAt, threshold))));
   }
-  return { ok: true, token: { id: row.id, userId: row.userId, name: row.name, kind: row.kind } };
+  return { ok: true, token: { id: row.id, userId: row.userId, name: row.name, kind: row.kind, mediaUpload: row.mediaUpload } };
 }

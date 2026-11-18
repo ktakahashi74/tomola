@@ -739,13 +739,14 @@ export const apiTokens = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     kind: text("kind").notNull(), // "read" | "draft"
+    mediaUpload: boolean("media_upload").notNull().default(false),
     tokenHash: text("token_hash").notNull().unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
-  (t) => [index("api_tokens_user_idx").on(t.userId), check("api_tokens_kind_check", oneOf(t.kind, API_TOKEN_KINDS))],
+  (t) => [index("api_tokens_user_idx").on(t.userId), check("api_tokens_kind_check", oneOf(t.kind, API_TOKEN_KINDS)), check("api_tokens_media_draft_check", sql`not ${t.mediaUpload} or ${t.kind} = 'draft'`)],
 );
 
 // Fixed rate-limit windows (app/lib/rate-limit.server.ts). Count per (key, window_start). Remove expired rows (past expires_at)

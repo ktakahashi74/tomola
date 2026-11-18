@@ -44,9 +44,9 @@ export async function action({ request }: Route.ActionArgs) {
   // Keeping the connection (a refresh token) is not a choice: without it the connection ends after 15 minutes. It is given whenever it was asked for.
   if (accept && consent.scopes.includes("offline_access") && !scope.includes("offline_access")) scope = [...scope, "offline_access"];
   if (scope.some((item) => !consent.scopes.includes(item))) throw data("Invalid scope", { status: 400 });
-  // Keeping the connection alone is not a permission: at least one real one (read or draft) must be chosen.
+  // Keeping the connection alone is not a permission: read, draft or media must be chosen.
   if (accept && scope.every((item) => item === "offline_access")) throw data("Select a permission", { status: 400 });
-  if (accept && scope.includes("draft") && !(await getWriter(db, user.id)).ok) throw data("Draft permission unavailable", { status: 403 });
+  if (accept && scope.some(item => item === "draft" || item === "media") && !(await getWriter(db, user.id)).ok) throw data("Writing permission unavailable", { status: 403 });
   const approve = async (tx: typeof db, transactional: typeof auth) => {
     await tx.select({ id: oauthClient.id }).from(oauthClient).where(eq(oauthClient.clientId, consent.clientId)).for("no key update");
     return transactional.api.oauth2Consent({ request, headers: request.headers, body: { accept, ...(accept ? { scope: scope.join(" ") } : {}), oauth_query: consent.query } });
@@ -65,7 +65,7 @@ export default function McpConsent({ loaderData, actionData }: Route.ComponentPr
   const hasPermissions = loaderData.scopes.some(scope => scope !== "offline_access");
   return <><GuestHeader /><main className="space-y-4"><h1 className="text-2xl font-bold">{m.mcp_connect_title()}</h1><p>{m.mcp_consent_intro({ who: loaderData.who, client: loaderData.name })}</p>
     <Form method="post" className="space-y-3"><input type="hidden" name="oauth_query" value={loaderData.query} />
-      {loaderData.scopes.filter((scope) => scope !== "offline_access").map((scope) => <Field key={scope} orientation="horizontal" className="min-w-0 w-auto"><FieldLabel className="flex items-center gap-2 " key={scope}><Checkbox name="scope" value={scope} defaultChecked />{scope === "read" ? m.mcp_scope_read() : m.mcp_scope_draft()}</FieldLabel></Field>)}
+      {loaderData.scopes.filter((scope) => scope !== "offline_access").map((scope) => <div key={scope}><Field orientation="horizontal" className="min-w-0 w-auto"><FieldLabel className="flex items-center gap-2 "><Checkbox name="scope" value={scope} defaultChecked={scope !== "media"} />{scope === "media" ? m.media_upload_permission() : scope === "read" ? m.mcp_scope_read() : m.mcp_scope_draft()}</FieldLabel></Field>{scope === "media" && <p className="ui-help text-muted-foreground">{m.media_upload_help()}</p>}</div>)}
       {hasPermissions && keeps && <><input type="hidden" name="scope" value="offline_access" /><p>{m.mcp_scope_offline({ settings: m.settings_connections_link() })}</p></>}
       {!hasPermissions && <p role="alert">{m.mcp_no_permissions()}</p>}
       <div className="mt-4 flex flex-wrap gap-3">{hasPermissions && <Button name="accept" value="yes" type="submit">{m.mcp_allow()}</Button>}<Button variant="outline" name="accept" value="no" type="submit">{m.mcp_deny()}</Button></div>

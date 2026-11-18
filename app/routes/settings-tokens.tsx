@@ -1,4 +1,6 @@
 import { withMarkdownRead } from "~/lib/markdown-budget.server";
+import { useState } from "react";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -46,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
   // All members may revoke their own tokens. Creation passes through the writing gate.
   await requireWriter(request);
-  const res = await withCredentialSession(db, user.id, request, "/settings/tokens", tx => createApiToken(tx, user.id, { name: formString(form, "name"), kind: formString(form, "kind"), ...(form.has("expiresInDays") ? { expiresInDays: formString(form, "expiresInDays") } : {}) }));
+  const res = await withCredentialSession(db, user.id, request, "/settings/tokens", tx => createApiToken(tx, user.id, { name: formString(form, "name"), kind: formString(form, "kind"), mediaUpload: formString(form, "mediaUpload") === "yes", ...(form.has("expiresInDays") ? { expiresInDays: formString(form, "expiresInDays") } : {}) }));
   if (!res.ok) return data({ intent: "create" as const, error: res.error, token: null, name: null }, { status: 400, ...noStore });
   return data({ intent: "create" as const, error: null, token: res.token, name: res.summary.name }, noStore);
 }
@@ -58,6 +60,7 @@ const dateOf = (d: Date) => d.toISOString().slice(0, 10);
 
 export default function SettingsTokens({ loaderData, actionData }: Route.ComponentProps) {
   const { tokens } = loaderData;
+  const [kind, setKind] = useState("read");
   return (
     <main className="space-y-6">
       <h1 className="text-2xl font-bold">{m.tokens_title()}</h1>
@@ -87,7 +90,7 @@ export default function SettingsTokens({ loaderData, actionData }: Route.Compone
           </FieldLabel></Field>
           <FieldSet>
             <FieldLegend>{m.tokens_kind()}</FieldLegend>
-            <RadioGroup name="kind" defaultValue="read">
+            <RadioGroup name="kind" value={kind} onValueChange={setKind}>
             <Field orientation="horizontal" className="min-w-0 w-auto"><FieldLabel className="flex items-center gap-2 ">
               <RadioGroupItem value="read" /> {m.tokens_kind_read()}
             </FieldLabel></Field>
@@ -96,6 +99,10 @@ export default function SettingsTokens({ loaderData, actionData }: Route.Compone
             </FieldLabel></Field>
             </RadioGroup>
           </FieldSet>
+          {kind === "draft" && <div className="space-y-1">
+            <Field orientation="horizontal" className="min-w-0 w-auto"><FieldLabel className="flex items-center gap-2"><Checkbox name="mediaUpload" value="yes" />{m.media_upload_permission()}</FieldLabel></Field>
+            <p className="ui-help text-muted-foreground">{m.media_upload_help()}</p>
+          </div>}
           <Field className="min-w-0 w-auto"><FieldLabel>{m.tokens_expires()}</FieldLabel>
             <Select name="expiresInDays" defaultValue="90" items={[...[30, 90, 365].map(days => ({ value: String(days), label: m.tokens_expiry_days({ days }) })), { value: "none", label: m.tokens_no_expiry() }]}><SelectTrigger aria-label={m.tokens_expires()}><SelectValue /></SelectTrigger><SelectContent>
               {[30, 90, 365].map(days => <SelectItem key={days} value={String(days)}>{m.tokens_expiry_days({ days })}</SelectItem>)}
@@ -133,7 +140,7 @@ export default function SettingsTokens({ loaderData, actionData }: Route.Compone
               {tokens.map((t) => (
                 <TableRow key={t.id} className={`border-t ${t.revokedAt ? "text-muted-foreground" : ""}`}>
                   <TableCell className="py-1">{t.name}</TableCell>
-                  <TableCell>{t.kind === "read" ? m.tokens_kind_read_short() : m.tokens_kind_draft_short()}</TableCell>
+                  <TableCell>{t.kind === "read" ? m.tokens_kind_read_short() : m.tokens_kind_draft_short()}{t.mediaUpload && <><br />{m.media_upload_permission()}</>}</TableCell>
                   <TableCell>{dateOf(t.createdAt)}</TableCell>
                   <TableCell><span className="inline-flex flex-wrap gap-x-4">{t.expiresAt ? <><span>{dateOf(t.expiresAt)}</span>{t.expiresAt <= new Date() && <>{" "}<span>{m.tokens_expired()}</span></>}</> : m.tokens_no_expiry()}</span></TableCell>
                   <TableCell>{t.lastUsedAt ? dateOf(t.lastUsedAt) : m.tokens_never_used()}</TableCell>

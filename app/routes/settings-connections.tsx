@@ -22,7 +22,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!(await revokeConnection(db, user.id, String(form.get("id") ?? "")))) throw data("Not found", { status: 404 });
   return { revoked: true };
 }
-const PERMISSIONS: Record<string, () => string> = { read: () => m.mcp_perm_read(), draft: () => m.mcp_perm_draft(), offline_access: () => m.mcp_perm_offline() };
+const PERMISSIONS: Record<string, () => string> = { read: () => m.mcp_perm_read(), draft: () => m.mcp_perm_draft(), media: () => m.media_upload_permission(), offline_access: () => m.mcp_perm_offline() };
 
 export default function SettingsConnections({ loaderData, actionData }: Route.ComponentProps) {
   const [beforeConnect, afterConnect] = m.mcp_connections_intro({ link: "\u0000" }).split("\u0000");

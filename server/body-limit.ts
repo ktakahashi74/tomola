@@ -20,13 +20,20 @@ export const DRAIN_TIMEOUT_MS = 10_000;
 
 // Match only image actions, including React Router's fetcher URLs. Ignore the
 // query without normalizing the path into a different upload route.
-export const IMAGE_UPLOAD_PATH = /^\/(?:media|settings\/avatar|v\/[a-z0-9]+(?:-[a-z0-9]+)*\/icon)(?:\.data)?$/;
+export const IMAGE_UPLOAD_PATH = /^\/(?:api\/media|media|settings\/avatar|v\/[a-z0-9]+(?:-[a-z0-9]+)*\/icon)(?:\.data)?$/;
+
+function rejection(req: Request) {
+  return /^\/api\/media(?:\.data)?$/.test(req.originalUrl.split("?", 1)[0])
+    ? { message: JSON.stringify({ error: "too_large", message: "Image upload exceeds the request size limit." }), type: "application/json; charset=utf-8" }
+    : { message: MESSAGE, type: "text/plain; charset=utf-8" };
+}
 
 // A known oversized body may already be in transit through a proxy. Send 413
 // without Connection: close, which would let Node close before draining it.
 function rejectKnownLength(req: Request, res: Response, drainMaxBytes: number): void {
-  res.status(413).set({ "Content-Type": "text/plain; charset=utf-8", "Content-Length": String(Buffer.byteLength(MESSAGE)), "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
-  res.end(MESSAGE);
+  const { message, type } = rejection(req);
+  res.status(413).set({ "Content-Type": type, "Content-Length": String(Buffer.byteLength(message)), "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
+  res.end(message);
   let drained = 0;
   let ended = false;
   const closeWhenFlushed = () => { if (ended && res.writableFinished) req.destroy(); };
@@ -50,8 +57,9 @@ function reject(req: Request, res: Response): void {
   if (res.headersSent || res.writableEnded) return;
   req.pause();
   req.unpipe();
-  res.status(413).set({ "Content-Type": "text/plain; charset=utf-8", "Content-Length": String(Buffer.byteLength(MESSAGE)), "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", Connection: "close" });
-  res.end(MESSAGE, () => req.destroy());
+  const { message, type } = rejection(req);
+  res.status(413).set({ "Content-Type": type, "Content-Length": String(Buffer.byteLength(message)), "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", Connection: "close" });
+  res.end(message, () => req.destroy());
 }
 
 export function bodyLimit(maxBytes: number) {

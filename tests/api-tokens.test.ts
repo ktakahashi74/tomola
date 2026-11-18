@@ -41,6 +41,16 @@ describe("token format", () => {
 });
 
 describe("createApiToken, listApiTokens and revokeApiToken", () => {
+  it("keeps media permission disabled by default and allows explicit opt-in only on draft tokens", async () => {
+    const db = await setup();
+    const legacy = await db.insert(apiTokens).values({ userId: "u1", name: "Existing draft", kind: "draft", tokenHash: hashToken(generateToken("draft")) }).returning();
+    expect(legacy[0].mediaUpload).toBe(false);
+    const enabled = await createApiToken(db, "u1", { name: "Images", kind: "draft", mediaUpload: true });
+    if (!enabled.ok) throw new Error(enabled.error);
+    expect(enabled.summary.mediaUpload).toBe(true);
+    expect(await authenticateToken(db, enabled.token)).toMatchObject({ ok: true, token: { mediaUpload: true, kind: "draft" } });
+    expect(await createApiToken(db, "u1", { name: "Read", kind: "read", mediaUpload: true })).toEqual({ ok: false, error: "invalid_kind" });
+  });
   it("returns the plaintext once and stores only its hash", async () => {
     const db = await setup();
     const res = await createApiToken(db, "u1", { name: "  my laptop ", kind: "read" }, { now: t0 });
@@ -116,7 +126,7 @@ describe("authenticateToken", () => {
     const db = await setup();
     const res = await createApiToken(db, "u1", { name: "reader", kind: "read" });
     if (!res.ok) throw new Error(res.error);
-    expect(await authenticateToken(db, res.token)).toEqual({ ok: true, token: { id: res.summary.id, userId: "u1", name: "reader", kind: "read" } });
+    expect(await authenticateToken(db, res.token)).toEqual({ ok: true, token: { id: res.summary.id, userId: "u1", name: "reader", kind: "read", mediaUpload: false } });
   });
 
   it("rejects malformed, unknown and altered tokens without telling them apart", async () => {

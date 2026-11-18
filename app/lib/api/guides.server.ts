@@ -1,5 +1,6 @@
 import { operatorDocument } from "~/lib/operator-config.server";
 import { WRITING_MD_PATH } from "~/lib/writing-paths";
+import { mediaUploadGuide } from "./media-guide.server";
 import { DRAFT_RESPONSE_GUIDE } from "./draft-response-guide";
 import { accountsSection, connectPlan, connectPointer } from "~/lib/api/connect.server";
 import { AI_USE_GUIDANCE, AI_USE_GUIDANCE_TITLE } from "~/lib/api/ai-use-guidance.server";
@@ -199,6 +200,7 @@ ${DRAFT_RESPONSE_GUIDE}
 Follow the AI instructions in "${AI_USE_GUIDANCE_TITLE}" at ${o}/help/ai.md when helping a member write.
 
 Publishing happens only in the member's browser: the member opens approvalUrl, checks the displayed text and publishes it. API and MCP credentials cannot publish. If the member has turned on passkey confirmation in settings, publishing also asks for a passkey signature. Create a draft with \`POST ${o}/api/drafts\` (a draft token \`Authorization: Bearer tml_draft_…\` and a Markdown body, Content-Type text/markdown or text/plain, up to 384 KiB including frontmatter); it returns \`{ "id": …, "approve_url": …, "lang": …, "language": …, "issues": [], "issues_truncated": false }\`. The member opens approve_url, checks the full text and publishes it in the browser. Passkey confirmation is optional. API and MCP credentials cannot publish. The signature verifies a credential and approval snapshot; it does not establish that the member read or understood the text. It also does not prove that AI cannot use the passkey. Optional frontmatter: type (topic | reply; post and comment are accepted too), title (optional; leave it out for a short remark; a question needs it), lang, reply_to (p-<id> or c-<id>), ai_assistance (optional; omitted when absent, and then nothing is recorded), asks_stance, alt_of, stance_tag (see "Questions"). 30 drafts per hour per member across REST and MCP, and at most 100 drafts from the API waiting for the member to publish or delete them. Details: ${o}/help/ai.md and ${o}/api/openapi.json.
+${mediaUploadGuide(o)}
 ` + villageGuide(o);
 }
 
@@ -311,6 +313,8 @@ The first block of a thread file is an overview (\`type: index\`): \`replies_rea
 ## 4. Send a draft
 
 For supported Markdown, image preparation, limits and importing a blog post, read ${o}${WRITING_MD_PATH}.
+
+${mediaUploadGuide(o)}
 
 Posts under your name are only those you have confirmed: the API creates a draft, and you read it and publish it in the browser.
 

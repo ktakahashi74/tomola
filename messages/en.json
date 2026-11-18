@@ -3067,5 +3067,7 @@
   "writing_guide_formats": "The guide covers Markdown, math, images, animated figures and their limits.",
   "writing_guide_language": "Write in one language. tomola supplies the translations.",
   "writing_guide_rights": "Use your own writing or material you have permission to publish. Describe every image.",
-  "writing_guide_publish": "Your AI can prepare a draft. You review it and publish from the browser approval screen."
+  "writing_guide_publish": "Your AI can prepare a draft. You review it and publish from the browser approval screen.",
+  "media_upload_permission": "Upload images",
+  "media_upload_help": "Allows images to be uploaded to your account and uses your image storage and upload allowance. It does not publish them."
 }

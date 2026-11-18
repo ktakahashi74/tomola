@@ -1,4 +1,5 @@
 import en from "../../../messages/en.json";
+import { mediaUploadGuide } from "./media-guide.server";
 import { AI_USE_GUIDANCE, AI_USE_GUIDANCE_TITLE } from "~/lib/api/ai-use-guidance.server";
 import { CONNECT_MD_PATH, CONNECT_PATH, CONNECTIONS_SETTINGS_PATH, MCP_SCOPES } from "~/lib/connect-paths";
 import { siteOrigin } from "~/lib/http/csrf.server";
@@ -9,7 +10,7 @@ import { publicReading } from "~/lib/public-reading.server";
 // connectPlan(); a change to a step, a command or a name is made here and shows up in all of them.
 
 // The permissions requested at consent. The draft permission cannot publish; publishing stays in the member's browser.
-export const CONNECT_SCOPES = MCP_SCOPES;
+export const CONNECT_SCOPES = MCP_SCOPES.filter(scope => scope !== "media");
 
 // A single shell word: plain characters stay as they are, anything else is single-quoted.
 export function shellQuote(value: string): string {
@@ -257,6 +258,8 @@ ${plan.publicReading ? `The public endpoint ${plan.publicMcpUrl} requires no aut
 Your user completes tomola login and the browser screen “${en.mcp_connect_title}”, checks that the screen is on ${plan.origin}, checks which AI is connecting and its requested abilities, and chooses “${en.mcp_allow}”. They can choose “${en.mcp_deny}”; if so, stop without repeating. Publishing remains their own action in the browser. Prepare them to finish within about ${WAIT_MINUTES} minutes; if the wait expires, repeat only the browser authentication step, not server registration. If the browser does not open, show its printed URL. Respect the user's chosen browser and environment.
 
 ${connectVerificationSection(plan)}
+
+${mediaUploadGuide(plan.origin)}
 
 ${connectManualSection(plan)}
 

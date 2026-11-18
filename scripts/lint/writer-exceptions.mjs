@@ -1,4 +1,5 @@
 export const WRITER_EXCEPTIONS = {
+  "api.media.ts": "Bearer authentication only; handleMediaUpload requires the media permission and getWriter before receiving bytes",
   "village-chat-nushi.ts": "same-origin, rate-limited private syntax preview through chatResourceMember and current consent; no request or content is published",
   "village-chat-search.tsx": "private chat reading through requireMember and current village consent; suspended members may search readable messages, with no publishing",
   "list-seen.ts": "private list watermarks only: requireMember permits suspended members to update their own viewing state; no publishing or signature",

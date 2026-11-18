@@ -93,6 +93,7 @@ export default [
   route("help/mcp.md", "routes/mcp-guide.ts"),
   route("api/openapi.json", "routes/llms-txt.ts", { id: "openapi" }),
   route("api/drafts", "routes/api.drafts.ts"),
+  route("api/media", "routes/api.media.ts"),
   // Offline guidance, accessible without login and cached by the service worker.
   route("offline", "routes/offline.ts"),
   // The principles page (public, readable without logging in) and its Markdown twin. Outside the member layout.

@@ -240,8 +240,8 @@ describe("/api/openapi.json", () => {
     // The title is optional (a topic without a title is a short remark); a question needs it.
     expect(doc.paths["/api/drafts"].post.description).toContain("title (optional: a topic without a title is a short remark; required when asks_stance is true)");
     expect(doc.paths["/api/drafts"].post.responses["400"].description).toContain("invalid_alt_of");
-    expect(Object.keys(doc.paths).sort()).toEqual(["/a/{lang}.md", "/ai.txt", "/api/drafts", "/changes.md", "/following.md", "/glossary.md", "/glossary.yaml", "/help/ai.md", "/home.md", "/latest.md", "/llms.txt", "/manifest.json", "/principles.md", "/search.md", "/t/{id}.md", "/t/{id}/stances.md"]);
-    expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(["draftToken", "readToken", "readTokenQuery", "sessionCookie"]);
+    expect(Object.keys(doc.paths).sort()).toEqual(["/a/{lang}.md", "/ai.txt", "/api/drafts", "/api/media", "/changes.md", "/following.md", "/glossary.md", "/glossary.yaml", "/help/ai.md", "/home.md", "/latest.md", "/llms.txt", "/manifest.json", "/principles.md", "/search.md", "/t/{id}.md", "/t/{id}/stances.md"]);
+    expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(["draftToken", "mediaOAuth", "mediaToken", "readToken", "readTokenQuery", "sessionCookie"]);
     expect(doc.components.securitySchemes.readTokenQuery).toMatchObject({ type: "apiKey", in: "query", name: "k" });
     expect(doc.components.securitySchemes.draftToken).toMatchObject({ type: "http", scheme: "bearer" });
     // Drafts require draft tokens; reads accept any of three authentication methods.

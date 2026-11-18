@@ -1,4 +1,5 @@
 import { MAX_DRAFT_BYTES } from "./drafts-api.server";
+import { MEDIA_LIMITS } from "~/lib/media";
 import { DRAFT_ISSUE_KINDS } from "~/lib/draft-issues";
 import { DRAFT_RESPONSE_GUIDE } from "./draft-response-guide";
 import { LANGS } from "~/lib/languages";
@@ -55,6 +56,33 @@ export function openApiDocument(): Record<string, unknown> {
     },
     servers: [{ url: siteUrl("") }],
     paths: {
+      "/api/media": {
+        post: {
+          summary: "Upload one image for a draft; publication stays in the browser",
+          description: `Requires an explicitly enabled draft-token image permission or OAuth media scope. Cookies are ignored. The image is rewritten through the browser upload pipeline. ${MEDIA_LIMITS.hourly} images/hour per member shared with browser uploads, with an additional ${MEDIA_LIMITS.apiHourly}/hour API allowance across credentials. A motion/still pair costs two; damaged or invalid attempts count. Original filenames are not retained. Repeated uploads return the same active stored image. Use returned site-relative URLs in POST /api/drafts or tomola_draft_create and give the member approvalUrl (REST: approve_url). Draft-only images are not served to other viewers.`,
+          security: [{ mediaToken: [] }, { mediaOAuth: ["media"] }],
+          requestBody: { required: true, content: {
+            "application/octet-stream": { schema: { type: "string", format: "binary", maxLength: MEDIA_LIMITS.inputBytes } },
+            "image/*": { schema: { type: "string", format: "binary", maxLength: MEDIA_LIMITS.inputBytes } },
+            "multipart/form-data": { schema: { type: "object", minProperties: 1, maxProperties: 1, additionalProperties: { type: "string", format: "binary", maxLength: MEDIA_LIMITS.inputBytes } }, description: "Exactly one file part (for example, named image); at most 8192 header bytes and 16 header lines." },
+          } },
+          responses: {
+            "201": { description: "Stored image and optional motion poster, all URLs site-relative.", content: { "application/json": { schema: { type: "object", required: ["mediaId", "url", "width", "height", "markdown"], properties: {
+              mediaId: { type: "string", pattern: "^[a-f0-9]{64}$" }, url: { type: "string" }, width: { type: "integer" }, height: { type: "integer" }, posterUrl: { type: "string" }, posterWidth: { type: "integer" }, posterHeight: { type: "integer" }, markdown: { type: "string", description: "Replace the nonempty description placeholder with useful alt text." },
+            } } } } },
+            "400": errorResponse("type or generic: unsupported, damaged or malformed input, including multiple multipart parts."),
+            "401": errorResponse("unauthorized: missing, invalid, expired or revoked Bearer credential."),
+            "403": errorResponse("forbidden: missing image permission or writing is unavailable."),
+            "405": errorResponse("generic: use POST."),
+            "408": errorResponse("generic: receiving or processing timed out."),
+            "409": errorResponse("quota, member_bytes or site_bytes: storage limit reached."),
+            "413": errorResponse("too_large: input or multipart headers exceed a limit."),
+            "429": { ...errorResponse("rate: member or API allowance exhausted."), headers: Object.fromEntries(["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"].map(name => [name, { schema: { type: "integer" } }])) },
+            "503": { ...errorResponse("busy: receive or processing capacity unavailable."), headers: { "Retry-After": { schema: { type: "integer" } } } },
+            "500": errorResponse("generic: unexpected upload failure."),
+          },
+        },
+      },
       "/t/{id}.md": {
         get: {
           summary: "A thread as Markdown (also /t/{id}.txt)",
@@ -221,6 +249,8 @@ export function openApiDocument(): Record<string, unknown> {
     },
     components: {
       securitySchemes: {
+        mediaToken: { type: "http", scheme: "bearer", description: "A draft PAT with Upload images explicitly enabled. Existing draft/read tokens do not have this permission." },
+        mediaOAuth: { type: "oauth2", flows: { authorizationCode: { authorizationUrl: siteUrl("/api/auth/oauth2/authorize"), tokenUrl: siteUrl("/api/auth/oauth2/token"), scopes: { media: "Upload images to the account, consuming storage and upload allowances, without publication." } } } },
         readToken: { type: "http", scheme: "bearer", description: "A read token (tml_read_…), created at /settings/tokens." },
         readTokenQuery: { type: "apiKey", in: "query", name: "k", description: "A read token or a signed Open in AI link (oai1.…), for tools that cannot set headers. Only on GET of the read endpoints." },
         sessionCookie: { type: "apiKey", in: "cookie", name: "better-auth.session_token", description: "The browser session." },

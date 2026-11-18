@@ -281,3 +281,9 @@ Machine-facing details should not clutter manual reading, while AI representatio
 **Current implementation.** Documentation, no-database, focused, integration and release checks have separate entry points. ESLint and disclosure checks record existing findings in file/rule baselines and fail on increases. JavaScript budgets limit both total size and growth from the previous baseline. Verification records fingerprints, SHA, settings and exit state.
 
 **Properties and limits.** Existing findings in a baseline are not fixed defects, and pattern scans do not establish suitability for publication. A browser quarantine registry allows one retry only for registered cases with a cause and repair deadline; the current registry is empty. Failures and recoveries remain recorded. These checks do not replace usability on real devices, real-model quality or actual deployment checks.
+
+## 46 Require separate permission for image uploads from AI clients
+
+`POST /api/media` receives one image using an explicitly enabled image permission on a draft token, or the OAuth `media` scope. Existing credentials do not acquire it. Consent states that uploads use account storage and upload allowances without publishing anything. Browser cookies are ignored. Image processing, storage and quotas use the browser upload pipeline.
+
+The shared member allowance of 30 images/hour contains an additional API allowance of 20/hour; failed attempts count. A motion/still pair costs two. Bodies are bounded while receiving; multipart accepts one file and bounded headers. Original filenames are not stored. Existing credential last-use records and image owner/storage timestamps provide accounting. Draft-only images are served only to their owner. Publication requires the member's approval in the browser. No server-side URL fetching is included.

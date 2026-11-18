@@ -8,6 +8,7 @@ export const MEDIA_LIMITS = {
   edge: 2000,
   storedBytes: 2 * 1024 * 1024,
   hourly: 30,
+  apiHourly: 20,
   memberReadsHourly: 6000,
   anonymousReadsHourly: 3000,
   readWindowSeconds: 3600,
