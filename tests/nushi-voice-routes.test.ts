@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { villages } from "~/lib/db/schema";
+import { entries, villages } from "~/lib/db/schema";
 import { setTestMessages } from "./stubs/paraglide-messages";
 import { renderToStaticMarkup } from "react-dom/server";
 import { jsonMessages } from "./helpers/messages-json";
@@ -11,6 +11,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { getProfile } from "~/lib/profiles.server";
 import { personalVoiceVillage, setNushiVoice } from "~/lib/nushi-voice.server";
 import { createTopic } from "~/lib/entries.server";
+import { READING_BATCH } from "~/lib/reading-page";
 
 const auth = vi.hoisted(() => ({ getReader: vi.fn(), requireWriter: vi.fn(), requireMember: vi.fn() }));
 vi.mock("~/lib/auth/session.server", () => ({ getReader: auth.getReader, requireWriter: auth.requireWriter, requireMember: auth.requireMember }));
@@ -22,13 +23,17 @@ import MemberPage, { loader as memberLoader } from "~/routes/member-page";
 beforeEach(() => setTestMessages(jsonMessages()));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); setTestMessages(); });
 const request = (path: string, form?: Record<string, string>, origin = "http://localhost:5173") => new Request(`http://localhost${path}`, form ? { method: "POST", headers: { Origin: origin }, body: new URLSearchParams(form) } : undefined);
+const seedOlderPosts = (db: Awaited<ReturnType<typeof nushiFixture>>["db"], villageId: string) => db.insert(entries).values(Array.from({ length: READING_BATCH }, () => ({
+  kind: "topic", authorId: "nushi-owner", villageId, lang: "en", title: "Older post", body: "An older fixture post.", createdAt: new Date("2026-01-01T00:00:00Z"),
+})));
 
-it("links to Nushi after posts and pagination, before roster and management, without embedding any style fields", async () => {
+it("links to Nushi after posts and Load more, before roster and management, without embedding any style fields", async () => {
   const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
+  await seedOlderPosts(f.db, f.village.id);
   auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-owner", email: "owner@example.com" }, profile: await getProfile(f.db, "nushi-owner") });
   const render = async () => {
     const view = await villageLoader({ request: request("/v/nushi-test"), params: { slug: "nushi-test" } } as never);
-    return renderInRouter(() => createElement(Village, { loaderData: { ...view, hasNext: true } } as never), "/v/nushi-test");
+    return renderInRouter(() => createElement(Village, { loaderData: view } as never), "/v/nushi-test");
   };
   const unused = await render();
   expect(unused).not.toContain('id="nushi-voice"');
@@ -37,8 +42,11 @@ it("links to Nushi after posts and pagination, before roster and management, wit
     await setNushiVoice(f.db, "nushi-owner", f.village.id, text);
     const html = await render();
     const link = html.indexOf('href="/v/nushi-test/nushi"');
-    expect(link).toBeGreaterThan(html.indexOf(`id="q-${f.source}"`));
-    expect(link).toBeGreaterThan(html.indexOf('rel="next"'));
+    const post = html.indexOf(`id="q-${f.source}"`);
+    const more = html.indexOf("data-load-more");
+    expect(post).toBeGreaterThan(-1);
+    expect(more).toBeGreaterThan(post);
+    expect(link).toBeGreaterThan(more);
     expect(link).toBeLessThan(html.indexOf('id="village-roster"'));
     expect(link).toBeLessThan(html.indexOf('id="village-management"'));
     expect(html).toContain(renderToStaticMarkup(m.village_nushi_title()));
@@ -151,10 +159,12 @@ it("exposes only public style information on a personal village page and gates i
   expect(auth.getReader).not.toHaveBeenCalled();
 });
 
-it("links to the personal Nushi after posts and pagination, for the owner or readers with style history", async () => {
+it("links to the personal Nushi after posts and Load more, for the owner or readers with style history", async () => {
   const f = await nushiFixture(); vi.stubEnv("VILLAGE_NUSHI_VOICE", "1");
   const topic = await createTopic(f.db, "nushi-owner", { title: "Personal post", body: "A personal village post.", lang: "en", village: "@znushi_owner" });
   expect(topic.ok).toBe(true);
+  const village = (await personalVoiceVillage(f.db, "znushi_owner"))!;
+  await seedOlderPosts(f.db, village.id);
   const href = "/v/personal/znushi_owner#nushi-voice";
   const args = { request: request("/u/znushi_owner"), params: { handle: "znushi_owner" } } as never;
   const load = async (id: string) => {
@@ -165,23 +175,23 @@ it("links to the personal Nushi after posts and pagination, for the owner or rea
     const view = await load(id);
     if (visible) expect(view).toHaveProperty("nushiVoiceHref", href);
     else expect(view).not.toHaveProperty("nushiVoiceHref");
-    const html = await renderInRouter(() => createElement(MemberPage, { loaderData: { ...view, personal: { ...view.personal!, hasNext: true } } } as never), "/u/znushi_owner");
+    const html = await renderInRouter(() => createElement(MemberPage, { loaderData: view } as never), "/u/znushi_owner");
     expect(html.includes(`href="${href}"`)).toBe(visible);
     if (visible) {
       expect(html).toContain(`<a class="link-ui inline-block" href="${href}"`);
       expect(html).toContain(`>${renderToStaticMarkup(m.village_nushi_title())}</a>`);
       const link = html.indexOf(`href="${href}"`);
-      expect(html.indexOf("Personal post")).toBeGreaterThan(-1);
-      expect(html.indexOf('rel="next"')).toBeGreaterThan(-1);
-      expect(link).toBeGreaterThan(html.indexOf("Personal post"));
-      expect(link).toBeGreaterThan(html.indexOf('rel="next"'));
-      expect(html).toContain("vpage=2#village");
+      const post = html.indexOf("Personal post");
+      const more = html.indexOf(`data-load-more="true" href="/u/znushi_owner?vlist_after=${view.personal!.list!.next}#village"`);
+      expect(post).toBeGreaterThan(-1);
+      expect(more).toBeGreaterThan(post);
+      expect(link).toBeGreaterThan(more);
+      expect(html).toContain(`>${renderToStaticMarkup(m.list_load_more())}</a>`);
       expect(link).toBeLessThan(html.indexOf('id="posts"'));
     }
   };
   await render("nushi-owner", true);
   await render("nushi-caller", false);
-  const village = (await personalVoiceVillage(f.db, "znushi_owner"))!;
   await setNushiVoice(f.db, "nushi-owner", village.id, "Brief.");
   await render("nushi-caller", true);
   await setNushiVoice(f.db, "nushi-owner", village.id, "");

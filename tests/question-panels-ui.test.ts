@@ -4,6 +4,7 @@ import { ObjectionsPanel } from "~/components/objections-panel";
 import TopicObjections from "~/routes/topic-objections";
 import { RepliesFilter, StanceTagSelect } from "~/components/stance-tag";
 import type { ObjectionPanel } from "~/lib/objections.server";
+import { readReadingRequest, readingPage } from "~/lib/reading-page";
 import { m } from "~/paraglide/messages.js";
 import { escapeRegex, messageMarkup } from "./helpers/message-markup";
 import { renderInRouter } from "./helpers/render-in-router";
@@ -38,12 +39,18 @@ describe("empty and populated objection panels", () => {
     alternative: { alternatives: [{ id: 13, lang: "en", authorHandle: "writer", createdAt, title: { text: "Another framing", lang: "en", kind: null, engine: null, fallback: false, stale: false, pending: false, fromBody: false } }], objections: [] },
     objection: { alternatives: [], objections: [{ id: 14, threadId: 12, lang: "en", authorHandle: "writer", createdAt, excerpt: "An objection", location: "/t/12#c-14" }] },
   };
-  it.each([empty, ...Object.values(populated)])("uses the short explanation on a populated full-list page", async panel => {
+  it.each(Object.entries({ empty, ...populated }))("uses the appropriate explanation on the full-list page with %s", async (_, panel) => {
+    const request = new Request("https://fixture.invalid/t/12/objections");
+    const chunk = <T extends { createdAt: Date; id: number }>(topics: T[], param: string) => ({
+      topics, list: readingPage(topics, readReadingRequest(request, "created", 1, param, 50, "page"), row => ({ order: "created", keys: [row.createdAt.toISOString(), row.id] }), false),
+    });
     const html = await renderInRouter(() => createElement(TopicObjections, { loaderData: {
       id: 12, title: { text: "Question", lang: "en" }, ...panel, hasNext: false, page: 1, langParam: null, reader: false,
-    } } as never));
-    expect(html).toContain(messageMarkup(panel.alternatives.length || panel.objections.length ? m.objections_neutrality() : m.objections_help()));
-    if (panel.alternatives.length || panel.objections.length) expect(html).not.toContain(messageMarkup(m.objections_help()));
+      alternativesList: chunk(panel.alternatives, "list"), objectionsList: chunk(panel.objections, "vlist"),
+    } } as never), "/t/12/objections");
+    const hasItems = panel.alternatives.length > 0 || panel.objections.length > 0;
+    expect(html).toContain(`>${messageMarkup(hasItems ? m.objections_neutrality() : m.objections_help())}</p>`);
+    expect(html).not.toContain(`>${messageMarkup(hasItems ? m.objections_help() : m.objections_neutrality())}</p>`);
   });
 
   it.each(Object.entries(populated))("keeps the panel open when an %s is present", async (_, panel) => {

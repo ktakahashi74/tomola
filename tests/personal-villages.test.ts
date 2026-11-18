@@ -16,6 +16,7 @@ import { createClientDraft, updateClientDraft } from "~/lib/mcp/drafts.server";
 import { canReadThreadPublicly } from "~/lib/md/thread.server";
 import { setVillageFollow, listFollowedVillages } from "~/lib/village-follows.server";
 import { loadMemberPageContent, resolveMemberPage, setIntroduction } from "~/lib/member-pages.server";
+import { READING_BATCH, readReadingRequest } from "~/lib/reading-page";
 import { endVillage, editVillage, inviteToVillage } from "~/lib/village-management.server";
 import { chatAccess, acceptChatConsent, mutateChat } from "~/lib/village-chat.server";
 import { createVillageReport, moderateVillage } from "~/lib/village-moderation.server";
@@ -155,7 +156,11 @@ it("omits language-village names on member rows while keeping community and orga
   await db.insert(villageMembers).values(places.map(place => ({ userId: "pv-owner", villageId: place.id })));
   for (const target of ["en", ...places.map(place => place.slug!)]) await post(db, "pv-owner", target);
   const member = (await resolveMemberPage(db, "pv_owner"))!;
-  const content = await loadMemberPageContent(db, member, { viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1 });
+  const request = new Request("https://fixture.invalid/u/pv_owner");
+  const content = await loadMemberPageContent(db, member, {
+    viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1,
+    reading: readReadingRequest(request, "created"), personalReading: readReadingRequest(request, "created", 1, "vlist"),
+  });
   const html = await renderInRouter(() => createElement(MemberPage, { loaderData: content, actionData: undefined, params: {}, matches: [] } as never), "/u/pv_owner");
   expect(html).not.toContain('href="/v/en"');
   for (const place of places) {
@@ -246,29 +251,43 @@ it("preparation preserves an existing member's unset default", async () => {
   expect((await db.select().from(entries).where(eq(entries.id, id)))[0].villageId).toBe(village.id);
 });
 
-it("keeps the two member-page sections on independent pages and author reading counts private", async () => {
+it("gives the two member-page sections independent Load more links and keeps author reading counts private", async () => {
   const { db, village } = await world();
   const shared = (await languageVillage(db, "en"))!;
-  const seed = async (villageId: string) => db.insert(entries).values(Array.from({ length: 21 }, (_, i) => ({ kind: "topic", authorId: "pv-owner", villageId, lang: "en", title: `Paged post ${i}`, body: "Owned paging fixture." }))).returning({ id: entries.id, sourceHash: entries.sourceHash });
+  const seed = async (villageId: string) => db.insert(entries).values(Array.from({ length: READING_BATCH + 1 }, (_, i) => ({ kind: "topic", authorId: "pv-owner", villageId, lang: "en", title: `Paged post ${i}`, body: "Owned paging fixture." }))).returning({ id: entries.id, sourceHash: entries.sourceHash });
   const personalRows = await seed(village.id), otherRows = await seed(shared.id);
-  await db.insert(translations).values([personalRows[20], otherRows[20]].map(row => ({ entryId: row.id, field: "body", lang: "ja", kind: "primary", text: "翻訳", engine: "fake", model: "fake-1", sourceHash: row.sourceHash, everSeen: true })));
+  await db.insert(translations).values([personalRows.at(-1)!, otherRows.at(-1)!].map(row => ({ entryId: row.id, field: "body", lang: "ja", kind: "primary", text: "翻訳", engine: "fake", model: "fake-1", sourceHash: row.sourceHash, everSeen: true })));
   const member = (await resolveMemberPage(db, "pv_owner"))!;
-  const read = { viewerId: "pv-owner", readLangs: ["en"] as const, displayLang: "en" as const, page: 1 };
-  const first = await loadMemberPageContent(db, member, read);
-  const personalNext = await loadMemberPageContent(db, member, { ...read, personalPage: 2 });
-  const otherNext = await loadMemberPageContent(db, member, { ...read, page: 2 });
+  const path = "/u/pv_owner";
+  const url = new URL(path, "https://fixture.invalid");
+  const load = (address: URL, viewerId = "pv-owner") => {
+    const request = new Request(address);
+    return loadMemberPageContent(db, member, {
+      viewerId, readLangs: ["en"], displayLang: "en", page: 1,
+      reading: readReadingRequest(request, "created"), personalReading: readReadingRequest(request, "created", 1, "vlist"),
+    });
+  };
+  const first = await load(url);
+  expect(first.personal?.topics).toHaveLength(READING_BATCH);
+  expect(first.topics).toHaveLength(READING_BATCH);
+  const html = await renderInRouter(() => createElement(MemberPage, { loaderData: first, actionData: undefined, params: {}, matches: [] } as never), path);
+  const links = [...html.matchAll(/<a\b[^>]*data-load-more="true"[^>]*href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll("&amp;", "&"), url));
+  expect(links.map(link => link.hash)).toEqual(["#village", "#posts"]);
+  const [villageLink, postsLink] = links;
+  expect(first.personal?.list?.next).toBeTruthy();
+  expect(first.list?.next).toBeTruthy();
+  expect([...villageLink.searchParams]).toEqual([["vlist_after", first.personal!.list!.next]]);
+  expect([...postsLink.searchParams]).toEqual([["list_after", first.list!.next]]);
+  const personalNext = await load(villageLink);
+  const otherNext = await load(postsLink);
   expect(personalNext.personal?.topics.map(row => row.id)).toEqual([personalRows[0].id]);
   expect(personalNext.topics).toEqual(first.topics);
   expect(otherNext.personal?.topics).toEqual(first.personal?.topics);
   expect(otherNext.topics.map(row => row.id)).toEqual([otherRows[0].id]);
   expect(first.personal?.topics[0].readLanguageCount).toBe(1);
   expect(first.topics[0].readLanguageCount).toBe(1);
-  const visitor = await loadMemberPageContent(db, member, { ...read, viewerId: "pv-reader" });
+  const visitor = await load(url, "pv-reader");
   expect([...visitor.topics, ...visitor.personal!.topics].every(row => !("readLanguageCount" in row))).toBe(true);
-  const html = await renderInRouter(() => createElement(MemberPage, { loaderData: first, actionData: undefined, params: {}, matches: [] } as never), "/u/pv_owner?page=1&vpage=1");
-  const links = [...html.matchAll(/href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll("&amp;", "&"), "https://fixture.invalid"));
-  expect(links.filter(link => link.hash === "#village").map(link => [link.searchParams.get("page"), link.searchParams.get("vpage")])).toEqual([["1", "2"]]);
-  expect(links.filter(link => link.hash === "#posts").map(link => [link.searchParams.get("page"), link.searchParams.get("vpage")])).toEqual([["2", "1"]]);
 });
 
 it("requires destination review when an implicit post's previously displayed default becomes unavailable", async () => {

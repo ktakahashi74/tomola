@@ -102,7 +102,8 @@ it("omits roster identities from anonymous HTML/data and every Markdown/text pat
 });
 
 it("invites without adding and reports successful edits, invitations, cancellations and removals in server-rendered status lines", async () => {
-  expect(await html(await load("vr_owner"), "/v/roster-fixture?notice=__proto__")).not.toContain('role="status"');
+  const invalidNotice = await html(await load("vr_owner"), "/v/roster-fixture?notice=__proto__");
+  expect(invalidNotice).not.toMatch(/<p role="status"(?![^>]*\baria-live="polite")/);
   const sent = await post("vr_owner", { intent: "invite", handle: "vr_reader" });
   expect(sent).toMatchObject({ status: 302 }); expect(sent.location).toContain("#village-invites");
   const page = await load("vr_owner"); expect(page.management.roster.some(row => row.handle === "vr_reader")).toBe(false);

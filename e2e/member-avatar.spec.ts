@@ -67,7 +67,7 @@ test("avatar report, operator removal and independent appeal restore the image",
   await report.locator("summary").click();
   await report.locator('[name="note"]').fill("Avatar report belonging to this scenario");
   await report.getByRole("button", { name: en.flag_submit, exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText(en.flag_thanks);
+  await expect(page.locator('main > [role="status"]')).toHaveText(en.flag_thanks);
   await useMember(page, "av_operator@example.com", "/mod?lang=en"); await waitForHydration(page);
   const card = page.locator("section").filter({ has: page.getByRole("link", { name: "@av_subject", exact: true }) });
   await expect(card.locator("img")).toHaveCount(2);
