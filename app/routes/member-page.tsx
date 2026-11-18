@@ -17,6 +17,7 @@ import { AuthorLink } from "~/components/author-link";
 import { LocalTime } from "~/components/local-time";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TranslatedEntry } from "~/components/translated-entry";
 import { requireMember, requireWriter } from "~/lib/auth/session.server";
 import { parseIdSet } from "~/lib/display";
@@ -28,7 +29,7 @@ import { parsePageParam } from "~/lib/pagination";
 import { m } from "~/paraglide/messages.js";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
 
-export const middleware: Route.MiddlewareFunction[] = [privateCacheMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [privateCacheMiddleware, readingChunk(loader, (result, section) => section === "vlist" ? result.personal : result)];
 
 const DisplayNameReport = lazy(() => import("~/components/display-name-report"));
 
@@ -61,13 +62,15 @@ export async function action({ request, params }: Route.ActionArgs) {
   const member = await resolveMemberPage(db, params.handle ?? "");
   if (!member || member.redirectTo) throw data("Not found", { status: 404, headers: privateHeaders });
   const form = await request.formData();
+  const query = new URL(request.url).searchParams;
   const intent = form.get("intent");
   if (intent === "report-display-name" || intent === "report-avatar") {
     const rate = await hitMemberLimit(db, "report", user.id);
     if (!rate.allowed) return data({ error: "rate_limited" }, { status: 429, headers: { ...privateHeaders, ...rateLimitHeaders(rate) } });
     const result = await (intent === "report-avatar" ? createAvatarReport : createDisplayNameReport)(db, user.id, member.userId, { reason: form.get("reason"), note: form.get("note") });
     if (!result.ok) return data({ error: result.error }, { status: 400, headers: privateHeaders });
-    return redirect(`/u/${member.handle}?reported=1`, { headers: privateHeaders });
+    query.set("reported", "1");
+    return redirect(`/u/${member.handle}?${query}`, { headers: privateHeaders });
   }
   if (!villagesEnabled()) throw data("Not found", { status: 404, headers: privateHeaders });
   if (intent !== "follow" && intent !== "unfollow") throw data("Invalid intent", { status: 400, headers: privateHeaders });
@@ -75,7 +78,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (!rate.allowed) return data({ error: "rate_limited" }, { status: 429, headers: { ...privateHeaders, ...rateLimitHeaders(rate) } });
   const result = await setVillageFollow(db, user.id, `@${member.handle}`, intent === "follow");
   if (!result.ok) throw data("Not found", { status: 404, headers: privateHeaders });
-  return redirect(form.get("returnTo") === "/following" ? "/following" : `/u/${member.handle}#village`, { headers: privateHeaders });
+  return redirect(form.get("returnTo") === "/following" ? "/following" : `/u/${member.handle}${query.size ? `?${query}` : ""}#village`, { headers: privateHeaders });
 }
 
 export function headers() { return privateHeaders; }
@@ -121,12 +124,12 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
           {!own && <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={personal.following} name="intent" value={personal.following ? "unfollow" : "follow"}>{personal.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>}
         </div>
         {!own && <p className="ui-help text-muted-foreground">{m.member_page_village_follow_hint()}</p>}
-        <ReadingList topics={personal.topics} list={personal.list!} section="personal">{items => <MemberTopics topics={items} own={own} />}</ReadingList>
+        <ReadingList topics={personal.topics} list={personal.list!} anchor="#village">{items => <MemberTopics topics={items} own={own} />}</ReadingList>
         {loaderData.nushiVoiceHref && <Link className="link-ui inline-block" to={loaderData.nushiVoiceHref}>{m.village_nushi_title()}</Link>}
       </section>}
       <section className="space-y-3" id="posts">
         <h2 className={personal || intro || own ? "text-lg font-semibold" : "sr-only"}>{personal ? m.member_page_elsewhere() : m.member_page_topics_heading()}</h2>
-        <ReadingList topics={topics} list={loaderData.list!}>{items => <MemberTopics topics={items} own={own} />}</ReadingList>
+        <ReadingList topics={topics} list={loaderData.list!} anchor="#posts">{items => <MemberTopics topics={items} own={own} />}</ReadingList>
       </section>
     </main>
   );

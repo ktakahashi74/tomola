@@ -2487,5 +2487,6 @@
   "media_upload_help": "允许向你的账户上传图片，并使用图片存储空间和上传额度。不会发布图片。",
   "list_load_more": "查看更多",
   "list_added": "已添加 {count} 篇帖子。",
+  "list_load_failed": "无法加载更多帖子。请重试。",
   "list_back_latest": "返回最新帖子"
 }

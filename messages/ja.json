@@ -2279,6 +2279,7 @@
   "media_upload_permission": "画像を上げる",
   "media_upload_help": "アカウントに画像を上げ、画像の保存量とアップロード回数の枠を使います。公開はしません。",
   "list_load_more": "もっと見る",
-  "list_added": "{count} 件追加した。",
+  "list_added": "{count} 件を追加しました。",
+  "list_load_failed": "投稿を追加できませんでした。もう一度お試しください。",
   "list_back_latest": "最新に戻る"
 }

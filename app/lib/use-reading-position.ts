@@ -1,5 +1,10 @@
 import { useLayoutEffect } from "react";
-import { useLocation } from "react-router";
+import { useLocation, type Location } from "react-router";
+
+// Extending a range replaces the address within the same reading visit.
+export function readingVisitKey(location: Location): string {
+  return location.state?.readingVisitKey ?? location.key;
+}
 
 // Expanded lists can have a different initial height from their first batch.
 // Retain the departure position on this history entry and restore after the

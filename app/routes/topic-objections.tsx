@@ -4,6 +4,7 @@ import type { Route } from "./+types/topic-objections";
 import { AlternativeList, ObjectionList } from "~/components/objections-panel";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { getReader } from "~/lib/auth/session.server";
 import { entries } from "~/lib/db/schema";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -31,12 +32,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (question.hiddenAt && !canSeeHidden(user ? await getViewer(db, user) : undefined, question)) throw data("Not found", { status: 404 });
   const langs = { readLangs: screenReadLangsFor(request, profile), displayLang: displayLangFor(request, profile) };
   const [result, titles] = await Promise.all([
-    listObjections(db, id, { ...langs, page, reading: readReadingRequest(request, "created", page, "list", 50), objectionReading: readReadingRequest(request, "created", page, "vlist", 50) }),
+    listObjections(db, id, { ...langs, page, reading: readReadingRequest(request, "created", page, "list", 50), objectionReading: readReadingRequest(request, "created", page, "vlist", 50, "page") }),
     loadTitleDisplays(db, [{ id, lang: question.lang as Lang, title: question.title, sourceHash: question.sourceHash }], langs, true),
   ]);
   const title = titles.get(id)!;
   return { reader: !user, id, title: { text: title.text, lang: title.lang }, langParam: langCarry(request), page, ...result };
 }
+
+export const middleware: Route.MiddlewareFunction[] = [readingChunk(loader, (result, section) => section === "vlist" ? result.objectionsList : result.alternativesList)];
 
 // Member-only viewer-specific screen; prevent shared caching.
 export function headers() {
@@ -65,11 +68,11 @@ export default function TopicObjections({ loaderData }: Route.ComponentProps) {
       <p className="ui-help text-muted-foreground">{alternatives.length || objections.length ? m.objections_neutrality() : m.objections_help()}</p>
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">{m.objections_alternatives()}</h2>
-        <ReadingList topics={alternatives} list={loaderData.alternativesList!.list} section="alternativesList">{items => <AlternativeList reader={loaderData.reader} items={items} langParam={langParam} />}</ReadingList>
+        <ReadingList topics={alternatives} list={loaderData.alternativesList!.list} companion={loaderData.objectionsList!.list}>{items => <AlternativeList reader={loaderData.reader} items={items} langParam={langParam} />}</ReadingList>
       </section>
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">{m.objections_replies()}</h2>
-        <ReadingList topics={objections} list={loaderData.objectionsList!.list} section="objectionsList">{items => <ObjectionList reader={loaderData.reader} items={items} />}</ReadingList>
+        <ReadingList topics={objections} list={loaderData.objectionsList!.list} companion={loaderData.alternativesList!.list}>{items => <ObjectionList reader={loaderData.reader} items={items} />}</ReadingList>
       </section>
       {!loaderData.reader && <p className="flex flex-wrap items-center gap-x-4 gap-y-1 ui-meta">
         <Link to={`/t/${id}?write=objection#reply`} className="underline">

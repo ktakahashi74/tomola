@@ -9,7 +9,7 @@ it("village topic pagination drops management state while retaining reading and 
   const html = await renderInRouter(() => createElement(Village, { loaderData: {
     village: { slug: "example", name: "Example", description: "", language: null, kind: "open" },
     nushi: { available: false, setting: null, id: "example" },
-    list: { param: "list", after: "old", start: "head", next: "next", count: 30, older: true },
+    list: { param: "list", legacyParam: "page", after: "old", start: "head", next: "next", count: 30, older: true, restored: false },
     membership: null, topics: [], order: "activity", page: 2, hasNext: true, langParam: "ja",
     writers: [], reader: true, ended: false, operator: false, incoming: [], management: { canReadRoster: false },
     readingLanguage: { current: "ja", usual: "en", enabled: ["ja", "en"] },

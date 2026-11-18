@@ -22,6 +22,7 @@ import { OrderSwitch } from "~/components/order-switch";
 import { Pagination } from "~/components/pagination";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -62,7 +63,7 @@ import { safeLocalPath } from "~/lib/display-lang.server";
 import { formString } from "~/lib/entry-form.server";
 import { VILLAGE_DESCRIPTION_MAX, VILLAGE_NAME_MAX, VILLAGE_REMOVAL_REASON_MAX } from "~/lib/villages";
 
-export const middleware: Route.MiddlewareFunction[] = [villageMdMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [villageMdMiddleware, readingChunk(loader, result => result)];
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   return skipRevalidationFor(formAction) ? false : defaultShouldRevalidate;
 }

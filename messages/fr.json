@@ -3126,6 +3126,22 @@
   "media_upload_permission": "Téléverser des images",
   "media_upload_help": "Permet de téléverser des images sur votre compte et utilise votre espace de stockage et votre quota de téléversement d’images. Cela ne les publie pas.",
   "list_load_more": "Voir plus",
-  "list_added": "{count} publications ajoutées.",
+  "list_added": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{count} publication ajoutée.",
+        "countPlural=many": "{count} publications ajoutées.",
+        "countPlural=other": "{count} publications ajoutées."
+      }
+    }
+  ],
+  "list_load_failed": "Impossible de charger plus de publications. Réessayez.",
   "list_back_latest": "Revenir aux dernières publications"
 }

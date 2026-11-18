@@ -4,6 +4,7 @@ import { AsksFilter } from "~/components/asks-filter";
 import { OpenInAi } from "~/components/open-in-ai";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { getReader } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -23,6 +24,8 @@ import { readingRobotsMeta } from "~/lib/public-reading";
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   return skipRevalidationFor(formAction) ? false : defaultShouldRevalidate;
 }
+
+export const middleware: Route.MiddlewareFunction[] = [readingChunk(loader, result => result)];
 
 // The page shows member-specific content, so prevent shared caching. Read-delegation links are issued only by a separate user-triggered POST.
 export function headers() {

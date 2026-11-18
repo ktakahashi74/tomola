@@ -5,6 +5,7 @@ import type { Route } from "./+types/topic-related";
 import { RelatedDiscussionList } from "~/components/related-discussions";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { getReader } from "~/lib/auth/session.server";
 import { entries } from "~/lib/db/schema";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -24,6 +25,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (page > result.pageCount) throw data("Not found", { status: 404 });
   return { id, page, lang, reader: !user, rows: result.rows, topics: result.rows, list: result.list!, hasNext: result.hasNext, pageCount: result.pageCount };
 }
+
+export const middleware: Route.MiddlewareFunction[] = [readingChunk(loader, result => result)];
 
 export function headers() { return readingHeaders(); }
 export function meta({ matches }: Route.MetaArgs) { return [...readingRobotsMeta(matches), { title: m.related_title() }]; }

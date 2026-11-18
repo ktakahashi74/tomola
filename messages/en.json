@@ -3071,6 +3071,21 @@
   "media_upload_permission": "Upload images",
   "media_upload_help": "Allows images to be uploaded to your account and uses your image storage and upload allowance. It does not publish them.",
   "list_load_more": "Load more",
-  "list_added": "Added {count} posts.",
+  "list_added": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Added {count} post.",
+        "countPlural=other": "Added {count} posts."
+      }
+    }
+  ],
+  "list_load_failed": "Could not load more posts. Try again.",
   "list_back_latest": "Back to latest"
 }

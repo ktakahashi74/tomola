@@ -1,4 +1,5 @@
 import "~/lib/reading-document";
+import { readingVisitKey } from "~/lib/use-reading-position";
 import { webPushEnabled } from "~/lib/push/config.server";
 import { THEME_COLORS } from "~/lib/theme-colors";
 import { memberColorScheme } from "~/lib/member-appearance.server";
@@ -144,7 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <NavigationProgress />
         <TranslationWaitContext.Provider value={rootData?.translationWait ?? NORMAL_WAITS}>{children}</TranslationWaitContext.Provider>
         {!chat && <SiteFooter labels={rootData?.labels} privacyLabel={rootData?.privacyLabel} member={memberData?.reader === false} publicReading={rootData?.publicReading} statsLabel={rootData?.statsLabel} previewNotice={rootData?.previewNotice} sourceUrl={rootData?.sourceUrl ?? null} revision={rootData?.revision} />}
-        <ScrollRestoration />
+        <ScrollRestoration getKey={readingVisitKey} />
         <Scripts />
       </body>
     </html>

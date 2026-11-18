@@ -10,6 +10,7 @@ import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { OrderSwitch } from "~/components/order-switch";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { getReader } from "~/lib/auth/session.server";
@@ -36,6 +37,8 @@ export const handle = { PasskeyPrompt };
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   return skipRevalidationFor(formAction) ? false : defaultShouldRevalidate;
 }
+
+export const middleware: Route.MiddlewareFunction[] = [readingChunk(loader, result => result)];
 
 // The page shows member-specific content, so prevent shared caching. Read-delegation links are issued only by a separate user-triggered POST.
 export function headers() {

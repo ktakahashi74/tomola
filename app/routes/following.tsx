@@ -1,4 +1,3 @@
-import { useReadingSearch } from "~/lib/use-reading-search";
 import { clearReadingParams } from "~/lib/reading-page";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/following";
@@ -10,6 +9,7 @@ import { MoreInfo } from "~/components/ui/more-info";
 import { OpenInAi } from "~/components/open-in-ai";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { requireMember } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -27,6 +27,8 @@ import { loadFollowedNewReplies } from "~/lib/reply-locations.server";
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   return skipRevalidationFor(formAction) ? false : defaultShouldRevalidate;
 }
+
+export const middleware: Route.MiddlewareFunction[] = [readingChunk(loader, result => result)];
 
 // The page shows member-specific content, so prevent shared caching. Read-delegation links are issued only by a separate user-triggered POST.
 export function headers() {
@@ -73,9 +75,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Following({ loaderData }: Route.ComponentProps) {
   const { topics, langParam, aiOpen, asksOnly, stanceMessage, all, hasFollowedTopics } = loaderData;
   const location = useLocation();
-  const readingSearch = useReadingSearch();
   const filterTo = (showAll: boolean) => {
-    const params = new URLSearchParams(readingSearch);
+    const params = new URLSearchParams(location.search);
     clearReadingParams(params);
     params.delete("page");
     params.delete("vpage");

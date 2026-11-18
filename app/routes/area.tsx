@@ -9,6 +9,7 @@ import { PageHeader } from "~/components/page-header";
 import { OrderSwitch } from "~/components/order-switch";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { getReader } from "~/lib/auth/session.server";
@@ -28,7 +29,7 @@ import { readingHeaders } from "~/lib/public-reading.server";
 import { readingRobotsMeta } from "~/lib/public-reading";
 
 // Handle /a/:lang.md and /a/:lang.txt here, returning Markdown without running the UI loader (app/lib/md/twin.server.ts).
-export const middleware: Route.MiddlewareFunction[] = [areaMdMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [areaMdMiddleware, readingChunk(loader, result => result)];
 
 // A stance submission updates its own control without changing the list order.
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {

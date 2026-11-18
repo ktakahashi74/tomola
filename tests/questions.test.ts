@@ -7,6 +7,7 @@ import { createDraft, getDraft } from "~/lib/drafts.server";
 import { createReply, createTopic, editEntry, getEditableEntry, getEntryViews, getThread, listTopics, replyLocation, softDeleteEntry } from "~/lib/entries.server";
 import { deleteEntry, hideEntry, unhideEntry, type Actor } from "~/lib/moderation.server";
 import { listObjectionRefs, listObjections, loadObjectionPanel } from "~/lib/objections.server";
+import { readingHref, readingLatestHref } from "~/lib/reading-page";
 import type { StanceTag } from "~/lib/stances";
 import { createApiToken } from "~/lib/tokens.server";
 import { getModScope, getViewer, grantModerator } from "~/lib/roles.server";
@@ -612,6 +613,36 @@ describe("another way of asking, and the objection panel", () => {
     type Page = { alternatives: unknown[]; hasNext: boolean; page: number };
     expect(await load<Page>("topic-objections", "hana", `/t/${q}/objections?page=2`, { id: String(q) })).toMatchObject({ page: 2, hasNext: false });
     expect((await load<Page>("topic-objections", "hana", `/t/${q}/objections`, { id: String(q) })).alternatives).toHaveLength(30);
+  });
+
+  it("keeps both old objection ranges at 50 and returns each section independently to latest", async () => {
+    const q = await question("Two old sections");
+    await h.db.insert(entries).values(Array.from({ length: 102 }, (_, i) => {
+      const common = { authorId: hana, lang: "ja", body: "b", sourceHash: "x", createdAt: t(200 + i), updatedAt: t(200 + i), lastActivityAt: t(200 + i) };
+      return [
+        { ...common, kind: "topic" as const, title: `Alternative ${i}`, asksStance: true, altOf: q },
+        { ...common, kind: "reply" as const, threadId: q, stanceTag: "objection" as const },
+      ];
+    }).flat());
+    const path = `/t/${q}/objections`;
+    const read = (query: string) => load<Awaited<ReturnType<typeof import("~/routes/topic-objections").loader>>>("topic-objections", "hana", path + query, { id: String(q) });
+    const query = "?page=2";
+    const legacy = await read(query);
+    const latest = await read("");
+    const keys = ["alternativesList", "objectionsList"] as const;
+    for (const [active, other] of [keys, [keys[1], keys[0]] as const]) {
+      expect(legacy[active]!.topics).toHaveLength(50);
+      expect(legacy[active]!.list.older).toBe(true);
+      const latestHref = readingLatestHref(query, legacy[active]!.list, legacy[other]!.list);
+      expect(new URLSearchParams(latestHref).has("page")).toBe(false);
+      const returned = await read(latestHref);
+      expect(returned[active]!.topics).toEqual(latest[active]!.topics);
+      expect(returned[active]!.list).toMatchObject({ older: false, restored: false });
+      expect(returned[other]!.topics).toEqual(legacy[other]!.topics);
+      const more = await read(readingHref(query, legacy[active]!.list, true, legacy[other]!.list));
+      expect(more[active]!.topics).toHaveLength(2);
+      expect(more[other]!.topics).toEqual(legacy[other]!.topics);
+    }
   });
 
   it("shows the excerpt of an objection as plain text, 160 characters at most", async () => {

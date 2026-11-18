@@ -59,6 +59,7 @@ it("keeps tied timestamps stable after insertion, and restores the frozen head a
   const restored = await listTopics(h.db, { kind: "all" }, { order: "created", reading: request("created", readingHref("", expanded, false)) });
   expect(topicIds(restored)).toEqual([...topicIds(first), ...topicIds(second)]);
   expect(topicIds(restored)).not.toContain(made.id);
+  expect(restored.list).toMatchObject({ restored: true, older: false });
   await h.db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, made.id));
 });
 
@@ -79,6 +80,10 @@ it("uses the original range for old page URLs and continues from that range by c
   expect(old.list.older).toBe(true);
   const continuation = await loader(h.args(h.request(`/${next(old.list)}`, { as: "cursor_reader" })));
   expect(topicIds(continuation)).toEqual(topicIds(await listTopics(h.db, { kind: "all" }, { page: 3, order: "created" })));
+  const restoredHref = readingHref("?page=2", { ...old.list, count: old.topics.length + continuation.topics.length }, false);
+  const restored = await loader(h.args(h.request(`/${restoredHref}`, { as: "cursor_reader" })));
+  expect(topicIds(restored)).toEqual([...topicIds(old), ...topicIds(continuation)]);
+  expect(restored.list).toMatchObject({ restored: true, older: false });
 });
 
 it("keeps followed membership, unread and empty-language boundaries", async () => {
@@ -139,6 +144,20 @@ it("rejects malformed, wrong-order, excessive and wrong-arity cursors and caps r
   const restored = await listTopics(h.db, { kind: "all" }, { order: "created", reading: request("created", "?list_count=300") });
   expect(restored.topics.length).toBeLessThanOrEqual(300);
   expect(readingLatestHref("?lang=en&list_after=x&list_start=y&list_count=300", restored.list!)).toBe("?lang=en");
+});
+
+it.each([
+  "2026-02-30 00:00:00+00", "1900-02-29T00:00:00Z", "0000-01-01 00:00:00+00",
+  "2026-01-01 00:00:00+99", "2026-01-01T00:00:00-15:60", "2026-01-01T24:00:00Z",
+])("rejects an out-of-range cursor timestamp before querying the database (%s)", (time) => {
+  const cursor = encodeReadingCursor({ order: "created", keys: [time, 1] });
+  expect(() => request("created", `?list_start=${cursor}`)).toThrow(expect.objectContaining({ status: 400 }));
+});
+
+it("accepts valid leap dates and PostgreSQL offsets while preserving cursor precision", () => {
+  const time = "2000-02-29 23:59:59.123456-15:59";
+  const cursor = encodeReadingCursor({ order: "created", keys: [time, 1] });
+  expect(request("created", `?list_after=${cursor}`).after?.keys).toEqual([time, 1]);
 });
 
 it("marks appended posts against the frozen guest boundary without writing again", () => {

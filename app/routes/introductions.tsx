@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Route } from "./+types/introductions";
 import { ReadingList } from "~/components/reading-list";
 import { readReadingRequest } from "~/lib/reading-page";
+import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { requireMember } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, screenReadLangsFor } from "~/lib/display-lang.server";
@@ -11,7 +12,7 @@ import { parsePage } from "~/lib/params.server";
 import { toTopicItems } from "~/lib/topic-list.server";
 import { m } from "~/paraglide/messages.js";
 
-export const middleware: Route.MiddlewareFunction[] = [privateCacheMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [privateCacheMiddleware, readingChunk(loader, result => result)];
 export function headers() { return { "Cache-Control": "private, no-store" }; }
 export function meta() { return [{ title: `${m.introductions_title()} · ${m.site_name()}` }]; }
 

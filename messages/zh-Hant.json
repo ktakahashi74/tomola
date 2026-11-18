@@ -2487,5 +2487,6 @@
   "media_upload_help": "允許向你的帳戶上傳圖片，並使用圖片儲存空間和上傳額度。不會發布圖片。",
   "list_load_more": "載入更多",
   "list_added": "已新增 {count} 篇貼文。",
+  "list_load_failed": "無法載入更多貼文。請再試一次。",
   "list_back_latest": "返回最新貼文"
 }

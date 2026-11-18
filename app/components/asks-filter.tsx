@@ -1,5 +1,5 @@
-import { useReadingSearch } from "~/lib/use-reading-search";
 import { clearReadingParams } from "~/lib/reading-page";
+import { readingVisitKey } from "~/lib/use-reading-position";
 import { ChevronDown } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { m } from "~/paraglide/messages.js";
@@ -10,11 +10,10 @@ export type ListFilter = "all" | "asks" | "long" | "following";
 
 export function AsksFilter({ asksOnly, filter, withLong = false, withFollowing = false, collapsed = false }: { asksOnly?: boolean; filter?: ListFilter; withLong?: boolean; withFollowing?: boolean; collapsed?: boolean }) {
   const location = useLocation();
-  const readingSearch = useReadingSearch();
   const prefix = m.filter_prefix();
   const current: ListFilter = filter ?? (asksOnly ? "asks" : "all");
   const to = (target: ListFilter) => {
-    const params = new URLSearchParams(readingSearch);
+    const params = new URLSearchParams(location.search);
     clearReadingParams(params);
     params.delete("page");
     params.delete("asks");
@@ -43,7 +42,7 @@ export function AsksFilter({ asksOnly, filter, withLong = false, withFollowing =
   const currentLabel = current === "asks" ? m.list_questions_only() : current === "long" ? m.home_filter_long() : current === "following" ? m.home_filter_following() : m.home_filter_all();
   // The name "Filter:" is not drawn: the chosen value says it. The accessible name keeps it.
   const summaryLabel = `${prefix}${prefix.endsWith("：") ? "" : " "}${currentLabel}`;
-  return <details key={location.key} className="ui-meta text-muted-foreground">
+  return <details key={readingVisitKey(location)} className="ui-meta text-muted-foreground">
     <summary aria-label={summaryLabel} className={`link-ui inline-flex min-h-6 cursor-pointer list-none items-center gap-0.5 whitespace-nowrap [&::-webkit-details-marker]:hidden ${current !== "all" ? "font-medium text-foreground" : ""}`}>{currentLabel}<ChevronDown aria-hidden="true" className="size-3" /></summary>
     <div className="absolute inset-x-0 top-full z-20 mt-1 rounded-lg border bg-popover p-3 shadow-md">{links}</div>
   </details>;
