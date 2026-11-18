@@ -62,7 +62,7 @@ export default function VillageInviteAutocomplete({ input, slug }: { input: RefO
             selected = 0;
             setItems(results);
             setActive(0);
-            setAnnouncement(m.village_invite_suggest_status({ count: results.length }));
+            setAnnouncement(results.length > 0 ? m.village_invite_suggest_status({ count: results.length }) : "");
           } catch {
             // Offline, aborted or malformed responses leave manual entry available.
           }
