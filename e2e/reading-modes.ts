@@ -11,6 +11,7 @@ export const publicOnly = [
   ["reading-counts", ".*"],
   ["village-join-state", ".*"],
   ["village-roster", ".*"],
+  ["village-invite-suggest", ".*"],
   ["list-seen-sync", "signed-out boundaries"],
   ["meta-separators", ".*"],
   ["read-later", "anonymous readers"],

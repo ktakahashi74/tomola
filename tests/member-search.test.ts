@@ -77,6 +77,11 @@ describe("member matching", () => {
     expect(await handles("Shared cap")).toEqual(Array.from({ length: 10 }, (_, i) => `cap${String(i).padStart(2, "0")}`));
   });
 
+  it("supports a smaller limit and excludes recipients before limiting without changing defaults", async () => {
+    expect((await searchMembers(h.db, "cap", { limit: 3, excludeUserIds: ["member-cap00", "member-cap01"] })).map(row => row.handle)).toEqual(["cap02", "cap03", "cap04"]);
+    expect(await handles("cap")).toHaveLength(10);
+  });
+
   it("keeps suspended members, drops departed members and does not match cleared names", async () => {
     await addMember(h.db, "member_departed", "departed_search");
     await h.db.update(profiles).set({ displayName: "Departed Search Name" }).where(eq(profiles.handle, "departed_search"));

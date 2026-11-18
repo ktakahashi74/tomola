@@ -2724,6 +2724,24 @@
   "push_message_mention": "You were mentioned.",
   "push_message_group": "There are new replies or mentions for you.",
   "push_message_test": "This is a test notification.",
+  "village_invite_suggest_status": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{count} suggestion. Use the up and down arrow keys and Enter to choose one.",
+        "countPlural=other": "{count} suggestions. Use the up and down arrow keys and Enter to choose one."
+      }
+    }
+  ],
+  "village_invite_suggest_help": "Type a username or part of a name to see suggestions.",
+  "village_invite_suggest_label": "Members to invite",
+  "village_invite_suggest_selected": "Selected @{handle}.",
   "village_invite_member_help": "They will join this village only if they accept your invitation.",
   "village_join_visibility": "If you join, people on tomola can see your name in this village's member list. You can read and reply without joining.",
   "village_member_role": "Member",

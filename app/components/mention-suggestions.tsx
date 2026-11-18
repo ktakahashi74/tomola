@@ -13,8 +13,8 @@ export async function fetchSuggestions(query: string, village: string | undefine
 }
 
 // Only the open suggestion list needs display labels and its presentation code.
-export default function MentionSuggestions({ id, items, active, choose }: { id: string; items: MentionSuggestion[]; active: number; choose: (handle: string) => void }) {
-  return <ul id={id} role="listbox" aria-label={m.mention_suggestions_label()} className="absolute start-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-auto rounded border bg-popover py-1 shadow">
+export default function MentionSuggestions({ id, items, active, choose, label = m.mention_suggestions_label() }: { id: string; items: MentionSuggestion[]; active: number; choose: (handle: string) => void; label?: string }) {
+  return <ul id={id} role="listbox" aria-label={label} className="absolute start-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-auto rounded border bg-popover py-1 shadow">
     {items.map(({ handle, label }, index) => <li key={handle} id={`${id}-${index}`} role="option" aria-selected={index === active}
       onMouseDown={event => { event.preventDefault(); choose(handle); }} className={`cursor-pointer px-3 py-1 ${index === active ? "bg-info" : ""}`}>
       {label && <bdi>{label} </bdi>}@{handle}

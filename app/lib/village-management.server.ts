@@ -1,10 +1,12 @@
 import { selectDisplayName } from "./display-names.server";
-import { cancelUnavailableVillageInvites } from "./village-invitations.server";
+import { cancelUnavailableVillageInvites, villageInviteSenderIsOwner } from "./village-invitations.server";
+import { villageInviteMembershipAllowed, villageInviteOtherMember, villageInvitePairRestrictions } from "./village-invite-eligibility.server";
+import { searchMembers } from "./member-search.server";
 import { lockVillageSlugClaims, villageSlugHeld } from "~/lib/village-slugs.server";
 import { villageChatEnabled } from "./village-chat-enabled.server";
 import { closeVillageChatConnections } from "./village-chat-events.server";
 import { clearVillageChatMemberState } from "./village-chat-notifications.server";
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNull, not, or, sql } from "drizzle-orm";
 import { hitMemberLimit } from "~/lib/rate-limit.server";
 import type { Db } from "~/lib/db/client.server";
 import { notifications, profiles, reports, user, villageEvents, villageInvites, villageMembers, villages } from "~/lib/db/schema";
@@ -14,9 +16,9 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { handleKey } from "~/lib/handles";
 import { checkPagination } from "~/lib/pagination";
 import { resetPersonalDefault } from "./personal-villages.server";
-import { activeSharedVillageCondition, enrollInVillage, sharedVillageCondition } from "~/lib/villages.server";
+import { activeSharedVillageCondition, enrollInVillage, sharedVillageCondition, villageBySlug } from "~/lib/villages.server";
 import { decideVillageLangOf, memberVillageLang, requestVillageTranslations, villageSourceLang } from "~/lib/village-translations.server";
-import { validVillageSlug, villageDescriptionText, villageNameText, villageText, VILLAGE_CREATE_LIMIT, VILLAGE_DECLINE_LIMIT, VILLAGE_INVITE_DAILY_LIMIT, VILLAGE_INVITE_PAUSE_DAYS, VILLAGE_REINVITE_HOURS, VILLAGE_REMOVAL_REASON_MAX, VILLAGE_ROSTER_PAGE_SIZE, type VillageInviteKind } from "~/lib/villages";
+import { validVillageSlug, villageDescriptionText, villageNameText, villageText, VILLAGE_CREATE_LIMIT, VILLAGE_INVITE_DAILY_LIMIT, VILLAGE_REMOVAL_REASON_MAX, VILLAGE_ROSTER_PAGE_SIZE, type VillageInviteKind } from "~/lib/villages";
 
 export type VillageError = "disabled" | "forbidden" | "not_found" | "invalid" | "slug_taken" | "limit" | "rate_limited" | "paused" | "invite_limit" | "invite_wait" | "pending" | "last_owner";
 export type VillageResult = { ok: true; slug: string } | { ok: false; error: VillageError };
@@ -158,8 +160,8 @@ export async function endVillage(db: Db, userId: string, slug: string): Promise<
 export async function inviteToVillage(db: Db, userId: string, slug: string, handle: string, kind: VillageInviteKind, now = new Date()): Promise<VillageResult> {
   if (!villagesEnabled()) return fail("disabled");
   if (kind !== "join" && kind !== "owner") return fail("invalid");
-  const [target] = await db.select({ userId: profiles.userId, handle: profiles.handle }).from(profiles).where(eq(profiles.handleKey, handleKey(handle.trim().replace(/^@/, ""))));
-  if (!target || target.userId === userId) return fail("invalid");
+  const [target] = await db.select({ userId: profiles.userId, handle: profiles.handle }).from(profiles).where(and(eq(profiles.handleKey, handleKey(handle.trim().replace(/^@/, ""))), villageInviteOtherMember(userId, profiles.userId)));
+  if (!target) return fail("invalid");
   return db.transaction(async tx => {
     const actors = await lockActors(tx, [userId, target.userId]);
     const actor = actors.find(row => row.userId === userId);
@@ -167,20 +169,14 @@ export async function inviteToVillage(db: Db, userId: string, slug: string, hand
     const village = await lockedVillage(tx, slug);
     if (!village || village.endedAt) return fail("not_found");
     if (!await isOwner(tx, village.id, userId)) return fail("forbidden");
-    const [member] = await tx.select({ role: villageMembers.role }).from(villageMembers).where(and(eq(villageMembers.villageId, village.id), eq(villageMembers.userId, target.userId)));
-    if (kind === "join" ? village.kind !== "invite_public" || !!member : !member || member.role === "owner") return fail("invalid");
+    const [membership] = await tx.select({ allowed: villageInviteMembershipAllowed(tx, village, target.userId, kind) }).from(profiles).where(eq(profiles.userId, target.userId));
+    if (!membership.allowed) return fail("invalid");
     await cancelUnavailableVillageInvites(tx, village.id, now);
     // The recipient lock serializes this pair's invitations across villages and kinds.
     // Cancelled/pending invitations do not erase a run of actual refusals.
-    const history = await tx.select({ state: villageInvites.state, respondedAt: villageInvites.respondedAt }).from(villageInvites)
-      .where(and(eq(villageInvites.invitedBy, userId), eq(villageInvites.userId, target.userId), inArray(villageInvites.state, ["accepted", "declined"]), isNotNull(villageInvites.respondedAt)))
-      .orderBy(desc(villageInvites.responseEventId)).limit(VILLAGE_DECLINE_LIMIT);
-    if (history.length === VILLAGE_DECLINE_LIMIT && history.every(row => row.state === "declined")
-      && history[0].respondedAt!.getTime() + VILLAGE_INVITE_PAUSE_DAYS * 86400000 > now.getTime()) return fail("paused");
-    const [recentResponse] = await tx.select({ at: villageInvites.respondedAt }).from(villageInvites)
-      .where(and(eq(villageInvites.invitedBy, userId), eq(villageInvites.userId, target.userId), inArray(villageInvites.state, ["cancelled", "declined"]), isNotNull(villageInvites.respondedAt)))
-      .orderBy(desc(villageInvites.respondedAt)).limit(1);
-    if (recentResponse && recentResponse.at!.getTime() + VILLAGE_REINVITE_HOURS * 3600000 > now.getTime()) return fail("invite_wait");
+    const [restriction] = await tx.select(villageInvitePairRestrictions(tx, userId, target.userId, now)).from(profiles).where(eq(profiles.userId, target.userId));
+    if (restriction.paused) return fail("paused");
+    if (restriction.waiting) return fail("invite_wait");
     // The sender profile lock serializes the rolling-day cap across villages,
     // recipients and invitation kinds. Every issued invitation counts.
     if (await dailyInvitationCount(tx, userId, now) >= VILLAGE_INVITE_DAILY_LIMIT) return fail("invite_limit");
@@ -190,6 +186,22 @@ export async function inviteToVillage(db: Db, userId: string, slug: string, hand
     await record(tx, village.id, actor, "invite", { handle: target.handle, kind });
     return { ok: true, slug };
   });
+}
+
+export async function suggestVillageInvitees(db: Db, userId: string, slug: string, query: string, now = new Date()) {
+  if (!villagesEnabled()) return null;
+  const [actor] = await db.select({ userId: profiles.userId, handle: profiles.handle, suspendedUntil: profiles.suspendedUntil }).from(profiles).where(eq(profiles.userId, userId));
+  if (!canWrite(actor, now)) return null;
+  const village = await villageBySlug(db, slug);
+  if (!village || village.endedAt || !await isOwner(db, village.id, userId)) return null;
+  if (village.kind !== "invite_public" || village.language || await dailyInvitationCount(db, userId, now) >= VILLAGE_INVITE_DAILY_LIMIT) return [];
+  const { paused, waiting } = villageInvitePairRestrictions(db, userId, profiles.userId, now);
+  const pending = exists(db.select({ id: villageInvites.id }).from(villageInvites).where(and(
+    eq(villageInvites.villageId, village.id), eq(villageInvites.userId, profiles.userId), eq(villageInvites.state, "pending"), villageInviteSenderIsOwner(),
+  )));
+  const excluded = db.select({ userId: profiles.userId }).from(profiles).where(or(not(villageInviteOtherMember(userId, profiles.userId)),
+    not(villageInviteMembershipAllowed(db, village, profiles.userId, "join")), paused, waiting, pending));
+  return searchMembers(db, query, { limit: 8, excludeUserIds: excluded });
 }
 
 export async function respondToVillageInvite(db: Db, userId: string, slug: string, inviteId: string, response: "accepted" | "declined", now = new Date()): Promise<VillageResult> {

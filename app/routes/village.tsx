@@ -50,6 +50,7 @@ import { getLocale } from "~/paraglide/runtime.js";
 import { feedAlternate, sharePreviewMeta } from "~/lib/share-meta";
 import { previewText } from "~/lib/share-text";
 import { VillageInvites } from "~/components/village-invites";
+import { VillageInviteField } from "~/components/village-invite-field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { cancelVillageInvite, editVillage, emptyVillageManagement, endVillage, incomingVillageInvites, inviteToVillage, removeVillageMember, respondToVillageInvite, villageManagement, type VillageResult } from "~/lib/village-management.server";
@@ -273,8 +274,7 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
           </Form>
         </details>
         {!ended && owner && village.kind === "invite_public" && <Form method="post" className="max-w-xl space-y-2">
-          <label className="block space-y-1"><span>{m.village_invite_handle()}</span><Input name="handle" required /></label>
-          <p className="ui-help text-muted-foreground">{m.village_invite_member_help()}</p>
+          <VillageInviteField slug={village.slug!} />
           <Button type="submit" name="intent" value="invite">{m.village_invite_member()}</Button>
         </Form>}
         {!ended && owner && <div id="village-invites" className="space-y-2">
