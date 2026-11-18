@@ -33,8 +33,9 @@ import { listUnicodeReviewCandidates, parseUnicodeReviewCursor } from "~/lib/uni
 import { UNICODE_REVIEW_DAYS, UNICODE_REVIEW_SCAN_LIMIT } from "~/lib/unicode-review";
 import { m } from "~/paraglide/messages.js";
 import { villageName } from "~/lib/village-name";
-import { deleteMediaWithLog } from "~/lib/media-store.server";
-import { parseMediaPath } from "~/lib/media";
+import { deleteMediaWithLog, pairedMedia } from "~/lib/media-store.server";
+import { mediaPath, parseMediaPath } from "~/lib/media";
+import { motionImages } from "~/lib/motion-display.server";
 
 // Moderator/operator screen for open post reports in assigned languages (operators: all languages), with moderation actions.
 // This route's action handles hiding, unhiding, and dismissing reports, including submissions from thread moderation controls with returnTo.
@@ -54,15 +55,21 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   await enforceMemberLimit(db, "mod", user.id);
   const nushi = scope.operator && await nushiReportsAvailable(db, true) ? await pendingNushiReports(db) : null;
   const params = new URL(request.url).searchParams;
+  const rawMedia = params.get("media") ?? "";
+  let inspectedId = /^[a-f0-9]{64}$/.test(rawMedia) ? rawMedia : "";
+  if (!inspectedId && rawMedia) { try { inspectedId = parseMediaPath(new URL(rawMedia, request.url).pathname)?.id ?? ""; } catch { /* Invalid input shows no preview. */ } }
+  const inspectedMedia = scope.operator && inspectedId ? await pairedMedia(db, inspectedId) : [];
   const tab = params.get("tab") === "handled" ? "handled" : params.get("tab") === "review" ? "review" : "open";
   // Posts with format characters to check: a read-only list that is not saved. It stands apart from the report cards.
   if (tab === "review") {
     const review = await listUnicodeReviewCandidates(db, scope, { viewerId: user.id, cursor: parseUnicodeReviewCursor(params.get("cursor")) });
-    return { nushi, tab, operator: scope.operator, maxDays: 0, cards: [], page: 1, hasNext: false, review };
+    return { nushi, tab, operator: scope.operator, maxDays: 0, cards: [], page: 1, hasNext: false, review, inspectedMedia, inspectedId };
   }
   // Hide reports against the viewer's own posts, which they may not moderate.
   const result = await listReportCards(db, scope, { page: parsePage(request), handled: tab === "handled", viewerId: user.id });
+  const images = await motionImages(db, result.cards.flatMap(card => "body" in card ? [card.body] : []));
   return {
+    inspectedMedia, inspectedId,
     review: null,
     nushi,
     tab,
@@ -70,6 +77,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     maxDays: scope.operator ? MAX_SUSPEND_DAYS.operator : MAX_SUSPEND_DAYS.moderator,
     cards: result.cards.map((c) => c.kind === "avatar" ? { ...c, reports: c.reports.map(r => ({ ...r, createdAt: r.createdAt.toISOString().slice(0, 10) })) } : c.kind === "display_name" ? { ...c, reports: c.reports.map(r => ({ ...r, createdAt: r.createdAt.toISOString().slice(0, 10) })) } : c.kind === "village" ? { ...c, reports: c.reports.map(r => ({ ...r, createdAt: r.createdAt.toISOString().slice(0, 10) })) } : c.kind === "chat" ? { ...c, reports: c.reports.map(r => ({ ...r, createdAt: r.createdAt.toISOString().slice(0, 10) })) } : ({
       ...c,
+      motionLinks: [...images.values()].filter(image => image.animated && image.uploadedBy === c.authorId && c.body.includes(image.id)).map(image => mediaPath(image.id, image.width, image.height)),
       authorSuspendedUntil: c.authorSuspendedUntil ? c.authorSuspendedUntil.toISOString().slice(0, 10) : null,
       reports: c.reports.map((r) => ({ ...r, createdAt: r.createdAt.toISOString().slice(0, 10) })),
     })),
@@ -115,7 +123,7 @@ export async function action({ request }: Pick<Route.ActionArgs, "request">) {
       try { id = parseMediaPath(new URL(raw, request.url).pathname)?.id ?? ""; } catch { id = ""; }
     }
     if (!/^[a-f0-9]{64}$/.test(id)) throw data("Bad request", { status: 400 });
-    const result = await deleteMediaWithLog(db, actor, { id, reason, note });
+    const result = await deleteMediaWithLog(db, actor, { id, reason, note, confirmedIds: formString(form, "pair_ids") });
     if (!result.ok) return data({ error: result.error, id: "media" }, { status: result.error === "forbidden" ? 403 : result.error === "not_found" ? 404 : 400 });
     throw done();
   }
@@ -263,6 +271,7 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
           <pre lang={c.lang} className="max-h-64 overflow-auto whitespace-pre-wrap font-sans text-sm">
             {c.body}
           </pre>
+          <ul>{c.motionLinks.map(url => <li key={url}><a className="underline" href={url}>{m.motion_show()}</a></li>)}</ul>
           <ul className="space-y-1 text-sm">
             {c.reports.map((r) => (
               <li key={r.id}>
@@ -351,10 +360,14 @@ export default function Mod({ loaderData, actionData }: Route.ComponentProps) {
       {operator && <details open={actionData?.id === "media"} className="space-y-2 rounded border p-3">
         {/* An operator's tool that is not about the reports above: one line at the foot until it is needed. */}
         <summary className="cursor-pointer text-lg font-semibold">{m.moderation_media_heading()}</summary>
+        <Form method="get" className="space-y-2"><label>{m.moderation_media_id()}<Input name="media" required defaultValue={loaderData.inspectedId} /></label><Button type="submit" variant="outline">{m.motion_inspect()}</Button></Form>
+        {loaderData.inspectedMedia.length > 1 && <p>{m.motion_delete_pair()}</p>}
+        <ul>{loaderData.inspectedMedia.map(image => <li key={image.id}><a href={mediaPath(image.id, image.width, image.height)} className="underline">{image.animated ? m.motion_show() : m.motion_show_still()} · {image.id.slice(0, 12)}</a></li>)}</ul>
         {actionData?.id === "media" && <p role="alert">{errorText(actionData.error)}</p>}
         <Form method="post" className="space-y-2">
           <input type="hidden" name="intent" value="delete-media" />
-          <label className="block">{m.moderation_media_id()}<Input name="mediaId" required /></label>
+          <label className="block">{m.moderation_media_id()}<Input name="mediaId" required defaultValue={loaderData.inspectedId} /></label>
+          <input type="hidden" name="pair_ids" value={loaderData.inspectedMedia.map(image => image.id).sort().join(",")} />
           <label className="block">{m.mod_reason()}<select name="reason" required className="block rounded border p-2">{REPORT_REASONS.map(reason => <option key={reason} value={reason}>{reasonLabel(reason)}</option>)}</select></label>
           <label className="block">{m.mod_note()}<Textarea name="note" required maxLength={1500} /></label>
           <label className="flex gap-2"><input type="checkbox" name="confirm" value="1" required />{m.media_delete_confirm()}</label>

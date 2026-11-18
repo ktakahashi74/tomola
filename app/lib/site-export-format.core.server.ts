@@ -27,6 +27,7 @@ export type ExportLinks = {
   documents: ReadonlySet<string>;
   origin?: string;
   media?: ReadonlyMap<string, string>;
+  motionMedia?: ReadonlySet<string>;
 };
 
 function exportedImage(href: string, links: ExportLinks): string | null {
@@ -112,6 +113,12 @@ export function offlineHtml(html: string, links: ExportLinks): string {
       if (target && src) {
         const image = mediaImage(unescapeAttribute(src.value!), links.origin ?? "https://export.invalid")!;
         const alt = unescapeAttribute(tag.attributes.find(attr => attr.name === "alt")?.value ?? "");
+        if (links.motionMedia?.has(image.id)) {
+          remove("img");
+          if (anchors.length) return escapeHtml(alt);
+          for (const name of ["a", "/a"]) allowed.set(name, (allowed.get(name) ?? 0) + 1);
+          return `<a href="${escapeHtml(target)}">${escapeHtml(alt || target)}</a>`;
+        }
         return `<img src="${escapeHtml(target)}" alt="${escapeHtml(alt)}" width="${image.width}" height="${image.height}" loading="lazy" decoding="async">`;
       }
       const value = tag.attributes.find(attr => attr.name === "alt")?.value
@@ -165,7 +172,7 @@ export function referencedMedia(markdown: string, origin?: string): string[] {
   };
   definitionsOf(tree);
   const visit = (node: MdNode): void => {
-    if (node.type === "image" || node.type === "imageReference") {
+    if (node.type === "image" || node.type === "imageReference" || node.type === "link" || node.type === "linkReference") {
       const image = mediaImage(node.url ?? definitions.get(node.identifier?.toUpperCase() ?? "") ?? "", origin ?? "https://export.invalid");
       if (image) ids.add(image.id);
     }
@@ -227,6 +234,15 @@ export function offlineMarkdown(markdown: string, links: ExportLinks): string {
         const href = node.url ?? definitions.get(node.identifier?.toUpperCase() ?? "");
         const target = href === undefined || inLabel ? null : exportHref(href, links);
         const children = node.children ?? [];
+        const motion = href && mediaImage(href, links.origin ?? "https://export.invalid");
+        if (!inLabel && target && motion && links.motionMedia?.has(motion.id) && children.length === 1 && children[0].type === "image") {
+          const still = exportedImage(children[0].url ?? "", links);
+          if (still && images + 2 <= MEDIA_LIMITS.perPost) {
+            images += 2; imageTargets.add(still);
+            edits.push({ start, end, text: link(`![${labelText(children[0].alt ?? "")}](${destination(still)})`, target) });
+            return;
+          }
+        }
         // A bare URL or <URL>: the source has no label to copy, only the URL itself. It stays as written unless it
         // points to an exported file. Only a <URL> with a scheme that links must not use is reduced to its text
         // (an http or https URL would be read as a link again without the brackets, so it keeps them).

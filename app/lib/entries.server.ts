@@ -7,6 +7,7 @@ import { withinEditGrace } from "./entry-history.server";
 import { inspectEntrySpam, lockAbuseWriter } from "./moderation-automation.server";
 import { safeErrorText } from "~/lib/error-text.server";
 import { syncMediaReferences } from "~/lib/media-references.server";
+import { decorateMotionHtml, motionImages } from "./motion-display.server";
 import { activeEntryRender, prepareEntryRender, renderEntryForWrite, type PreparedEntryRender } from "./entry-render-preparation.server";
 import { withMarkdownScope, withMarkdownRead, MarkdownBudgetError } from "./markdown-budget.server";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, max, notInArray, or, sql, lt, type SQL } from "drizzle-orm";
@@ -292,7 +293,7 @@ async function createTopicImplementation(
     // The original question's Markdown changes (alternative-framing list), so emit a change for it too through meta_changed_at.
     if (altOf !== null) await touchQuestion(tx, altOf, now);
     await syncEntryReferences(tx, row.id, now);
-    await syncMediaReferences(tx, row.id, parsed.data.body);
+    await syncMediaReferences(tx, row.id, parsed.data.body, rendered.html);
     // The author follows their own topic (a topic they took off is never followed again: autoFollow leaves an existing row alone). notifyForNewEntry is called for a topic
     // too, as the one place that tells the members mentioned in the body.
     await autoFollow(tx, authorId, row.id, now);
@@ -395,7 +396,7 @@ async function createReplyImplementation(
       await enqueueEmbedding(tx, { id: row.id, sourceHash: hash });
     }
     await syncEntryReferences(tx, row.id, now);
-    await syncMediaReferences(tx, row.id, parsed.data.body);
+    await syncMediaReferences(tx, row.id, parsed.data.body, rendered.html);
     // Update listing aggregates (reply count and last activity) incrementally. The topic-row lock serializes concurrent replies so none are missed.
     await tx
       .update(entries)
@@ -656,7 +657,7 @@ export async function applyEntryEdit(
     })
     .where(eq(entries.id, entryId));
   await syncEntryReferences(tx, entryId, now);
-  await syncMediaReferences(tx, entryId, after.body);
+  await syncMediaReferences(tx, entryId, after.body, rendered.html);
   if (before.deletedAt) return { revisionId: revision?.id ?? null, sourceHash: hash, mentions };
   // Rebuild sentence boundaries. Carry unchanged-field translations into the new source revision for title-only/body-only edits without retranslation or marking stale.
   // If the body changed, remove its disagreements. Keep remaining human translations and mark them stale;
@@ -958,7 +959,9 @@ async function viewsWithHtml(db: Db, rows: readonly ViewRow[], viewer: Viewer | 
     return (v === "visible" || v === "hidden") && (r.html === null || r.htmlVersion !== RENDER_VERSION);
   });
   const snapshots = await resolveSavedMentionsFor(db, stale);
-  return Promise.all(rows.map(r => viewWithHtml(db, r, viewer, snapshots.get(r.id) ?? new Map())));
+  const views = await Promise.all(rows.map(r => viewWithHtml(db, r, viewer, snapshots.get(r.id) ?? new Map())));
+  const images = await motionImages(db, views.map(view => view.html));
+  return views.map(view => ({ ...view, html: decorateMotionHtml(view.html, view.html, view.authorId, images) }));
 }
 
 function toView(

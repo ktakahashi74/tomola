@@ -466,12 +466,12 @@ export function RichTextEditor({ invalid, describedBy, placeholder, tall = false
       }
       initial = editor.action(getMarkdown());
       sync.current = synchronize;
-      unregisterMedia = registerMediaEditor(body, { element: view.dom, insert: (url, alt) => {
+      unregisterMedia = registerMediaEditor(body, { element: view.dom, insert: (url, alt, motionUrl) => {
         if (!parseMediaPath(url) || cancelled) return;
         const { state } = view;
         const cursor = state.selection.$head;
         const pos = view.hasFocus() && cursor.depth ? cursor.after() : state.doc.content.size;
-        const image = state.schema.nodes.image.create({ src: url, alt, title: "" });
+        const image = state.schema.nodes.image.create({ src: url, alt, title: "" }, null, motionUrl && parseMediaPath(motionUrl) ? [state.schema.marks.link.create({ href: motionUrl })] : []);
         const paragraph = state.schema.nodes.paragraph.create(null, image);
         const transaction = closeHistory(state.tr.insert(pos, paragraph));
         transaction.setSelection(NodeSelection.create(transaction.doc, pos + 1));

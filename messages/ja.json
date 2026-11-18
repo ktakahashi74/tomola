@@ -1137,7 +1137,7 @@
   "media_insert": "画像を入れる",
   "media_uploading": "画像を送っています…",
   "media_alt_placeholder": "画像の説明",
-  "media_help": "JPEG、PNG、WebP を、1枚 10 MB まで。位置情報などの埋め込みは、消して保存します。図の中の文字は、訳されません。説明を書くと、訳されて、AI にも読めます。",
+  "media_help": "JPEG・PNG・WebP・GIF、10 MBまで。埋め込み情報は消して保存します。静止画の図と画像の説明は翻訳できます。動く版の文字は原文のままです。",
   "media_error_too_large": "画像が大きすぎます（1枚 10 MB まで）。",
   "media_error_type": "この形式の画像は使えません。JPEG、PNG、WebP を使ってください。",
   "media_error_rate": "短い間に、多くの画像を送りました。しばらくしてから、もう一度試してください。",
@@ -2250,5 +2250,15 @@
   "draft_details_unclosed": "開く行と同じ数以上のコロンだけの行で閉じる。",
   "draft_details_attributes": "容器の属性を取り除く。",
   "draft_details_depth": "入れ子は全体で 2 段までにする。",
-  "draft_details_summary_footnote": "{line} 行目：折りたたみの見出し内の脚注参照は文字のまま表示される。脚注の文を表示するには、参照を本文へ移す。"
+  "draft_details_summary_footnote": "{line} 行目：折りたたみの見出し内の脚注参照は文字のまま表示される。脚注の文を表示するには、参照を本文へ移す。",
+  "motion_show": "動きを見る",
+  "motion_show_still": "静止画に戻す",
+  "motion_original_text": "動いている間は、図の文字は原文のままです。",
+  "motion_delete_pair": "この画像を消すと、組になっている画像も消えます。",
+  "motion_delivery_title": "動く図の配信量",
+  "motion_delivery_help": "日ごとの UTC 集計です。読者や画像の識別情報は残しません。キャッシュからの応答と HEAD リクエストは含みません。",
+  "motion_delivery_counts": "{requests} 回 · {bytes} バイト",
+  "motion_inspect": "組になっている画像を確認",
+  "motion_help": "GIF や動く WebP を上げると、静止画と動く版の組が入ります。静止画は Markdown 欄で差し替えられます。光の点滅を避け、動きが何を示すかを画像の説明か本文に書いてください。",
+  "motion_error_type": "この形式の画像は使えません。JPEG・PNG・WebP・GIF を使ってください。動く PNG と動画は使えません。"
 }

@@ -9,7 +9,7 @@ import { m } from "~/paraglide/messages.js";
 function failureMessage(code: MediaErrorCode): string {
   switch (code) {
     case "too_large": return m.media_error_too_large();
-    case "type": return m.media_error_type();
+    case "type": return m.motion_error_type();
     case "rate": return m.media_error_rate();
     case "quota": return m.media_error_quota();
     case "member_bytes": return m.media_error_member_bytes();
@@ -53,17 +53,18 @@ export default function MediaUpload({ compact = false }: { compact?: boolean }) 
     try {
       const form = new FormData(); form.set("image", file);
       const response = await fetch("/media", { method: "POST", body: form, credentials: "same-origin", signal: controller.signal });
-      const result = await response.json() as { url?: string; error?: MediaErrorCode };
+      const result = await response.json() as { url?: string; posterUrl?: string; error?: MediaErrorCode };
       if (!response.ok || !result.url) { setError(result.error ?? "generic"); return; }
       const field = body();
       if (!field) return;
       const editor = mediaEditor(field);
-      if (editor) { editor.insert(result.url, ""); return; }
-      const alt = m.media_alt_placeholder(), text = `![${alt}](${result.url})`;
+      if (editor) { editor.insert(result.posterUrl ?? result.url, "", result.posterUrl ? result.url : undefined); return; }
+      const alt = m.media_alt_placeholder(), image = `![${alt}](${result.posterUrl ?? result.url})`, text = result.posterUrl ? `[${image}](${result.url})` : image;
       const start = document.activeElement === field ? field.selectionEnd : field.value.length;
       field.setRangeText(text, start, start, "end");
       field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.focus({ preventScroll: true }); field.setSelectionRange(start + 2, start + 2 + alt.length);
+      const offset = result.posterUrl ? 3 : 2;
+      field.focus({ preventScroll: true }); field.setSelectionRange(start + offset, start + offset + alt.length);
       revealSelection(field);
     } catch { if (!controller.signal.aborted) setError("generic"); }
     finally { pending.current = false; setBusy(false); }
@@ -101,7 +102,7 @@ export default function MediaUpload({ compact = false }: { compact?: boolean }) 
     picker.current?.click();
   }}>{toolbar ? <ImagePlus aria-hidden="true" /> : m.media_insert()}</Button>;
   return <div ref={root} data-media-insert="" className="space-y-2">
-    <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void upload(files); }} />
+    <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void upload(files); }} />
     {toolbar ? createPortal(insert, toolbar) : insert}
     <p role="status" className="empty:sr-only">{busy ? m.media_uploading() : null}</p>
     {error && <p role="alert" className="text-destructive">{failureMessage(error)}</p>}

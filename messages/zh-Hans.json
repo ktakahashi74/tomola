@@ -1292,7 +1292,7 @@
   "media_insert": "插入图片",
   "media_uploading": "正在上传图片…",
   "media_alt_placeholder": "图片说明",
-  "media_help": "JPEG、PNG 或 WebP，每张最大 10 MB。保存前会移除位置等嵌入信息。图片中的文字不会被翻译。说明文字会被翻译，AI 也能读取。",
+  "media_help": "JPEG、PNG、WebP 或 GIF，最大 10 MB。保存前移除嵌入信息。静态图与图片说明可以翻译；动画中的文字保留原文。",
   "media_error_too_large": "图片太大（每张最大 10 MB）。",
   "media_error_type": "无法使用此图片格式。请使用 JPEG、PNG 或 WebP。",
   "media_error_rate": "您在短时间内上传了很多图片。请稍后再试。",
@@ -2457,5 +2457,15 @@
   "draft_details_unclosed": "请添加仅含冒号的结束行，冒号数不得少于开始行。",
   "draft_details_attributes": "请移除容器属性。",
   "draft_details_depth": "嵌套总层数不得超过两层。",
-  "draft_details_summary_footnote": "第 {line} 行：折叠标题中的脚注引用按原文显示。请将引用移到正文中，以显示脚注内容。"
+  "draft_details_summary_footnote": "第 {line} 行：折叠标题中的脚注引用按原文显示。请将引用移到正文中，以显示脚注内容。",
+  "motion_show": "查看动画",
+  "motion_show_still": "返回静态图",
+  "motion_original_text": "动画中的文字保留原文。",
+  "motion_delete_pair": "删除此图也会删除与其配对的图片。",
+  "motion_delivery_title": "动态图传输量",
+  "motion_delivery_help": "按 UTC 日期汇总，不记录读者或图片的标识。缓存响应和 HEAD 请求不计入。",
+  "motion_delivery_counts": "{requests} 次请求 · {bytes} 字节",
+  "motion_inspect": "查看配对图片",
+  "motion_help": "上传 GIF 或动态 WebP 后，会插入静态图及其动画链接。可在 Markdown 栏中替换静态图。请避免闪烁，并在图片说明或正文中解释动画所表达的内容。",
+  "motion_error_type": "不支持此图片格式。请使用 JPEG、PNG、WebP 或 GIF。不支持动态 PNG 和视频。"
 }

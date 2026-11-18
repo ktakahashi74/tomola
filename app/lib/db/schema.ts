@@ -82,6 +82,10 @@ export const media = pgTable("media", {
   id: text("id").primaryKey(),
   bytes: binary("bytes"),
   avatar: boolean("avatar").notNull().default(false),
+  animated: boolean("animated").notNull().default(false),
+  frames: integer("frames").notNull().default(1),
+  durationMs: integer("duration_ms").notNull().default(0),
+  loop: integer("loop").notNull().default(0),
   villageId: text("village_id").references((): AnyPgColumn => villages.id, { onDelete: "cascade" }),
   mime: text("mime").notNull(),
   width: integer("width").notNull(),
@@ -99,6 +103,19 @@ export const media = pgTable("media", {
   check("media_size_check", sql`${t.byteSize} BETWEEN 1 AND 2097152`),
   check("media_content_check", sql`(${t.deletedAt} IS NULL AND ${t.bytes} IS NOT NULL AND octet_length(${t.bytes}) = ${t.byteSize}) OR (${t.deletedAt} IS NOT NULL AND ${t.bytes} IS NULL)`),
 ]);
+
+// Explicit upload and authored Markdown pairs; never infer motion from a hash.
+export const motionPairs = pgTable("motion_pairs", {
+  motionId: text("motion_id").notNull().references(() => media.id, { onDelete: "cascade" }),
+  stillId: text("still_id").notNull().references(() => media.id, { onDelete: "cascade" }),
+}, t => [primaryKey({ columns: [t.motionId, t.stillId] }), index("motion_pairs_still_idx").on(t.stillId)]);
+
+// Daily UTC totals only. No image, post, request or person identifiers.
+export const motionDelivery = pgTable("motion_delivery", {
+  day: date("day").primaryKey(),
+  requests: bigint("requests", { mode: "number" }).notNull().default(0),
+  bytes: bigint("bytes", { mode: "number" }).notNull().default(0),
+});
 
 // Derived only from links in original posts. No duplicated text or ranking data.
 export const entryReferences = pgTable("entry_references", {

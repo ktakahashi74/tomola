@@ -2,6 +2,10 @@ import type { SeedMember } from "../e2e/member-fixtures";
 import { EARLY_MEMBERS } from "../e2e/early-members";
 
 export const PROD_MEMBERS: readonly SeedMember[] = [
+  { email: "motion_prod@example.com", handle: "motion_prod", homeArea: "en", uiLocale: "en" },
+  { email: "motion_reduced_prod@example.com", handle: "motion_reduced_prod", homeArea: "en", uiLocale: "en" },
+  { email: "motion_figure_author@example.com", handle: "motion_figure_author", homeArea: "en", uiLocale: "en" },
+  { email: "motion_figure_reader@example.com", handle: "motion_figure_reader", homeArea: "ja", readLangs: ["ja"], uiLocale: "en" },
   { email: "google_controls@example.com", handle: "google_controls", homeArea: "en", uiLocale: "en" },
   { email: "google_disconnect@example.com", handle: "google_disconnect", homeArea: "en", uiLocale: "en" },
   { email: "zask_prod@example.com", handle: "zask_prod", homeArea: "en", readLangs: ["en"], uiLocale: "en" },

@@ -51,7 +51,7 @@ export function publicFigureCondition(db: Db, entryId?: number) {
   const reference = db.select({ id: entries.id }).from(entryMedia)
     .innerJoin(entries, and(eq(entries.id, entryMedia.entryId), eq(entries.authorId, media.uploadedBy)))
     .innerJoin(rootTopic, rootTopicOn()).where(and(eq(entryMedia.mediaId, media.id), entryId === undefined ? undefined : eq(entries.id, entryId), visibleWithTopic()));
-  return and(eq(media.avatar, false), isNull(media.villageId), isNull(media.deletedAt), isNotNull(media.bytes), exists(reference))!;
+  return and(eq(media.avatar, false), eq(media.animated, false), isNull(media.villageId), isNull(media.deletedAt), isNotNull(media.bytes), exists(reference))!;
 }
 
 export async function enqueueFigureTranslations(db: Db, mediaId: string, key: string, reading: FigureReading, env?: LlmEnv, rescheduleRunning = false): Promise<void> {

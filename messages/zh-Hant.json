@@ -1292,7 +1292,7 @@
   "media_insert": "插入圖片",
   "media_uploading": "正在上傳圖片…",
   "media_alt_placeholder": "圖片說明",
-  "media_help": "JPEG、PNG 或 WebP，每張最大 10 MB。儲存前會移除位置等內嵌資訊。圖片中的文字不會被翻譯。說明文字會被翻譯，AI 也能讀取。",
+  "media_help": "JPEG、PNG、WebP 或 GIF，最大 10 MB。儲存前移除嵌入資訊。靜態圖與圖片說明可以翻譯；動畫中的文字保留原文。",
   "media_error_too_large": "圖片太大（每張最大 10 MB）。",
   "media_error_type": "無法使用此圖片格式。請使用 JPEG、PNG 或 WebP。",
   "media_error_rate": "您在短時間內上傳了很多圖片。請稍後再試。",
@@ -2457,5 +2457,15 @@
   "draft_details_unclosed": "請新增僅含冒號的結束行，冒號數不得少於開始行。",
   "draft_details_attributes": "請移除容器屬性。",
   "draft_details_depth": "巢狀總層數不得超過兩層。",
-  "draft_details_summary_footnote": "第 {line} 行：摺疊標題中的註腳引用按原文顯示。請將引用移到正文中，以顯示註腳內容。"
+  "draft_details_summary_footnote": "第 {line} 行：摺疊標題中的註腳引用按原文顯示。請將引用移到正文中，以顯示註腳內容。",
+  "motion_show": "查看動畫",
+  "motion_show_still": "返回靜態圖",
+  "motion_original_text": "動畫中的文字保留原文。",
+  "motion_delete_pair": "刪除此圖也會刪除與其配對的圖片。",
+  "motion_delivery_title": "動態圖傳輸量",
+  "motion_delivery_help": "按 UTC 日期彙總，不記錄讀者或圖片的識別資訊。快取回應和 HEAD 請求不計入。",
+  "motion_delivery_counts": "{requests} 次請求 · {bytes} 位元組",
+  "motion_inspect": "查看配對圖片",
+  "motion_help": "上傳 GIF 或動態 WebP 後，會插入靜態圖及其動畫連結。可在 Markdown 欄中替換靜態圖。請避免閃爍，並在圖片說明或正文中解釋動畫所表達的內容。",
+  "motion_error_type": "不支援此圖片格式。請使用 JPEG、PNG、WebP 或 GIF。不支援動態 PNG 和影片。"
 }

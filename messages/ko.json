@@ -1706,7 +1706,7 @@
   "media_insert": "이미지 삽입",
   "media_uploading": "이미지 업로드 중…",
   "media_alt_placeholder": "이미지 설명 입력",
-  "media_help": "JPEG, PNG 또는 WebP, 파일당 최대 10 MB까지 가능합니다. 위치 정보 등의 임베디드 데이터는 저장 전에 삭제됩니다. 이미지 내부의 텍스트는 번역되지 않습니다. 설명을 입력하면 번역되며, AI도 읽을 수 있습니다.",
+  "media_help": "JPEG, PNG, WebP 또는 GIF, 최대 10 MB. 포함된 메타데이터는 제거합니다. 정지 그림과 이미지 설명은 번역할 수 있으며 움직이는 그림의 글자는 원문으로 표시됩니다.",
   "media_error_too_large": "이미지 크기가 너무 큽니다(파일당 최대 10 MB).",
   "media_error_type": "사용할 수 없는 이미지 형식입니다. JPEG, PNG 또는 WebP 형식을 사용해 주세요.",
   "media_error_rate": "짧은 시간에 너무 많은 이미지를 전송했습니다. 잠시 후 다시 시도해 주세요.",
@@ -2975,5 +2975,15 @@
   "draft_details_unclosed": "여는 줄 이상의 콜론만 있는 닫는 줄을 추가하세요.",
   "draft_details_attributes": "컨테이너 속성을 제거하세요.",
   "draft_details_depth": "중첩은 전체 두 단계까지만 사용하세요.",
-  "draft_details_summary_footnote": "{line}행: 접기 제목의 각주 참조는 원문 그대로 표시됩니다. 각주 내용을 표시하려면 참조를 본문으로 옮기세요."
+  "draft_details_summary_footnote": "{line}행: 접기 제목의 각주 참조는 원문 그대로 표시됩니다. 각주 내용을 표시하려면 참조를 본문으로 옮기세요.",
+  "motion_show": "움직임 보기",
+  "motion_show_still": "정지 이미지로 돌아가기",
+  "motion_original_text": "움직이는 동안 그림의 글자는 원문으로 표시됩니다.",
+  "motion_delete_pair": "이 이미지를 삭제하면 짝으로 연결된 이미지도 삭제됩니다.",
+  "motion_delivery_title": "움직이는 그림 전송량",
+  "motion_delivery_help": "UTC 기준 일별 합계이며 독자나 이미지의 식별 정보는 남기지 않습니다. 캐시 응답과 HEAD 요청은 제외합니다.",
+  "motion_delivery_counts": "요청 {requests}회 · {bytes}바이트",
+  "motion_inspect": "짝 이미지 확인",
+  "motion_help": "GIF나 움직이는 WebP를 올리면 정지 이미지와 움직이는 버전의 링크가 삽입됩니다. Markdown 입력란에서 정지 이미지를 바꿀 수 있습니다. 번쩍임을 피하고 이미지 설명이나 본문에 움직임이 무엇을 나타내는지 적어 주세요.",
+  "motion_error_type": "이 이미지 형식은 사용할 수 없습니다. JPEG, PNG, WebP 또는 GIF를 사용하세요. 움직이는 PNG와 동영상은 지원하지 않습니다."
 }

@@ -22,6 +22,7 @@ import { getReader } from "~/lib/auth/session.server";
 import * as mediaStore from "~/lib/media-store.server";
 import { formatAccessLog } from "../server/access-log.ts";
 import { addMember, closeTestDb, createTestDb } from "./helpers/db";
+import { motionImage } from "./helpers/motion-images";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let db: Db, signedIn = true, sessionMemberId = "media-member";
@@ -216,6 +217,20 @@ describe("image reference visibility", () => {
 });
 
 describe("untrusted image conversion", () => {
+  it("uploads both motion assets by contents and charges both images", async () => {
+    const response = await action({ request: upload((await motionImage()).bytes) });
+    expect(response.status).toBe(201);
+    const result = await response.json(); expect(result.posterUrl).toMatch(/^\/media\//);
+    expect((await db.select().from(media))).toHaveLength(2);
+    expect((await db.select().from(rateLimits)).find(row => row.key === "media:member:media-member")?.count).toBe(2);
+    const topic = await createTopic(db, "media-member", { title: "Animated image", body: `[![diagram](${result.posterUrl})](${result.url})`, lang: "en" });
+    expect(topic.ok).toBe(true);
+    const get = await fetchImage(result.url); expect(get.status).toBe(200);
+    const { motionDelivery } = await import("~/lib/db/schema");
+    const before = await db.select().from(motionDelivery);
+    await fetchImage(result.url, {}, "HEAD"); await fetchImage(result.url, { "If-None-Match": get.headers.get("etag")! });
+    expect(await db.select().from(motionDelivery)).toEqual(before);
+  });
   it("detects contents, removes all metadata, and applies orientation before removing it", async () => {
     const jpeg = await sharp({ create: { width: 100, height: 40, channels: 3, background: "red" } })
       .withMetadata({ orientation: 6 }).withExifMerge({ IFD0: { ImageDescription: "private-camera" }, IFD3: { GPSLatitudeRef: "N", GPSLatitude: "51/1 30/1 0/1" } })
@@ -257,12 +272,12 @@ describe("untrusted image conversion", () => {
     await expect(rewriteMedia(Buffer.alloc(MEDIA_LIMITS.inputBytes + 1))).rejects.toMatchObject({ code: "too_large" });
     await expect(rewriteMedia(await png(7000, 6000))).rejects.toMatchObject({ code: "too_large" });
   }, 30_000);
-  it("rejects animated WebP and PNG", async () => {
+  it("accepts animated WebP and rejects animated PNG", async () => {
     const animated = await sharp({ create: { width: 8, height: 16, channels: 3, background: "red" } }).raw().toBuffer();
     animated.fill(0, animated.length / 2);
     const webp = await sharp(animated, { raw: { width: 8, height: 16, channels: 3, pageHeight: 8 } }).webp({ loop: 0, delay: [100, 100] }).toBuffer();
     expect((await sharp(webp, { animated: true }).metadata()).pages).toBe(2);
-    await expect(rewriteMedia(webp)).rejects.toMatchObject({ code: "type" });
+    expect(await rewriteMedia(webp)).toMatchObject({ frames: 2, poster: { width: 8, height: 8 } });
     const chunk = Buffer.alloc(20); chunk.writeUInt32BE(8); chunk.write("acTL", 4);
     await expect(rewriteMedia(Buffer.concat([source.subarray(0, 33), chunk, source.subarray(33)]))).rejects.toMatchObject({ code: "type" });
   });

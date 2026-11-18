@@ -1747,7 +1747,7 @@
   "media_insert": "Insert image",
   "media_uploading": "Uploading the image…",
   "media_alt_placeholder": "Describe the image",
-  "media_help": "JPEG, PNG or WebP, up to 10 MB each. Embedded data such as location is removed before saving. Text inside an image is not translated. A description is translated, and AI can read it.",
+  "media_help": "JPEG, PNG, WebP or GIF, up to 10 MB. Embedded metadata is removed. Still figures and descriptions can be translated; motion text uses the original language.",
   "media_error_too_large": "The image is too large (up to 10 MB each).",
   "media_error_type": "This image format cannot be used. Use JPEG, PNG or WebP.",
   "media_error_rate": "You have sent many images in a short time. Try again later.",
@@ -3028,5 +3028,15 @@
   "draft_details_unclosed": "Add a colon-only closing line with at least as many colons as the opening.",
   "draft_details_attributes": "Remove the container attributes.",
   "draft_details_depth": "Use no more than two nesting levels.",
-  "draft_details_summary_footnote": "Line {line}: a footnote reference in a summary is shown as literal text. Move the reference to the body to show its note."
+  "draft_details_summary_footnote": "Line {line}: a footnote reference in a summary is shown as literal text. Move the reference to the body to show its note.",
+  "motion_show": "View motion",
+  "motion_show_still": "Return to still image",
+  "motion_original_text": "The animation uses the original language.",
+  "motion_delete_pair": "Deleting this image also deletes its paired images.",
+  "motion_delivery_title": "Motion image delivery",
+  "motion_delivery_help": "Daily UTC totals without reader or image identifiers. Cached responses and HEAD requests are excluded.",
+  "motion_delivery_counts": "{requests} requests · {bytes} bytes",
+  "motion_inspect": "Inspect paired images",
+  "motion_help": "Upload a GIF or animated WebP to insert a still image linked to its motion version. You can replace the still image in Markdown. Avoid flashing and explain the motion in the image description or body.",
+  "motion_error_type": "This image format cannot be used. Use JPEG, PNG, WebP or GIF. Animated PNG and video are not supported."
 }

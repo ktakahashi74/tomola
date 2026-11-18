@@ -173,7 +173,7 @@ export async function exportSite(db: Db, options: SiteExportOptions) {
     list.push(row); translated.set(row.entryId, list);
   }
   const linksFor = (file: string, lang: Lang, extension: "html" | "md"): ExportLinks => ({
-    page: file, lang, extension, posts, documents: documentKeys, origin: process.env.BETTER_AUTH_URL || undefined, media: imageFiles,
+    page: file, lang, extension, posts, documents: documentKeys, origin: process.env.BETTER_AUTH_URL || undefined, media: imageFiles, motionMedia: new Set(snapshot.images.filter(image => image.animated).map(image => image.id)),
   });
   const documentTitle = (doc: Document) => doc.name === "principles" ? m.footer_principles({}, { locale: doc.lang })
     : doc.name === "why" ? m.footer_why({}, { locale: doc.lang }) : doc.markdown.match(/^# (.+)$/m)?.[1].trim() ?? "tomola";

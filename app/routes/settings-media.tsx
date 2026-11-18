@@ -37,7 +37,8 @@ export default function SettingsMedia({ loaderData, actionData }: Route.Componen
     <ul className="space-y-4">{loaderData.images.map(image => {
       const usage = actionData && !actionData.deleted && actionData.id === image.id ? actionData.usedByOwnPosts : image.usedByOwnPosts;
       return <li key={image.id} className="space-y-2 rounded border p-3">
-      <img src={mediaPath(image.id, image.width, image.height)} width={image.width} height={image.height} loading="lazy" alt="" className="max-h-40 w-auto max-w-full object-contain" />
+      {image.animated ? <a href={mediaPath(image.id, image.width, image.height)} className="underline">{m.motion_show()}</a> : <img src={mediaPath(image.id, image.width, image.height)} width={image.width} height={image.height} loading="lazy" alt="" className="max-h-40 w-auto max-w-full object-contain" />}
+      {image.related.length > 1 && <p className="ui-help">{m.motion_delete_pair()} {image.related.filter(row => row.id !== image.id).map(row => <a key={row.id} className="underline" href={mediaPath(row.id, row.width, row.height)}>{row.animated ? m.motion_show() : m.motion_show_still()}</a>)}</p>}
       <ListMeta items={[
         { key: "uploaded", content: <time dateTime={image.uploadedAt.toISOString()}>{image.uploadedAt.toISOString().slice(0, 10)}</time> },
         { key: "dimensions", content: `${image.width} × ${image.height}` },

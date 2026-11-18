@@ -1,4 +1,5 @@
 import { ReadingMetrics } from "~/components/reading-metrics";
+import { recentMotionDelivery } from "~/lib/motion-delivery.server";
 import { weeklyReadings } from "~/lib/reading-counts.server";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { QualityMetrics } from "~/components/quality-metrics";
@@ -36,6 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     pair.cells.push({ questions: p.questions, people: p.people, sumDistance: p.sumDistance, mean: p.mean });
   }
   return {
+    motionDelivery: await recentMotionDelivery(db),
     history,
     questionReportsLabel: m.post_ask_reports_title(),
     qualitySignals,
@@ -161,6 +163,11 @@ export default function AdminMetrics({ loaderData }: Route.ComponentProps) {
   const langRows = [...weeks, null].map((week) => ({ week, cells: questionLangs.filter((r) => r.weekStart === week) }));
   return (
     <main className="space-y-8">
+      <section className="space-y-2">
+        <h2 className="text-xl font-semibold">{m.motion_delivery_title()}</h2>
+        <p className="ui-help">{m.motion_delivery_help()}</p>
+        <ul>{loaderData.motionDelivery.map(row => <li key={row.day}>{row.day}: {m.motion_delivery_counts({ requests: row.requests, bytes: row.bytes })}</li>)}</ul>
+      </section>
       <h1 className="text-2xl font-bold">{m.metrics_title()}</h1>
       <p className="ui-help text-muted-foreground">{m.metrics_note()}</p>
       <p><Link className="underline" to="/admin/ai-question-reports">{loaderData.questionReportsLabel}</Link></p>

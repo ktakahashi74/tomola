@@ -137,6 +137,7 @@ export function TranslatedEntry({
   const details = useDetailsNavigation(bodyRef, bodyHtml, initializedDetails, id);
   useEffect(() => {
     const body = bodyRef.current;
+    if (body?.querySelector("[data-motion-figure]")) void import("~/lib/motion").then(({ activateMotionFigures }) => { if (body.isConnected) activateMotionFigures(body); });
     body?.addEventListener("click", toggleFigure);
     return () => body?.removeEventListener("click", toggleFigure);
   }, [bodyHtml]);

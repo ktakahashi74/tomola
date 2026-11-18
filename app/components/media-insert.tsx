@@ -25,5 +25,5 @@ export function MediaInsert({ compact = false }: { compact?: boolean } = {}) {
 }
 export function MediaInsertHelp() {
   const ready = useMediaReady();
-  return ready ? <FieldDescription>{m.media_help()}</FieldDescription> : null;
+  return ready ? <FieldDescription>{m.media_help()} {m.motion_help()}</FieldDescription> : null;
 }

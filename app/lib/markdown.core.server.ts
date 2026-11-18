@@ -51,7 +51,8 @@ const sanitizeSchema: SanitizeOptions = {
 // 12: GFM 2.1 literal-text email candidates and punctuation-led domain rejection.
 // 13: bounded Markdown details containers and summary-only cards.
 // 14: literal rejected delimiters and non-interactive summary references.
-export const RENDER_VERSION = 14;
+// 15: refresh source HTML for motion-aware display decoration.
+export const RENDER_VERSION = 15;
 
 const DEFAULT_ID_PREFIX = "user-content-";
 

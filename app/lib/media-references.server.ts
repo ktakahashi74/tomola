@@ -1,9 +1,10 @@
 import { villagesEnabled } from "./villages-enabled.server";
-import { queueEntryFigures } from "./figure-translation.server";
-import { and, eq, inArray } from "drizzle-orm";
+import { lockFigureMedia, queueEntryFigures } from "./figure-translation.server";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
-import { appeals, entries, entryMedia, media, moderationActions, profiles, villages } from "~/lib/db/schema";
+import { appeals, entries, entryMedia, media, motionPairs, moderationActions, profiles, villages } from "~/lib/db/schema";
+import { motionCandidates } from "./motion-display.server";
 import { publicPostVillageCondition } from "./villages.server";
 import { isVillageOwner } from "./village-moderation.server";
 import { canSeeHidden, type Viewer } from "~/lib/roles.server";
@@ -14,12 +15,26 @@ export function referencedMediaIds(body: string): string[] {
   return [...new Set([...body.matchAll(/\/media\/([a-f0-9]{64})-[1-9]\d{0,3}x[1-9]\d{0,3}\.webp\b/g)].map(match => match[1]))];
 }
 
-export async function syncMediaReferences(db: Db, entryId: number, body: string): Promise<void> {
+export async function syncMediaReferences(db: Db, entryId: number, body: string, renderedHtml?: string): Promise<void> {
   await db.delete(entryMedia).where(eq(entryMedia.entryId, entryId));
   const ids = referencedMediaIds(body);
   if (!ids.length) return;
   const stored = await db.select({ id: media.id }).from(media).where(inArray(media.id, ids));
+  const motions = await db.select({ id: media.id }).from(media).where(and(inArray(media.id, ids), eq(media.animated, true)));
   if (stored.length) await db.insert(entryMedia).values(stored.map(row => ({ entryId, mediaId: row.id })));
+  if (motions.length) {
+    await lockFigureMedia(db);
+    const [entry] = await db.select({ authorId: entries.authorId, html: entries.html }).from(entries).where(eq(entries.id, entryId));
+    const owned = await db.select({ id: media.id, animated: media.animated, width: media.width, height: media.height }).from(media).where(and(inArray(media.id, ids), eq(media.uploadedBy, entry.authorId), isNull(media.deletedAt)));
+    const images = new Map(owned.map(image => [image.id, image]));
+    // Reuse the isolated renderer's sanitized output; do not parse untrusted
+    // Markdown again on the application event loop or infer pairs from hashes.
+    const found = motionCandidates(renderedHtml ?? entry.html ?? "").flatMap(pair => {
+      const motion = images.get(pair.motion.id), still = images.get(pair.still.id);
+      return motion?.animated && still && !still.animated && motion.width === pair.motion.width && motion.height === pair.motion.height && still.width === pair.still.width && still.height === pair.still.height ? [{ motionId: motion.id, stillId: still.id }] : [];
+    });
+    if (found.length) await db.insert(motionPairs).values(found).onConflictDoNothing();
+  }
   await queueEntryFigures(db, entryId);
 }
 

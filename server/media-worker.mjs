@@ -1,10 +1,40 @@
 import sharp from "sharp";
-import { MEDIA_LIMITS } from "../app/lib/media.ts";
+import { MOTION_LIMITS, MEDIA_LIMITS } from "../app/lib/media.ts";
+import { inspectMotion } from "../app/lib/motion-header.ts";
 
 // Untrusted decoders run in a disposable process. No input filenames or error details leave it.
 sharp.cache(false);
 sharp.concurrency(1);
 const avatar = process.argv[2] === "avatar";
+const motion = process.argv[2] === "motion";
+async function rewriteMotion(bytes) {
+  // Container admission precedes libvips, including metadata probes.
+  const header = inspectMotion(bytes);
+  if (!header) { process.exitCode = 2; return; }
+  const options = { failOn: "warning", limitInputPixels: MOTION_LIMITS.pixels };
+  const meta = await sharp(bytes, { ...options, animated: true }).metadata();
+  if (meta.format !== header.format || meta.width !== header.width || (meta.pageHeight ?? meta.height) !== header.height || (meta.pages ?? 1) !== header.frames) { process.exitCode = 2; return; }
+  const delay = meta.delay ?? [100], duration = delay.reduce((sum, ms) => sum + ms, 0);
+  if (delay.length !== header.frames) { process.exitCode = 2; return; }
+  if (duration > MOTION_LIMITS.durationMs) { process.exitCode = 3; return; }
+  let page = 0, best = -1;
+  const samples = Math.min(header.frames, MOTION_LIMITS.samples);
+  for (let i = 0; i < samples; i++) {
+    const index = samples === 1 ? 0 : Math.round(i * (header.frames - 1) / (samples - 1));
+    const stats = await sharp(bytes, { ...options, page: index, pages: 1 }).resize({ width: 256, height: 256, fit: "inside", withoutEnlargement: true }).stats();
+    const score = stats.entropy + stats.channels.slice(0, 3).reduce((sum, channel) => sum + channel.stdev, 0) / 100;
+    if (score > best) { best = score; page = index; }
+  }
+  const resize = { width: MEDIA_LIMITS.edge, height: MEDIA_LIMITS.edge, fit: "inside", withoutEnlargement: true };
+  const poster = await sharp(bytes, { ...options, page, pages: 1 }).resize(resize).webp({ quality: MOTION_LIMITS.quality, alphaQuality: 100, effort: 4 }).toBuffer({ resolveWithObject: true });
+  const output = header.frames === 1 ? poster.data : await sharp(bytes, { ...options, animated: true })
+    .timeout({ seconds: Math.floor(MOTION_LIMITS.processingMs / 1000) - 1 }).resize(resize)
+    .webp({ quality: MOTION_LIMITS.quality, alphaQuality: 100, effort: 4, loop: meta.loop ?? 0, delay }).toBuffer();
+  if (output.length > MOTION_LIMITS.storedBytes || poster.data.length > MEDIA_LIMITS.storedBytes) { process.exitCode = 3; return; }
+  const envelope = Buffer.alloc(28);
+  [poster.info.width, poster.info.height, header.frames, duration, meta.loop ?? 0, output.length, header.frames > 1 ? poster.data.length : 0].forEach((n, i) => envelope.writeUInt32BE(n, i * 4));
+  process.stdout.write(Buffer.concat([envelope, output, ...(header.frames > 1 ? [poster.data] : [])]));
+}
 function format(bytes) {
   if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "jpeg";
   if (bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return "png";
@@ -38,7 +68,8 @@ try {
   }
   if (!process.exitCode) {
     const bytes = Buffer.concat(chunks), type = format(bytes);
-    if (!type || animated(bytes, type)) process.exitCode = 2;
+    if (motion && !avatar) await rewriteMotion(bytes);
+    else if (!type || animated(bytes, type)) process.exitCode = 2;
     else {
       const options = { failOn: "warning", limitInputPixels: MEDIA_LIMITS.pixels };
       const metadata = await sharp(bytes, options).metadata();
@@ -63,5 +94,5 @@ try {
     }
   }
 } catch (error) {
-  process.exitCode = /pixel limit/i.test(String(error)) ? 3 : 4;
+  process.exitCode = error?.code === "too_large" || /pixel limit/i.test(String(error)) ? 3 : error?.code === "type" ? 2 : 4;
 }

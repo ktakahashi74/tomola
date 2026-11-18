@@ -266,9 +266,9 @@ Machine-facing details should not clutter manual reading, while AI representatio
 
 ## 43 Separate canonical Markdown from editing and image derivatives
 
-**Current implementation.** Rich and Markdown editing save the same canonical Markdown. Math and frontmatter use Markdown editing, and mode controls do not convert an unchanged original. JPEG/PNG/WebP uploads are inspected in an isolated process, oriented/resized and re-encoded to metadata-free WebP, with converted bytes stored in the database.
+**Current implementation.** Rich and Markdown editing save the same canonical Markdown. Math and frontmatter use Markdown editing, and mode controls do not convert an unchanged original. JPEG/PNG/WebP/GIF uploads are inspected in an isolated process, oriented/resized and re-encoded to metadata-free WebP, with converted bytes stored in the database.
 
-**Properties and limits.** Editor round-trips and image conversion do not guarantee lossless handling of arbitrary formats. Animation is rejected. Input, processing time/memory, output size and member/site storage are bounded. Image delivery checks references from the uploader's own posts and visibility; unused images are personal. Existing device caches and downloaded copies cannot be recalled. See [architecture](architecture.en.md#24-images) for values and deletion entry points.
+**Properties and limits.** Editor round-trips and image conversion do not guarantee lossless handling of arbitrary formats. GIF and animated WebP gain an informative still and an explicit Markdown link; motion starts only on request. APNG and video are rejected. Paired assets share quotas and deletion. Input, processing time/memory, output size and member/site storage are bounded. Image delivery checks references from the uploader's own posts and visibility; unused images are personal. Existing device caches and downloaded copies cannot be recalled. See [architecture](architecture.en.md#24-images) for values and deletion entry points.
 
 ## 44 Distinguish external model purposes and sending conditions
 

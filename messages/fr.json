@@ -1789,7 +1789,7 @@
   "media_insert": "Insérer une image",
   "media_uploading": "Envoi de l'image…",
   "media_alt_placeholder": "Décrivez l'image",
-  "media_help": "JPEG, PNG ou WebP, jusqu'à 10 MB par image. Les données intégrées, comme la position, sont retirées avant l'enregistrement. Le texte contenu dans une image n'est pas traduit. Une description est traduite, et l'IA peut la lire.",
+  "media_help": "JPEG, PNG, WebP ou GIF, jusqu’à 10 Mo. Les métadonnées sont supprimées. Les figures fixes et descriptions peuvent être traduites ; le texte animé reste dans la langue originale.",
   "media_error_too_large": "L'image est trop volumineuse (10 MB maximum par image).",
   "media_error_type": "Ce format d'image ne peut pas être utilisé. Utilisez JPEG, PNG ou WebP.",
   "media_error_rate": "Vous avez envoyé beaucoup d'images en peu de temps. Réessayez plus tard.",
@@ -3082,5 +3082,15 @@
   "draft_details_unclosed": "Ajoutez une ligne de fermeture composée uniquement de deux-points, au moins aussi nombreux qu’à l’ouverture.",
   "draft_details_attributes": "Retirez les attributs du conteneur.",
   "draft_details_depth": "Limitez l’imbrication à deux niveaux.",
-  "draft_details_summary_footnote": "Ligne {line} : une référence de note dans le résumé est affichée telle quelle. Déplacez la référence dans le corps du texte pour afficher la note."
+  "draft_details_summary_footnote": "Ligne {line} : une référence de note dans le résumé est affichée telle quelle. Déplacez la référence dans le corps du texte pour afficher la note.",
+  "motion_show": "Voir l’animation",
+  "motion_show_still": "Revenir à l’image fixe",
+  "motion_original_text": "L’animation conserve le texte dans la langue originale.",
+  "motion_delete_pair": "La suppression de cette image supprime aussi les images qui lui sont associées.",
+  "motion_delivery_title": "Diffusion des images animées",
+  "motion_delivery_help": "Totaux quotidiens en UTC, sans identifiant de lecteur ni d’image. Les réponses en cache et les requêtes HEAD sont exclues.",
+  "motion_delivery_counts": "{requests} requêtes · {bytes} octets",
+  "motion_inspect": "Examiner les images associées",
+  "motion_help": "Téléversez un GIF ou WebP animé pour insérer une image fixe liée à sa version animée. Vous pouvez remplacer l’image fixe dans le champ Markdown. Évitez les clignotements et expliquez le mouvement dans la description de l’image ou le texte.",
+  "motion_error_type": "Ce format d’image n’est pas accepté. Utilisez JPEG, PNG, WebP ou GIF. Les PNG animés et les vidéos ne sont pas pris en charge."
 }

@@ -25,6 +25,22 @@ export const MEDIA_LIMITS = {
   receivingPerMember: 3,
 } as const;
 
+// Server-only motion limits stay out of the reading and editor bundles.
+export const MOTION_LIMITS = {
+  width: 4096,
+  height: 4096,
+  frames: 600,
+  durationMs: 60_000,
+  pixels: 240_000_000,
+  storedBytes: 2 * 1024 * 1024,
+  processingMs: 60_000,
+  addressBytes: 4 * 1024 * 1024 * 1024,
+  dataBytes: 1024 * 1024 * 1024,
+  waiting: 2,
+  samples: 12,
+  quality: 85,
+} as const;
+
 export type MediaErrorCode = "too_large" | "type" | "rate" | "quota" | "member_bytes" | "site_bytes" | "generic";
 export class MediaError extends Error {
   code: MediaErrorCode;

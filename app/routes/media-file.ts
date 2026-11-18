@@ -4,6 +4,7 @@ import { readMedia } from "~/lib/media-store.server";
 import { readFigureTranslation } from "~/lib/figure-translation.server";
 import { parseMediaPath, parseTranslatedMediaPath } from "~/lib/media";
 import { canReadMedia } from "~/lib/media-references.server";
+import { countMotionDelivery } from "~/lib/motion-delivery.server";
 
 export async function loader({ request }: { request: Request }) {
   const safety = {
@@ -31,6 +32,7 @@ export async function loader({ request }: { request: Request }) {
     const entity = `"${parsed.id}${translated ? `:${translated.lang}:v${translated.version}:${createHash("sha256").update(bytes).digest("hex")}` : ""}"`;
     const headers = { ...safety, "Content-Type": image.mime, "Cache-Control": "private, max-age=86400", ETag: entity };
     if (request.headers.get("if-none-match")?.split(",").some(tag => tag.trim() === "*" || tag.trim().replace(/^W\//, "") === entity)) return new Response(null, { status: 304, headers });
+    if (image.animated && request.method === "GET") await countMotionDelivery(db, bytes.length);
     return new Response(request.method === "HEAD" ? null : new Uint8Array(bytes), { headers: { ...headers, "Content-Length": String(bytes.length) } });
   } catch (error) {
     // Failures keep resource-safe headers and never disclose authentication details.
