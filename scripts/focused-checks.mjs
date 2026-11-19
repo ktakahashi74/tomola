@@ -84,7 +84,7 @@ export function selectFocused(root, changed, diagnostics = {}, explicit = []) {
   const { unit: units, browser: browsers, production } = testSelection(files);
   const known = file => /^tests\/.*\.test\.ts$|^e2e(?:-prod)?\/.*\.spec\.ts$|^(?:app|server)\/.*\.tsx?$|^server\.ts$|^messages\/|^docs\/|^README\.md$/.test(file);
   const unknown = changed.filter(file => !known(file));
-  if (unknown.length) diagnostics.reasons.push({ reason: 'unknown-inputs', files: unknown.slice(0, 20), count: unknown.length, unit: 'all' });
+  if (unknown.length) diagnostics.reasons.push({ reason: 'unknown-inputs', files: unknown.slice(0, 20), count: unknown.length, unit: 'all', browser: 'imports-and-explicit' });
 
   const messageFiles = changed.filter(file => file.startsWith('messages/'));
   const inputs = changed.filter(file => !file.startsWith('messages/'));
@@ -121,24 +121,31 @@ export function selectFocused(root, changed, diagnostics = {}, explicit = []) {
   const docsChanged = changed.some(file => /^(?:docs\/|README\.md$)/.test(file));
   const explicitSet = new Set(explicit);
   diagnostics.reasons.push({ reason: 'imports-and-changed-tests' });
-  if (productChanged) diagnostics.reasons.push({ reason: 'product-change', unit: 'imports-and-runtime-readers' });
+  if (productChanged) diagnostics.reasons.push({ reason: 'product-change', unit: 'imports-and-runtime-readers', browser: 'imports-and-explicit' });
   if (docsChanged) diagnostics.reasons.push({ reason: 'documentation-readers' });
   if (messageFiles.length) {
     diagnostics.reasons.push({ reason: 'message-keys', count: keys.size, matched: matchedKeys.size, keys: [...keys].sort().slice(0, 20) });
+    diagnostics.reasons.push({ reason: 'message-readers', unreadable: unreadable.slice(0, 20), unmatched: keys.size - matchedKeys.size });
   }
-  const fallback = unreadable.length > 0 || matchedKeys.size < keys.size;
-  if (fallback) diagnostics.reasons.push({ reason: 'message-readers', unreadable: unreadable.slice(0, 20), unmatched: keys.size - matchedKeys.size });
-  const affectedReaders = fallback ? affectedFiles(dependents, readers) : new Set();
+  const affectedReaders = affectedFiles(dependents, readers);
 
   let unit = units.filter(file => affected.has(file) || explicitSet.has(file) || productChanged && implicit.has(file) ||
     docsChanged && /documentation|principles|guides|why/.test(file) || affectedReaders.has(file));
-  if (unknown.length) unit = units;
-  else if (productChanged && !unit.length) {
+  const messageFallback = !unknown.length && !unit.length && messageFiles.length > 0;
+  if (messageFallback) diagnostics.reasons.push({ reason: 'message-change-without-unit-match', unit: 'all' });
+  const all = unknown.length > 0 || messageFallback;
+  if (all) unit = units;
+  else if (!unit.length && productChanged) {
     diagnostics.reasons.push({ reason: 'product-change-without-unit-match' });
     unit = units;
   }
+  if (messageFiles.length && !unit.length) throw new Error('Message changes require at least one unit test');
   const chosen = file => affected.has(file) || explicitSet.has(file);
-  return { unit, browser: browsers.filter(chosen), production: production.filter(chosen), all: unknown.length > 0 };
+  const browser = browsers.filter(chosen), prod = production.filter(chosen);
+  if (!browser.length && !prod.length) {
+    diagnostics.reasons.push({ reason: 'browser-not-inferred', hint: 'Name browser specs that exercise the change over HTTP as arguments.' });
+  }
+  return { unit, browser, production: prod, all };
 }
 
 export function changedFiles(root, base = 'origin/main', diagnostics = {}) {

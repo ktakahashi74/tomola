@@ -261,13 +261,22 @@ export async function runChecks(plan, root, environment = process.env, executor 
     ...(plan.selection ? { selection: plan.selection } : {}),
   };
   const destination = path.join(root, ".data/checks/latest.json");
+  const failedChecks = () => report.steps.flatMap(check => {
+    const groups = check.groups?.filter(group => Number.isInteger(group.exitCode) && group.exitCode !== 0);
+    if (groups?.length) return groups;
+    return Number.isInteger(check.exitCode) && check.exitCode !== 0 ? [check] : [];
+  });
   const save = () => {
+    report.failedSoFar = failedChecks().length;
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, `${JSON.stringify(report, null, 2)}\n`);
   };
   save();
   const history = path.join(root, ".data/checks/history.jsonl");
   fs.appendFileSync(history, `${JSON.stringify({ event: "started", runId: report.runId, mode: report.mode, commit: report.commit, input: report.input, startedAt: report.startedAt, resources: report.resources, validation: report.validation, browserExecution: report.browserExecution })}\n`);
+  for (const { hint } of plan.selection?.reasons ?? []) {
+    if (hint) logger.log(`[check] ${hint}`);
+  }
   const recordOutcome = (detail, check, outcome) => {
     detail.exitCode = typeof outcome === "number" ? outcome : outcome.exitCode;
     if (typeof outcome === "object") {
@@ -314,7 +323,6 @@ export async function runChecks(plan, root, environment = process.env, executor 
         // Drain every child even if logging or artifact collection fails for one group.
         const outcomes = await Promise.allSettled(check.parallel.map(async (child, index) => {
           const detail = result.groups[index], groupStarted = Date.now();
-          detail.exitCode = 1;
           detail.log = path.relative(root, path.join(logs, `${report.startedAt.replace(/[^\d]/g, "")}-${child.group ?? index}.log`));
           const logFile = path.join(root, detail.log);
           logger.log(`[check] ${child.name} started`);
@@ -367,10 +375,7 @@ export async function runChecks(plan, root, environment = process.env, executor 
   save();
   fs.appendFileSync(history, `${JSON.stringify(report)}\n`);
   if (plan.keepGoing && exitCode) {
-    const failures = report.steps.filter(check => check.exitCode !== 0).flatMap(check => {
-      const groups = check.groups?.filter(group => Number.isInteger(group.exitCode) && group.exitCode !== 0);
-      return groups?.length ? groups : [check];
-    });
+    const failures = failedChecks();
     if (failures.length) logger.error(`[check] failed steps: ${failures.map(check => `${check.name} (exit ${check.exitCode})`).join(", ")}`);
   }
   logger.log(`[check] ${report.status}: ${report.quarantineRecovered} quarantined test(s) recovered on retry`);

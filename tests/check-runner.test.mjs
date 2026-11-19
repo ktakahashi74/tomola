@@ -305,6 +305,10 @@ test("a failed browser group drains its siblings and keeps each group's output i
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(seen, ["a", "b", "public"]);
   assert.equal(finished, false);
+  const inProgress = readReport(root);
+  assert.equal(inProgress.status, "running");
+  assert.equal(inProgress.failedSoFar, 2);
+  assert.equal(inProgress.steps[0].groups[1].exitCode, undefined);
   release();
   assert.equal(await running, 1);
   const report = readReport(root);
@@ -431,6 +435,11 @@ test("keep-going runs independent checks and reports failures and blocked depend
     const exit = await executeChecks(plan, root, pgEnv, async check => {
       seen.push(check.name);
       if (check.name === "lint baseline") return 7;
+      if (check.name === "disclosure baseline") {
+        const inProgress = readReport(root);
+        assert.equal(inProgress.status, "running");
+        assert.equal(inProgress.failedSoFar, 1);
+      }
       if (check.name === fail) return 8;
       if (check.name === "build") {
         for (const file of ["build/server/index.js", "build/markdown/markdown-worker.mjs"]) {
@@ -443,6 +452,7 @@ test("keep-going runs independent checks and reports failures and blocked depend
     const report = readReport(root);
     assert.equal(exit, 7);
     assert.equal(report.status, "failed");
+    assert.equal(report.failedSoFar, 2);
     assert.ok(seen.includes("unit (PostgreSQL)"));
     assert.equal(seen.some(name => name.startsWith("browser")), fail === "page JavaScript budget");
     assert.ok(output.some(line => line.includes("lint baseline (exit 7)") && line.includes(`${fail} (exit 8)`)));
@@ -616,38 +626,81 @@ test('focused changed selects only modified tests, and accepts an empty selectio
   assert.throws(() => planChecks(['focused', '--base=HEAD'], root, {}));
 });
 
-test("focused changed adds explicit specs and selects catalog dependents by changed key", t => {
+test("focused changed selects catalog readers, their unit dependents, and changed-key users", t => {
   const root = fixture(t);
   const write = (file, contents) => {
     const destination = path.join(root, file);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, contents);
   };
-  write("messages/en.json", '{"view_title":"old","other_title":"unchanged"}');
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","isolated_title":"old"}');
   write("app/view.ts", 'export const title = () => m.view_title();');
+  write("app/isolated.ts", 'export const title = () => m.isolated_title();');
   write("tests/view.test.ts", 'import "../app/view";');
   write("tests/catalog.test.ts", 'JSON.parse(readFileSync("messages/en.json"));');
+  write("tests/helpers/catalog.ts", 'export const catalog = () => readFileSync("messages/en.json");');
+  write("tests/translation.test.ts", 'import "./helpers/catalog";');
   write("e2e/view.spec.ts", 'import "../app/view";');
   write("e2e/other.spec.ts", 'import en from "../messages/en.json"; console.log(en.other_title);');
   write("e2e-prod/live.spec.ts", '');
   assert.equal(spawnSync("git", ["add", "."], { cwd: root }).status, 0);
   assert.equal(spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "catalog fixture"], { cwd: root }).status, 0);
 
-  write("messages/en.json", '{"view_title":"new","other_title":"unchanged"}');
+  write("messages/en.json", '{"view_title":"new","other_title":"unchanged","isolated_title":"old"}');
   const args = ["focused", "--changed", "--base=HEAD", "e2e-prod/live.spec.ts"];
   const { selection } = planChecks(args, root, {});
-  assert.deepEqual(selection.unit, ["tests/view.test.ts"]);
+  const readers = ["tests/catalog.test.ts", "tests/translation.test.ts"];
+  assert.deepEqual(selection.unit, [...readers, "tests/view.test.ts"]);
   assert.deepEqual(selection.browser, ["e2e/view.spec.ts"]);
   assert.deepEqual(selection.production, ["e2e-prod/live.spec.ts"]);
   assert.ok(selection.reasons.some(reason => reason.reason === "message-keys" && reason.matched === 1));
+  assert.ok(selection.reasons.some(reason => reason.reason === "message-readers" && reason.unmatched === 0));
   assert.deepEqual(planChecks(["focused", "e2e/view.spec.ts"], root, {}).selection.browser, ["e2e/view.spec.ts"]);
 
-  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","dynamic_title":"new"}');
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","isolated_title":"old","dynamic_title":"new"}');
   const fallback = planChecks(args, root, {}).selection;
-  assert.deepEqual(fallback.unit, ["tests/catalog.test.ts"]);
+  assert.deepEqual(fallback.unit, readers);
   assert.deepEqual(fallback.browser, []);
   assert.deepEqual(fallback.production, ["e2e-prod/live.spec.ts"]);
   assert.ok(fallback.reasons.some(reason => reason.reason === "message-readers" && reason.unmatched === 1));
+
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","isolated_title":"new"}');
+  const isolated = planChecks(args.slice(0, -1), root, {});
+  assert.deepEqual(isolated.selection.unit, readers);
+  assert.ok(isolated.selection.reasons.some(reason => reason.reason === "message-keys" && reason.matched === 1));
+  assert.deepEqual(isolated.steps.map(step => step.name), ["focused unit"]);
+  assert.ok(isolated.selection.reasons.some(reason => reason.reason === "browser-not-inferred"));
+
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","isolated_title":"old"}\n');
+  assert.deepEqual(planChecks(args.slice(0, -1), root, {}).selection.unit, readers);
+  write("messages/.source-hashes.json", '{}');
+  assert.deepEqual(planChecks(args.slice(0, -1), root, {}).selection.unit, readers);
+});
+
+test("focused catalog changes require a unit stage even when there are no recognized readers", t => {
+  const root = fixture(t), args = ["focused", "--changed", "--base=HEAD"];
+  fs.mkdirSync(path.join(root, "messages"));
+  fs.writeFileSync(path.join(root, "messages/en.json"), '{"title":"new"}');
+  const plan = planChecks(args, root, {});
+  assert.equal(plan.selection.all, true);
+  assert.deepEqual(plan.steps.map(step => step.name), ["focused unit"]);
+  fs.rmSync(path.join(root, "tests/email.test.ts"));
+  assert.throws(() => planChecks(args, root, {}), /require at least one unit test/);
+});
+
+test("focused reports browser selection reasons and prompts for specs that use HTTP", async t => {
+  const root = fixture(t), lines = [];
+  fs.mkdirSync(path.join(root, "app"));
+  fs.writeFileSync(path.join(root, "app/view.ts"), 'export const route = "/view";');
+  fs.writeFileSync(path.join(root, "app/view.css"), 'body { color: black; }');
+  const plan = planChecks(["focused", "--changed", "--base=HEAD"], root, {});
+  for (const name of ["product-change", "unknown-inputs"]) {
+    assert.equal(plan.selection.reasons.find(reason => reason.reason === name)?.browser, "imports-and-explicit");
+  }
+  const hint = plan.selection.reasons.find(reason => reason.reason === "browser-not-inferred")?.hint;
+  assert.match(hint, /HTTP/);
+  assert.equal(await executeChecks(plan, root, {}, async () => 0, { log: line => lines.push(line), error() {} }), 0);
+  assert.equal(lines.filter(line => line.includes(hint)).length, 1);
 });
 
 test('started evidence exists before execution, and unit and validation metadata reach the finished record', async t => {
