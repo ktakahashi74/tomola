@@ -45,10 +45,6 @@ function normalizeMathLabels(formula: string): string {
   return parts.length ? parts.join("") + formula.slice(cursor) : formula;
 }
 
-export function hasMathLabel(formula: string): boolean {
-  return formula.includes("\\") && !mathLabels(formula).next().done;
-}
-
 type Formula = { shape: string; separators: string };
 // A plain comma inside a delimited group can split coordinates or arguments.
 // The grouping braces in {,} mark its use as part of a number there.

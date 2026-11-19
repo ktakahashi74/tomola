@@ -85,3 +85,31 @@ export function normalizeFigureReading(reading: FigureReading): FigureReading {
     text: normalizeFigureNewlines(region.text).replace(/\\([A-Za-z]+)/g, (command, name: string) => Object.hasOwn(sourceMathCommands, name) ? sourceMathCommands[name] : command),
   })) };
 }
+// Compare formula tokens and their multiplicity, preserving semantic distinctions.
+export function preservesFigureMath(source: string, translated: string): boolean {
+  source = normalizeFigureNewlines(source);
+  translated = normalizeFigureNewlines(translated);
+  // Sources already contain visible symbols. Preserve literal source escapes,
+  // but reject new or duplicated escapes before scanning formula tokens.
+  const commands = (text: string) => {
+    const counts = new Map<string, number>();
+    for (const [command] of text.matchAll(/\\[A-Za-z]+/g)) counts.set(command, (counts.get(command) ?? 0) + 1);
+    return counts;
+  };
+  const sourceCommands = commands(source);
+  for (const [command, count] of commands(translated)) {
+    if (sourceCommands.get(command) !== count) return false;
+  }
+  const tokens = (text: string, allowAsciiMinus = false) => {
+    const normalized = [...text].map(c => FIGURE_MATH_VARIANTS[c] ?? c).join("");
+    const comparable = allowAsciiMinus ? normalized.replace(/-/g, "−") : normalized;
+    return (comparable.match(/[A-Za-z\u0370-\u03ff][A-Za-z0-9\u0370-\u03ff]*\([^()\r\n]*\)|[A-Za-z0-9\u0370-\u03ff]+(?:[_^](?:\{[^{}\r\n]+\}|[A-Za-z0-9]+))+|[+=<>|]|\p{Sm}|[\u0370-\u03ff\u1f00-\u1fff\u2070-\u214f\u1d2c-\u1d6a\u1d9b-\u1dbf\u00b0\u00b2\u00b3\u00b9\u{1d400}-\u{1d7ff}]/gu) ?? []).map(token => token.replace(/-/g, "−"));
+  };
+  const remaining = new Map<string, number>();
+  for (const token of tokens(translated, true)) remaining.set(token, (remaining.get(token) ?? 0) + 1);
+  return tokens(source).every(token => {
+    const count = remaining.get(token) ?? 0;
+    remaining.set(token, count - 1);
+    return count > 0;
+  });
+}

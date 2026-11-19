@@ -1,4 +1,3 @@
-import { preservesFigureMath } from "~/lib/figure-math.core.server";
 import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -18,6 +17,7 @@ import { completionEstimate, meteredCall } from "~/lib/llm/metering.server";
 import { costMicro } from "~/lib/llm/pricing.server";
 import { FLAG_MARKDOWN_BUDGET, HIDDEN_PRIMARY_FLAGS } from "~/lib/llm/flags";
 import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
+import { preservesFigureMath } from "~/lib/figure";
 import { loadGlossary, matchGlossary } from "~/lib/translations.server";
 import { paidTranslationCall } from "./paid-translation.server";
 import { currentJobSignal } from "./signal.server";
@@ -136,7 +136,7 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
         }
         const candidates = parseLabels(shortened, retrySources);
         const proposed = [...labelsOut];
-        for (const [j, i] of retryIndexes.entries()) if (candidates[j] && preservesFigureMath(labels[i], candidates[j]!, lang)) proposed[i] = candidates[j];
+        for (const [j, i] of retryIndexes.entries()) if (candidates[j] && preservesFigureMath(labels[i], candidates[j]!)) proposed[i] = candidates[j];
         const retried = await render(proposed, { final: true });
         // An unsuccessful retry must not replace the fuller external translation
         // or sacrifice a label already drawn in the first layout.

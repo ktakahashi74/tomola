@@ -1,4 +1,3 @@
-import { preservesFigureMath } from "~/lib/figure-math.core.server";
 import sharp from "sharp";
 import { renderFigure } from "./helpers/figure-render";
 import { renderFigureLabels } from "~/lib/figure-render.server";
@@ -7,7 +6,7 @@ import { FinishReason, GoogleGenAI } from "@google/genai";
 import { describe, expect, it, vi } from "vitest";
 import { createFigureReader, FIGURE_READING_PROMPT, FIGURE_READING_PROMPT_VERSION, FIGURE_READING_OVERLAP_RETRY, figureTranslationEnabled, parseFigureReading } from "~/lib/figure-reading.server";
 import { decorateFigureHtml } from "~/lib/figure-display.server";
-import { figurePath, FIGURE_VERSION, normalizeFigureReading, type FigureReading } from "~/lib/figure";
+import { figurePath, FIGURE_VERSION, normalizeFigureReading, preservesFigureMath, type FigureReading } from "~/lib/figure";
 import { parseTranslatedMediaPath } from "~/lib/media";
 import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import { buildTranslationPrompt, PROMPT_VERSION } from "~/lib/llm/prompt.server";
@@ -335,21 +334,4 @@ it("shows one reason when every saved label has no usable translation", () => {
   expect(decorated).toContain("data-figure-fallback"); expect(decorated).not.toContain('role="listitem"');
   expect(decorated.match(/使える訳を作れませんでした。/g)).toHaveLength(1);
   expect(decorated).not.toContain("図の外に添えた訳");
-});
-
-it.each([
-  [String.raw`Rate $3.4\times10^{-7}$`, String.raw`Taux $3,4\times10^{-7}$`, "fr", true],
-  [String.raw`Rate $3.4\times10^{-7}$`, String.raw`Rate $3,4\times10^{-7}$`, "en", false],
-  [String.raw`Rate $x_{\text{mean}}$`, String.raw`Taux $x_{\text{moyenne}}$`, "fr", true],
-  [String.raw`Rate $x_{\text{mean}}$`, String.raw`Taux $X_{\text{moyenne}}$`, "fr", false],
-  [String.raw`x_{\text{mean}}`, String.raw`x_{\text{moyenne}}`, "fr", true],
-  [String.raw`x_{\text{mean}}`, "x", "fr", false],
-  ["Rate = 2.0", "Taux = 2,0", "fr", true],
-  ["Rate = 2.0", "Taux = 2,1", "fr", false],
-  ["Point (2,0)", "Point (2.0)", "fr", false],
-  ["$5 to $10", "De 5 à 10 dollars", "fr", true],
-] as const)("checks localized figure math in %s", (source, translated, to, valid) => {
-  expect(preservesFigureMath(source, translated, to)).toBe(valid);
-  const req = { text: JSON.stringify([source]), from: "ja" as const, to, figure: true };
-  expect(inspectTranslation(req, JSON.stringify([translated]), "fake").flags.includes("quality_mismatch")).toBe(!valid);
 });

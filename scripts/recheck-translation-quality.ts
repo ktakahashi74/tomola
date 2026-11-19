@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import { closeDb, openDb, resolveDbConfig, type Db } from "../app/lib/db/client.server";
+import { closeDb, getOperatorDb, type Db } from "../app/lib/db/client.server";
 import { entries, translations } from "../app/lib/db/schema";
 import { tryRenderTranslationHtml } from "../app/lib/entries.server";
 import { isLang, isSourceLang } from "../app/lib/languages";
@@ -84,7 +84,7 @@ async function recheck(db: Db, apply: boolean): Promise<number[]> {
 
 export async function runTranslationQualityRecheck(
   args: string[],
-  open: () => Promise<Db> = () => openDb(resolveDbConfig(), { migrate: false }),
+  open: () => Promise<Db> = getOperatorDb,
   output: CliOutput = cliOutput,
 ): Promise<number> {
   if (args.length > 1 || args.some(arg => arg !== "--apply")) {

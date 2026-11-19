@@ -317,35 +317,20 @@ export const TRANSLATION_QUALITY_LIMITS = {
   paragraphTolerance: 1,
 } as const;
 
-function mathParts(tree: MdNode, source: string, figureLabel = false) {
+function mathParts(tree: MdNode, source: string) {
   const display: string[] = [], inline: { value: string; multiDollar: boolean }[] = [];
-  const rest: string[] = [];
-  let cursor = 0;
   const walk = (node: MdNode) => {
     if (node.type === "math" || node.type === "inlineMath") {
       const value = (node.value ?? "").replace(/\r\n/g, "\n");
-      const start = node.position?.start.offset, end = node.position?.end.offset;
+      const start = node.position?.start.offset;
       const multiDollar = start !== undefined && source.startsWith("$$", start);
-      if (figureLabel && start !== undefined && end !== undefined) {
-        // A plain OCR label can contain two dollar prices. A digit directly
-        // after the closing dollar marks the second price, as in "$5 to $10".
-        if (node.type === "inlineMath" && !multiDollar && /^\d/.test(value) && /\d/.test(source[end] ?? "")) return;
-        rest.push(source.slice(cursor, start));
-        cursor = end;
-      }
       if (node.type === "math") display.push(value);
       else inline.push({ value, multiDollar });
     }
     node.children?.forEach(walk);
   };
   walk(tree);
-  return { display, inline, rest: rest.length ? [...rest, source.slice(cursor)].join(" ") : source };
-}
-
-// Figure labels also contain undelimited OCR math. Keep that text available
-// for the OCR checks after comparing Markdown formulas with the post rules.
-export function splitFigureMath(source: string) {
-  return mathParts(markdown.parse(source) as unknown as MdNode, source, true);
+  return { display, inline };
 }
 
 function qualityParts(source: string) {
