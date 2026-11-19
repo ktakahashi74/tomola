@@ -80,7 +80,7 @@ for (const [lang, locale, messages] of [["en", "en-US", en], ["ja", "ja-JP", ja]
       await reply.fill("A text reply that keeps its content while opening the guide.");
       const form = reply.locator("xpath=ancestor::form");
       const more = form.locator("[data-reply-more]");
-      await more.locator("summary").click();
+      await more.locator(":scope > summary").click();
       const link = more.getByRole("link", { name: messages.writing_guide_title, exact: true });
       await expect(link).toHaveAttribute("href", "/writing");
       await expect(link).toHaveAttribute("target", "_blank");

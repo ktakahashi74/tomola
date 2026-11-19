@@ -60,13 +60,20 @@ for (const javaScriptEnabled of [true]) {
       await waitForClientRoute(page);
       await page.locator(`#c-${f.firstId}`).getByRole("link", { name: en.reply_to_button, exact: true }).click();
       await expect(page.locator('#reply input[name="parentId"]')).toHaveValue(String(f.firstId));
-      if (javaScriptEnabled) await waitForFormReady(page.locator("#reply form"));
+      const form = page.locator("#reply form");
+      if (javaScriptEnabled) await waitForFormReady(form);
       const body = `Reply from the selected form, JS ${javaScriptEnabled}.`;
       await page.getByLabel(en.field_body, { exact: true }).fill(body);
       await page.getByRole("button", { name: en.submit_reply, exact: true }).click();
-      await expect(page.getByText(body, { exact: true })).toBeVisible();
-      const created = page.locator("article").filter({ has: page.getByText(body, { exact: true }) });
+      const published = page.getByRole("paragraph").and(page.getByText(body, { exact: true }));
+      await expect(published).toBeVisible();
+      const created = page.locator("article").filter({ has: published });
       await expect(created.getByRole("link", { name: messagePattern(en.reply_parent_link, { handle: /[a-z0-9_]+/ }), exact: true })).toHaveAttribute("href", `/t/${f.topicId}#c-${f.firstId}`);
+      await expect(form.getByLabel(en.field_body, { exact: true })).toBeEmpty();
+      await form.locator("[data-reply-more] > summary").click();
+      await form.getByRole("button", { name: en.ai_write_button, exact: true }).click();
+      await form.getByText(en.ai_write_send, { exact: true }).click();
+      await expect(form.getByLabel(en.ai_write_text, { exact: true })).toBeEmpty();
       await noOverflow(page);
       if (!javaScriptEnabled) await expect(marker(page)).toHaveCount(0);
     } finally { await context.close(); }

@@ -661,6 +661,26 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const quoteRoot = useRef<HTMLElement>(null);
   const [replyRound, setReplyRound] = useState(0);
   const hasReplyForm = canReply && !!loaderData.ownerId;
+  const replyFormKey = `${loaderData.ownerId}:${topic.id}:${replyRound}`;
+  const replySection = useRef<HTMLElement>(null);
+  const serverReplyBody = useRef<{ key: string; field: HTMLTextAreaElement } | null>(null);
+  const captureReplySection = useCallback((section: HTMLElement | null) => {
+    if (!section || replySection.current === section) return;
+    replySection.current = section;
+    const field = section.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+    if (field) serverReplyBody.current = { key: replyFormKey, field };
+  }, [replyFormKey]);
+  const adoptReplyBody = useCallback(() => {
+    const previous = serverReplyBody.current;
+    serverReplyBody.current = null;
+    // A route update can replace the server form before the editor hydrates.
+    // Keep native input within the same member, topic and publication round.
+    if (previous?.key !== replyFormKey || previous.field.value === previous.field.defaultValue) return;
+    const field = replySection.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+    if (!field || field === previous.field || field.value !== field.defaultValue) return;
+    field.value = previous.field.value;
+    field.setSelectionRange(previous.field.selectionStart, previous.field.selectionEnd, previous.field.selectionDirection);
+  }, [replyFormKey]);
   useEffect(() => hasReplyForm ? afterPageIdle(startReplyFormLoad) : undefined, [hasReplyForm]);
   // The translation that the topic's "wrong translation" button is about (TranslatedEntry reports it, since the reader can switch to the original); the button is drawn in the end of the article, outside the entry.
   const [topicReported, setTopicReported] = useState(() => topic.placeholder === null ? initialReportedTranslation(topic.display) : null);
@@ -1033,7 +1053,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         </div>
         <Pagination page={page} hasNext={hasNextPage} lastPage={loaderData.pageCount} anchor="#replies" />
       </section>
-      <section id="reply" className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}
+      <section id="reply" ref={captureReplySection} className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}
         onPointerOver={hasReplyForm ? startReplyFormLoad : undefined}
         onPointerDownCapture={hasReplyForm ? startReplyFormLoad : undefined}
         onFocusCapture={hasReplyForm ? startReplyFormLoad : undefined}>
@@ -1053,7 +1073,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
         {canReply && loaderData.ownerId && (
           <Suspense fallback={<LoadClientReplyForm />}>
-            <TopicReplyForm key={`${loaderData.ownerId}:${topic.id}:${replyRound}`} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
+            <TopicReplyForm key={replyFormKey} adoptReplyBody={adoptReplyBody} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
               nushiAvailable={loaderData.nushiAvailable}
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
               error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined}

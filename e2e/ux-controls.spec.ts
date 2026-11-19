@@ -176,12 +176,21 @@ test("reporting only the title makes no report of the body", async ({ browser })
 
 test("reply AI saves a reply draft and imports text before publication", async ({ page, context }) => {
   await context.route(/^https:\/\/(chatgpt\.com|claude\.ai)\//, route => route.fulfill({ contentType: "text/html", body: "Mock AI" }));
-  await useMember(page, "ux_reply@example.com", `/t/${fixture().questionId}`);
-  await page.evaluate(() => localStorage.setItem("tomola.openInAi", JSON.stringify({ provider: "chatgpt" })));
-  await waitForClientRoute(page);
-  const topicPath = new URL(page.url()).pathname;
-  await page.getByRole("link", { name: m.reply_to_button, exact: true }).first().click();
-  await body(page).fill("My original reply.");
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const formModule = await routeModule(page, "app/components/topic-reply-form.tsx", async route => { await held; await route.continue(); });
+  const topicPath = `/t/${fixture().questionId}`;
+  try {
+    await useMember(page, "ux_reply@example.com", topicPath);
+    await page.evaluate(() => localStorage.setItem("tomola.openInAi", JSON.stringify({ provider: "chatgpt" })));
+    await waitForClientRoute(page);
+    await formModule.assertHit();
+    await body(page).fill("My original reply.");
+    await page.getByRole("link", { name: m.reply_to_button, exact: true }).first().click();
+    await expect(page).toHaveURL(/reply_to=c-\d+#reply$/);
+  } finally { release(); }
+  await waitForFormReady(page.locator("#reply form"));
+  await expect(body(page)).toHaveValue("My original reply.");
   // Asking the AI saves a draft and opens the AI in another tab; the reply screen is not left, and the reply is posted from here.
   await openReplyMore(page);
   await page.getByRole("button", { name: m.ai_write_button, exact: true }).click();
