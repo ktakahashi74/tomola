@@ -132,10 +132,14 @@ const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params 
   const threadId = parseIdOrNull(params.id);
   const nushi = !member && nushiEnabled() && threadId !== null
     ? (await (await getDb()).select({ id: nushiRequests.id }).from(nushiRequests).where(eq(nushiRequests.threadId, threadId)).limit(1)).length > 0 : false;
-  if (!member && !nushi) return response;
-  // Saved state and changing AI replies must stay current in documents and client-router data requests.
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", "private, no-store");
+  if (member || nushi) {
+    // Saved state and changing AI replies must stay current in documents and client-router data requests.
+    headers.set("Cache-Control", "private, no-store");
+  } else {
+    // The visitor's hide preference can show the control even on topics without AI requests.
+    headers.append("Vary", "Cookie");
+  }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 };
 // Handle /t/:id.md and /t/:id.txt here, returning Markdown without running the UI loader (app/lib/md/twin.server.ts).

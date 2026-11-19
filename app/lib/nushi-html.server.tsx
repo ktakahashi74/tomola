@@ -18,7 +18,7 @@ export function renderNushiThread(view: ComponentProps<typeof NushiThreadControl
     if (!post.nushiParentId && !view.answers.some(answer => answer.entryId === post.id) && !view.requests.some(request => request.entryId === post.id)) continue;
     entries[post.id] = renderToStaticMarkup(<NushiThreadEntry entryId={post.id} nushiParentId={post.nushiParentId} view={view} member={options.member} refreshable={options.refreshable} />, { identifierPrefix: `nushi-${post.id}-` });
   }
-  const controls = view.setting !== null || view.answers.length ? renderToStaticMarkup(<NushiThreadControls view={view} {...options} />, { identifierPrefix: `nushi-controls-${options.threadId}-` }) : "";
+  const controls = view.setting !== null || view.hide || view.answers.length ? renderToStaticMarkup(<NushiThreadControls view={view} {...options} />, { identifierPrefix: `nushi-controls-${options.threadId}-` }) : "";
   const reply = options.reply ? renderToStaticMarkup(<><input type="hidden" name="nushiParentId" value={options.reply} /><p>{m.nushi_name()} · {m.reply_to_button()}</p></>) : "";
   return { entries, controls, reply, pending: view.requests.filter(request => ["pending", "processing"].includes(request.state)).map(request => request.id) };
 }

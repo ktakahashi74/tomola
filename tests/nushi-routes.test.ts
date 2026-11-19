@@ -130,19 +130,34 @@ it("lists pending moderation reports for operators and records hiding in the pub
   expect(log.entries).toContainEqual(expect.objectContaining({ action: "hide", reason: "other", nushiAnswerId: answerId }));
   expect(JSON.stringify(log)).not.toContain("Hidden after source review");
 });
-it.each(["", ".data"])("uses no-store only for member state or a thread with AI requests on %s reads", async (suffix) => {
+it("lets visitors clear their hide preference on a topic without Nushi answers", async () => {
+  const { loader } = await import("~/routes/topic");
+  const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "A topic with no Nushi answers.", lang: "en" });
+  if (!topic.ok) throw new Error("Missing topic fixture");
+  const path = `/t/${topic.id}?lang=en`;
+  const params = { id: String(topic.id) };
+  const hidden = await loader(h.args(h.request(path, { headers: { cookie: "nushi_hidden=1" } }), params));
+  expect(hidden.nushi.controls).toContain('value="visitor-hide"');
+  expect(hidden.nushi.controls).toContain('checked=""');
+  const visible = await loader(h.args(h.request(path, { headers: { cookie: "nushi_hidden=0" } }), params));
+  expect(visible.nushi.controls).toBe("");
+});
+
+it.each(["", ".data"])("keeps member state and AI requests fresh and varies ordinary topic reads by cookie on %s", async (suffix) => {
   const { headers, middleware } = await import("~/routes/topic");
   const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "A topic without AI requests.", lang: "en" });
   const pending = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard pending", lang: "en" });
   if (!topic.ok || !pending.ok) throw new Error("Missing cache fixtures");
   const [answered] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.state, "answered"));
-  const cache = async (id: number | string, as?: string) => {
+  const responseHeaders = async (id: number | string, as?: string) => {
     const response = await middleware.at(-1)!(h.args(h.request(`/t/${id}${suffix}`, { as }), { id: String(id) }), async () => new Response("", { headers: headers() }));
-    return (response as Response).headers.get("Cache-Control");
+    return (response as Response).headers;
   };
+  const cache = async (id: number | string, as?: string) => (await responseHeaders(id, as)).get("Cache-Control");
   expect(headers()["Cache-Control"]).toBe("private");
   expect(await cache("999999999999999999999")).toBe("private");
   expect(await cache(topic.id)).toBe("private");
+  expect((await responseHeaders(topic.id)).get("Vary")).toContain("Cookie");
   expect(await cache(pending.id)).toBe("private, no-store");
   expect(await cache(answered.threadId)).toBe("private, no-store");
   expect(await cache(topic.id, "znushi_route_reader")).toBe("private, no-store");
