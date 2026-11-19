@@ -18,7 +18,7 @@ import { publicTopicPlace } from "./visibility.server";
 export const TRANSLATION_READ_BATCH_MAX = 101; // A topic and its page of 100 replies.
 export const TRANSLATION_READ_MEMBER_HOURLY = 300;
 export const TRANSLATION_READ_IP_HOURLY = 120;
-// At most 40 status calls per two-minute wait, plus batched display reports.
+// Status checks back off throughout the wait. Display reports share this limit.
 export const TRANSLATION_READ_CALLS_HOURLY = 3600;
 
 // Match the thread's page boundaries, including deleted and hidden reply slots

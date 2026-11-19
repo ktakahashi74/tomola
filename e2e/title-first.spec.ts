@@ -70,7 +70,7 @@ for (const width of [1280, 390]) {
       await captureScreenshot(page, { path: testInfo.outputPath(`${path.split("?")[0].replaceAll("/", "-")}-${width}.png`), fullPage: true }, "e2e-title-first");
       await provisional.click();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(fixture.provisional.sourceTitle);
-      await expect(page.getByText(en.translation_working, { exact: true })).toBeVisible();
+      await expect(page.locator("[data-article-translation-waiting]")).toBeVisible();
     }
     await page.goto(`/t/${fixture.complete.id}`);
     await waitForClientRoute(page);

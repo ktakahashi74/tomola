@@ -405,6 +405,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
             title: topic.title,
             headline: headline,
             reading: readingVersions(topic.html, topic.lang, displayOf(topic.id)),
+            longTranslation: topic.body.length >= 8_000,
           },
     // Question attributes: asksStance, alternative-framing source question (altOf with null origin shows 「元の問いは読めません」), and lock state (locked for authors, canFix for typo correctors; omit timestamp).
     question: {
@@ -838,6 +839,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
               html={topic.html}
               display={topic.display}
               reading={topic.reading}
+              longTranslation={topic.longTranslation}
               readingLanguage={{ choice: loaderData.readingLanguage, translating: new Set(translating) }}
               readingActions={(readingLang, details) => {
                 const actions = <TopicActions topicId={topic.id} originalLang={topic.lang} readingLang={readingLang}

@@ -774,8 +774,11 @@ are limited to 300 post/language pairs per member per hour, or 120 per trusted
 client IP range per hour for visitors. These are fixed hourly windows; requests
 around a boundary may consume two windows. Repeated requests count toward the
 limit but do not duplicate unfinished jobs. Missing client addresses share a
-restricted fallback allowance. Polling stops after two minutes, including time
-spent in a background tab. The monthly translation budget still applies.
+restricted fallback allowance. Status checks begin at three seconds and back off to
+thirty seconds while the tab is visible. The browser waits up to sixteen minutes
+(the provider timeout cap plus one minute), including time spent in a background
+tab. Once the wait ends, the original remains available with a translation notice.
+The monthly translation budget still applies.
 Markdown, API, MCP, export and server-rendered reads never request work or record
 displays. The browser records only the first display timestamp of a translation,
 without a reader identity or view count. These timestamps do not affect ranking.

@@ -191,7 +191,7 @@ test("post controls, metadata and empty states work at desktop and phone widths,
     expect(await heading.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(1);
     expect(Array.from(await page.title()).length).toBeLessThanOrEqual(41);
     await page.goto(`/t/${f.pendingId}?lang=en`);
-    await expect(page.getByText(en.translation_working, { exact: true })).toBeVisible();
+    await expect(page.locator("[data-article-translation-waiting]")).toBeVisible();
     await page.goto(`/t/${f.topicId}?lang=en&tr=${f.topicId}`);
     // The reply typed earlier (quoted text) is offered back on a visit; this part is about the post, so start from an empty reply and no unsent-text question on leaving.
     await forgetLocalDrafts(page);

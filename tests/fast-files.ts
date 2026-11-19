@@ -15,6 +15,7 @@ export const FAST_TEST_FILES = [
   "tests/author-member-links.test.ts",
   "tests/body-limit.test.ts",
   "tests/body-length.test.ts",
+  "tests/body-translation-poll.test.ts",
   "tests/gemini-timeout.test.ts",
   "tests/browser-groups.test.ts",
   "tests/bundle-size.test.ts",

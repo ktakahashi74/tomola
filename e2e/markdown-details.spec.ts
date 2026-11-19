@@ -183,7 +183,7 @@ test("an arriving translation does not reopen an old fragment or move focus back
     await page.goto(url.href);
     const article = page.locator("[data-reading-body]").first();
     await expect(article).toHaveAttribute("lang", "en");
-    await expect(page.getByText(en.translation_working, { exact: true })).toBeVisible();
+    await expect(page.locator("[data-article-translation-waiting]")).toBeVisible();
     const { hidden, scroll } = await leaveFragmentBehind(page);
     const control = page.locator("[data-member-menu-trigger]");
     await control.evaluate(node => (node as HTMLElement).focus({ preventScroll: true }));

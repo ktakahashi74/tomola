@@ -48,6 +48,7 @@ export function TranslatedEntry({
   toolsAfter,
   readingActions,
   readingLanguage,
+  longTranslation = false,
   quotable = false,
   onReportedChange,
   quoteHandle,
@@ -75,6 +76,7 @@ export function TranslatedEntry({
   // Only the topic page opts into the reading layout; introductions and replies retain their layout.
   reading?: ReadingVersions;
   readingLanguage?: { choice: ReadingLanguageChoice; translating?: ReadonlySet<Lang> };
+  longTranslation?: boolean;
   toolsBefore?: ReactNode;
   toolsAfter?: ReactNode;
   readingActions?: (lang: SourceLang, details: { available: boolean; allOpen: boolean; toggle: () => void }) => { actions: ReactNode; actionMenu: ReactNode };
@@ -138,6 +140,9 @@ export function TranslatedEntry({
           : { text: title, lang, fromBody: false };
   const bodyLang = showing || showingOlder ? (tr as NonNullable<typeof tr>).lang : lang;
   const bodyHtml = showing?.html ?? showingOlder?.html ?? html;
+  const originalNotice = readingLanguage && !tr
+    ? { source: lang, sourceCode: langCode, target: readingLanguage.choice.current, long: longTranslation }
+    : undefined;
   const details = useDetailsNavigation(bodyRef, bodyHtml, initializedDetails, id);
   useEffect(() => {
     const body = bodyRef.current;
@@ -256,7 +261,11 @@ export function TranslatedEntry({
           {toolsAfter}
         </div>
       ) : translationControls}
-      {display.needsCurrent && (display.wait?.kind === "stopped" ? <span role="status" className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span> : <Suspense fallback={<PendingText short />}><BodyTranslationWait entryId={id} /></Suspense>)}
+      {display.needsCurrent && (display.wait?.kind === "stopped" ? <span role="status" className="ui-meta text-muted-foreground"><PendingText wait={display.wait} /></span> : (
+        <Suspense fallback={<PendingText short={!originalNotice} />}>
+          <BodyTranslationWait key={location.pathname + location.search} entryId={id} original={originalNotice} />
+        </Suspense>
+      ))}
       {(info || readingActions) && <ReadingToc headings={info?.headings ?? []} lang={bodyLang} bodyRef={bodyRef} {...readingActions?.(bodyLang, details)} />}
       <div ref={bodyRef} dir="auto" lang={bodyLang} className={reading ? "longread" : "longread longread-compact"} data-reading-body={reading ? "" : undefined} data-quote-entry={quotable ? id : undefined} data-quote-kind={quotable ? kind : undefined} data-quote-handle={quotable ? quoteHandle : undefined} data-quote-translated={quotable && (showing || showingOlder) ? "1" : undefined} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       {footer?.(showing ?? (showingOlder ? (tr as NonNullable<typeof tr>) : null))}

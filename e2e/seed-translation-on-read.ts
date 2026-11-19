@@ -9,7 +9,7 @@ export async function seedTranslationOnRead(db: Db, dir: string) {
   const fixtures: Record<string, { id: number; body: string }> = {};
   for (const name of ["member", "timeout", "public", "notice", "sourceNotice", "limited", "watch"]) {
     const [member] = await db.select().from(user).where(eq(user.email, `ondemand_${name === "sourceNotice" ? "notice" : name}@example.com`));
-    const body = Array.from({ length: 30 }, (_, n) => `${name} 段落 ${n + 1}。これは訳を待つ間にも読める原文です。`).join("\n\n");
+    const body = Array.from({ length: name === "member" ? 260 : 30 }, (_, n) => `段落 ${n + 1}。これは翻訳が完了するまで表示される、試験用の記事の原文です。（${name}）`).join("\n\n");
     const result = await createTopic(db, member.id, { lang: "ja", title: `訳を読む ${name}`, body }, { now: new Date("2025-11-01T00:00:00Z") });
     if (!result.ok) throw new Error(result.error);
     const [source] = await db.select().from(entries).where(eq(entries.id, result.id));
