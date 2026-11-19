@@ -16,7 +16,7 @@ import hiSource from "~/content/principles/hi.md?raw";
 import idSource from "~/content/principles/id.md?raw";
 import bnSource from "~/content/principles/bn.md?raw";
 import urSource from "~/content/principles/ur.md?raw";
-import { PRINCIPLES_LANGS, type PrinciplesLang } from "~/lib/principles-languages";
+import { PRINCIPLES_LANGS, PRINCIPLES_TRANSLATION_NOTICES, type PrinciplesLang } from "~/lib/principles-languages";
 import { renderMarkdown } from "~/lib/markdown.server";
 
 // The principles page (/principles and /principles.md) reads its seventeen canonical texts from app/content/principles/.
@@ -36,6 +36,7 @@ export type PrinciplesDocument = {
   lang: PrinciplesLang;
   // The text as it is published, without the leading HTML comments.
   markdown: string;
+  status: PrinciplesStatus;
   title: string;
   // The text between the title and the first section.
   intro: string;
@@ -48,18 +49,21 @@ export function stripLeadingComments(raw: string): string {
   return raw.replace(LEADING_COMMENTS, "");
 }
 
-function hasUnverifiedMarker(markdown: string): boolean {
-  const first = markdown.split(/\r?\n/).slice(1).find(line => line.trim() !== "");
-  return first?.trim().toLowerCase() === "unverified machine translation";
-}
+// The canonical marker is the first nonblank line after the title.
+const UNVERIFIED_MARKER = /^(# [^\r\n]*\r?\n(?:[^\S\r\n]*\r?\n)*)[^\S\r\n]*Unverified machine translation[^\S\r\n]*(?=\r?\n|$)/i;
 
 // Splits a principles text into its title, the introduction and the numbered sections. Throws when the text does not have the shape the page relies on
 // (a title, and sections numbered 1 to 7 in order), so that a broken edit fails the tests and the build of the page, not a reader.
 export function parsePrinciples(raw: string, lang: PrinciplesLang): PrinciplesDocument {
-  const markdown = stripLeadingComments(raw);
+  const source = stripLeadingComments(raw);
+  const unverified = UNVERIFIED_MARKER.test(source);
+  if (lang === "ja" && unverified) throw new Error("principles ja: the original cannot have an unverified translation marker");
+  const status = lang === "ja" ? "original" : unverified ? "unverified" : "human_checked";
+  const markdown = unverified && lang !== "en" && lang !== "ja"
+    ? source.replace(UNVERIFIED_MARKER, (_marker, opening: string) => opening + PRINCIPLES_TRANSLATION_NOTICES[lang])
+    : source;
   const lines = markdown.split(/\r?\n/);
   if (!lines[0]?.startsWith("# ")) throw new Error(`principles ${lang}: the text must start with a "# " title`);
-  if (lang === "ja" && hasUnverifiedMarker(markdown)) throw new Error("principles ja: the original cannot have an unverified translation marker");
   const title = lines[0].slice(2).trim();
   const starts: Array<{ line: number; number: number }> = [];
   lines.forEach((line, index) => {
@@ -76,7 +80,7 @@ export function parsePrinciples(raw: string, lang: PrinciplesLang): PrinciplesDo
     alias: SECTION_ALIASES[start.number] ?? null,
     markdown: lines.slice(start.line, starts[i + 1]?.line ?? lines.length).join("\n").trim(),
   }));
-  return { lang, markdown, title, intro, sections };
+  return { lang, markdown, status, title, intro, sections };
 }
 
 const sources: Record<PrinciplesLang, string> = { ja: jaSource, en: enSource, fr: frSource, de: deSource, "zh-Hant": zhHantSource, "zh-Hans": zhHansSource, ko: koSource, th: thSource, vi: viSource, es: esSource, pt: ptSource, ru: ruSource, ar: arSource, hi: hiSource, id: idSource, bn: bnSource, ur: urSource };
@@ -84,8 +88,7 @@ const documents = new Map<PrinciplesLang, PrinciplesDocument>();
 
 // Review is recorded in the text itself. Remove this first paragraph only after checking a translation against the original.
 export function principlesStatus(document: PrinciplesDocument): PrinciplesStatus {
-  if (document.lang === "ja") return "original";
-  return hasUnverifiedMarker(document.markdown) ? "unverified" : "human_checked";
+  return document.status;
 }
 
 // Principles translations are public in every supported language, independently of the site's enabled posting/UI languages.
@@ -122,7 +125,8 @@ export function principlesFor(requested: PrinciplesLang): PrinciplesView {
 // `ai` is true while that text is an unchecked machine translation, which the caller says next to it.
 export function principlesOpening(lang: PrinciplesLang): { text: string; ai: boolean } {
   const view = principlesFor(lang);
-  const paragraph = view.document.intro.split(/\n\s*\n/).map(part => part.trim()).find(part => part && part.toLowerCase() !== "unverified machine translation") ?? "";
+  const intro = view.status === "unverified" ? view.document.intro.replace(/^[^\n]*\n?/, "").trimStart() : view.document.intro;
+  const paragraph = intro.split(/\n\s*\n/, 1)[0];
   const plain = paragraph.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]/g, "");
   const first = [...new Intl.Segmenter(lang, { granularity: "sentence" }).segment(plain)][0]?.segment.trim() ?? plain;
   return { text: first, ai: view.status === "unverified" };

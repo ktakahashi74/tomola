@@ -67,11 +67,14 @@ export default function Villages({ loaderData }: Route.ComponentProps) {
           const chat = village.kind !== "personal" && group.id === "joined-villages" && village.slug && "chatUnread" in loaderData && Object.hasOwn(loaderData.chatUnread, village.slug);
           // The made-up description of a language village only says what its name says; one an operator wrote is shown.
           const description = village.language && !village.description ? null : villageDescription(village);
+          // A personal village already uses its type as its name.
+          const typeLabel = village.kind === "personal" ? null : village.kind === "invite_public" ? m.village_invite_public() : m.village_open();
           return <li key={village.slug} className="space-y-1 py-3">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <Link to={villagePath(village.slug)} title={villageNameTitle(village)} className="link-ui inline-flex flex-wrap items-center gap-x-3 font-semibold">{villageName(village)}
-                {village.kind === "invite_public" && <span title={m.village_invite_only_help()} className="rounded border px-1.5 ui-meta font-normal text-muted-foreground">{m.village_invite_only()}</span>}
-              </Link>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Link to={villagePath(village.slug)} title={villageNameTitle(village)} className="link-ui font-semibold">{villageName(village)}</Link>
+                {typeLabel && <span title={village.kind === "invite_public" ? m.village_invite_only_help() : undefined} className="rounded border px-1.5 ui-meta text-muted-foreground">{typeLabel}</span>}
+              </div>
               {chat && <ChatEntry slug={village.slug!} name={villageName(village)} unread={loaderData.chatUnread[village.slug!]} mentions={"chatMentions" in loaderData ? loaderData.chatMentions[village.slug!] ?? 0 : 0} />}
             </div>
             {description && <p className="line-clamp-2 whitespace-pre-wrap [overflow-wrap:anywhere]">{description}</p>}

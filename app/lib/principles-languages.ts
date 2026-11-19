@@ -16,6 +16,25 @@ export const PRINCIPLES_LANG_LABELS: Record<PrinciplesLang, string> = {
   ur: "اردو",
 };
 
+export const PRINCIPLES_TRANSLATION_NOTICES: Record<Exclude<PrinciplesLang, "ja">, string> = {
+  en: "Unverified machine translation",
+  fr: "Traduction automatique non vérifiée",
+  de: "Ungeprüfte maschinelle Übersetzung",
+  "zh-Hant": "未經核對的機器翻譯",
+  "zh-Hans": "未经核对的机器翻译",
+  ko: "검토하지 않은 기계 번역",
+  th: "คำแปลด้วยเครื่องที่ยังไม่ได้ตรวจสอบ",
+  vi: "Bản dịch máy chưa được kiểm tra",
+  es: "Traducción automática sin verificar",
+  pt: "Tradução automática não verificada",
+  ru: "Непроверенный машинный перевод",
+  ar: "ترجمة آلية غير مُراجَعة",
+  hi: "बिना जाँच का मशीनी अनुवाद",
+  id: "Terjemahan mesin yang belum diperiksa",
+  bn: "যাচাই না করা যান্ত্রিক অনুবাদ",
+  ur: "بغیر جانچ کا مشینی ترجمہ",
+};
+
 export function principlesDirection(lang: PrinciplesLang): "rtl" | "ltr" {
   return lang === "ar" || lang === "ur" ? "rtl" : "ltr";
 }

@@ -1,6 +1,6 @@
 import { operatorConfig } from "~/lib/operator-config.server";
 import { enabledLangs, previewLangs } from "~/lib/enabled-langs.server";
-import { LANGS, type Lang } from "~/lib/languages";
+import { LANGS, languageName, type Lang } from "~/lib/languages";
 import { PRINCIPLES_LANGS, PRINCIPLES_LANG_LABELS, type PrinciplesLang } from "~/lib/principles-languages";
 import { m } from "~/paraglide/messages.js";
 
@@ -10,7 +10,6 @@ type Env = Record<string, string | undefined>;
 export function languagePage(locale: Lang, env: Env = process.env) {
   const enabled = enabledLangs(env);
   const preview = previewLangs(env);
-  const names = new Intl.DisplayNames([locale], { type: "language", languageDisplay: "standard" });
   const options = { locale };
   const groups = [
     { id: "open", title: m.languages_open({}, options), tags: enabled.filter(lang => !preview.includes(lang)) },
@@ -18,7 +17,7 @@ export function languagePage(locale: Lang, env: Env = process.env) {
     { id: "supported", title: m.languages_supported({}, options), tags: LANGS.filter(lang => !enabled.includes(lang)) },
     { id: "principles", title: m.languages_principles({}, options), tags: PRINCIPLES_LANGS.filter(lang => !(LANGS as readonly string[]).includes(lang)) },
   ];
-  const named = (tag: PrinciplesLang) => ({ tag, nativeName: PRINCIPLES_LANG_LABELS[tag], name: names.of(tag) ?? PRINCIPLES_LANG_LABELS[tag] });
+  const named = (tag: PrinciplesLang) => ({ tag, nativeName: PRINCIPLES_LANG_LABELS[tag], name: languageName(tag, locale, PRINCIPLES_LANG_LABELS[tag]) });
   const query = new URLSearchParams({ subject: m.languages_request_subject({}, options), body: m.languages_request_body({}, options) });
   return {
     locale,

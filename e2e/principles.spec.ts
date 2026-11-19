@@ -2,7 +2,7 @@ import { captureScreenshot, enMessages, jaMessages  } from "./helpers";
 import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { PRINCIPLES_LANGS, PRINCIPLES_LANG_LABELS } from "../app/lib/principles-languages";
-import { expectedPrinciplesStatus, readPrinciplesSource } from "../tests/helpers/principles-source";
+import { readPrinciplesSource } from "../tests/helpers/principles-source";
 
 // The principles page and footer are public without logging in.
 test("the principles page opens without logging in, shows the English text and its review notice, and has the names other pages link to", async ({ page, request }) => {
@@ -15,7 +15,7 @@ test("the principles page opens without logging in, shows the English text and i
   await expect(page.getByRole("heading", { level: 1, name: english.title, exact: true })).toBeVisible();
   for (const heading of english.headings) await expect(page.getByRole("heading", { level: 2, name: heading, exact: true })).toBeVisible();
   await expect(page.getByRole("note")).toHaveCount(0);
-  if (expectedPrinciplesStatus("en") === "unverified") await expect(page.locator("article p").first()).toHaveText("Unverified machine translation");
+  if (english.notice) await expect(page.locator("article p").first()).toHaveText(english.notice);
   else await expect(page.getByText("Unverified machine translation", { exact: true })).toHaveCount(0);
   // The anchors: #s1 to #s7 and the names #rules (section 3) and #objections (section 7).
   for (const id of ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "rules", "objections"]) await expect(page.locator(`[id="${id}"]`), id).toHaveCount(1);
@@ -77,8 +77,8 @@ test("the public language list opens every language's own text and marks only th
     expect(await nav.locator("details").evaluate(element => (element as HTMLDetailsElement).open)).toBe(rows[1].includes(lang));
     await expect(page.locator('link[rel="alternate"][type="text/markdown"]')).toHaveAttribute("href", lang === "ja" ? "/principles.md" : `/principles.md?lang=${lang}`);
     await expect(page.getByRole("note")).toHaveCount(0);
-    if (expectedPrinciplesStatus(lang) !== "unverified") await expect(page.getByText("Unverified machine translation", { exact: true })).toHaveCount(0);
-    else await expect(page.locator("article p").first()).toHaveText("Unverified machine translation");
+    if (source.notice) await expect(page.locator("article p").first()).toHaveText(source.notice);
+    else await expect(page.getByText("Unverified machine translation", { exact: true })).toHaveCount(0);
   }
   await context.close();
 });

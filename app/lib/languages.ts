@@ -25,16 +25,17 @@ export const LANG_LABELS: Record<Lang, string> = {
 };
 
 // Name languages by script, not country/region. Choices use LANG_LABELS autonyms: 简体中文, 繁體中文. For names in the reader's language,
-// such as language composition, pass BCP 47 zh-Hans/zh-Hant directly to Intl.DisplayNames. languageDisplay: "standard" yields Japanese 「中国語 (簡体字)」「中国語 (繁体字)」
-// and English 「Chinese (Simplified)」「Chinese (Traditional)」; default "dialect" yields Japanese 「簡体中国語」. Never name languages using zh-CN, zh-TW, 「台湾語」, or other country/region names.
+// such as language composition, pass BCP 47 zh-Hans/zh-Hant directly to Intl.DisplayNames. Use "standard" for script names in parentheses and full-width
+// parentheses in Japanese. Never name languages using zh-CN, zh-TW, 「台湾語」, or other country/region names.
 const displayNames = new Map<string, Intl.DisplayNames>();
-export function languageName(lang: Lang, inLocale: string): string {
+export function languageName(lang: string, inLocale: string, fallback = isLang(lang) ? LANG_LABELS[lang] : lang): string {
   let names = displayNames.get(inLocale);
   if (!names) {
     names = new Intl.DisplayNames([inLocale], { type: "language", languageDisplay: "standard" });
     displayNames.set(inLocale, names);
   }
-  return names.of(lang) ?? LANG_LABELS[lang];
+  const name = names.of(lang) ?? fallback;
+  return inLocale === "ja" ? name.replace(/ ?\(/g, "（").replaceAll(")", "）") : name;
 }
 
 export function isLang(x: unknown): x is Lang {

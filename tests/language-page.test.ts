@@ -45,11 +45,14 @@ describe("public language availability", () => {
     vi.stubEnv("PREVIEW_LANGS", "ko");
     const page = loader();
     const html = await renderInRouter(() => createElement(Languages, { loaderData: page } as never), "/languages");
+    const names = new Intl.DisplayNames([locale], { type: "language", languageDisplay: "standard" });
+    const japaneseScriptNames = { "zh-Hans": m.language_name_zh_hans(), "zh-Hant": m.language_name_zh_hant() };
     for (const group of page.groups) {
       expect(html).toContain(`id="languages-${group.id}"`);
       for (const lang of group.languages) {
         expect(lang.nativeName).toBeTruthy();
-        expect(lang.name).toBe(new Intl.DisplayNames([locale], { type: "language", languageDisplay: "standard" }).of(lang.tag));
+        const expected = locale === "ja" && (lang.tag === "zh-Hans" || lang.tag === "zh-Hant") ? japaneseScriptNames[lang.tag] : names.of(lang.tag);
+        expect(lang.name).toBe(expected);
         expect(html).toContain(`lang="${lang.tag}"`);
       }
     }

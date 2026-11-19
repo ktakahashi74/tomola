@@ -67,11 +67,12 @@ it("the page, Markdown twin and both machine guides share the text-derived state
     const { html, data } = await renderPage(`/principles?lang=${lang}`);
     expect(data).toMatchObject({ shown: lang, status });
     expect(html).not.toContain('role="note"');
-    // Language spans can divide the visible marker without changing its text or state.
+    // Language spans can divide the notice without changing the visible text.
+    const source = readPrinciplesSource(lang);
     const visibleText = html.replace(/<[^>]+>/g, "");
-    if (status === "unverified") expect(visibleText).toContain("Unverified machine translation");
+    if (source.notice) expect(visibleText).toContain(source.notice);
     else expect(visibleText).not.toContain("Unverified machine translation");
-    for (const comment of readPrinciplesSource(lang).comments)
+    for (const comment of source.comments)
       for (const output of [html, await (await callMd(`/principles.md?lang=${lang}`)).text(), ...guides]) expect(output, lang).not.toContain(comment);
     if (lang !== "ja") expect(html).toContain(">Read the original (Japanese)<");
     expect(await (await callMd(`/principles.md?lang=${lang}`)).text()).toContain(`\nstatus: ${status}\n`);
@@ -113,7 +114,8 @@ it("offers the first sentence of each edition for the signup screen, as one sent
   for (const lang of PRINCIPLES_LANGS) {
     const { text, ai } = principlesOpening(lang);
     expect(text.length, lang).toBeGreaterThan(5);
-    expect(text, lang).not.toMatch(/unverified machine translation/i);
+    const { notice } = readPrinciplesSource(lang);
+    if (notice) expect(notice.startsWith(text), lang).toBe(false);
     expect(text, lang).not.toMatch(/^#|<!--/);
     expect(ai, lang).toBe(principlesStatus(principlesFor(lang).document) === "unverified");
   }

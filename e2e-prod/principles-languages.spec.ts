@@ -28,7 +28,7 @@ test("all seventeen principles editions are public with only Japanese and Englis
     for (const [index, langs] of rows.entries()) expect(await nav.locator("ul").nth(index).locator("[lang]").evaluateAll(items => items.map(item => item.getAttribute("lang")))).toEqual(langs);
     await expect(page.locator('link[rel="alternate"][type="text/markdown"]')).toHaveAttribute("href", lang === "ja" ? "/principles.md" : `/principles.md?lang=${lang}`);
     await expect(page.getByRole("note")).toHaveCount(0);
-    if (expectedPrinciplesStatus(lang) === "unverified") await expect(page.locator("article p").first()).toHaveText("Unverified machine translation");
+    if (source.notice) await expect(page.locator("article p").first()).toHaveText(source.notice);
     else await expect(page.getByText("Unverified machine translation", { exact: true })).toHaveCount(0);
     const response = await request.get(`/principles.md?lang=${lang}`);
     expect(response.status()).toBe(200);
