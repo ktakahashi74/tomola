@@ -36,6 +36,38 @@ describe("conservative translation quality checks", () => {
     expect(checkStructure("$$\nx = 1\n$$", "$$\nx = 2\n$$").ok).toBe(false);
     expect(checkStructure("Value $x + 1$.", "値 $x + 1$。").ok).toBe(true);
   });
+  it.each([
+    ["N回の試行で手法iを比べ、行列Aに記録した。基準は $x+1$。", "We compared method $i$ in $N$ trials and recorded the results in matrix $A$. The baseline is $x+1$.", "ja", "en"],
+    ["The coefficient is α and the matrix is A_12. The terms are $x$ and $y$.", "行列は $A_{12}$、係数は $α$。項は $y$ と $x$。", "en", "ja"],
+    ["変数**N**とパラメーターαを使う。", "Use variable $N$ and parameter $α$.", "ja", "en"],
+  ])("accepts inline math for standalone source prose symbols: %s", (source, translated, from, to) => {
+    expect(checkStructure(source, translated, { from, to })).toEqual({ ok: true, mismatches: [], flags: [] });
+  });
+  it.each([
+    ["変数Nを使う。式は $x+1$。", "Use $N$. The formulas are $x+1$ and $N+1$."],
+    ["変数Nを使う。式は $x+1$。", "Use $N$."],
+    ["変数Nを使う。式は $x+1$。", "Use $N$. The formula is $x+2$."],
+    ["変数Nを使う。式は $x$ と $x$。", "Use $N$ and $x$."],
+    ["変数Nを使う。式は $x$。", "Use $N$, $x$ and $x$."],
+    ["変数Nを使う。", "Use $M$."],
+    ["Use éN, NN, N2, N_12, and **N**ame.", "Use $N$."],
+    ["Use n.", "Use $N$."],
+    ["Use A_123.", "Use $A_{123}$."],
+    ["Use A_12.", "Use $A_12$."],
+    ["Use `N` here.", "Use `N` and $N$."],
+    ["Example follows.\n\n    N", "Example follows: $N$.\n\n    N"],
+    ["Example follows.\n\n```\nN\n```", "Example follows: $N$.\n\n```\nN\n```"],
+    ["Use https://example.org/N and [the reference](https://example.net/N).", "Use $N$ and the reference."],
+    ["変数Nを使う。", "Use $$N$$."],
+    ["変数Nを使う。", "Use:\n\n$$\nN\n$$"],
+    ["The value is $x$.\n\n$$\ny\n$$", "値は $y$。\n\n$$\nx\n$$"],
+  ])("flags missing, changed or unsupported math: %s → %s", (source, translated) => {
+    expect(checkStructure(source, translated)).toMatchObject({
+      ok: false,
+      flags: ["quality_mismatch"],
+      mismatches: expect.arrayContaining([expect.stringContaining("math content changed")]),
+    });
+  });
   it("rejects omitted blocks and obvious partial translations", () => {
     expect(checkStructure("# One\n\nText.\n\n# Two\n\nMore.", "# 一\n\n文。").ok).toBe(false);
     expect(checkStructure("- First\n- Second\n- Third", "- 一つ").ok).toBe(false);

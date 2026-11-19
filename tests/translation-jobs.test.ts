@@ -308,6 +308,23 @@ describe("translate_entry", () => {
     expect(title.every((r) => r.flags.length === 0)).toBe(true);
   });
 
+  it("stores and displays a translation that formats source prose variables as inline math", async () => {
+    const db = await setup();
+    const body = "行列AにN回の結果を記録した。基準は $x+1$。";
+    const text = "Matrix $A$ holds the results of $N$ trials. The baseline is $x+1$.";
+    const topicId = await newTopic(db, { title: "題", body });
+    const reqs: TranslationRequest[] = [];
+    const engine = recordingEngine(reqs, req => req.text === body && req.to === "en" ? text : `[${req.to}] ${req.text}`);
+    await run(db, { primary: engine, secondary: null, judge: null });
+
+    expect(reqs.filter(req => req.text === body && req.to === "en")).toHaveLength(1);
+    const row = (await transRows(db, topicId)).find(row => row.field === "body" && row.lang === "en");
+    expect(row).toMatchObject({ text, kind: "primary", flags: [] });
+    const [entry] = await db.select().from(entries).where(eq(entries.id, topicId));
+    const displayed = await loadEntryDisplays(db, [{ id: topicId, kind: "topic", lang: "ja", sourceHash: entry.sourceHash }], { readLangs: ["en"], displayLang: "en" });
+    expect(displayed.get(topicId)).toMatchObject({ shown: "translation", translation: { kind: "primary", html: expect.stringContaining("katex") } });
+  });
+
   it("stores a translation that added a link with link_mismatch, does not show it, and translates it again on the next run", async () => {
     const db = await setup();
     const topicId = await newTopic(db, { title: "題", body: "これは十分に長い日本語の本文で、訳されるべき文章です。" });

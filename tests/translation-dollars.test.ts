@@ -96,6 +96,21 @@ it("keeps source math unchanged and still hides changed formulas", async () => {
   expect(isUsablePrimary({ sourceHash: "h", flags: changed.flags }, "h")).toBe(false);
 });
 
+it("keeps supported inline symbols and escapes currency in a translation of prose", async () => {
+  const text = "At $5 to $10 per run, use $N$ trials.";
+  const result = await translateChecked(engineReturning(text), { text: "1回5〜10ドルで、N回試す。", from: "ja", to: "en" });
+  expect(result).toMatchObject({ text: "At \\$5 to \\$10 per run, use $N$ trials.", flags: [], attempts: 1 });
+  expect(await renderMarkdown(result.text)).toContain("katex");
+});
+
+it.each(["Use $M$ trials.", "Use $N+1$ trials.", "Use $2+3$ trials.", "Trials:\n\n$$\nN\n$$"])(
+  "still checks math introduced into prose before storage: %s",
+  async text => {
+    const result = await translateChecked(engineReturning(text), { text: "N回試す。", from: "ja", to: "en" });
+    expect(result).toMatchObject({ flags: ["quality_mismatch"], attempts: 2 });
+  },
+);
+
 it("leaves plain-text chat currency untouched", async () => {
   const text = "It costs $5 to $10 per run.";
   expect(await translateChecked(engineReturning(text), { text: "1回あたり5〜10ドルかかる。", from: "ja", to: "en", chat: { context: [] } })).toMatchObject({ text, flags: [], attempts: 1 });

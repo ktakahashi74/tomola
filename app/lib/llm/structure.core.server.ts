@@ -78,8 +78,8 @@ type MdNode = {
   children?: MdNode[];
 };
 
-// A translation must not introduce math when the source contains none. Escape
-// literal dollars before inspection and storage, preserving every code span.
+// In translations of sources without math, escape literal dollars while
+// preserving code and keeping formulas available for the structure check.
 export function normalizeTranslationDollars(source: string, translated: string): string {
   if (!translated.includes("$")) return translated;
   const math = countStructure(source);
@@ -111,6 +111,26 @@ export function normalizeTranslationDollars(source: string, translated: string):
   // Mask dollars at the same offsets so accidental math cannot swallow inline
   // code that occurs between two amounts. Code syntax itself stays unchanged.
   walk(markdown.parse(translated.replace(/\$/g, "x")) as unknown as MdNode);
+  const masked: string[] = [];
+  let cursor = 0;
+  for (const { start, end } of spans) {
+    masked.push(translated.slice(cursor, start), translated.slice(start, end).replace(/\$/g, "x"));
+    cursor = end;
+  }
+  masked.push(translated.slice(cursor));
+  const mathDollars = new Set<number>();
+  const collectMath = (node: MdNode) => {
+    if (node.type === "math" || node.type === "inlineMath") {
+      const start = node.position?.start.offset, end = node.position?.end.offset;
+      if (start === undefined || end === undefined) return;
+      const raw = translated.slice(start, end);
+      // In a price pair such as "$5 to $10" or "$5–$10", the nominal
+      // closing delimiter starts the second amount.
+      if (node.type === "inlineMath" && /^\$\d/.test(raw) && /[\s\p{Pd},/](?:\\\\)*\$$/u.test(raw) && /\d/.test(translated[end] ?? "")) return;
+      for (let i = start; i < end; i++) if (translated[i] === "$") mathDollars.add(i);
+    } else node.children?.forEach(collectMath);
+  };
+  collectMath(markdown.parse(masked.join("")) as unknown as MdNode);
   const out: string[] = [];
   let nextSpan = 0, backslashes = 0;
   for (let i = 0; i < translated.length; i++) {
@@ -121,7 +141,7 @@ export function normalizeTranslationDollars(source: string, translated: string):
       continue;
     }
     const char = translated[i];
-    if (char === "$" && backslashes % 2 === 0) out.push("\\");
+    if (char === "$" && backslashes % 2 === 0 && !mathDollars.has(i)) out.push("\\");
     out.push(char);
     backslashes = char === "\\" ? backslashes + 1 : 0;
   }
@@ -340,23 +360,76 @@ function qualityParts(source: string) {
     const parts: string[] = []; let cursor = 0;
     for (const offset of markers) { parts.push(source.slice(cursor, offset), "- "); cursor = offset + 1; }
     parts.push(source.slice(cursor));
-    tree = markdown.parse(parts.join("")) as unknown as MdNode;
+    source = parts.join("");
+    tree = markdown.parse(source) as unknown as MdNode;
   }
   const counts = { heading: 0, listItem: 0, table: 0, paragraph: 0 };
-  const math: string[] = [];
+  const math = { display: [] as string[], inline: [] as string[], multiDollarInline: [] as string[] };
   const walk = (node: MdNode) => {
     if (node.type in counts) counts[node.type as keyof typeof counts]++;
-    if (node.type === "math" || node.type === "inlineMath") math.push((node.value ?? "").replace(/\r\n/g, "\n"));
+    if (node.type === "math" || node.type === "inlineMath") {
+      const value = (node.value ?? "").replace(/\r\n/g, "\n");
+      if (node.type === "math") math.display.push(value);
+      else {
+        math.inline.push(value);
+        const start = node.position?.start.offset;
+        if (start !== undefined && source.startsWith("$$", start)) math.multiDollarInline.push(value);
+      }
+    }
     node.children?.forEach(walk);
   };
   walk(tree);
-  return { counts, math };
+  return { counts, math, tree, source };
+}
+
+const SYMBOL_LETTER = String.raw`[\p{L}&&[\p{Script=Latin}\p{Script=Greek}]]`;
+// Japanese prose can adjoin a variable without a space. Treat letters in
+// other scripts, combining marks, digits and underscores as part of a word.
+const PROSE_WORD_CHAR = String.raw`[[\p{L}\p{M}\p{N}\p{Pc}]--[\p{Script_Extensions=Han}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}]]`;
+const PROSE_SYMBOL = new RegExp(String.raw`(?<!${PROSE_WORD_CHAR})${SYMBOL_LETTER}(?:_(?:\{[A-Za-z0-9]{1,2}\}|[A-Za-z0-9]{1,2}))?(?!${PROSE_WORD_CHAR})`, "gv");
+const INLINE_SYMBOL = new RegExp(String.raw`^${SYMBOL_LETTER}(?:_(?:\{[A-Za-z0-9]{1,2}\}|[A-Za-z0-9]))?$`, "v");
+const symbolKey = (symbol: string) => symbol.replace(/[{}]/g, "");
+const INLINE_PROSE_CONTAINERS = new Set(["emphasis", "strong", "delete", "linkReference"]);
+
+function proseSymbols({ tree, source }: Pick<ReturnType<typeof qualityParts>, "tree" | "source">): Set<string> {
+  const parts: string[] = [];
+  const walk = (node: MdNode) => {
+    if (node.type === "text") {
+      parts.push(node.value ?? "");
+      return;
+    }
+    const start = node.position?.start.offset;
+    const explicitLink = node.type === "link" && start !== undefined && source[start] === "[";
+    const inline = explicitLink || INLINE_PROSE_CONTAINERS.has(node.type);
+    // Keep adjacent letters together across inline styling. Code, math and
+    // autolinks do not supply prose, and separate blocks cannot form one word.
+    if (!inline) parts.push(" ");
+    if (node.type !== "link" || explicitLink) node.children?.forEach(walk);
+    if (!inline) parts.push(" ");
+  };
+  walk(tree);
+  return new Set(Array.from(parts.join("").matchAll(PROSE_SYMBOL), ([symbol]) => symbolKey(symbol)));
+}
+
+function mathChanged(a: ReturnType<typeof qualityParts>, b: ReturnType<typeof qualityParts>): boolean {
+  if (a.math.display.length !== b.math.display.length || missingInline(a.math.display, b.math.display).length) return true;
+  if (missingInline(a.math.inline, b.math.inline).length) return true;
+  const extra = missingInline(b.math.inline, a.math.inline);
+  if (!extra.length) return false;
+  // Existing inline formulas may use either delimiter length. Each
+  // multi-dollar span must still have a matching source formula.
+  if (missingInline(b.math.multiDollarInline, a.math.inline).length) return true;
+  const symbols = proseSymbols(a);
+  return extra.some(index => {
+    const value = b.math.inline[index - 1].trim();
+    return !INLINE_SYMBOL.test(value) || !symbols.has(symbolKey(value));
+  });
 }
 
 export function qualityMismatches(source: string, translated: string, opts: { from?: string; to?: string }): string[] {
   const a = qualityParts(source), b = qualityParts(translated);
   const out: string[] = [];
-  if (a.math.length !== b.math.length || missingInline(a.math, b.math).length) out.push("math content changed: copy every formula exactly");
+  if (mathChanged(a, b)) out.push("math content changed: copy every formula exactly");
   for (const key of Object.keys(a.counts) as Array<keyof typeof a.counts>) {
     const tolerance = key === "paragraph" && a.counts[key] >= TRANSLATION_QUALITY_LIMITS.paragraphToleranceFrom ? TRANSLATION_QUALITY_LIMITS.paragraphTolerance : 0;
     if (Math.abs(a.counts[key] - b.counts[key]) > tolerance) out.push(`${key} count: ${a.counts[key]} -> ${b.counts[key]}`);
