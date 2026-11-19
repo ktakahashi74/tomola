@@ -24,12 +24,13 @@ test("owners publish a speaking style and readers follow answer labels to its hi
   })).toBe(true);
   await management.locator(":scope > summary").click();
   const nushiToggle = management.locator('form[action="/nushi/action"]');
+  const saveNushi = nushiToggle.getByRole("button", { name: en.save, exact: true });
   await nushiToggle.getByRole("checkbox").uncheck();
-  await nushiToggle.getByRole("button", { name: en.save, exact: true }).click();
+  await saveNushi.click();
   await expect(link).toHaveCount(0);
   expect((await page.request.get("/v/chat-nushi-browser/nushi")).status()).toBe(404);
   await nushiToggle.getByRole("checkbox").check();
-  await nushiToggle.getByRole("button", { name: en.save, exact: true }).click();
+  await saveNushi.click();
   await expect(link).toHaveCount(1);
   await link.click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(en.village_nushi_title);

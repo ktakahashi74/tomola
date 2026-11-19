@@ -1,9 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, type Locator } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { clientHeaders, enMessages as en, state, useMember, waitForClientRoute, openPostSettings } from "./helpers";
 import { expectNushiPending } from "./support/nushi-pending";
+
+async function enablePersonalNushi(page: Page) {
+  await waitForClientRoute(page);
+  const form = page.locator('#settings-nushi form:has(input[name="villageId"])');
+  const enabled = form.getByLabel(en.nushi_enable, { exact: true });
+  await enabled.check();
+  const [saved] = await Promise.all([
+    page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/nushi/action.data"),
+    form.getByRole("button", { name: en.save, exact: true }).click(),
+  ]);
+  expect(saved.ok()).toBe(true);
+  await waitForClientRoute(page);
+  await expect(enabled).toBeChecked();
+}
 
 async function expectAnswerLayout(answer: Locator, member: boolean) {
   const header = answer.locator("header > p").first();
@@ -109,9 +123,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
   await waitForClientRoute(page);
   const settings = page.locator("#settings-nushi");
   await expect(settings.locator('form:has(input[value="preferences"])').getByRole("button", { name: en.save, exact: true })).toBeVisible();
-  await settings.getByLabel(en.nushi_enable, { exact: true }).check();
-  await settings.locator('form:has(input[name="villageId"])').getByRole("button", { name: en.save, exact: true }).click();
-  await expect(settings.getByLabel(en.nushi_enable, { exact: true })).toBeChecked();
+  await enablePersonalNushi(page);
   await page.goto("/t/new?lang=en");
   await waitForClientRoute(page);
   await page.getByLabel(en.field_body, { exact: true }).fill("Orchard source for a public AI reply. The growers disagree about the planting date.");
@@ -247,10 +259,7 @@ test("Nushi moderation reports appear in the operator queue and public action lo
   test.setTimeout(180_000);
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.221"));
   await useMember(page, "znushi_mod_owner@example.com", "/settings?lang=en#settings-nushi");
-  await waitForClientRoute(page);
-  const settings = page.locator("#settings-nushi");
-  await settings.getByLabel(en.nushi_enable, { exact: true }).check();
-  await settings.locator('form:has(input[name="villageId"])').getByRole("button").click();
+  await enablePersonalNushi(page);
   await page.goto("/t/new?lang=en");
   await waitForClientRoute(page);
   await page.getByLabel(en.field_body, { exact: true }).fill("@nushi orchard moderation sources");
@@ -296,9 +305,7 @@ test("public edits warn on the original answer and only its caller can replace i
   const guestContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, javaScriptEnabled: false, extraHTTPHeaders: clientHeaders("192.0.2.227") });
   try {
     await useMember(page, "znushi_flow_owner@example.com", "/settings?lang=en#settings-nushi");
-    const settings = page.locator("#settings-nushi");
-    await settings.getByLabel(en.nushi_enable, { exact: true }).check();
-    await settings.locator('form:has(input[name="villageId"])').getByRole("button").click();
+    await enablePersonalNushi(page);
     await page.goto("/t/new?lang=en"); await waitForClientRoute(page);
     await page.getByLabel(en.field_body, { exact: true }).fill("The orchard date needs review. Growers disagree about the planting schedule.");
     await page.getByRole("button", { name: en.submit_post, exact: true }).click();
