@@ -3,14 +3,14 @@ import { afterInitialActivation } from "~/lib/initial-activation";
 import { useLocation } from "react-router";
 import { AiImport } from "~/components/ai-import";
 import { readerLoginHref } from "~/lib/public-reading";
-import { AiChoiceForm, choiceName, readChoice, saveChoice } from "~/components/open-in-ai";
+import { AiChoiceForm, choiceName } from "~/components/ai-choice";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { entryErrorMessage } from "~/components/entry-fields";
 import { aiWriteDestination, aiWritePrompt, AI_WRITE_TASKS, defaultAiWriteTask, type AiWriteTask } from "~/lib/ai-draft";
-import type { AiChoice } from "~/lib/open-in-ai";
+import { readChoice, saveChoice, type AiChoice } from "~/lib/open-in-ai";
 import { m } from "~/paraglide/messages.js";
 import { flushDraft } from "~/lib/draft-autosave";
 

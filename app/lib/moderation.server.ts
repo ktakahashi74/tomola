@@ -182,14 +182,23 @@ export async function madeByOperator(db: Db, actionId: number | null | undefined
 
 // Latest action on the post among specified kinds, or null. Determine the action behind the current state from history,
 // rather than moderation_action_id, which restoration and other actions overwrite.
-export async function latestEntryAction(db: Db, entryId: number, kinds: readonly ModerationAction[]): Promise<{ id: number; action: ModerationAction; reason: ReportReason } | null> {
-  const [row] = await db
-    .select({ id: moderationActions.id, action: moderationActions.action, reason: moderationActions.reason })
+export async function loadLatestEntryActions(db: Db, entryIds: readonly number[], kinds: readonly ModerationAction[]) {
+  const result = new Map<number, { id: number; action: ModerationAction; reason: ReportReason }>();
+  if (!entryIds.length) return result;
+  const rows = await db
+    .selectDistinctOn([moderationActions.targetEntryId], { entryId: moderationActions.targetEntryId, id: moderationActions.id, action: moderationActions.action, reason: moderationActions.reason })
     .from(moderationActions)
-    .where(and(eq(moderationActions.targetEntryId, entryId), inArray(moderationActions.action, [...kinds])))
-    .orderBy(desc(moderationActions.id))
-    .limit(1);
-  return row ? { id: row.id, action: row.action as ModerationAction, reason: isReason(row.reason) ? row.reason : "other" } : null;
+    .where(and(inArray(moderationActions.targetEntryId, [...entryIds]), inArray(moderationActions.action, [...kinds])))
+    .orderBy(moderationActions.targetEntryId, desc(moderationActions.id))
+    .limit(entryIds.length);
+  for (const row of rows) {
+    if (row.entryId !== null) result.set(row.entryId, { id: row.id, action: row.action as ModerationAction, reason: isReason(row.reason) ? row.reason : "other" });
+  }
+  return result;
+}
+
+export async function latestEntryAction(db: Db, entryId: number, kinds: readonly ModerationAction[]) {
+  return (await loadLatestEntryActions(db, [entryId], kinds)).get(entryId) ?? null;
 }
 
 // Resolve every open report on the post, retaining actor/time. Return resolved count.

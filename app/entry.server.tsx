@@ -79,10 +79,13 @@ export default function handleRequest(
     let shellRendered = false;
     let userAgent = request.headers.get("user-agent");
 
-    // Ensure requests from bots and SPA Mode renders wait for all content to load before responding
+    // Keep the reply form in the HTML flow, where it works without JavaScript.
+    // React can put even a completed Suspense boundary in a hidden segment.
+    const topicHasReplyForm = routerContext.staticHandlerContext.loaderData["routes/topic"]?.canReply === true;
+    // Bots and SPA Mode renders also wait for all content before responding.
     // https://react.dev/reference/react-dom/server/renderToPipeableStream#waiting-for-all-content-to-load-for-crawlers-and-static-generation
     let readyOption: keyof RenderToPipeableStreamOptions =
-      (userAgent && isbot(userAgent)) || routerContext.isSpaMode
+      topicHasReplyForm || (userAgent && isbot(userAgent)) || routerContext.isSpaMode
         ? "onAllReady"
         : "onShellReady";
 
@@ -102,6 +105,7 @@ export default function handleRequest(
         </TestSiteNoticeContext.Provider>
       </BrowserTranslationContext.Provider>,
       {
+        progressiveChunkSize: topicHasReplyForm ? Infinity : undefined,
         // Add the nonce to React's own inline streaming scripts that complete Suspense boundaries too.
         nonce,
         async [readyOption]() {

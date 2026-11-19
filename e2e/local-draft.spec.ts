@@ -132,10 +132,29 @@ test("text typed in the reply field goes with the member to another reply target
     await expect(body(page, "#reply")).toBeEmpty();
   }
   expect(await kept(page)).toEqual([]);
-  await page.goto(thread);
-  await waitForFormReady(page.locator("form", { has: page.locator('textarea[name="body"]') }).first());
+  const form = page.locator("#reply form");
+  const draftText = "Typed for the first reply";
+  if (process.env.E2E_SERVER === "build") {
+    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    let release!: () => void;
+    const pause = new Promise<void>(resolve => { release = resolve; });
+    await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
+    try {
+      const requested = page.waitForRequest(asset);
+      await page.goto(thread, { waitUntil: "commit" });
+      await requested;
+      await expect(form).not.toHaveAttribute("data-ready", "true");
+      await body(page, "#reply").fill(draftText);
+    } finally { release(); }
+    await waitForFormReady(form);
+    await expect(body(page, "#reply")).toHaveValue(draftText);
+    await expect(body(page, "#reply")).toBeFocused();
+  } else {
+    await page.goto(thread);
+    await waitForFormReady(form);
+    await body(page, "#reply").fill(draftText);
+  }
   // Typed, and the target changed before the one-second wait is over: the text must be in the new target's record and not in the record of the target left.
-  await body(page, "#reply").fill("Typed for the first reply");
   await page.getByRole("link", { name: en.reply_to_button, exact: true }).first().click();
   await expect(page).toHaveURL(/reply_to=c-\d+#reply$/);
   const target = new URL(page.url()).searchParams.get("reply_to")!.slice(2);

@@ -1,4 +1,4 @@
-// Browser-side selection/URL construction for 「AIで開く」, pure functions. UI components read/write localStorage.
+// Browser-side selection/URL construction for 「AIで開く」, and local choice storage.
 // Choices: ChatGPT, Claude, or Other with a user-provided https URL template containing {prompt}.
 // Replace {prompt} with URL-encoded prompt text.
 
@@ -63,4 +63,24 @@ export function parseChoice(raw: string | null): AiChoice | null {
 
 export function serializeChoice(choice: AiChoice): string {
   return JSON.stringify(choice);
+}
+
+export function readChoice(): AiChoice | null {
+  try {
+    return parseChoice(window.localStorage.getItem(AI_CHOICE_STORAGE_KEY));
+  } catch {
+    // localStorage is unavailable, for example in private browsing; the choice is not persisted.
+    return null;
+  }
+}
+
+export function saveChoice(choice: AiChoice | null) {
+  try {
+    if (choice) window.localStorage.setItem(AI_CHOICE_STORAGE_KEY, serializeChoice(choice));
+    else window.localStorage.removeItem(AI_CHOICE_STORAGE_KEY);
+    return true;
+  } catch {
+    // Opening still works for this attempt even if persistence fails.
+    return false;
+  }
 }

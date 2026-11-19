@@ -187,25 +187,26 @@ function reportNoticeOf(notice: ReportNotice | undefined, kind: ShownKind): Repo
 
 export async function loadEntryDisplays(db: Db, inputs: readonly DisplayInput[], opts: DisplayOptions): Promise<Map<number, EntryDisplay>> {
   const browser = (id: number) => opts.browser?.has(id) ?? false;
-  const picked = await loadPickedTranslations(db, inputs, opts.displayLang);
-  const availability = await loadTranslationAvailability(db, inputs.filter(e => {
-    const body = picked.get(e.id)?.body;
-    return (!body || (browser(e.id) && (body.sourceHash !== e.sourceHash || isStale(body.flags)))) && wantsTranslation(e.lang, opts.readLangs, opts.displayLang);
-  }), [opts.displayLang], undefined, { currentOnly: !!opts.browser });
-  const notices = await loadReportNotices(
-    db,
-    inputs.filter((e) => picked.get(e.id)?.body).map((e) => ({ entryId: e.id, lang: opts.displayLang, sourceHash: e.sourceHash })),
-  );
-  // The posts with a translation whose stored rendering is missing or old: their source bodies are read once, for the members their translations can emphasize.
   const includeOlder = (id: number) => opts.variant !== "card" && !!opts.forceOlder?.has(id) && !opts.forceOriginal?.has(id);
   const needsRender = (row: Row | null) => row !== null && (row.html === null || row.htmlVersion !== RENDER_VERSION);
-  const sourceOf = await resolveSourceSnapshotsFor(
-    db,
-    inputs.filter((e) => needsRender(picked.get(e.id)?.body ?? null) || (includeOlder(e.id) && needsRender(picked.get(e.id)?.bodyOlder ?? null))).map((e) => e.id),
-  );
-  const renderRows = [...picked.values()].flatMap(rows => [rows.body, ...(rows.bodyOlder && includeOlder(rows.bodyOlder.entryId) ? [rows.bodyOlder] : [])]).filter((row): row is Picked => row !== null && needsRender(row));
-  const savedMentions = await resolveTranslationMentionsFor(db, renderRows);
-  const decorateFigures = await prepareEntryFigureDisplay(db, inputs.map(entry => entry.id), opts.displayLang);
+  const [[picked, availability, notices, sourceOf, savedMentions], decorateFigures] = await Promise.all([
+    loadPickedTranslations(db, inputs, opts.displayLang).then(async picked => {
+      const renderRows = [...picked.values()].flatMap(rows => [rows.body, ...(rows.bodyOlder && includeOlder(rows.bodyOlder.entryId) ? [rows.bodyOlder] : [])]).filter((row): row is Picked => row !== null && needsRender(row));
+      // Snapshot only the source entries whose selected translation needs rendering.
+      const renderIds = [...new Set(renderRows.map(row => row.entryId))];
+      const [availability, notices, sourceOf, savedMentions] = await Promise.all([
+        loadTranslationAvailability(db, inputs.filter(e => {
+          const body = picked.get(e.id)?.body;
+          return (!body || (browser(e.id) && (body.sourceHash !== e.sourceHash || isStale(body.flags)))) && wantsTranslation(e.lang, opts.readLangs, opts.displayLang);
+        }), [opts.displayLang], undefined, { currentOnly: !!opts.browser }),
+        loadReportNotices(db, inputs.filter(e => picked.get(e.id)?.body).map(e => ({ entryId: e.id, lang: opts.displayLang, sourceHash: e.sourceHash }))),
+        resolveSourceSnapshotsFor(db, renderIds),
+        resolveTranslationMentionsFor(db, renderRows),
+      ]);
+      return [picked, availability, notices, sourceOf, savedMentions] as const;
+    }),
+    prepareEntryFigureDisplay(db, inputs.map(entry => entry.id), opts.displayLang),
+  ]);
   const out = new Map<number, EntryDisplay>();
   const card = opts.variant === "card";
   // Report displayed rows even after their first timestamp: the writer may have

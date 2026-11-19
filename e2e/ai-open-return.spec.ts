@@ -168,6 +168,11 @@ test("public readers receive fresh inert markers and see recovery only until the
 test("checks pause while hidden, stop at expiry, reset on menu use, and skip failed public issuance", async ({ browser }) => {
 
   const { page, opened, checked, close } = await setup(browser, "10.89.0.3");
+  const deferredAssets: string[] = [];
+  page.on("request", request => {
+    const filename = new URL(request.url()).pathname.split("/").at(-1)!;
+    if (/^(topic-reply-form|open-in-ai-details)-.*\.js$/.test(filename)) deferredAssets.push(filename);
+  });
   try {
     await page.goto(`/t/${fixture().topicId}?lang=en`);
     await expect(page.getByRole("button", { name: en.open_in_ai, exact: true }).first()).toBeVisible();
@@ -185,7 +190,16 @@ test("checks pause while hidden, stop at expiry, reset on menu use, and skip fai
     await page.clock.fastForward(AI_OPEN_CHECK_INTERVAL_MS);
     expect(checked.length).toBe(after);
     await expect(entrance.getByText(recovery, { exact: true })).toBeVisible();
-    await entrance.getByRole("button", { name: en.open_in_ai_menu, exact: true }).click();
+    if (process.env.E2E_SERVER === "build") expect(deferredAssets).toEqual([]);
+    const menuButton = entrance.getByRole("button", { name: en.open_in_ai_menu, exact: true });
+    await menuButton.click();
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem", { name: en.open_in_ai_copy_url })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menuButton).toBeFocused();
+    if (process.env.E2E_SERVER === "build") {
+      expect(deferredAssets).toEqual([expect.stringMatching(/^open-in-ai-details-/)]);
+    }
     await expect(page.getByText(recovery, { exact: true })).toHaveCount(0);
     // Isolate failed issuance from the menu check and its animation clock.
     await page.goto(page.url());

@@ -29,6 +29,32 @@ export default defineConfig({
     }),
     tailwindcss(),
     reactRouter(),
+    {
+      name: "group-small-client-messages",
+      apply: "build",
+      applyToEnvironment: environment => environment.name === "client",
+      outputOptions: options => ({
+        ...options,
+        codeSplitting: {
+          groups: [
+            {
+              name: "shell-messages",
+              test: /\/app\/paraglide\/messages\/(?:error_body_unavailable|footer_connect|site_name)\.js$/,
+              // Every page already uses the shell's locale runtime.
+              priority: 1,
+            },
+            {
+              name: "entry-report-messages",
+              test: /\/app\/paraglide\/messages\/flag_(?:error(?:_invalid)?|thanks)\.js$/,
+            },
+            {
+              name: "report-form-messages",
+              test: /\/app\/paraglide\/messages\/flag_(?:privacy|submit)\.js$/,
+            },
+          ],
+        },
+      }),
+    },
   ],
   // The development server for e2e browser tests uses a dedicated dependency-optimization cache (e2e/global-setup.ts).
   cacheDir: process.env.TOMOLA_VITE_CACHE_DIR || undefined,

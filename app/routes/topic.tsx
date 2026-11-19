@@ -20,7 +20,6 @@ import { Badge } from "~/components/ui/badge";
 import { data, Form, Link, useLocation } from "react-router";
 import type { Route } from "./+types/topic";
 import { entryErrorMessage } from "~/lib/entry-error-message";
-import { ReplyFields } from "~/components/reply-fields";
 import { SaveButton } from "~/components/save-button";
 import { TopicActions } from "~/components/topic-actions";
 import { ReadingActionMenu } from "~/components/reading-action-menu";
@@ -59,7 +58,7 @@ import { loadReplyParents } from "~/lib/reply-branches.server";
 import { ReplyBranchTail } from "~/components/reply-branch-tail";
 import { loadLatestReplyLocations } from "~/lib/reply-locations.server";
 import { getFollowState } from "~/lib/follows.server";
-import { latestEntryAction, loadOwnOpenReportIds } from "~/lib/moderation.server";
+import { loadLatestEntryActions, loadOwnOpenReportIds } from "~/lib/moderation.server";
 import { loadAltOrigin, loadObjectionPanel } from "~/lib/objections.server";
 import { loadReasonExcerpts, loadReasonsPanel, type ReasonExcerpt } from "~/lib/reasons.server";
 import { peekHrefFor, readPeekParam, readReviewParam, readStanceMessage, reviewHrefFor, stanceReturnTo, toDistributionView } from "~/lib/stance-ui";
@@ -88,7 +87,7 @@ import { villageNameTitle } from "~/lib/village-translation-view";
 import { postingVillageName, villageName } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 import { SigningFailureResponse } from "~/lib/signing.server";
-import { SendButton, SignedForm } from "~/components/signed-form";
+import { afterPageIdle } from "~/lib/initial-activation";
 import { ListMeta } from "~/components/list-meta";
 import { LocalTime } from "~/components/local-time";
 import { ActionPanel } from "~/components/ui/action-panel";
@@ -124,6 +123,13 @@ const ModerationPanelContent: ComponentType<ComponentProps<typeof LazyModeration
 const ModerationPanel = memo(function ModerationPanel({ className, ...props }: ComponentProps<typeof LazyModerationPanel> & { className?: string }) {
   return <ActionPanel label={m.mod_panel_summary()} className={className ?? "text-sm"} summaryClassName="touch-action h-auto px-1 ui-meta"><Suspense fallback={null}><ModerationPanelContent {...props} /></Suspense></ActionPanel>;
 });
+// Suspense keeps the server's form in place while the browser waits for idle
+// time or interaction to hydrate it.
+let startReplyFormLoad: () => void;
+const replyFormReady = new Promise<void>(resolve => { startReplyFormLoad = () => resolve(); });
+const LazyTopicReplyForm = lazy(() => replyFormReady.then(() => import("~/components/topic-reply-form")));
+const ServerTopicReplyForm = import.meta.env.SSR ? (await import("~/components/topic-reply-form")).default : null;
+const TopicReplyForm = ServerTopicReplyForm ?? LazyTopicReplyForm;
 
 const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params }, next) => {
   const response = await next();
@@ -170,42 +176,19 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   const { topic, replies } = thread;
   const resume = consumeStanceResume(request, user?.id, topic.id, !!profile && hasStanceConsent(profile));
   collectSessionCookies(resume.headers);
-  const latestReplyPromise = !stanceTag && thread.replyTotal > 10 ? loadLatestReplyLocations(db, [topic.id]).then(rows => rows.get(topic.id)) : undefined;
-  // Read display decisions and votes only for entries whose content is shown.
   const shown = [topic, ...replies].filter((e) => e.visibility === "visible" || e.visibility === "hidden");
-  // Displayed version: original if its language is readable; otherwise the display-language translation, overridden per page with ?lang=.
-  // Only affected authors receive action ids; privileged visibility alone does not grant an appeal.
-  const hiddenActionsPromise = (user ? Promise.all(shown.filter((e) => e.visibility === "hidden" && e.authorId === user.id).map(async (e) => {
-    const current = await latestEntryAction(db, e.id, ["hide", "unhide"]);
-    return [e.id, current?.action === "hide" ? { id: current.id, reason: current.reason } : null] as const;
-  })) : Promise.resolve([])).then(rows => new Map(rows));
-  const ownOpenReportIdsPromise = user ? loadOwnOpenReportIds(db, user.id, shown.map((e) => e.id)) : Promise.resolve(new Set<number>());
-  const ownTranslationReportsPromise = user ? loadOwnTranslationReports(db, user.id, shown) : Promise.resolve([]);
   const displayLang = displayLangFor(request, profile);
   const readLangs = screenReadLangsFor(request, profile);
-  // The reasons panel (a question that is visible): the replies drawn by lot, for everyone alike. The panel shows a plain-text excerpt of each (not the reply's HTML: the same reply is
-  // also in the list below, and two copies would repeat footnote ids); their Insightful state is read with the thread's posts.
-  const questionVisible = topic.visibility === "visible" && topic.asksStance;
-  const reasonsPromise = questionVisible ? loadReasonsPanel(db, topic.id, { viewer, lang: langCarry(request) }) : Promise.resolve(null);
-  const extraPromise = Promise.all([
-    user && topic.visibility !== "hidden-redacted" && topic.asksStance ? loadOwnStances(db, user.id, [topic.id]) : Promise.resolve(new Map()),
-    !user || topic.visibility === "hidden-redacted" ? Promise.resolve(null) : getFollowState(db, user.id, topic.id).then(state => ({ state })),
-    stanceTag ? Promise.resolve([]) : loadReplyParents(db, topic.id, replies.map(r => r.id)),
-    listRelatedDiscussions(db, topic.id, { readLangs, displayLang, inline: true, lang: langCarry(request), typesetTitles: true }),
-    villagesEnabled() && topic.visibility === "visible" ? topicContinuation(db, topic.id, { readLangs, displayLang }) : Promise.resolve(null),
-    topic.visibility !== "hidden-redacted" && topic.title === null ? headlineFromBody(topic.body) : Promise.resolve(null),
-    topic.visibility === "visible" && topic.asksStance ? loadObjectionPanel(db, topic.id, { readLangs, displayLang }) : Promise.resolve(null),
-    topic.visibility !== "hidden-redacted" && topic.altOf !== null ? loadAltOrigin(db, topic.altOf, { readLangs, displayLang }) : Promise.resolve(null),
-    synchronizeTopicRead(request),
-  ]);
-  const reasonsLoaded = await reasonsPromise;
-  const reasonViews = reasonsLoaded ? [...reasonsLoaded.views.values()].filter((v) => v.visibility === "visible") : [];
-  const avatars = await loadMemberAvatars(db, shown.map(e => e.authorHandle));
-  const authorNames = await loadDisplayNames(db, [...shown, ...reasonViews].map(e => e.authorHandle));
-  const reasonExcerptsPromise = reasonViews.length > 0 ? loadReasonExcerpts(db, reasonViews, { readLangs, displayLang }) : Promise.resolve(new Map<number, ReasonExcerpt>());
-  const forReactions = [...shown, ...reasonViews.filter((v) => !shown.some((e) => e.id === v.id))];
+  const langs = { readLangs, displayLang };
+  const carriedLang = langCarry(request);
+  const topicVisible = topic.visibility === "visible";
+  const topicReadable = topic.visibility !== "hidden-redacted";
+  const asksStance = topicReadable && topic.asksStance;
+  const questionVisible = topicVisible && asksStance;
+  const showVillage = villagesEnabled() && topicReadable;
+  const showContinuation = showVillage && topicVisible;
   // Return only fields needed by the UI, without raw body.
-  // ?orig=<id>, ?tr=<id>, and ?old=<id> (translations based on an earlier source version) are link targets for switching source and translations without JavaScript.
+  // ?orig=<id>, ?tr=<id>, and ?old=<id> are link targets for switching versions without JavaScript.
   const displaysPromise = loadEntryDisplays(
     db,
     shown.map((e) => ({ id: e.id, kind: e.kind, lang: e.lang, sourceHash: e.sourceHash })),
@@ -218,52 +201,137 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       forceOlder: parseIdSet(url.searchParams.getAll("old")),
     },
   );
-  // Mute only languages with unfinished body work; unrequested languages remain
-  // selectable and start the same on-read translation path as any reader.
-  const translatingPromise: Promise<Lang[]> = user && topic.authorId === user.id && topic.visibility === "visible"
-    ? loadTranslationAvailability(db, [{ id: topic.id, lang: topic.lang, sourceHash: topic.sourceHash }], enabledLangs())
-      .then(states => enabledLangs().filter(lang => lang !== topic.lang && states.get(availabilityKey(topic.id, lang)) === "pending"))
-    : Promise.resolve([]);
-  const [displays, reasonExcerpts, reactions, extra, hiddenActions, ownOpenReportIds, latestReply, ownTranslationReports, translating] = await Promise.all([
-    displaysPromise, reasonExcerptsPromise,
-    loadReactions(db, forReactions.map(e => ({ id: e.id })), user?.id ?? null),
-    extraPromise, hiddenActionsPromise, ownOpenReportIdsPromise, latestReplyPromise, ownTranslationReportsPromise, translatingPromise,
+  // The reason excerpts and the full thread share batched display-name and reaction lookups.
+  const reasonData = (async () => {
+    const reasonsLoaded = questionVisible ? await loadReasonsPanel(db, topic.id, { viewer, lang: carriedLang }) : null;
+    const reasonViews = reasonsLoaded ? [...reasonsLoaded.views.values()].filter(v => v.visibility === "visible") : [];
+    const forReactions = [...shown, ...reasonViews.filter(v => !shown.some(e => e.id === v.id))];
+    const [authorNames, reasonExcerpts, reactions] = await Promise.all([
+      loadDisplayNames(db, [...shown, ...reasonViews].map(e => e.authorHandle)),
+      reasonViews.length ? loadReasonExcerpts(db, reasonViews, langs) : new Map<number, ReasonExcerpt>(),
+      loadReactions(db, forReactions.map(e => ({ id: e.id })), user?.id ?? null),
+    ]);
+    return { reasonsLoaded, authorNames, reasonExcerpts, reactions };
+  })();
+  const [
+    displays, { reasonsLoaded, authorNames, reasonExcerpts, reactions }, avatars, hiddenActions,
+    ownOpenReportIds, ownTranslationReports, latestReply, ownStances, follow, replyParents,
+    related, continuation, headline, objections, origin, translating,
+  ] = await Promise.all([
+    displaysPromise,
+    reasonData,
+    loadMemberAvatars(db, shown.map(e => e.authorHandle)),
+    // Only affected authors receive action ids; privileged visibility alone does not grant an appeal.
+    loadLatestEntryActions(db, shown.filter(e => e.visibility === "hidden" && e.authorId === user?.id).map(e => e.id), ["hide", "unhide"]),
+    user ? loadOwnOpenReportIds(db, user.id, shown.map(e => e.id)) : new Set<number>(),
+    user ? loadOwnTranslationReports(db, user.id, shown) : [],
+    !stanceTag && thread.replyTotal > 10 ? loadLatestReplyLocations(db, [topic.id]).then(rows => rows.get(topic.id)) : undefined,
+    user && asksStance ? loadOwnStances(db, user.id, [topic.id]) : null,
+    user && topicReadable ? getFollowState(db, user.id, topic.id).then(state => ({ state })) : null,
+    stanceTag ? [] : loadReplyParents(db, topic.id, replies.map(r => r.id)),
+    listRelatedDiscussions(db, topic.id, { ...langs, inline: true, lang: carriedLang, typesetTitles: true }),
+    showContinuation ? topicContinuation(db, topic.id, langs) : null,
+    topicReadable && topic.title === null ? headlineFromBody(topic.body) : null,
+    questionVisible ? loadObjectionPanel(db, topic.id, langs) : null,
+    topicReadable && topic.altOf !== null ? loadAltOrigin(db, topic.altOf, langs) : null,
+    // Mute only unfinished body work; unrequested languages still start work on read.
+    user && topic.authorId === user.id && topicVisible
+      ? loadTranslationAvailability(db, [topic], enabledLangs())
+        .then(states => enabledLangs().filter(lang => lang !== topic.lang && states.get(availabilityKey(topic.id, lang)) === "pending"))
+      : [],
+    // Acknowledge the followed-thread notification on the same request as the layout.
+    synchronizeTopicRead(request),
   ]);
-  const [ownStances, follow, replyParents, related, loadedContinuation, headline, objections, origin] = extra;
   const displayOf = (id: number): EntryDisplay => displays.get(id) ?? { shown: "original", pending: false, translation: null };
-  // "Insightful": the total, the number of languages it came from (nothing per language), and the viewer's own press. Nobody can press it on their own post.
+  // "Insightful": only the total, language count and the viewer's own press.
   const reactionsOf = (id: number) => reactions.get(id) ?? NO_REACTIONS;
   const placeholderOf = (e: (typeof thread.replies)[number]): Placeholder => ({ id: e.id, placeholder: e.visibility === "deleted" ? "deleted" : "hidden" });
-  // Questions: for alternative framings, include the original question, or null if unreadable. Show the 「問いの立て方への異議」 panel only on readable, unhidden question pages.
-  const asksStance = topic.visibility !== "hidden-redacted" && topic.asksStance;
-  const langs = { readLangs, displayLang };
+  const writeParam = user ? url.searchParams.get("write") : null;
+  const parentIds = replies.filter(r => r.visibility !== "deleted" && r.visibility !== "hidden-redacted")
+    .flatMap(r => r.parentId === null ? [] : [r.parentId]);
+  const grouped = stanceTag ? null : buildReplyBranches(topic.id, replies, replyParents);
+  const replyOnPage = new Map(replies.map(r => [r.id, r]));
+  const missingRootIds = grouped?.filter(branch => !replyOnPage.has(branch.rootId)).map(branch => branch.rootId) ?? [];
+  const targetParam = user ? url.searchParams.get("reply_to") : null;
+  const targetId = targetParam && /^c-[1-9]\d*$/.test(targetParam) ? Number(targetParam.slice(2)) : null;
+  // Right after posting a topic, its author is told in which language it was published and into which it is being translated (and welcomed, once, for the first).
+  const ownPostedTopic = !!user && topic.visibility === "visible" && topic.authorId === user.id && readPostedId(url) === topic.id;
+  const ownPostedEntry = !!user ? shown.find(entry => entry.visibility === "visible" && entry.authorId === user.id && readPostedId(url) === entry.id) : null;
+  const postedNoticePromise = ownPostedEntry && user ? Promise.all([
+    ownPostedTopic && isFirstTopic(db, user.id),
+    postedTranslationStates(db, ownPostedEntry),
+    postedSourceLanguageStatus(db, ownPostedEntry),
+    ownPostedTopic && hasPostAiMaterialInstructionWarning(db, topic.id),
+  ]).then(([first, langs, sourceStatus, warning]) => ({
+    first, langs, sourceStatus,
+    materialWarning: warning ? { text: m.ai_material_instruction_warning(), label: m.ai_material_link(), href: `/t/${topic.id}/ai-materials` } : null,
+  })) : null;
+  const alternateLang = url.searchParams.get("lang");
+  const countCrawler = request.method === "GET" && url.pathname === `/t/${topic.id}` && thread.page === 1 && topicVisible &&
+    !/prefetch/i.test(`${request.headers.get("purpose")} ${request.headers.get("sec-purpose")}`) &&
+    isAiCrawler(request.headers.get("user-agent") ?? "");
+  const nushiReplyId = Number(url.searchParams.get("nushi_reply"));
+  const canTarget = targetId !== null && Number.isSafeInteger(targetId) && topicVisible;
+  const nushiOn = nushiEnabled();
   // Question stance panel: viewer's own stance and version. Include distribution totals and language count only after stance selection or with ?peek=1; readDistributions excludes hidden questions.
   // Never include other members' stances. ?stance_msg= carries the previous submission result without JavaScript.
-  let stancePart: {
-    stance: { position: Position | null; version: number };
-    distribution: ReturnType<typeof toDistributionView> | null;
-    peeked: boolean;
-    message: "conflict" | "rate_limited" | null;
-    canChoose: boolean;
-    // The post that "Reconsider my stance" came from (?review=), checked: the stance panel sends it with the stance, and the stance is recorded with it as the trigger.
-    triggerEntryId: number | null;
-  } | null = null;
-  if (user && profile && asksStance && topic.visibility !== "hidden-redacted") {
-    const own = ownStances.get(topic.id) ?? { position: null, version: 0 };
+  const stancePromise = (async () => {
+    if (!user || !profile || !asksStance) return null;
+    const own = ownStances?.get(topic.id) ?? { position: null, version: 0 };
     const peeked = readPeekParam(url) !== null;
-    const shownDistribution = own.position !== null || peeked ? (await readDistributions(db, [topic.id], distributionViewerFor({ userId: user.id, profile }))).get(topic.id) : undefined;
     const sent = readStanceMessage(url);
     const reviewParam = readReviewParam(url);
-    stancePart = {
+    const [distributions, triggerEntryId] = await Promise.all([
+      own.position !== null || peeked ? readDistributions(db, [topic.id], distributionViewerFor({ userId: user.id, profile })) : null,
+      // Ignore a trigger unless it can still be used for this reader's stance.
+      own.position !== null && topicVisible && reviewParam !== null ? loadReviewTrigger(db, user.id, topic.id, reviewParam) : null,
+    ]);
+    const shownDistribution = distributions?.get(topic.id);
+    return {
       stance: own,
       distribution: shownDistribution ? toDistributionView(shownDistribution) : null,
       peeked,
       message: sent && sent.questionId === topic.id ? sent.message : null,
-      canChoose: topic.visibility === "visible",
-      // Ignored (not an error) unless the post is in this thread, neither deleted nor hidden, pressed Insightful by the viewer, not the trigger of an earlier change of this stance, and the viewer holds a stance now.
-      triggerEntryId: own.position !== null && topic.visibility === "visible" && reviewParam !== null ? await loadReviewTrigger(db, user.id, topic.id, reviewParam) : null,
+      canChoose: topicVisible,
+      triggerEntryId,
     };
-  }
+  })();
+  const nushiPromise = (async () => {
+    const nushi = topicVisible ? await threadNushi(db, topic.id, [topic.id, ...replies.map(reply => reply.id)], displayLang) : { answers: [], requests: [] };
+    const refreshable = await Promise.all(nushi.answers.map(async answer => await canRefreshNushi(db, answer, user?.id) ? answer.id : null));
+    return { nushi, refreshable: refreshable.filter((id): id is number => id !== null) };
+  })();
+  const writerPromise = (async () => {
+    const canWriteReply = !!user && !!profile && topicVisible && (await getWriter(db, user.id, { profile })).ok;
+    return { canWriteReply, nushiAvailable: canWriteReply && !!await nushiPlace(db, topic.id) };
+  })();
+  const [
+    stancePart, parents, target, postedNotice, village, share, { nushi, refreshable }, nushiPreference, nushiTopic,
+    { canWriteReply, nushiAvailable }, nushiReply, material, saved, replyLangCount,
+  ] = await Promise.all([
+    stancePromise,
+    loadReplyLocations(db, [topic.id], [...new Set([...parentIds, ...missingRootIds])], { viewer, lang: carriedLang }),
+    canTarget ? loadReplyLocations(db, [topic.id], [targetId], { lang: carriedLang }).then(rows => rows.get(targetId)) : undefined,
+    postedNoticePromise,
+    !showVillage ? null : showContinuation ? continuation?.village ?? null
+      : topicVillage(db, topic.id).then(value => value ? localizeVillage(db, value, langs) : null),
+    // Member pages do not fetch public preview data.
+    !user && publicReading() && topicVisible ? topicShare(db, topic, url.search) : null,
+    nushiPromise,
+    nushiOn ? nushiPreferences(db, user?.id, request) : { hide: false, citations: true },
+    nushiOn && user?.id === topic.authorId ? nushiTopicDisabled(db, topic.id) : null,
+    writerPromise,
+    nushiReplyId > 0 && Number.isSafeInteger(nushiReplyId) ? readNushiAnswer(db, nushiReplyId) : null,
+    topicVisible ? hasPostAiMaterial(db, topic.id) : null,
+    user && topicReadable ? isTopicSaved(db, user.id, topic.id) : null,
+    thread.replyCount >= 2 && topicVisible ? countReplyLanguages(db, topic.id) : 0,
+    countCrawler ? countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) }) : undefined,
+  ]);
+  const nushiView = { ...nushi, ...nushiPreference, setting: nushiTopic };
+  const hiddenActionOf = (id: number) => {
+    const current = hiddenActions.get(id);
+    return current?.action === "hide" ? { id: current.id, reason: current.reason } : null;
+  };
   // "Reconsider my stance": a small link next to the pressed button of a post in a question's thread, only for a viewer who holds a stance now (and the question takes stances).
   // It is not offered otherwise: offering it to someone without a stance would urge them to choose one.
   const canReview = stancePart !== null && stancePart.stance.position !== null && stancePart.canChoose;
@@ -294,19 +362,6 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
         ]),
       ) as Record<Position, ReasonView[]>)
     : null;
-  const writeParam = user ? url.searchParams.get("write") : null;
-  // Following: the viewer's state for this topic. Opening a topic marks the viewer's unread followed_thread notification of it as read, so that merging does
-  // not go on after the member has read the topic. A topic whose content is not shown to the viewer has neither.
-  const parentIds = replies.filter(r => r.visibility !== "deleted" && r.visibility !== "hidden-redacted")
-    .flatMap(r => r.parentId === null ? [] : [r.parentId]);
-  const grouped = stanceTag ? null : buildReplyBranches(topic.id, replies, replyParents);
-  const replyOnPage = new Map(replies.map(r => [r.id, r]));
-  const missingRootIds = grouped?.filter(branch => !replyOnPage.has(branch.rootId)).map(branch => branch.rootId) ?? [];
-  const parents = await loadReplyLocations(db, [topic.id], [...new Set([...parentIds, ...missingRootIds])], { viewer, lang: langCarry(request) });
-  const targetParam = user ? url.searchParams.get("reply_to") : null;
-  const targetId = targetParam && /^c-[1-9]\d*$/.test(targetParam) ? Number(targetParam.slice(2)) : null;
-  const target = targetId !== null && Number.isSafeInteger(targetId) && topic.visibility === "visible"
-    ? (await loadReplyLocations(db, [topic.id], [targetId], { lang: langCarry(request) })).get(targetId) : undefined;
   const parentById = new Map(replyParents.map(r => [r.id, r.parentId]));
   const replyBranches = grouped?.map(branch => {
     const { folded } = splitReplyBranch(branch.replyIds);
@@ -344,7 +399,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       own: !!user && e.authorId === user.id,
       posted: !!user && e.authorId === user.id && readPostedId(url) === e.id,
       hidden: e.visibility === "hidden",
-      hiddenAction: hiddenActions.get(e.id) ?? null,
+      hiddenAction: hiddenActionOf(e.id),
       reported: ownOpenReportIds.has(e.id),
       translationReports: ownTranslationReports.filter(report => report.entryId === e.id),
       canModerate: !!user && !!viewer && e.authorId !== user.id && inScope(viewer.scope, e.lang),
@@ -353,41 +408,13 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
       reviewHref: reviewHrefOf(e),
     };
   };
-  // Right after posting a topic, its author is told in which language it was published and into which it is being translated (and welcomed, once, for the first).
-  const ownPostedTopic = !!user && topic.visibility === "visible" && topic.authorId === user.id && readPostedId(url) === topic.id;
-  const ownPostedEntry = !!user ? shown.find(entry => entry.visibility === "visible" && entry.authorId === user.id && readPostedId(url) === entry.id) : null;
-  const postedNotice = ownPostedEntry ? { first: ownPostedTopic && await isFirstTopic(db, user!.id), langs: await postedTranslationStates(db, ownPostedEntry), sourceStatus: await postedSourceLanguageStatus(db, ownPostedEntry),
-    materialWarning: ownPostedTopic && await hasPostAiMaterialInstructionWarning(db, topic.id)
-      ? { text: m.ai_material_instruction_warning(), label: m.ai_material_link(), href: `/t/${topic.id}/ai-materials` } : null } : null;
-  const showVillage = villagesEnabled() && topic.visibility !== "hidden-redacted";
-  const showContinuation = showVillage && topic.visibility === "visible";
-  const continuation = showContinuation ? loadedContinuation : null;
-  const plainVillage = showVillage && !showContinuation ? await topicVillage(db, topic.id) : null;
-  const village = showVillage ? (showContinuation ? continuation?.village ?? null : plainVillage ? await localizeVillage(db, plainVillage, { readLangs, displayLang }) : null) : null;
-  // Only public readers fetch preview data; member pages do not need its cost.
-  const share = !user && publicReading() && topic.visibility === "visible" ? await topicShare(db, topic, url.search) : null;
-  const alternateLang = url.searchParams.get("lang");
-  if (request.method === "GET" && url.pathname === `/t/${topic.id}` && thread.page === 1 && topic.visibility === "visible" &&
-      !/prefetch/i.test(`${request.headers.get("purpose")} ${request.headers.get("sec-purpose")}`) &&
-      isAiCrawler(request.headers.get("user-agent") ?? "")) {
-    await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
-  }
-  const nushi = topic.visibility === "visible" ? await threadNushi(db, topic.id, [topic.id, ...replies.map(reply => reply.id)], displayLang) : { answers: [], requests: [] };
-  const nushiOn = nushiEnabled();
-  const nushiPreference = nushiOn ? await nushiPreferences(db, user?.id, request) : { hide: false, citations: true };
-  const nushiTopic = nushiOn && user?.id === topic.authorId ? await nushiTopicDisabled(db, topic.id) : null;
-  const canWriteReply = !!user && !!profile && topic.visibility === "visible" && (await getWriter(db, user.id, { profile })).ok;
-  const nushiView = { ...nushi, ...nushiPreference, setting: nushiTopic };
-  const nushiReplyId = Number(url.searchParams.get("nushi_reply"));
-  const nushiReply = nushiReplyId > 0 && Number.isSafeInteger(nushiReplyId) ? await readNushiAnswer(db, nushiReplyId) : null;
   return {
-    aiMaterialLinks: await (async () => {
-      const material = topic.visibility === "visible" ? await hasPostAiMaterial(db, topic.id) : null;
-      return [...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
-        ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : [])];
-    })(),
-    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: `/t/${topic.id}${url.search}`, refreshable: (await Promise.all(nushi.answers.map(async answer => await canRefreshNushi(db, answer, user?.id) ? answer.id : null))).filter((id): id is number => id !== null), reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
-    nushiAvailable: canWriteReply && !!await nushiPlace(db, topic.id),
+    aiMaterialLinks: [
+      ...(material ? [{ href: `/t/${topic.id}/ai-materials`, label: m.ai_material_link() }] : []),
+      ...(user?.id === topic.authorId ? [{ href: `/t/${topic.id}/ai-materials/edit`, label: material ? m.ai_material_title() : m.ai_material_add() }] : []),
+    ],
+    nushi: renderNushiThread(nushiView, [{ id: topic.id }, ...replies.map(reply => ({ id: reply.id, nushiParentId: reply.nushiParentId }))], { threadId: topic.id, member: !!user, back: `/t/${topic.id}${url.search}`, refreshable, reply: nushiReply && !nushiReply.hidden && nushiReply.threadId === topic.id ? nushiReply.id : undefined }),
+    nushiAvailable,
     reader: !user,
     askAi: user && topic.visibility === "visible" && postAskAiEnabled()
       ? { href: `/t/${topic.id}/ask?${new URLSearchParams({ lang: displayLang })}`, label: m.post_ask_entry() } : null,
@@ -427,18 +454,18 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     loadedAt,
     stanceTag,
     follow,
-    saved: user && topic.visibility !== "hidden-redacted" ? await isTopicSaved(db, user.id, topic.id) : null,
+    saved,
     postedFollowed: follow?.state === "following" && url.searchParams.get("followed") === "1",
-    replyTarget: targetId !== null && Number.isSafeInteger(targetId) && topic.visibility === "visible"
+    replyTarget: canTarget
       ? { id: targetId, href: target?.state === "visible" ? target.href : null, handle: target?.state === "visible" ? target.authorHandle : null } : null,
     replyToTopic: !!user && targetParam === "",
     // Reply-form default tag (?write=<tag>), linked from 「異議を返信で書く」.
     writeTag: asksStance && isStanceTag(writeParam) ? writeParam : null,
-    langParam: langCarry(request),
+    langParam: carriedLang,
     markdownHref: `/t/${topic.id}.md${isLang(alternateLang) ? `?lang=${alternateLang}` : ""}`,
     replyCount: thread.replyCount,
     // In how many original languages the readable replies are written; shown in the replies heading from two on. Fewer than two replies cannot differ.
-    replyLangCount: thread.replyCount >= 2 && topic.visibility === "visible" ? await countReplyLanguages(db, topic.id) : 0,
+    replyLangCount,
     replyBranches,
     replies: replies.map((r) => (r.visibility === "deleted" || r.visibility === "hidden-redacted" ? placeholderOf(r) : {
       ...common(r), nushiParentId: r.nushiParentId ?? null, parent: r.parentId === null ? null : parents.get(r.parentId) ?? { state: "unavailable" as const },
@@ -446,7 +473,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     page: thread.page,
     hasNextPage: thread.page < thread.pageCount,
     pageCount: thread.pageCount,
-    latestReplyHref: latestReply ? replyLocationAt(topic.id, latestReply.id, latestReply.page, { lang: langCarry(request) }) : null,
+    latestReplyHref: latestReply ? replyLocationAt(topic.id, latestReply.id, latestReply.page, { lang: carriedLang }) : null,
     // Show deletion in moderation controls only to operators.
     operator: viewer?.scope.operator ?? false,
     ownerId: user?.id ?? null,
@@ -624,6 +651,8 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const translating = loaderData.translating.filter(lang => !(settled.id === topic.id && settled.langs.includes(lang)));
   const quoteRoot = useRef<HTMLElement>(null);
   const [replyRound, setReplyRound] = useState(0);
+  const hasReplyForm = canReply && !!loaderData.ownerId;
+  useEffect(() => hasReplyForm ? afterPageIdle(startReplyFormLoad) : undefined, [hasReplyForm]);
   // The translation that the topic's "wrong translation" button is about (TranslatedEntry reports it, since the reader can switch to the original); the button is drawn in the end of the article, outside the entry.
   const [topicReported, setTopicReported] = useState(() => topic.placeholder === null ? initialReportedTranslation(topic.display) : null);
   const postedReply = replies.find(reply => reply.placeholder === null && reply.posted)?.id;
@@ -972,7 +1001,10 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         </div>
         <Pagination page={page} hasNext={hasNextPage} lastPage={loaderData.pageCount} anchor="#replies" />
       </section>
-      <section id="reply" className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}>
+      <section id="reply" className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}
+        onPointerOver={hasReplyForm ? startReplyFormLoad : undefined}
+        onPointerDownCapture={hasReplyForm ? startReplyFormLoad : undefined}
+        onFocusCapture={hasReplyForm ? startReplyFormLoad : undefined}>
         {!loaderData.reader && <div className="flex flex-wrap items-center justify-between gap-2" data-reply-heading="">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="text-lg font-semibold">{m.reply_write_title()}</h2>
@@ -988,20 +1020,12 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {(topic.placeholder !== null || topic.hidden) && <p className="ui-help text-muted-foreground">{m.reply_closed_hidden()}</p>}
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
         {canReply && loaderData.ownerId && (
-          <SignedForm protectUnsaved="new" preserveUnsavedOnSamePath signatureRequired={loaderData.signPosts} signIntent="" key={`${loaderData.ownerId}:${topic.id}:${replyRound}`} method="post" className="space-y-2">
-            {renderNushi(loaderData.nushi.reply)}
-            {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
-            <ReplyFields
+          <Suspense fallback={null}>
+            <TopicReplyForm key={`${loaderData.ownerId}:${topic.id}:${replyRound}`} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
               nushiAvailable={loaderData.nushiAvailable}
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
-              error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error"
-              errorText={actionData?.intent === "reply" && actionData.error ? entryErrorMessage(actionData.error, "reply") : undefined}
+              error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined}
               defaultLang={defaultLang} defaultBody={replyInput?.body} selectedLang={replyInput?.lang}
-              actions={loaderData.respondWithPost && <div className="flex flex-wrap gap-2">
-                <SendButton>{m.submit_reply()}</SendButton>
-                <SendButton {...loaderData.respondWithPost} aria-describedby="respond-with-post-hint" />
-                <p id="respond-with-post-hint" className="w-full ui-help text-muted-foreground">{m.respond_with_post_hint()}</p>
-              </div>}
               above={<>
                 {replyTarget && <p className="flex flex-wrap gap-2 ui-meta [overflow-wrap:anywhere]">
                   <input type="hidden" name="parentId" value={replyTarget.id} />
@@ -1014,8 +1038,11 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                 {question.asksStance && <StanceTagChips error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error" key={writeTag ?? "none"} defaultValue={writeTag} />}
               </>}
               aiTools={{ ownerId: loaderData.ownerId, connectDraftLabel: loaderData.connectDraftLabel, kind: "reply", threadId: topic.id }}
-            />
-          </SignedForm>
+            >
+              {renderNushi(loaderData.nushi.reply)}
+              {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
+            </TopicReplyForm>
+          </Suspense>
         )}
       </section>
       <RelatedDiscussions id={topic.id} rows={loaderData.related.rows} omitted={loaderData.related.omitted} lang={langParam} />

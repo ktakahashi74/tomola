@@ -72,3 +72,12 @@ export function afterInitialActivation(callback: () => void): () => void {
   else callback();
   return () => { pending.delete(callback); };
 }
+
+export function afterPageIdle(callback: () => void): () => void {
+  if (typeof window.requestIdleCallback !== "function") {
+    const id = window.setTimeout(callback, 0);
+    return () => window.clearTimeout(id);
+  }
+  const id = window.requestIdleCallback(callback, { timeout: 250 });
+  return () => window.cancelIdleCallback(id);
+}

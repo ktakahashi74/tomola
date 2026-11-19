@@ -27,7 +27,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { data, Form, Link, redirect, useLocation } from "react-router";
 import type { Route } from "./+types/settings";
 import { LocaleSwitcher } from "~/components/locale-switcher";
-import { OpenInAiSettings } from "~/components/open-in-ai";
+import { OpenInAiSettings } from "~/components/open-in-ai-settings";
 import { PasskeySettings } from "~/components/passkey-settings";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { getAuth } from "~/lib/auth/auth.server";
