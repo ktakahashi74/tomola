@@ -8,23 +8,22 @@ import { authorLabel } from "../deleted-member";
 import { retainedAuthorColumn } from "../deleted-member.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { topicVillage } from "~/lib/villages.server";
-import { and, asc, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { entries, profiles, segments, user, villages } from "~/lib/db/schema";
 import { publicTopicPlace } from "~/lib/visibility.server";
-import { afterPageBoundary } from "~/lib/page-boundary.server";
 import { canSeeHidden, getViewer } from "~/lib/roles.server";
 import { joinBlocks, mdBlock, type FmValue } from "~/lib/md/frontmatter.server";
 import { loadMdTranslations, type MdTranslation } from "~/lib/md/translations.server";
 import { isoSeconds, mdUrl, replyCanonical, siteUrl, threadCanonical, twinPreamble } from "~/lib/md/urls.server";
 import { listAlternativeRefs, listObjectionRefs } from "~/lib/objections.server";
-import { pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
+import { checkPagination, pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
 import { segmentId } from "~/lib/segment";
 import type { Area, Lang } from "~/lib/languages";
 import { loadReactions } from "~/lib/votes.server";
 import { relatedMarkdownBlock } from "~/lib/md/related.server";
 import { enabledTargetLangs } from "~/lib/enabled-langs.server";
-import { hasUndeletedReply } from "~/lib/reply-placeholders.server";
+import { readThreadReplyPage } from "~/lib/thread-page.server";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { loadThreadOverviewCounts } from "~/lib/thread-overview.server";
@@ -135,24 +134,13 @@ export function versionOf(sourceHash: string | null): string | null {
 
 // Thread twin: null/404 for missing/deleted topics or out-of-range pages.
 export async function buildThreadMarkdown(db: Db, threadId: number, opts: ThreadMdOptions): Promise<string | null> {
-  // Topic, reply total and current-page replies are independent. Pages partition 100 replies ordered by createdAt/id, including deleted replies.
-  const offset = (opts.page - 1) * REPLIES_PER_PAGE;
-  const replyFilter = and(eq(entries.threadId, threadId), eq(entries.kind, "reply"));
-  const boundary = offset ? db.select({ createdAt: entries.createdAt, id: entries.id }).from(entries)
-    .where(replyFilter).orderBy(asc(entries.createdAt), asc(entries.id)).limit(1).offset(offset - 1) : undefined;
-  const [topic, [{ n: total }], replies] = await Promise.all([
+  const paging = checkPagination({ page: opts.page }, REPLIES_PER_PAGE);
+  const [topic, { replies, replyTotal }] = await Promise.all([
     readThreadTopic(db, threadId),
-    db.select({ n: count() }).from(entries).where(replyFilter),
-    db
-      .select({ ...columns, hasUndeletedChild: hasUndeletedReply() })
-      .from(entries)
-      .leftJoin(profiles, eq(profiles.userId, entries.authorId))
-      .where(and(replyFilter, afterPageBoundary([entries.createdAt, entries.id], boundary)))
-      .orderBy(asc(entries.createdAt), asc(entries.id))
-      .limit(REPLIES_PER_PAGE) as Promise<Array<Row & { hasUndeletedChild: boolean }>>,
+    readThreadReplyPage(db, threadId, paging, columns),
   ]);
   if (!topic) return null;
-  const pages = pageCount(Number(total), REPLIES_PER_PAGE);
+  const pages = pageCount(replyTotal, paging.limit);
   if (opts.page > pages) return null;
 
   // Question page 1: alternatives and objection lists; skip reading them for hidden questions with placeholder-only twins.
@@ -165,8 +153,8 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
   ]);
 
   // Only posts whose content is shown; deleted replies and hidden posts are placeholders.
-  const isShown = contentShown;
-  const shownRows: Row[] = [...(opts.page === 1 ? [topic] : []), ...replies].filter(isShown);
+  const shownReplies = replies.filter(reply => reply.visibility === "visible");
+  const shownRows: Row[] = [...(opts.page === 1 && contentShown(topic) ? [topic] : []), ...shownReplies];
   const historyCounts = await revisionCounts(db, shownRows.map(e => e.id));
   const names = await loadDisplayNames(db, [...shownRows.map(e => e.handle), ...alternatives.map(a => a.authorHandle), ...objections.map(o => o.authorHandle)]);
   const inputs = shownRows.map((e) => ({ id: e.id, lang: e.lang as Lang, sourceHash: e.sourceHash }));
@@ -213,7 +201,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
 
   // The overview block comes first and carries the fixed warning. It is not built for a hidden topic.
   if (overview) {
-    const shownOnPage = replies.filter(isShown).map((r) => `c-${r.id}`);
+    const shownOnPage = shownReplies.map((r) => `c-${r.id}`);
     const nextPage = opts.page < pages ? link(opts.page + 1) : undefined;
     blocks.push(
       mdBlock(
@@ -342,8 +330,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
     }
   }
   for (const reply of replies) {
-    if (reply.deletedAt !== null && !reply.hasUndeletedChild) continue;
-    if (!isShown(reply)) {
+    if (reply.visibility !== "visible") {
       blocks.push(
         mdBlock(
           {
@@ -351,7 +338,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
             id: `c-${reply.id}`,
             thread: `p-${threadId}`,
             reply_to: reply.parentId !== null ? `c-${reply.parentId}` : `p-${threadId}`,
-            ...(reply.deletedAt !== null ? { deleted: true } : { hidden: true }),
+            ...(reply.visibility === "deleted" ? { deleted: true } : { hidden: true }),
             content_trust: "untrusted_user_content",
           },
           null,
@@ -400,7 +387,7 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
       next ? `Next page: ${next}` : "End of thread.",
     ),
   );
-  if (!topic.hiddenAt) blocks.push(...await nushiMarkdownBlocks(db, threadId, [...(opts.page === 1 ? [threadId] : []), ...replies.filter(isShown).map(reply => reply.id)], opts.lang && opts.lang !== "all" ? opts.lang : "en"));
+  if (!topic.hiddenAt) blocks.push(...await nushiMarkdownBlocks(db, threadId, [...(opts.page === 1 ? [threadId] : []), ...shownReplies.map(reply => reply.id)], opts.lang && opts.lang !== "all" ? opts.lang : "en"));
   const markdown = joinBlocks(blocks);
   if (opts.readingMethod && opts.page === 1) await countReading(db, threadId, { method: opts.readingMethod, readerId: opts.readerId,
     lang: opts.lang === "all" ? opts.displayLang ?? topic.lang as Lang : opts.lang ?? topic.lang as Lang });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
+import { getMd, parseThreadBlocks } from "./helpers/md";
 import { entries, jobs, llmUsage, profiles, rateLimits, roles, translations, villageFollows, villageMembers, villages } from "~/lib/db/schema";
 import * as metering from "~/lib/llm/metering.server";
 import { createReply, createTopic, editEntry } from "~/lib/entries.server";
@@ -16,6 +17,7 @@ import { setTestLocale } from "./stubs/paraglide-runtime";
 import { translationPageInputs } from "~/lib/translation-on-read.server";
 import { BUDGET_RESERVATION_WAIT } from "~/lib/jobs/defer-reasons";
 import { translateDedupeKey } from "~/lib/translations.server";
+import { splitReplyBranch } from "~/lib/reply-branches";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); setTestLocale("en"); });
 async function setup() {
@@ -207,11 +209,12 @@ describe("browser-only route", () => {
     await h.db.delete(jobs);
     return result.id;
   }
-  function post(id: number, opts: { as?: string; ids?: number[]; headers?: Record<string, string>; intent?: string } = {}) {
-    const path = `/t/${id}/translations?lang=fr`;
+  function post(id: number, opts: { as?: string; ids?: number[]; headers?: Record<string, string>; intent?: string; search?: string } = {}) {
+    const search = opts.search ?? "?lang=fr";
+    const path = `/t/${id}/translations${search}`;
     const base = h.request(path, { as: opts.as });
     const headers = new Headers(base.headers);
-    Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}?lang=fr`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
+    Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}${search}`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
     return action(h.args(new Request(base.url, { method: "POST", headers, body: JSON.stringify({ intent: opts.intent ?? "request", ids: opts.ids ?? [id] }) }), { id: String(id) }));
   }
   it.each(["hana", undefined])("serves the same reservation wait to member and anonymous readers (viewer=%s)", async as => {
@@ -228,17 +231,45 @@ describe("browser-only route", () => {
     const response = await post(id, { as, intent: "status" });
     expect(response.data).toMatchObject({ paused: [id], ready: [], stopped: false });
   });
-  it("retains hidden and deleted reply slots in ordinary pages and removes them before paging by stance", async () => {
+  it("uses the same reply slots on screen, in Markdown and for translation requests, even inside folded branches", async () => {
     const id = await seed();
+    const reader = "page_reader";
+    await h.signIn(reader);
     const stamp = new Date();
-    const replies = await h.db.insert(entries).values(Array.from({ length: 103 }, (_, index) => ({
+    const replies = await h.db.insert(entries).values(Array.from({ length: 107 }, (_, index) => ({
       kind: "reply", threadId: id, authorId: h.ids.hana, lang: "ja", body: "Page boundary fixture", sourceHash: "fixture",
-      createdAt: stamp, deletedAt: index === 0 ? stamp : null, hiddenAt: index === 1 ? stamp : null,
+      createdAt: stamp, deletedAt: index === 0 || index === 99 ? stamp : null, hiddenAt: index === 1 ? stamp : null,
       stanceTag: index < 4 || index === 102 ? "agree" : null,
     }))).returning({ id: entries.id });
     const ids = replies.map(row => row.id);
-    expect((await translationPageInputs(h.db, id))?.map(row => row.id)).toEqual([id, ...ids.slice(2, 100)]);
-    expect((await translationPageInputs(h.db, id, { page: 2 }))?.map(row => row.id)).toEqual([id, ...ids.slice(100)]);
+    await h.db.update(entries).set({ parentId: ids[0] }).where(eq(entries.id, ids[1]));
+    await h.db.update(entries).set({ parentId: ids[100] }).where(inArray(entries.id, ids.slice(101)));
+
+    const { loader: loadTopic } = await import("~/routes/topic");
+    const loadPage = async (page: number, expected: number[], visible: number[]) => {
+      const search = `?lang=fr&page=${page}`;
+      const screen = await loadTopic(h.args(h.request(`/t/${id}${search}`, { as: reader }), { id: String(id) }));
+      const md = await getMd(h, `/t/${id}.md${search}`, { as: reader });
+      expect(md.status).toBe(200);
+      const comments = parseThreadBlocks(await md.text()).filter(block => block.fm.type === "comment");
+      expect(screen.replies.map(row => row.id)).toEqual(expected);
+      expect(comments.map(block => block.fm.id)).toEqual(expected.map(id => `c-${id}`));
+      expect(screen.replies.filter(row => row.placeholder === null).map(row => row.id)).toEqual(visible);
+      expect(comments.filter(({ fm }) => !fm.deleted && !fm.hidden).map(block => block.fm.id)).toEqual(visible.map(id => `c-${id}`));
+      expect((await translationPageInputs(h.db, id, { page }))?.map(row => row.id)).toEqual([id, ...visible]);
+      return screen;
+    };
+    await loadPage(1, ids.slice(0, 99), ids.slice(2, 99));
+    const second = await loadPage(2, ids.slice(100), ids.slice(100));
+    const branch = second.replyBranches?.find(branch => branch.rootId === ids[100]);
+    const tail = ids.at(-1)!;
+    expect(branch?.open).toBe(false);
+    expect(splitReplyBranch(branch!.replyIds).folded).toContain(tail);
+    expect(await h.outcome(() => post(id, { as: reader, ids: [tail] }))).toMatchObject({ status: 404 });
+    expect(await h.outcome(() => post(id, { as: reader, ids: [ids[0]] }))).toMatchObject({ status: 404 });
+    expect(await h.outcome(() => post(id, { as: reader, ids: [ids[1]] }))).toMatchObject({ status: 404 });
+    expect(await h.outcome(() => post(id, { as: reader, ids: [tail], search: "?lang=fr&page=2" }))).toMatchObject({ status: 200 });
+    expect((await queued(h.db, TRANSLATE_JOB)).map(job => job.payload)).toEqual([expect.objectContaining({ entryId: tail })]);
     expect(await translationPageInputs(h.db, id, { page: 3 })).toBeNull();
     expect((await translationPageInputs(h.db, id, { stanceTag: "agree" }))?.map(row => row.id)).toEqual([id, ids[2], ids[3], ids[102]]);
     expect(await translationPageInputs(h.db, id, { page: 2, stanceTag: "agree" })).toBeNull();

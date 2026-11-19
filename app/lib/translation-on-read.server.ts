@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, translations } from "./db/schema";
 import { isStale } from "./display";
@@ -13,6 +13,7 @@ import { enqueueCurrentBodyTranslation } from "./translations.server";
 import type { Lang } from "./languages";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "./pagination";
 import type { StanceTag } from "./stances";
+import { readThreadReplyPage } from "./thread-page.server";
 import { publicTopicPlace } from "./visibility.server";
 
 export const TRANSLATION_READ_BATCH_MAX = 101; // A topic and its page of 100 replies.
@@ -24,16 +25,14 @@ export const TRANSLATION_READ_CALLS_HOURLY = 3600;
 // Match the thread's page boundaries, including deleted and hidden reply slots
 // in unfiltered pages, without loading or rendering any post content.
 export async function translationPageInputs(db: Db, threadId: number, opts: { page?: number; stanceTag?: StanceTag } = {}): Promise<DisplayInput[] | null> {
-  const { page, limit, offset } = checkPagination(opts, REPLIES_PER_PAGE);
-  const replyFilter = and(eq(entries.threadId, threadId), eq(entries.kind, "reply"),
-    opts.stanceTag ? and(eq(entries.stanceTag, opts.stanceTag), isNull(entries.deletedAt), isNull(entries.hiddenAt)) : undefined);
+  const paging = checkPagination(opts, REPLIES_PER_PAGE);
   const columns = { id: entries.id, kind: entries.kind, lang: entries.lang, sourceHash: entries.sourceHash };
-  const [topic] = await db.select({ ...columns, replyTotal: db.$count(entries, replyFilter) }).from(entries)
+  const [topic] = await db.select(columns).from(entries)
     .where(and(eq(entries.id, threadId), eq(entries.kind, "topic"), isNull(entries.deletedAt), isNull(entries.hiddenAt), publicTopicPlace()));
-  if (!topic || page > pageCount(topic.replyTotal, limit)) return null;
-  const replies = await db.select({ ...columns, deletedAt: entries.deletedAt, hiddenAt: entries.hiddenAt }).from(entries)
-    .where(replyFilter).orderBy(asc(entries.createdAt), asc(entries.id)).offset(offset).limit(limit);
-  return [topic, ...replies.filter(row => row.deletedAt === null && row.hiddenAt === null)]
+  if (!topic) return null;
+  const { replies, replyTotal } = await readThreadReplyPage(db, threadId, paging, columns, opts);
+  if (paging.page > pageCount(replyTotal, paging.limit)) return null;
+  return [topic, ...replies.filter(row => row.visibility === "visible")]
     .map(row => ({ id: row.id, kind: row.kind as DisplayInput["kind"], lang: row.lang as Lang, sourceHash: row.sourceHash }));
 }
 

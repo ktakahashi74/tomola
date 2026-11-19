@@ -20,7 +20,7 @@ import type { Db, Tx } from "~/lib/db/client.server";
 import { divergences, entries, entryRevisions, follows, profiles, reports, topicListingStats, translations, villageFollows, villageMembers, villages, type SavedMentionBinding } from "~/lib/db/schema";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { SOURCE_LANGS, type SourceLang, type LangSource, type Area, type Lang } from "~/lib/languages";
-import { canSeeHidden, inScope, type Viewer } from "~/lib/roles.server";
+import { inScope, type Viewer } from "~/lib/roles.server";
 import { checkStanceAttributes, STANCE_TAGS, type StanceAttrError, type StanceTag } from "~/lib/stances";
 import { loadStanceAttrFacts, touchAltOriginal, touchQuestion } from "~/lib/questions.server";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
@@ -28,7 +28,7 @@ import { publicTopicPlace, rootTopic, rootTopicOn, undeletedTopic } from "~/lib/
 import { cursorTime, readingCondition } from "~/lib/reading-page.server";
 import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { afterPageBoundary } from "~/lib/page-boundary.server";
-import { hasUndeletedReply } from "~/lib/reply-placeholders.server";
+import { entryVisibility, readThreadReplyPage, type EntryVisibility } from "~/lib/thread-page.server";
 import {
   checkBodyBudget,
   renderEntryOrPlain,
@@ -52,9 +52,7 @@ import { cancelEntryJobs, carryOverUnchangedFields, enqueueTranslations, markHum
 
 export { AI_ASSISTANCE, type AiAssistance };
 
-// Entry visibility for this viewer. visible: normal entry. hidden: hidden by moderation but readable by the author, assigned moderators, or operators, with a 「非表示」 marker.
-// hidden-redacted: hidden and unreadable by this viewer, returning empty body/title/author etc. deleted: deleted, retaining only the reply position with empty content.
-export type EntryVisibility = "visible" | "hidden" | "hidden-redacted" | "deleted";
+export type { EntryVisibility } from "~/lib/thread-page.server";
 
 export type EntryView = {
   id: number;
@@ -898,11 +896,7 @@ type ViewRow = {
   stanceLockedAt: Date | null;
 };
 
-function visibilityOf(row: Pick<ViewRow, "authorId" | "lang" | "hiddenAt" | "deletedAt">, viewer: Viewer | undefined): EntryVisibility {
-  if (row.deletedAt) return "deleted";
-  if (!row.hiddenAt) return "visible";
-  return canSeeHidden(viewer, row) ? "hidden" : "hidden-redacted";
-}
+type ClassifiedViewRow = ViewRow & { visibility: EntryVisibility };
 
 // Content-redacted entry (deleted reply or hidden entry unreadable by this viewer). Retain position/kind only; clear title, body, author, etc.
 function redactedView(row: ViewRow, visibility: "deleted" | "hidden-redacted"): EntryView {
@@ -931,10 +925,9 @@ function redactedView(row: ViewRow, visibility: "deleted" | "hidden-redacted"): 
 
 // Use the cache if its version matches current RENDER_VERSION. Otherwise, or if absent, re-render and save.
 // `mentions`: the members that the bodies of the rows that are rendered again can name (viewsWithHtml looks them up once for all the rows).
-async function viewWithHtml(db: Db, row: ViewRow, viewer: Viewer | undefined, mentions: MentionTargets): Promise<EntryView> {
-  const visibility = visibilityOf(row, viewer);
+async function viewWithHtml(db: Db, row: ClassifiedViewRow, viewer: Viewer | undefined, mentions: MentionTargets): Promise<EntryView> {
+  const { visibility, html: cached, htmlVersion, hiddenAt: _hiddenAt, deletedAt: _deletedAt, stanceLockedAt, mentionRevision: _mentionRevision, ...rest } = row;
   if (visibility === "deleted" || visibility === "hidden-redacted") return redactedView(row, visibility);
-  const { html: cached, htmlVersion, hiddenAt: _hiddenAt, deletedAt: _deletedAt, stanceLockedAt, mentionRevision: _mentionRevision, ...rest } = row;
   let html = cached;
   if (html === null || htmlVersion !== RENDER_VERSION) {
     const kind = row.kind as EntryView["kind"];
@@ -957,11 +950,8 @@ async function viewWithHtml(db: Db, row: ViewRow, viewer: Viewer | undefined, me
 }
 
 // The views of several rows. The rows whose stored rendering is missing or old are rendered again; the members they can mention are looked up in one query for all of them.
-async function viewsWithHtml(db: Db, rows: readonly ViewRow[], viewer: Viewer | undefined): Promise<EntryView[]> {
-  const stale = rows.filter((r) => {
-    const v = visibilityOf(r, viewer);
-    return (v === "visible" || v === "hidden") && (r.html === null || r.htmlVersion !== RENDER_VERSION);
-  });
+async function viewsWithHtml(db: Db, rows: readonly ClassifiedViewRow[], viewer: Viewer | undefined): Promise<EntryView[]> {
+  const stale = rows.filter(r => (r.visibility === "visible" || r.visibility === "hidden") && (r.html === null || r.htmlVersion !== RENDER_VERSION));
   const snapshots = await resolveSavedMentionsFor(db, stale);
   const views = await Promise.all(rows.map(r => viewWithHtml(db, r, viewer, snapshots.get(r.id) ?? new Map())));
   const images = await motionImages(db, views.map(view => view.html));
@@ -1006,7 +996,7 @@ export async function getThread(
   threadId: number,
   opts: { page?: number; limit?: number; viewer?: Viewer; stanceTag?: StanceTag } = {},
 ): Promise<Thread | null> {
-  const { page, limit, offset } = checkPagination(opts, REPLIES_PER_PAGE);
+  const paging = checkPagination(opts, REPLIES_PER_PAGE);
   const [topic] = await db
     .select({ ...viewColumns, replyCount: entries.replyCount })
     .from(entries)
@@ -1014,31 +1004,14 @@ export async function getThread(
     .where(and(eq(entries.id, threadId), undeletedTopic(), publicTopicPlace()));
   if (!topic) return null;
   const { replyCount, ...topicRow } = topic;
-  const replyFilter = opts.stanceTag
-    ? and(eq(entries.threadId, threadId), eq(entries.kind, "reply"), eq(entries.stanceTag, opts.stanceTag), isNull(entries.deletedAt), isNull(entries.hiddenAt))
-    : and(eq(entries.threadId, threadId), eq(entries.kind, "reply"));
-  const boundary = offset ? db.select({ createdAt: entries.createdAt, id: entries.id }).from(entries)
-    .where(replyFilter).orderBy(asc(entries.createdAt), asc(entries.id)).limit(1).offset(offset - 1) : undefined;
-  const [[total], replies] = await Promise.all([
-    db.select({ n: count() }).from(entries).where(replyFilter),
-    db
-      .select({ ...viewColumns, hasUndeletedChild: hasUndeletedReply() })
-      .from(entries)
-      .leftJoin(profiles, eq(profiles.userId, entries.authorId))
-      .where(and(replyFilter, afterPageBoundary([entries.createdAt, entries.id], boundary)))
-      .orderBy(asc(entries.createdAt), asc(entries.id))
-      .limit(limit),
-  ]);
-  const replyTotal = Number(total.n);
-  const keptReplies = replies.filter(row => row.deletedAt === null || row.hasUndeletedChild)
-    .map(({ hasUndeletedChild: _hasChild, ...row }) => row);
-  const [topicView, ...replyViews] = await viewsWithHtml(db, [topicRow, ...keptReplies], opts.viewer);
+  const { replies, replyTotal } = await readThreadReplyPage(db, threadId, paging, viewColumns, opts);
+  const [topicView, ...replyViews] = await viewsWithHtml(db, [{ ...topicRow, visibility: entryVisibility(topicRow, opts.viewer) }, ...replies], opts.viewer);
   return {
     topic: topicView,
     replies: replyViews,
-    page,
-    pageSize: limit,
-    pageCount: pageCount(replyTotal, limit),
+    page: paging.page,
+    pageSize: paging.limit,
+    pageCount: pageCount(replyTotal, paging.limit),
     replyCount,
     replyTotal,
   };
@@ -1054,7 +1027,8 @@ export async function getEntryViews(db: Db, ids: readonly number[], viewer?: Vie
     .from(entries)
     .leftJoin(profiles, eq(profiles.userId, entries.authorId))
     .where(inArray(entries.id, [...ids]));
-  for (const view of await viewsWithHtml(db, rows, viewer)) out.set(view.id, view);
+  const classified = rows.map(row => ({ ...row, visibility: entryVisibility(row, viewer) }));
+  for (const view of await viewsWithHtml(db, classified, viewer)) out.set(view.id, view);
   return out;
 }
 
