@@ -11,7 +11,7 @@ import { syncMediaReferences } from "~/lib/media-references.server";
 import { decorateMotionHtml, motionImages } from "./motion-display.server";
 import { activeEntryRender, prepareEntryRender, renderEntryForWrite, type PreparedEntryRender } from "./entry-render-preparation.server";
 import { withMarkdownScope, withMarkdownRead, MarkdownBudgetError } from "./markdown-budget.server";
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, max, notInArray, or, sql, lt, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, lte, max, notInArray, or, sql, lt, type SQL } from "drizzle-orm";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { activePublicPostVillageCondition, activeSharedVillageCondition, lockVillageProfile, villageForTopic } from "~/lib/villages.server";
 import { z } from "zod";
