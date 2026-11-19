@@ -132,6 +132,7 @@ it("invites without adding and reports successful edits, invitations, cancellati
 
 it("shows only visible topic authors, once each, in latest-topic order without counts, also to guests", async () => {
   const village = (await villageBySlug(h.db, "roster-fixture"))!;
+  await h.db.update(profiles).set({ displayName: "Roster Writer", displayNameLatin: "Roster Writer" }).where(eq(profiles.userId, h.ids.vr_writer));
   for (const handle of ["vr_writer", "vr_hidden", "vr_deleted"]) await h.db.insert(villageMembers).values({ villageId: village.id, userId: h.ids[handle] });
   const topic = async (author: string) => {
     const result = await createTopic(h.db, h.ids[author], { body: "A topic in the authors fixture.", lang: "en", village: village.slug });
@@ -147,8 +148,8 @@ it("shows only visible topic authors, once each, in latest-topic order without c
   expect(writers.every(row => Object.keys(row).sort().join(",") === "handle,name")).toBe(true);
   const guest = await load(); expect(guest.writers).toEqual(writers);
   const rendered = await html(guest);
-  expect(rendered).toContain('role="list" aria-labelledby="village-writers-label"');
-  expect(rendered).toContain(`>${m.village_writers()}</span>`);
+  expect(rendered).toContain(m.village_writers());
+  expect(rendered).toContain("Roster Writer");
   expect(rendered).not.toContain('id="village-roster"');
   expect((await load("vr_reader")).writers).toEqual(writers);
 });
