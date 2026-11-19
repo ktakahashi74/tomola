@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
 import { consentChatMembers } from "./helpers/chat-consent";
+import { enableNushiCallerDelivery, expectNushiDeliveryJobs } from "./helpers/nushi";
 import { chatConsents, chatMessages, chatMessageTranslations, chatNushiRequests, chatNushiSources, chatNushiReservations, chatReads, entries, jobs, llmUsage, notifications, nushiRequests, profiles, villageMembers, villages } from "~/lib/db/schema";
 import { chatChanges, chatPage, chatUnreadCounts, markChatRead, mutateChat } from "~/lib/village-chat.server";
 import { processChatNushiRequest, expireChatNushiRequests } from "~/lib/chat-nushi.server";
@@ -42,6 +43,8 @@ async function world() {
 }
 it("publishes a private source guide without an AI member or human unread/search effects", async () => {
   const w = await world(), c = await w.call();
+  await enableNushiCallerDelivery(w.db, "zcn_caller");
+  await w.db.update(profiles).set({ emailPref: "immediate" }).where(eq(profiles.userId, "zcn_owner"));
   await markChatRead(w.db, "zcn_reader", w.village.slug!, c.sent.seq);
   await processChatNushiRequest(w.db, c.request.id);
   const [request] = await w.db.select().from(chatNushiRequests);
@@ -65,9 +68,8 @@ it("publishes a private source guide without an AI member or human unread/search
   expect((await threadNushi(w.db, w.source, [w.source], "en")).answers).toEqual([]);
   expect(await readNushiAnswer(w.db, 1)).toBeNull();
   const notices = await w.db.select().from(notifications);
-  expect(notices.filter(n => n.userId === "zcn_caller")).toMatchObject([{ kind: "chat_nushi_result" }]);
-  expect(notices.filter(n => n.kind === "chat_reply")).toHaveLength(0);
-  expect(notices.filter(n => n.kind === "chat_nushi_cited")).toMatchObject([{ userId: "zcn_owner" }]);
+  expect(notices).toMatchObject([{ kind: "chat_nushi_cited", userId: "zcn_owner", chatMessageId: answer.id }]);
+  await expectNushiDeliveryJobs(w.db, notices[0].id);
   const reply = await mutateChat(w.db, "zcn_reader", w.village.slug!, "send", { body: "Thank you", replyToId: answer.id });
   expect((await w.db.select().from(notifications)).filter(n => n.chatMessageId === reply.id)).toEqual([]);
 });
@@ -145,6 +147,7 @@ it.each(["off", "village-off", "language", "suppressed", "quote", "code", "edite
 });
 it.each(["edit", "delete", "leave", "consent", "suspend", "village-off", "switch-off"])("cancels before publication after %s", async mode => {
   const w = await world(), c = await w.call();
+  await enableNushiCallerDelivery(w.db, "zcn_caller");
   const mutate = async () => {
     if (mode === "edit") await mutateChat(w.db, "zcn_caller", w.village.slug!, "edit", { id: c.sent.id, body: "Changed question" });
     if (mode === "delete") await mutateChat(w.db, "zcn_caller", w.village.slug!, "delete", { id: c.sent.id });
@@ -157,6 +160,8 @@ it.each(["edit", "delete", "leave", "consent", "suspend", "village-off", "switch
   await processChatNushiRequest(w.db, c.request.id, { completer: { engine: "fake", model: "fake", async complete() { await mutate(); return { text: JSON.stringify({ status: "not_confirmed", readings: [] }), inputTokens: 1, outputTokens: 1 }; } } });
   expect((await w.db.select().from(chatNushiRequests))[0].state).toBe("cancelled");
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toEqual([]);
+  expect(await w.db.select().from(notifications)).toEqual([]);
+  await expectNushiDeliveryJobs(w.db);
 });
 it("redacts the answer, its translation and reply excerpt when a source changes", async () => {
   const w = await world(), c = await w.call(); await processChatNushiRequest(w.db, c.request.id);
@@ -201,12 +206,12 @@ it("defaults to two chat answers per minute across callers and publishes retries
   if (own.consentRequired || other.consentRequired) throw new Error("Missing consent");
   expect(own.messages.find(message => message.id === blocked.sent.id)).toMatchObject({ nushiCall: { state: "failed", failure: "interval" } });
   expect(other.messages.find(message => message.id === blocked.sent.id)).not.toHaveProperty("nushiCall");
-  expect((await listNotifications(w.db, "zcn_reader")).items).toMatchObject([{ kind: "chat_nushi_result", chat: { id: blocked.sent.id } }]);
+  expect((await listNotifications(w.db, "zcn_reader")).items).toEqual([]);
   now = new Date(start + 60_001);
   const next = await w.call(); await processChatNushiRequest(w.db, next.request.id, { clock });
   expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, next.request.id)))[0].state).toBe("answered");
   expect(await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"))).toHaveLength(3);
-  expect((await w.db.select().from(notifications)).filter(r => r.kind === "chat_nushi_result")).toHaveLength(4);
+  expect(await w.db.select().from(notifications)).toMatchObject([{ kind: "chat_nushi_cited", userId: "zcn_owner" }]);
 });
 it("uses the configured chat interval and allowance without changing posting allowances", async () => {
   const w = await world();
@@ -375,18 +380,18 @@ it("keeps verified quotations and destinations unchanged when translating an AI 
   const { chatMentionCounts } = await import("~/lib/village-chat-notifications.server");
   expect((await chatMentionCounts(w.db, "zcn_caller")).size).toBe(0);
 });
-it("shows a failed request only to its caller and never groups it with human notices", async () => {
+it("delivers a failed request as a chat update only to its caller without a notification", async () => {
   const w = await world(), c = await w.call();
+  await enableNushiCallerDelivery(w.db, "zcn_caller");
   vi.stubEnv("VILLAGE_NUSHI_LLM_MONTHLY_BUDGET_USD", "0");
   await processChatNushiRequest(w.db, c.request.id);
-  const own = (await chatPage(w.db, "zcn_caller", w.village.slug!))!;
-  const other = (await chatPage(w.db, "zcn_reader", w.village.slug!))!;
-  if (own.consentRequired || other.consentRequired) throw new Error("Missing consent");
-  expect(own.messages[0]).toMatchObject({ nushiCall: { state: "failed", failure: "budget" } });
-  expect(other.messages[0]).not.toHaveProperty("nushiCall");
-  const { groupChatNotifications } = await import("~/lib/group-chat-notifications");
-  const base = { read: false, actorHandle: "zcn_reader", chat: { slug: w.village.slug! } };
-  expect(groupChatNotifications([{ ...base, id: 1, kind: "chat_reply" }, { ...base, id: 2, kind: "chat_nushi_result" }])).toHaveLength(2);
+  const own = await chatChanges(w.db, "zcn_caller", w.village.slug!, { since: c.sent.seq });
+  const other = await chatChanges(w.db, "zcn_reader", w.village.slug!, { since: c.sent.seq });
+  expect(own.next).toBeGreaterThan(c.sent.seq);
+  expect(own.messages).toMatchObject([{ id: c.sent.id, nushiCall: { state: "failed", failure: "budget" } }]);
+  expect(other.messages.find(message => message.id === c.sent.id)).not.toHaveProperty("nushiCall");
+  expect(await w.db.select().from(notifications)).toEqual([]);
+  await expectNushiDeliveryJobs(w.db);
 });
 
 it("withdraws on supplied translation changes without disrupting ordinary translation writes", async () => {
@@ -449,8 +454,7 @@ it.each([false, true].flatMap(omitReadings => [undefined, false, true].flatMap(c
   expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "answered", failure: null });
   const [answer] = await w.db.select().from(chatMessages).where(eq(chatMessages.authorKind, "nushi"));
   expect(answer).toMatchObject({ body: [m.nushi_not_found(), ...(askPerson === true ? [m.nushi_ask_person()] : []), ...(clarificationNeeded === true ? [m.chat_nushi_clarify()] : [])].join(" "), nushiShape: { status: "not_confirmed", ranges: [], clarificationNeeded: clarificationNeeded === true, askPerson: askPerson === true } });
-  expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_result")).toMatchObject([{ userId: "zcn_caller", chatMessageId: answer.id }]);
-  expect((await w.db.select().from(notifications)).filter(n => n.kind === "chat_nushi_cited")).toEqual([]);
+  expect(await w.db.select().from(notifications)).toEqual([]);
 });
 
 it.each([false, true].flatMap(legacy => (["en", "ja"] as const).flatMap(sourceLang => [false, true].flatMap(clarificationNeeded => [false, true].map(askPerson => ({ legacy, sourceLang, clarificationNeeded, askPerson }))))))("preserves clarification=$clarificationNeeded and person guidance=$askPerson when reading a not-found answer from $sourceLang in another language (legacy=$legacy)", async ({ legacy, sourceLang, clarificationNeeded, askPerson }) => {

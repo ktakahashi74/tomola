@@ -1,7 +1,7 @@
 import { renderNushiThread, renderNushiAnswerPage } from "~/lib/nushi-html.server";
 import { createNushiTranslationHandlers } from "~/lib/nushi-translations.server";
 import { runRetentionCleanup } from "~/lib/retention.server";
-import { nushiFixture } from "./helpers/nushi";
+import { enableNushiCallerDelivery, expectNushiDeliveryJobs, nushiFixture } from "./helpers/nushi";
 import { and, eq } from "drizzle-orm";
 import { afterEach, expect, it, vi } from "vitest";
 import { addMember, createTestDb } from "./helpers/db";
@@ -93,7 +93,7 @@ it("publishes one sourced AI reply without adding a member, human reply, ranking
   const view = await readNushiAnswer(f.db, answer.id);
   expect(view && !view.hidden && view.answer.citations[0].author).toBe("@znushi_owner");
   const notices = await f.db.select().from(notifications);
-  expect(notices.map(notice => [notice.kind, notice.userId]).sort()).toEqual([["nushi_cited", "nushi-owner"], ["nushi_result", "nushi-caller"]]);
+  expect(notices).toMatchObject([{ kind: "nushi_cited", userId: "nushi-owner" }]);
   expect(JSON.stringify(notices)).not.toContain("orchard");
   expect((await f.db.select().from(llmUsage)).every(row => row.purpose === "ask_village")).toBe(true);
   expect((await nushiMarkdownBlocks(f.db, f.topic, [f.topic], "en")).join("\n")).toContain("author_kind: ai");
@@ -466,13 +466,14 @@ it("rejects a known caller limit before the embedding API", async () => {
   expect(embed).not.toHaveBeenCalled();
   expect((await f.db.select().from(nushiRequests).where(eq(nushiRequests.id, request.id)))[0].failure).toBe("limit");
 });
-it("queues immediate result and citation mail on creation without reviving failed mail", async () => {
+it("queues only citation mail on answer publication and does not revive failed mail", async () => {
   const f = await nushiFixture();
+  await enableNushiCallerDelivery(f.db, "nushi-caller");
   await f.db.update(profiles).set({ emailPref: "immediate" });
   await published(f);
-  const noticeIds = (await f.db.select().from(notifications)).filter(row => row.kind.startsWith("nushi_")).map(row => row.id);
-  const sent = await f.db.select().from(jobs).where(eq(jobs.kind, "send_notification_email"));
-  expect(sent.map(row => (row.payload as { notificationId: number }).notificationId).sort()).toEqual(noticeIds.sort());
+  const notices = await f.db.select().from(notifications);
+  expect(notices).toMatchObject([{ kind: "nushi_cited", userId: "nushi-owner", nushiRequestId: f.request.id }]);
+  await expectNushiDeliveryJobs(f.db, notices[0].id);
   await f.db.update(jobs).set({ status: "failed" }).where(eq(jobs.kind, "send_notification_email"));
   const reply = await createReply(f.db, "nushi-caller", f.topic, { body: "@nushi orchard another", lang: "en" });
   if (!reply.ok) throw new Error(reply.error);
@@ -485,20 +486,15 @@ it("queues immediate result and citation mail on creation without reviving faile
   await expireNushiRequests({ select } as unknown as Db, new Date(), {});
   expect(select).not.toHaveBeenCalled();
 });
-it.each(["topic", "village"])("queues durable immediate cancellation mail when a %s is stopped", async stop => {
+it.each(["expiry", "topic", "village"])("ends a posting request without notification jobs after %s", async stop => {
   const f = await nushiFixture();
-  await f.db.update(profiles).set({ emailPref: "immediate" }).where(eq(profiles.userId, "nushi-caller"));
+  await enableNushiCallerDelivery(f.db, "nushi-caller");
+  if (stop === "expiry") await expireNushiRequests(f.db, new Date(f.request.expiresAt.getTime() + 1));
   if (stop === "topic") await setTopicNushi(f.db, "nushi-caller", f.topic, true);
-  else await setVillageNushi(f.db, "nushi-owner", f.village.id, false);
-  const [notice] = await f.db.select().from(notifications).where(eq(notifications.kind, "nushi_result"));
-  const [job] = await f.db.select().from(jobs).where(eq(jobs.kind, "email_nushi_result"));
-  expect(job.payload).toEqual({ notificationId: notice.id });
-  const { createNushiHandlers } = await import("~/lib/nushi.server");
-  const handler = createNushiHandlers().email_nushi_result;
-  await handler(job, { db: f.db, now: new Date() });
-  await f.db.update(jobs).set({ status: "failed" }).where(eq(jobs.kind, "send_notification_email"));
-  await handler(job, { db: f.db, now: new Date() });
-  expect(await f.db.select().from(jobs).where(eq(jobs.kind, "send_notification_email"))).toHaveLength(1);
+  if (stop === "village") await setVillageNushi(f.db, "nushi-owner", f.village.id, false);
+  expect(await f.db.select().from(nushiRequests)).toMatchObject([{ state: stop === "expiry" ? "failed" : "cancelled" }]);
+  expect(await f.db.select().from(notifications)).toEqual([]);
+  await expectNushiDeliveryJobs(f.db);
 });
 it("loads eligible places once for all AI counts", async () => {
   const f = await nushiFixture(); await published(f);

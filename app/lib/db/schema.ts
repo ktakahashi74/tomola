@@ -1564,7 +1564,6 @@ export const notifications = pgTable(
   (t) => [
     uniqueIndex("notifications_chat_nushi_citation_day_unique").on(t.userId, t.nushiDay).where(sql`${t.kind} = 'chat_nushi_cited'`),
     uniqueIndex("notifications_nushi_citation_day_unique").on(t.userId, t.nushiDay).where(sql`${t.kind} = 'nushi_cited'`),
-    uniqueIndex("notifications_nushi_result_unique").on(t.nushiRequestId).where(sql`${t.kind} = 'nushi_result'`),
     uniqueIndex("notifications_translation_report_unique").on(t.translationReportId),
     check("notifications_translation_report_check", sql`(${t.kind} = 'translation_report_result') = (${t.translationReportId} IS NOT NULL)`),
     index("notifications_user_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
@@ -1896,7 +1895,6 @@ export const chatNushiRequests = pgTable("chat_nushi_requests", {
   token: text("token"),
   attempts: integer("attempts").notNull().default(0),
   answerMessageId: text("answer_message_id").references(() => chatMessages.id, { onDelete: "set null" }).unique(),
-  notifiedAt: timestamp("notified_at", { withTimezone: true }),
 }, t => [index("chat_nushi_requests_active_idx").on(t.state, t.expiresAt), index("chat_nushi_requests_village_idx").on(t.villageId),
   check("chat_nushi_requests_state_check", oneOf(t.state, ["pending", "processing", "answered", "failed", "cancelled"]))]);
 export const chatNushiSources = pgTable("chat_nushi_sources", {

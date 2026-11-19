@@ -189,12 +189,13 @@ test("chat AI keeps private access, explicit calls, quiet arrivals and ordinary 
       await expect(field).toHaveValue("");
       if (i < 3) await expect(page.locator("[data-chat-nushi]")).toHaveCount(before + i);
       else {
+        const status = page.locator("[data-chat-message]").filter({ hasText: question }).locator("[data-nushi-status]");
+        // Returning to the chat polls for committed changes, including failures.
         await expect(async () => {
-          await page.reload();
-          const status = page.locator("[data-chat-message]").filter({ hasText: question }).locator("[data-nushi-status]");
+          await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
           await expect(status).toContainText(en.nushi_failure_interval, { timeout: 1000 });
-          await expect(status).not.toContainText(en.nushi_failure_limit);
         }).toPass({ timeout: 20_000 });
+        await expect(status).not.toContainText(en.nushi_failure_limit);
         await expect(page.locator("[data-chat-nushi]")).toHaveCount(before + 2);
       }
     }

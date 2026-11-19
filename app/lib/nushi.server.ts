@@ -4,7 +4,7 @@ import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { enabledTargetLangs } from "./enabled-langs.server";
 import { notificationEmailDedupeKey, enqueueImmediateEmails } from "./notifications.server";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import type { Db, Tx } from "./db/client.server";
+import type { Db } from "./db/client.server";
 import { chatNushiRequests, chatNushiReservations, entries, jobs, nushiAnswers, nushiRequests, nushiReservations, nushiSources, nushiTranslations, notifications, profiles, villages } from "./db/schema";
 import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
@@ -40,18 +40,11 @@ export async function requestNushi(db: Db, entryId: number, suppress = false, no
 }
 
 // A daily citation notice is mailed once, including after a permanent delivery failure.
-async function enqueueNushiEmails(db: Db, created: Array<{ id: number; userId: string; kind: "nushi_result" | "nushi_cited" }>, now: Date) {
+async function enqueueNushiCitationEmails(db: Db, created: Array<{ id: number; userId: string }>, now: Date) {
   if (!created.length) return;
   const previous = await db.select({ key: jobs.dedupeKey }).from(jobs).where(inArray(jobs.dedupeKey, created.map(row => notificationEmailDedupeKey(row.id))));
   const keys = new Set(previous.map(row => row.key));
-  await enqueueImmediateEmails(db, created.filter(row => !keys.has(notificationEmailDedupeKey(row.id))), { now });
-}
-async function notifyResult(db: Tx, request: typeof nushiRequests.$inferSelect, now: Date) {
-  if (!request.callerId) return;
-  await db.insert(notifications).values({ userId: request.callerId, kind: "nushi_result", nushiRequestId: request.id, threadId: request.threadId, createdAt: now }).onConflictDoNothing();
-  const rows = await db.select({ id: notifications.id, userId: notifications.userId }).from(notifications)
-    .where(and(eq(notifications.nushiRequestId, request.id), eq(notifications.kind, "nushi_result"))).for("update");
-  await enqueueNushiEmails(db, rows.map(row => ({ ...row, kind: "nushi_result" })), now);
+  await enqueueImmediateEmails(db, created.filter(row => !keys.has(notificationEmailDedupeKey(row.id))).map(row => ({ ...row, kind: "nushi_cited" })), { now });
 }
 const { active, claim, expire, finish, reserve, retryOrFinish } = nushiRequestLifecycle({
   requests: nushiRequests,
@@ -61,7 +54,6 @@ const { active, claim, expire, finish, reserve, retryOrFinish } = nushiRequestLi
   enabled: nushiEnabled,
   countShared: chatNushiEnabled,
   topic: request => request.threadId,
-  notify: notifyResult,
   leasedMessage: "Nushi is processing this request",
   busyMessage: "Nushi is busy",
   retryMessage: "Nushi is temporarily unavailable",
@@ -99,15 +91,15 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
   if (!request) return;
   const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000);
   try {
-    if (!await nushiCaller(db, request, env)) { await finish(db, id, "changed", clock(), request.token!); return; }
+    if (!await nushiCaller(db, request, env)) { await finish(db, id, "changed", request.token!); return; }
     const input = await nushiMaterials(db, request, { env, now: clock(), clock, signal, embedding: options.embedding });
-    if (!input) { await finish(db, id, "private", clock(), request.token!); return; }
-    if (!await nushiCaller(db, request, env) || !await snapshotsCurrent(db, input.snapshots, request.villageId)) { await finish(db, id, "changed", clock(), request.token!); return; }
+    if (!input) { await finish(db, id, "private", request.token!); return; }
+    if (!await nushiCaller(db, request, env) || !await snapshotsCurrent(db, input.snapshots, request.villageId)) { await finish(db, id, "changed", request.token!); return; }
     const completer = options.completer ?? resolveNushiCompleter(env);
     const voice = await readNushiVoice(db, request.villageId, env);
     const prompt = { ...nushiPrompt(input, "public-reply", voice), signal };
     const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { voiceApplied: !!voice?.text, clock, env });
-    if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
+    if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", request.token!); return; }
     const { answer } = verified;
     await db.transaction(async tx => {
       // Sources precede the request lock, matching edits and withdrawal triggers.
@@ -117,16 +109,16 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
       const [current] = await tx.select().from(nushiRequests).where(eq(nushiRequests.id, id)).for("update");
       if (!current || current.state !== "processing" || current.token !== request.token) return;
       if (!await nushiVoiceCurrent(tx, current.villageId, voice, env) || !nushiEnabled(env) || current.expiresAt <= clock() || !await nushiCaller(tx, current, env) || !await snapshotsCurrent(tx, input.snapshots, current.villageId) || !await reconstructNushiMaterials(tx, nushiMaterialIndex(input.materials.sources), input.language)) {
-        await finish(tx, id, current.expiresAt <= clock() ? "expired" : "changed", clock(), request.token!); return;
+        await finish(tx, id, current.expiresAt <= clock() ? "expired" : "changed", request.token!); return;
       }
       const cited = new Set(answer.citations.map(citation => Number(/^e-(\d+)-/.exec(citation.sourceId)![1])));
       const authors = [...new Set(input.snapshots.filter(source => cited.has(source.id)).map(source => source.authorId))].filter(author => author !== current.callerId);
       const limits = nushiLimits(env);
-      if (!await reserve(tx, current, limits, clock(), env, authors)) { await finish(tx, id, "limit", clock(), request.token!); return; }
+      if (!await reserve(tx, current, limits, clock(), env, authors)) { await finish(tx, id, "limit", request.token!); return; }
       if (current.replacesAnswerId) {
         const [previous] = await tx.select().from(nushiAnswers).where(eq(nushiAnswers.id, current.replacesAnswerId)).for("update");
         if (!previous || previous.supersededById || (previous.hiddenAt && previous.hiddenReason !== "source_changed")) {
-          await finish(tx, id, "changed", clock(), request.token!); return;
+          await finish(tx, id, "changed", request.token!); return;
         }
       }
       const [published] = await tx.insert(nushiAnswers).values({ voiceEventId: voice?.text ? voice.eventId : null, requestId: id, answer, scope: { posts: new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, ...input.dates, truncated: input.materials.scope.truncated || verified.truncated, materialIndex: nushiMaterialIndex(input.materials.sources), materialLanguage: input.language, answerLangCode: input.answerLangCode },
@@ -136,7 +128,6 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
         .where(eq(nushiAnswers.id, current.replacesAnswerId));
       await tx.insert(nushiSources).values(input.snapshots.map(source => ({ answerId: published.id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, textHash: source.textHash, authorId: source.authorId, author: source.author, createdAt: source.createdAt })));
       await tx.update(nushiRequests).set({ state: "answered", leaseUntil: null }).where(eq(nushiRequests.id, id));
-      await notifyResult(tx, current, clock());
       if (answer.readings.length) for (const lang of enabledTargetLangs(input.answerLanguage)) await enqueue(tx, "translate_nushi", { answerId: published.id, lang }, { dedupeKey: `nushi-translation:${published.id}:${lang}`, maxAttempts: 2 });
       if (authors.length) {
         const recipients = await tx.select({ id: profiles.userId }).from(profiles).where(and(inArray(profiles.userId, authors), eq(profiles.nushiCitationNotifications, true)));
@@ -147,7 +138,7 @@ export async function processNushiRequest(db: Db, id: string, options: { env?: L
           target: [notifications.userId, notifications.nushiDay], targetWhere: sql`${notifications.kind} = 'nushi_cited'`,
           set: { mergedCount: sql`${notifications.mergedCount} + 1`, nushiRequestId: id, threadId: current.threadId },
         }).returning({ id: notifications.id, userId: notifications.userId });
-          await enqueueNushiEmails(tx, rows.map(row => ({ ...row, kind: "nushi_cited" })), clock());
+          await enqueueNushiCitationEmails(tx, rows, clock());
         }
       }
     });
@@ -162,15 +153,6 @@ export async function expireNushiRequests(db: Db, now = new Date(), env: LlmEnv 
 export const createNushiHandlers = () => defineJobHandlers({
   [NUSHI_JOB]: async (job, ctx) => {
     await processNushiRequest(ctx.db, job.payload.requestId, { now: ctx.now, clock: ctx.clock, signal: ctx.signal });
-  },
-  // Database withdrawal triggers create this durable handoff in the same transaction.
-  email_nushi_result: async (job, ctx) => {
-    const id = job.payload.notificationId;
-    await ctx.db.transaction(async tx => {
-      const rows = await tx.select({ id: notifications.id, userId: notifications.userId }).from(notifications)
-        .where(and(eq(notifications.id, id), eq(notifications.kind, "nushi_result"))).for("update");
-      await enqueueNushiEmails(tx, rows.map(row => ({ ...row, kind: "nushi_result" })), ctx.now);
-    });
   },
 });
 

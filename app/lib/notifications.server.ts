@@ -67,9 +67,9 @@ export async function enqueueImmediateEmails(
   opts: { now?: Date } = {},
 ): Promise<number> {
   if (created.length === 0) return 0;
-  await enqueuePush(db, created.filter(item => item.kind !== "chat_nushi_result" && item.kind !== "chat_nushi_cited"), opts.now);
+  await enqueuePush(db, created.filter(item => item.kind !== "chat_nushi_cited"), opts.now);
   // Result notices describe the outcome and use available topic titles; they do not need new excerpt translations.
-  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_result" && item.kind !== "nushi_cited" && item.kind !== "chat_nushi_result" && item.kind !== "chat_nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
+  await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_cited" && item.kind !== "chat_nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
   const runAt = new Date((opts.now ?? new Date()).getTime() + notificationEmailDelaySeconds() * 1000);
   const prefOf = new Map<string, EmailPref>();
   for (const ids of notificationBatches([...new Set(created.map(c => c.userId))])) {

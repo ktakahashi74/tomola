@@ -3034,7 +3034,6 @@
   "nushi_reports": "Signalements relatifs à Nushi",
   "nushi_resolve": "Traiter et masquer la réponse",
   "nushi_dismiss": "Rejeter et conserver la réponse",
-  "nushi_notification_result": "Nushi a terminé votre demande. Ouvrez-la pour voir la réponse ou la raison pour laquelle il n’a pas pu répondre.",
   "nushi_notification_cited": "Nushi a cité votre publication.",
   "ai_use_nushi": "Nushi du village",
   "ai_use_sent_nushi": "La publication appelante et un ensemble limité de publications publiques de ce village ; les réponses antérieures de l’IA uniquement comme contexte. Les réponses sont enregistrées en tant que réponses publiques de l’IA. Les signalements d’erreur n’enregistrent la question, la réponse et les sources qu’après consentement.",

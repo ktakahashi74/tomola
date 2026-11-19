@@ -1,6 +1,6 @@
 import { chatNushiEnabled } from "./chat-nushi-config.server";
 import { CHAT_NOTIFICATION_KINDS } from "./notifications";
-import { and, count, eq, getTableColumns, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, getTableColumns, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { chatConsents, chatMessages, chatReads, notifications, profiles, villageMembers, villages } from "./db/schema";
 import { villageChatEnabled } from "./village-chat-enabled.server";
@@ -17,7 +17,7 @@ export async function clearVillageChatMemberState(db: Db, villageId: string, use
   ), cleared_consents as (
     delete from ${chatConsents} where ${chatConsents.villageId} = ${villageId} and ${chatConsents.userId} = ${userId}
   ) delete from ${notifications} where ${notifications.villageId} = ${villageId}
-    and ${notifications.userId} = ${userId} and ${notifications.kind} in ('chat_mention', 'chat_reply', 'chat_nushi_result', 'chat_nushi_cited')`);
+    and ${notifications.userId} = ${userId} and ${inArray(notifications.kind, CHAT_NOTIFICATION_KINDS)}`);
 }
 
 // Preserve existing SELECT projections when chat is disabled or a caller only needs posting notices.
@@ -32,7 +32,7 @@ export function notificationColumns(includeChat = villageChatEnabled()) {
 // When disabled this condition references no chat or village table.
 export function chatNotificationCondition() {
   if (!villageChatEnabled()) return notInArray(notifications.kind, [...CHAT_NOTIFICATION_KINDS]);
-  return and(chatNushiEnabled() ? undefined : notInArray(notifications.kind, ["chat_nushi_result", "chat_nushi_cited"]), or(notInArray(notifications.kind, [...CHAT_NOTIFICATION_KINDS]), sql`exists (select 1 from ${chatMessages}
+  return and(chatNushiEnabled() ? undefined : ne(notifications.kind, "chat_nushi_cited"), or(notInArray(notifications.kind, [...CHAT_NOTIFICATION_KINDS]), sql`exists (select 1 from ${chatMessages}
     inner join ${villageMembers} on ${villageMembers.villageId} = ${chatMessages.villageId}
     inner join ${chatConsents} on ${chatConsents.villageId} = ${villageMembers.villageId}
       and ${chatConsents.userId} = ${villageMembers.userId} and ${chatConsents.version} = ${CHAT_CONSENT_VERSION}
@@ -48,7 +48,7 @@ export function chatNotificationCondition() {
 export async function chatNotificationLocations(db: Db, rows: readonly { id: number; chatMessageId: string | null; villageId: string | null; kind?: string }[], userId: string, mailNow?: Date): Promise<Map<number, ChatNotificationLocation>> {
   const out = new Map<number, ChatNotificationLocation>();
   if (!villageChatEnabled() || !rows.length) return out;
-  rows = rows.filter(row => chatNushiEnabled() || !["chat_nushi_result", "chat_nushi_cited"].includes(row.kind ?? ""));
+  rows = rows.filter(row => chatNushiEnabled() || row.kind !== "chat_nushi_cited");
   const ids = [...new Set(rows.map(row => row.chatMessageId).filter((id): id is string => !!id))];
   if (!ids.length) return out;
   const locations = await db.select({ id: chatMessages.id, villageId: villages.id, slug: villages.slug, name: villages.name, language: villages.language, kind: villages.kind })

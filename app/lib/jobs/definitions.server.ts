@@ -22,8 +22,6 @@ export const DEFAULT_JOB_PRIORITY = 3;
 export const jobDefinitions = {
   answer_nushi: { schema: nushiRequest, priority: 1 },
   answer_chat_nushi: { schema: nushiRequest, priority: 1 },
-  email_nushi_result: { schema: notice, priority: DEFAULT_JOB_PRIORITY },
-  email_chat_nushi_result: { schema: notice, priority: DEFAULT_JOB_PRIORITY },
   translate_nushi: { schema: z.object({ answerId: id, lang }), priority: DEFAULT_JOB_PRIORITY },
   check_source_language: {
     schema: z.object({ entryId: id, sourceHash: z.string(), revision: z.number().int(), checked: z.boolean().optional() }),

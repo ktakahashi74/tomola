@@ -50,13 +50,6 @@ async function callerFor(db: Db, request: ChatRequest, env: LlmEnv) {
   return row && !row.message.editedAt ? row.message : null;
 }
 
-async function resultNotice(db: Db, request: ChatRequest, now: Date) {
-  if (!request.callerId || request.notifiedAt) return;
-  const [created] = await db.update(chatNushiRequests).set({ notifiedAt: now }).where(and(eq(chatNushiRequests.id, request.id), isNull(chatNushiRequests.notifiedAt))).returning();
-  if (!created) return;
-  const [notice] = await db.insert(notifications).values({ userId: request.callerId, kind: "chat_nushi_result", villageId: request.villageId, chatMessageId: request.answerMessageId ?? request.messageId, createdAt: now }).returning({ id: notifications.id, userId: notifications.userId });
-  await enqueueImmediateEmails(db, [{ ...notice, kind: "chat_nushi_result" }], { now });
-}
 const { claim, expire, finish, reserve, retryOrFinish } = nushiRequestLifecycle({
   requests: chatNushiRequests,
   reservations: chatNushiReservations,
@@ -69,7 +62,6 @@ const { claim, expire, finish, reserve, retryOrFinish } = nushiRequestLifecycle(
     const [recent] = await tx.select({ n: count() }).from(chatNushiRequests).where(and(eq(chatNushiRequests.villageId, request.villageId), sql`${chatNushiRequests.id} <> ${request.id}`, sql`((${chatNushiRequests.state} = 'processing' and ${chatNushiRequests.leaseUntil} > ${now}) or exists (select 1 from ${chatMessages} where ${chatMessages.id} = ${chatNushiRequests.answerMessageId} and ${chatMessages.createdAt} >= ${new Date(now.getTime() - interval.intervalSeconds * 1000)}))`, inArray(chatNushiRequests.state, ["processing", "answered"])));
     return recent.n >= interval.intervalLimit;
   },
-  notify: resultNotice,
   pendingLeaseCounts: true,
   leasedMessage: "Village AI is busy",
   busyMessage: "Village AI is busy",
@@ -108,11 +100,11 @@ export async function processChatNushiRequest(db: Db, id: string, options: { env
   const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000);
   try {
     const message = await callerFor(db, request, env);
-    if (!message) { await finish(db, id, "changed", clock(), request.token!); return; }
+    if (!message) { await finish(db, id, "changed", request.token!); return; }
     const language = isLang(message.lang) ? message.lang : "en";
     const callingPost = (await projectQuestionSource({ kind: "post", field: "body", author: "", original: message.body })).original;
     const input = await collectNushiMaterials(db, { villageId: request.villageId, callerId: request.callerId, callingPost, language }, { env, now: clock(), clock, signal, embedding: options.embedding });
-    if (request.expiresAt <= clock() || !await callerFor(db, request, env) || !await snapshotsCurrent(db, input.snapshots, request.villageId)) { await finish(db, id, "changed", clock(), request.token!); return; }
+    if (request.expiresAt <= clock() || !await callerFor(db, request, env) || !await snapshotsCurrent(db, input.snapshots, request.villageId)) { await finish(db, id, "changed", request.token!); return; }
     const completer = options.completer ?? resolveNushiCompleter(env);
     const voice = await readNushiVoice(db, request.villageId, env);
     const base = nushiPrompt({ ...input, language, answerLanguage: language, answerLangCode: null, context: { callingMessage: callingPost } }, "chat", voice);
@@ -122,7 +114,7 @@ For status not_confirmed, including when clarification is needed, return {"statu
 Keep readings short in every language. You may reduce the number of readings for brevity, but preserve each retained reading's attribution, conditions, reservations and relevant disagreements, along with the consulted scope.
 Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
     const verified = await completeNushiAnswer(db, completer, prompt, input.materials, { destination: "chat", voiceApplied: !!voice?.text, clock, env });
-    if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", clock(), request.token!); return; }
+    if (!verified.ok) { logNushiVerificationFailure(id, verified); await finish(db, id, "unverified", request.token!); return; }
     const { answer, clarificationNeeded } = verified;
     const published = await db.transaction(async tx => {
       // Profile locks precede village/member locks, matching suspension and account deletion.
@@ -135,17 +127,16 @@ Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
       await quotaLock(tx);
       const [current] = await tx.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, id)).for("update");
       if (!current || current.state !== "processing" || current.token !== request.token) return null;
-      if (!await nushiVoiceCurrent(tx, current.villageId, voice, env) || current.expiresAt <= clock() || !await callerFor(tx, current, env) || !await snapshotsCurrent(tx, input.snapshots, current.villageId) || !await reconstructNushiMaterials(tx, nushiMaterialIndex(input.materials.sources), language)) { await finish(tx, id, "changed", clock(), request.token!); return null; }
+      if (!await nushiVoiceCurrent(tx, current.villageId, voice, env) || current.expiresAt <= clock() || !await callerFor(tx, current, env) || !await snapshotsCurrent(tx, input.snapshots, current.villageId) || !await reconstructNushiMaterials(tx, nushiMaterialIndex(input.materials.sources), language)) { await finish(tx, id, "changed", request.token!); return null; }
       const cited = new Set(answer.citations.map(citation => Number(/^e-(\d+)-/.exec(citation.sourceId)![1])));
       const authors = [...new Set(input.snapshots.filter(source => cited.has(source.id)).map(source => source.authorId))].filter(author => author !== current.callerId);
       const limits = nushiLimits(env);
-      if (!await reserve(tx, current, limits, clock(), env, authors)) { await finish(tx, id, "limit", clock(), request.token!); return null; }
+      if (!await reserve(tx, current, limits, clock(), env, authors)) { await finish(tx, id, "limit", request.token!); return null; }
       const answerId = randomBytes(16).toString("hex");
       const seq = await nextChatSequence(tx, current.villageId);
       await tx.insert(chatMessages).values({ id: answerId, villageId: current.villageId, authorKind: "nushi", authorId: null, ...answerBody(answer, clarificationNeeded, language, new Map(input.snapshots.map(source => [source.id, source.createdAt.toISOString().slice(0, 10)])), new Set(input.materials.sources.map(source => source.id.replace(/-(title|body)$/, ""))).size, input.dates.from, input.dates.to, input.materials.scope.truncated || verified.truncated), lang: language, replyToId: message.id, createdSeq: seq, changedSeq: seq, createdAt: clock() });
       if (input.snapshots.length) await tx.insert(chatNushiSources).values(input.snapshots.map(source => ({ requestId: id, entryId: source.id, revision: source.revision, sourceHash: source.sourceHash, authorId: source.authorId })));
-      const [done] = await tx.update(chatNushiRequests).set({ state: "answered", leaseUntil: null, answerMessageId: answerId, voiceEventId: voice?.text ? voice.eventId : null }).where(eq(chatNushiRequests.id, id)).returning();
-      await resultNotice(tx, done, clock());
+      await tx.update(chatNushiRequests).set({ state: "answered", leaseUntil: null, answerMessageId: answerId, voiceEventId: voice?.text ? voice.eventId : null }).where(eq(chatNushiRequests.id, id));
       // Daily citation notices contain no copied text and require current chat access.
       if (authors.length) {
         const recipients = await tx.select({ id: profiles.userId }).from(profiles).innerJoin(villageMembers, and(eq(villageMembers.userId, profiles.userId), eq(villageMembers.villageId, current.villageId)))
@@ -168,10 +159,8 @@ Prompt version: ${CHAT_NUSHI_PROMPT_VERSION}.` };
 export async function expireChatNushiRequests(db: Db, now = new Date()) {
   await expire(db, now, process.env);
 }
-export const createChatNushiHandlers = () => defineJobHandlers({ email_chat_nushi_result: async (job, ctx) => {
-  const id = job.payload.notificationId;
-  const rows = await ctx.db.select({ id: notifications.id, userId: notifications.userId }).from(notifications).where(and(eq(notifications.id, id), eq(notifications.kind, "chat_nushi_result")));
-  await enqueueImmediateEmails(ctx.db, rows.map(row => ({ ...row, kind: "chat_nushi_result" })), { now: ctx.now });
-}, answer_chat_nushi: async (job, ctx) => {
-  await processChatNushiRequest(ctx.db, job.payload.requestId, { now: ctx.now, clock: ctx.clock, signal: ctx.signal });
-} });
+export const createChatNushiHandlers = () => defineJobHandlers({
+  answer_chat_nushi: async (job, ctx) => {
+    await processChatNushiRequest(ctx.db, job.payload.requestId, { now: ctx.now, clock: ctx.clock, signal: ctx.signal });
+  },
+});

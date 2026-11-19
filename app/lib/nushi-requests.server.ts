@@ -25,7 +25,6 @@ type LifecycleOptions<T extends RequestTable> = {
   countShared: (env: LlmEnv) => boolean;
   topic?: (request: T["$inferSelect"]) => number;
   intervalLimited?: (db: Tx, request: T["$inferSelect"], now: Date, env: LlmEnv) => Promise<boolean>;
-  notify: (db: Tx, request: T["$inferSelect"], now: Date) => Promise<void>;
   pendingLeaseCounts?: boolean;
   leasedMessage: string;
   busyMessage: string;
@@ -42,14 +41,11 @@ export function nushiRequestLifecycle<T extends RequestTable>(options: Lifecycle
   const { reservations, sharedRequests, sharedReservations } = options;
   const active = () => inArray(requests.state, activeStates);
 
-  async function finish(db: Db, id: string, failure: string, now: Date, token?: string) {
-    await db.transaction(async tx => {
-      const [row] = await tx.update(requests).set({
-        state: failure === "disabled" || failure === "changed" ? "cancelled" : "failed",
-        failure, leaseUntil: null,
-      }).where(and(eq(requests.id, id), active(), token ? eq(requests.token, token) : undefined)).returning();
-      if (row) await options.notify(tx, row as T["$inferSelect"], now);
-    });
+  async function finish(db: Db, id: string, failure: string, token?: string) {
+    await db.update(requests).set({
+      state: failure === "disabled" || failure === "changed" ? "cancelled" : "failed",
+      failure, leaseUntil: null,
+    }).where(and(eq(requests.id, id), active(), token ? eq(requests.token, token) : undefined));
   }
 
   // Call under the same quota lock as claim and publication.
@@ -82,17 +78,17 @@ export function nushiRequestLifecycle<T extends RequestTable>(options: Lifecycle
       const request = row as T["$inferSelect"] | undefined;
       if (!request || !activeStates.includes(request.state)) return null;
       const unavailable = request.expiresAt <= now ? "expired" : !options.enabled(env) ? "disabled" : null;
-      if (unavailable) { await finish(tx, id, unavailable, now); return null; }
+      if (unavailable) { await finish(tx, id, unavailable); return null; }
       if ((request.state === "processing" || options.pendingLeaseCounts) && request.leaseUntil && request.leaseUntil > now) {
         throw new DeferJob(request.leaseUntil, options.leasedMessage);
       }
-      if (request.attempts >= NUSHI_MAX_ATTEMPTS) { await finish(tx, id, "unavailable", now); return null; }
+      if (request.attempts >= NUSHI_MAX_ATTEMPTS) { await finish(tx, id, "unavailable"); return null; }
       const limits = nushiLimits(env);
       const running = await countRunning(tx, requests, now);
       const shared = options.countShared(env) ? await countRunning(tx, sharedRequests, now) : 0;
       if (running + shared >= limits.concurrent) throw new DeferJob(new Date(now.getTime() + BUSY_DELAY_MS), options.busyMessage);
-      if (await options.intervalLimited?.(tx, request, now, env)) { await finish(tx, id, "interval", now); return null; }
-      if (!await reserve(tx, request, limits, now, env)) { await finish(tx, id, "limit", now); return null; }
+      if (await options.intervalLimited?.(tx, request, now, env)) { await finish(tx, id, "interval"); return null; }
+      if (!await reserve(tx, request, limits, now, env)) { await finish(tx, id, "limit"); return null; }
       const [claimed] = await tx.update(requests).set({
         state: "processing", attempts: request.attempts + 1,
         token: randomUUID(), leaseUntil: new Date(now.getTime() + LEASE_MS),
@@ -104,21 +100,21 @@ export function nushiRequestLifecycle<T extends RequestTable>(options: Lifecycle
   async function retryOrFinish(db: Db, request: T["$inferSelect"], error: unknown, clock: () => Date) {
     // Provider errors can include member content. Only report the fixed reason.
     const { id, token } = request;
-    if (error instanceof BudgetPausedError) { await finish(db, id, "budget", clock(), token!); return; }
+    if (error instanceof BudgetPausedError) { await finish(db, id, "budget", token!); return; }
     if (error instanceof DeferJob) throw error;
     if (request.attempts < NUSHI_MAX_ATTEMPTS && clock() < request.expiresAt) {
       await db.update(requests).set({ state: "pending", leaseUntil: null })
         .where(and(eq(requests.id, id), eq(requests.token, token!), eq(requests.state, "processing")));
       throw new DeferJob(new Date(clock().getTime() + RETRY_DELAY_MS), options.retryMessage);
     }
-    await finish(db, id, "unavailable", clock(), token!);
+    await finish(db, id, "unavailable", token!);
   }
 
   async function expire(db: Db, now: Date, env: LlmEnv) {
     if (!options.enabled(env)) return;
     const rows = await db.select({ id: requests.id }).from(requests)
       .where(and(active(), lte(requests.expiresAt, now))).limit(100);
-    for (const row of rows) await finish(db, row.id, "expired", now);
+    for (const row of rows) await finish(db, row.id, "expired");
   }
 
   return { active, claim, expire, finish, reserve, retryOrFinish };

@@ -2925,7 +2925,6 @@
   "nushi_reports": "Nushi 신고 내역",
   "nushi_resolve": "해결 처리 및 답변 숨기기",
   "nushi_dismiss": "기각 및 답변 유지",
-  "nushi_notification_result": "Nushi가 요청을 완료했습니다. 열어서 답변이나 답변할 수 없었던 이유를 확인해 보세요.",
   "nushi_notification_cited": "Nushi가 회원님의 게시물을 인용했습니다.",
   "ai_use_nushi": "빌리지 Nushi",
   "ai_use_sent_nushi": "호출한 게시물과 해당 빌리지의 제한된 공개 게시물 세트, 이전 AI 답글은 문맥으로만 사용됩니다. 답변은 공개 AI 답글로 저장됩니다. 오류 신고는 동의한 경우에만 질문, 답변 및 자료를 저장합니다.",

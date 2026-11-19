@@ -2979,7 +2979,6 @@
   "nushi_reports": "Nushi reports",
   "nushi_resolve": "Resolve and hide the answer",
   "nushi_dismiss": "Dismiss and keep the answer",
-  "nushi_notification_result": "Nushi has finished your request. Open it to see the answer or why it could not answer.",
   "nushi_notification_cited": "Nushi cited your post.",
   "ai_use_nushi": "Village Nushi",
   "ai_use_sent_nushi": "The calling post and a bounded set of public posts in that village; earlier AI replies only as context. Answers are saved as public AI replies. Error reports save question, answer and material only after consent.",

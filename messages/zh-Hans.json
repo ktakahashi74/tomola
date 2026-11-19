@@ -2394,7 +2394,6 @@
   "nushi_reports": "Nushi 报告",
   "nushi_resolve": "处理并隐藏该回答",
   "nushi_dismiss": "驳回并保留该回答",
-  "nushi_notification_result": "Nushi 已完成你的请求。打开即可查看回答或无法回答的原因。",
   "nushi_notification_cited": "Nushi 引用了你的帖子。",
   "ai_use_nushi": "村的 Nushi",
   "ai_use_sent_nushi": "发起调用的帖子以及该村中限定范围内的公开帖子；之前的 AI 回复仅作为上下文使用。回答将作为公开的 AI 回复保存。错误报告仅在获得同意后才会保存问题、回答和参考材料。",

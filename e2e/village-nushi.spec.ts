@@ -255,6 +255,14 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
   } finally { await callerContext.close(); await guestContext.close(); }
 });
 
+test("a failed posting call remains visible in its topic", async ({ page }) => {
+  const id = fs.readFileSync(path.join(state().dir, "expired-nushi-topic.txt"), "utf8");
+  await useMember(page, "zcn_flow_reader@example.com", `/t/${id}?lang=en`);
+  const status = page.locator("[data-nushi-status]");
+  await expect(status).toContainText(en.nushi_failure_expired, { timeout: 20_000 });
+  await expect(page.locator("[data-nushi-answer]")).toHaveCount(0);
+});
+
 test("Nushi moderation reports appear in the operator queue and public action log", async ({ page, browser }) => {
   test.setTimeout(180_000);
   await page.context().setExtraHTTPHeaders(clientHeaders("192.0.2.221"));

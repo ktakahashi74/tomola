@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../app/lib/db/client.server";
-import { chatConsents, chatMessages, chatMessageTranslations, chatReads, chatSequences, notifications, entries, profiles, user, villageInvites, villageMembers, villages } from "../app/lib/db/schema";
+import { chatConsents, chatMessages, chatMessageTranslations, chatReads, chatSequences, notifications, entries, nushiRequests, profiles, user, villageInvites, villageMembers, villages } from "../app/lib/db/schema";
 import { villagesEnabled } from "../app/lib/villages-enabled.server";
 import { createTopic, createReply } from "../app/lib/entries.server";
 import { setVote } from "../app/lib/votes.server";
@@ -25,6 +25,13 @@ export async function seedVillages(db: Db, dir: string) {
   if (!chatNushiSource.ok) throw new Error(chatNushiSource.error);
   await db.insert(chatMessages).values(Array.from({ length: 35 }, (_, index) => ({ villageId: chatNushiVillage.id, authorId: chatNushiId("zcn_flow_owner"), lang: "en", body: `Chat AI history ${index + 1}\nA quiet reading fixture.\nAnother line for a stable reading position.`, createdSeq: index + 1, changedSeq: index + 1 })));
   await db.insert(chatSequences).values({ villageId: chatNushiVillage.id, seq: 35 });
+  const expiredCaller = chatNushiId("zcn_flow_reader");
+  const [expiredVillage] = await db.insert(villages).values({ slug: "nushi-expired-browser", kind: "open", name: "Nushi expiry browser village" }).returning();
+  await db.insert(villageMembers).values({ villageId: expiredVillage.id, userId: expiredCaller, role: "owner" });
+  const expiredCall = await createTopic(db, expiredCaller, { body: "@nushi orchard status", lang: "en", village: expiredVillage.slug });
+  if (!expiredCall.ok) throw new Error(expiredCall.error);
+  await db.update(nushiRequests).set({ expiresAt: new Date(0) }).where(eq(nushiRequests.entryId, expiredCall.id));
+  fs.writeFileSync(path.join(dir, "expired-nushi-topic.txt"), String(expiredCall.id));
 
   const joinMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
   const joinId = (handle: string) => joinMembers.find(member => member.handle === handle)!.id;
