@@ -4,7 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { browserServerEnvironment } from "../scripts/browser-resources.mjs";
-import { inValidationBudget, validationCommand } from "../scripts/check-resources.mjs";
+import { highLoadFailure, inValidationBudget, validationCommand } from "../scripts/check-resources.mjs";
+
+test("the one-minute load is compared with host CPU count at either endpoint", () => {
+  const sample = (load, cpuCount = 8) => ({ loadAverage: [load, 100, 100], cpuCount });
+  assert.equal(highLoadFailure({ start: sample(7.99), end: sample(7.99) }), false);
+  assert.equal(highLoadFailure({ start: sample(8), end: sample(7) }), true);
+  assert.equal(highLoadFailure({ start: sample(2), end: sample(4, 4) }), true);
+  assert.equal(highLoadFailure({ start: { loadAverage: null, cpuCount: 8 } }), null);
+});
 
 test("browser servers share the native CPU budget without changing test semantics or explicit overrides", () => {
   const input = { NODE_OPTIONS: "--import=fixture.mjs", E2E_PORT: "5400" };

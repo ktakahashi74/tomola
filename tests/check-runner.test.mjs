@@ -48,6 +48,12 @@ test("records commit, dirty state, canonical modes and append-only history", asy
     assert.equal(history[index].event, "started");
     assert.equal(history[index].browserExecution, "none");
     assert.equal(history[index].runId, history[index + 1].runId);
+    assert.deepEqual(history[index].resources.start, history[index + 1].resources.start);
+    assert.ok(history[index + 1].resources.end);
+    if (process.platform === "linux") {
+      assert.ok(history[index].resources.start.cpuCount > 0);
+      assert.equal(history[index].resources.start.loadAverage.length, 3);
+    }
   }
 });
 
@@ -222,12 +228,14 @@ test("build workspaces copy existing output without linking mutable source artif
   fs.mkdirSync(path.join(root, "node_modules"));
   fs.mkdirSync(path.join(root, "build/server"), { recursive: true });
   fs.writeFileSync(path.join(root, "build/server/index.js"), "original build");
-  const directory = createBrowserWorkspace(root, "c", { E2E_SERVER: "build" });
-  try {
-    assert.equal(fs.readFileSync(path.join(directory, "build/server/index.js"), "utf8"), "original build");
-    fs.writeFileSync(path.join(directory, "build/server/index.js"), "changed copy");
-    assert.equal(fs.readFileSync(path.join(root, "build/server/index.js"), "utf8"), "original build");
-  } finally { removeBrowserWorkspace(directory); }
+  for (const env of [{ E2E_SERVER: "build" }, { E2E_PROD_SKIP_BUILD: "1" }]) {
+    const directory = createBrowserWorkspace(root, "c", env);
+    try {
+      assert.equal(fs.readFileSync(path.join(directory, "build/server/index.js"), "utf8"), "original build");
+      fs.writeFileSync(path.join(directory, "build/server/index.js"), "changed copy");
+      assert.equal(fs.readFileSync(path.join(root, "build/server/index.js"), "utf8"), "original build");
+    } finally { removeBrowserWorkspace(directory); }
+  }
 });
 
 test("browser workspaces isolate sources, generation, dependencies and kept data", (t) => {
@@ -308,12 +316,34 @@ test("a failed browser group drains its siblings and keeps each group's output i
   for (const section of output) assert.equal(section.split("owned-test-result").length, 2);
 });
 
-test("release checks the production build once on PostgreSQL", (t) => {
-  const steps = planChecks(["release"], fixture(t), pgEnv).steps.filter(step => step.name.startsWith("browser (production"));
-  assert.equal(steps.length, 1);
-  assert.equal(steps[0].name, "browser (production PostgreSQL)");
-  assert.equal(steps[0].env.E2E_PROD_PG, "1");
-  assert.equal(steps[0].env.E2E_PROD_SKIP_BUILD, "1");
+test("release includes isolated feature variants after the same build", t => {
+  const root = fixture(t);
+  for (const E2E_SERIAL of ["1", "0"]) {
+    const plan = planChecks(["release"], root, { ...pgEnv, E2E_SERIAL, E2E_GROUPS: "3", E2E_PORT: "5311" });
+    const stages = plan.steps.flatMap(check => check.parallel ?? [check]);
+    const production = stages.filter(check => check.args.includes("test:e2e:prod"));
+    assert.equal(production.length, 3);
+    for (const check of production) {
+      assert.equal(check.env.E2E_PROD_PG, "1");
+      assert.equal(check.env.E2E_PROD_SKIP_BUILD, "1");
+    }
+    const google = production.find(check => check.env.E2E_GOOGLE_LOGIN === "1");
+    assert.ok(google.args.every(arg => !arg.endsWith(".spec.ts")));
+    const motion = production.find(check => check.env.E2E_MOTION_FIXTURES === "1");
+    assert.equal(motion.env.FIGURE_TRANSLATION, "1");
+    assert.ok(motion.args.includes("e2e-prod/motion-figures.spec.ts") && motion.partial);
+    const voice = stages.find(check => check.env.VILLAGE_NUSHI_VOICE === "1");
+    assert.ok(voice.args.includes("playwright.public.config.ts") && voice.args.includes("e2e/nushi-voice.spec.ts") && voice.partial);
+    const batch = plan.steps.find(check => check.parallel?.includes(google));
+    assert.equal(Boolean(batch), E2E_SERIAL === "0");
+    if (batch) {
+      assert.ok(batch.parallel.includes(motion) && batch.parallel.includes(voice));
+      const ports = [google.env.E2E_PROD_PORT, motion.env.E2E_PROD_PORT, voice.env.E2E_PORT];
+      assert.ok(ports.every(Boolean));
+      assert.equal(new Set(ports).size, ports.length);
+    }
+    assert.ok(stages.findIndex(check => check.args.includes("drizzle-kit")) < stages.findIndex(check => check.args.includes("typecheck")));
+  }
 });
 
 test("focused requires explicit files and cannot accept traversal or arbitrary Vitest flags", (t) => {
@@ -391,6 +421,40 @@ test("a failed step stops the pipeline and records the unfinished scope without 
   assert.equal(report.status, "failed");
   assert.ok(report.unrun.length > 0);
   assert.ok(!JSON.stringify(report).includes("secret"));
+});
+
+test("keep-going runs independent checks and reports failures and blocked dependents", async t => {
+  const root = fixture(t);
+  for (const fail of ["typecheck", "build", "page JavaScript budget"]) {
+    const plan = planChecks(["release", "--keep-going"], root, pgEnv);
+    const seen = [], output = [];
+    const exit = await executeChecks(plan, root, pgEnv, async check => {
+      seen.push(check.name);
+      if (check.name === "lint baseline") return 7;
+      if (check.name === fail) return 8;
+      if (check.name === "build") {
+        for (const file of ["build/server/index.js", "build/markdown/markdown-worker.mjs"]) {
+          fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+          fs.writeFileSync(path.join(root, file), "");
+        }
+      }
+      return check.env.TOMOLA_TEST_PG === "1" ? { exitCode: 0, postgresSkipped: 0 } : 0;
+    }, { log: line => output.push(line), error: line => output.push(line) });
+    const report = readReport(root);
+    assert.equal(exit, 7);
+    assert.equal(report.status, "failed");
+    assert.ok(seen.includes("unit (PostgreSQL)"));
+    assert.equal(seen.some(name => name.startsWith("browser")), fail === "page JavaScript budget");
+    assert.ok(output.some(line => line.includes("lint baseline (exit 7)") && line.includes(`${fail} (exit 8)`)));
+    if (fail === "typecheck") assert.deepEqual(report.skipped.find(check => check.name === "build")?.blockedBy, ["typecheck"]);
+    if (fail !== "page JavaScript budget") {
+      assert.deepEqual(report.skipped.find(check => check.name.startsWith("browser"))?.blockedBy, ["build"]);
+      assert.ok(output.some(line => line.includes("skipped browser")));
+      assert.ok(report.unrun.includes("browser (production PostgreSQL)"));
+    } else {
+      assert.deepEqual(report.unrun, []);
+    }
+  }
 });
 
 test("changes during a check invalidate the result and stop further steps", async (t) => {
@@ -552,6 +616,40 @@ test('focused changed selects only modified tests, and accepts an empty selectio
   assert.throws(() => planChecks(['focused', '--base=HEAD'], root, {}));
 });
 
+test("focused changed adds explicit specs and selects catalog dependents by changed key", t => {
+  const root = fixture(t);
+  const write = (file, contents) => {
+    const destination = path.join(root, file);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, contents);
+  };
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged"}');
+  write("app/view.ts", 'export const title = () => m.view_title();');
+  write("tests/view.test.ts", 'import "../app/view";');
+  write("tests/catalog.test.ts", 'JSON.parse(readFileSync("messages/en.json"));');
+  write("e2e/view.spec.ts", 'import "../app/view";');
+  write("e2e/other.spec.ts", 'import en from "../messages/en.json"; console.log(en.other_title);');
+  write("e2e-prod/live.spec.ts", '');
+  assert.equal(spawnSync("git", ["add", "."], { cwd: root }).status, 0);
+  assert.equal(spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "catalog fixture"], { cwd: root }).status, 0);
+
+  write("messages/en.json", '{"view_title":"new","other_title":"unchanged"}');
+  const args = ["focused", "--changed", "--base=HEAD", "e2e-prod/live.spec.ts"];
+  const { selection } = planChecks(args, root, {});
+  assert.deepEqual(selection.unit, ["tests/view.test.ts"]);
+  assert.deepEqual(selection.browser, ["e2e/view.spec.ts"]);
+  assert.deepEqual(selection.production, ["e2e-prod/live.spec.ts"]);
+  assert.ok(selection.reasons.some(reason => reason.reason === "message-keys" && reason.matched === 1));
+  assert.deepEqual(planChecks(["focused", "e2e/view.spec.ts"], root, {}).selection.browser, ["e2e/view.spec.ts"]);
+
+  write("messages/en.json", '{"view_title":"old","other_title":"unchanged","dynamic_title":"new"}');
+  const fallback = planChecks(args, root, {}).selection;
+  assert.deepEqual(fallback.unit, ["tests/catalog.test.ts"]);
+  assert.deepEqual(fallback.browser, []);
+  assert.deepEqual(fallback.production, ["e2e-prod/live.spec.ts"]);
+  assert.ok(fallback.reasons.some(reason => reason.reason === "message-readers" && reason.unmatched === 1));
+});
+
 test('started evidence exists before execution, and unit and validation metadata reach the finished record', async t => {
   const root = fixture(t), unit = { failureCount: 1, failures: [{ file: 'tests/email.test.ts', title: 'suite > fails', status: 'failed', durationMs: 12 }] };
   await runChecks(planChecks(['focused', 'tests/email.test.ts'], root, {}), root, { TOMOLA_VALIDATE_LOCK_WAIT_MS: '12', TOMOLA_VALIDATE_MODE: 'serial', TOMOLA_VALIDATE_AVAILABLE_GIB: '18', TOMOLA_VALIDATE_SLICE_GIB: '9', E2E_SERIAL: '1' }, async () => {
@@ -708,4 +806,9 @@ test("unit backends overlap only after host admission, independently of browser 
     assert.equal(units.parallel.length, 2);
     assert.equal(Boolean(plan.steps.find(s => s.parallel?.some(child => child.group))), serial !== "1");
   }
+  const compatible = planChecks(["release"], root, { ...pgEnv, TOMOLA_UNIT_WORKERS: "4", TOMOLA_UNIT_SERIAL: "1" });
+  const units = compatible.steps.filter(s => s.name.startsWith("unit ("));
+  assert.equal(units.length, 2);
+  assert.ok(units.every(unit => !unit.parallel && unit.args.includes("--maxWorkers=4")));
+  assert.ok(compatible.steps.some(stage => stage.parallel?.some(child => child.group)));
 });

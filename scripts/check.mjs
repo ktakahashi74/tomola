@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { FAST_TEST_FILES } from "../tests/fast-files.ts";
 import { browserPorts, browserGroupCount } from "./browser-groups.ts";
 import { cleanupBrowserRuns, collectBrowserArtifacts, createBrowserWorkspace, removeBrowserWorkspace } from "./browser-workspaces.mjs";
-import { launchInValidationBudget } from "./check-resources.mjs";
+import { highLoadFailure, hostResources, launchInValidationBudget } from "./check-resources.mjs";
 
 const modes = ["docs", "fast", "focused", "integration", "release"];
 const step = (name, args, env = {}) => {
@@ -20,31 +20,35 @@ const step = (name, args, env = {}) => {
 const runnerTests = { name: "check runner", command: "node", args: ["--test", "--test-isolation=none", "tests/check-runner.test.mjs"], env: {} };
 const lint = { name: "lint baseline", command: "node", args: ["scripts/check-lint.mjs"], env: {} };
 const disclosure = { name: "disclosure baseline", command: "node", args: ["scripts/check-disclosure.mjs"], env: {} };
-const bundleSize = { name: "page JavaScript budget", command: "node", args: ["scripts/check-bundle-size.mjs"], env: {} };
+const bundleSize = { name: "page JavaScript budget", command: "node", args: ["scripts/check-bundle-size.mjs"], env: {}, requires: ["build"] };
 const isBrowserCheck = check => check.command === "pnpm" && (check.args[0]?.startsWith("test:e2e") || check.args[0] === "exec" && check.args[1] === "playwright");
 const hasBrowserChecks = check => isBrowserCheck(check) || Boolean(check.parallel?.some(isBrowserCheck));
+const reusesBuild = check => check.env.E2E_PROD_SKIP_BUILD === "1" || check.env.E2E_SERVER === "build";
+const releaseFeatures = ["E2E_GOOGLE_LOGIN", "E2E_MOTION_FIXTURES", "FIGURE_TRANSLATION", "VILLAGE_NUSHI_VOICE"];
 
 export function planChecks(argv, root, environment = process.env) {
   const [mode, ...options] = argv;
   if (!modes.includes(mode)) throw new Error(`Choose a check mode: ${modes.join(", ")}`);
   const dryRun = options.includes("--dry-run");
+  const keepGoing = options.includes("--keep-going");
   const pg = options.includes("--pg");
   const changed = options.includes("--changed");
   const base = options.find(option => option.startsWith("--base="));
   if (base && !changed) throw new Error("--base requires --changed");
-  const explicit = options.filter(value => !["--dry-run", "--pg", "--changed", base].includes(value));
-  if (changed && (mode !== "focused" || explicit.length)) throw new Error("--changed is only for focused checks without explicit files");
-  const diagnostics = {};
-  const changedInputs = changed ? changedFiles(root, base?.slice(7) ?? "origin/main", diagnostics) : [];
-  const selection = changed ? selectFocused(root, changedInputs, diagnostics) : null;
-  const files = selection?.unit ?? explicit;
-  if ((files.length || pg) && mode !== "focused") throw new Error("Only focused checks accept test files and --pg");
-  if (mode === "focused" && !files.length && !changed) throw new Error("focused requires explicit tests/*.test.ts files; it never falls back to all tests");
-  for (const file of files) {
-    if (!file.startsWith("tests/") || !file.endsWith(".test.ts") || file.includes("\\") || path.posix.normalize(file) !== file || !fs.statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile()) {
-      throw new Error("Specify existing tests/*.test.ts files, without extra flags");
+  const explicit = [...new Set(options.filter(value => !["--dry-run", "--keep-going", "--pg", "--changed", base].includes(value)))];
+  if (changed && mode !== "focused") throw new Error("--changed is only for focused checks");
+  if ((explicit.length || pg) && mode !== "focused") throw new Error("Only focused checks accept test files and --pg");
+  if (mode === "focused" && !explicit.length && !changed) throw new Error("focused requires explicit test files or --changed");
+  const testPath = /^(?:tests\/.*\.test|e2e(?:-prod)?\/.*\.spec)\.ts$/;
+  for (const file of explicit) {
+    if (!testPath.test(file) || file.includes("\\") || path.posix.normalize(file) !== file || !fs.lstatSync(path.join(root, file), { throwIfNoEntry: false })?.isFile()) {
+      throw new Error("Specify existing tests/*.test.ts or e2e and e2e-prod *.spec.ts files, without extra flags");
     }
   }
+  const diagnostics = {};
+  const changedInputs = changed ? changedFiles(root, base?.slice(7) ?? "origin/main", diagnostics) : [];
+  const selection = mode === "focused" ? selectFocused(root, changedInputs, diagnostics, explicit) : null;
+  const files = selection?.unit ?? [];
   if (pg || mode === "release") {
     let url;
     try { url = new URL(environment.TEST_DATABASE_URL ?? ""); } catch { /* Report no credentials. */ }
@@ -52,13 +56,18 @@ export function planChecks(argv, root, environment = process.env) {
       throw new Error("TEST_DATABASE_URL must name a dedicated PostgreSQL test account that can create disposable databases");
     }
   }
-  const full = step("unit (PGlite)", ["exec", "vitest", "run", "--maxWorkers=6"]);
-  const fullPg = step("unit (PostgreSQL)", ["exec", "vitest", "run", "--config", "vitest.db.config.ts", "--maxWorkers=6"], { TOMOLA_TEST_PG: "1" });
+  const workers = environment.TOMOLA_UNIT_WORKERS ?? "6";
+  if (["integration", "release"].includes(mode) && (!/^\d+$/.test(workers) || !Number.isSafeInteger(Number(workers)) || Number(workers) < 1)) {
+    throw new Error("TOMOLA_UNIT_WORKERS must be a positive integer");
+  }
+  const full = step("unit (PGlite)", ["exec", "vitest", "run", `--maxWorkers=${workers}`]);
+  const fullPg = step("unit (PostgreSQL)", ["exec", "vitest", "run", "--config", "vitest.db.config.ts", `--maxWorkers=${workers}`], { TOMOLA_TEST_PG: "1" });
   const units = { name: "unit (PGlite and PostgreSQL)", command: "parallel", args: [], env: {}, parallel: [full, fullPg] };
-  const releaseUnits = environment.TOMOLA_VALIDATE_MODE === "parallel" ? [units] : [full, fullPg];
+  const releaseUnits = environment.TOMOLA_VALIDATE_MODE === "parallel" && environment.TOMOLA_UNIT_SERIAL !== "1" ? [units] : [full, fullPg];
   const count = browserGroupCount(environment.E2E_GROUPS);
   const buildEnv = { E2E_SERVER: "build" };
-  const publicBrowser = step("browser (public reading)", ["exec", "playwright", "test", "-c", "playwright.public.config.ts"], buildEnv);
+  const publicBrowser = (name, specs = [], env = {}) =>
+    step(name, ["exec", "playwright", "test", "-c", "playwright.public.config.ts", ...specs], { ...buildEnv, ...env });
   const ports = ["integration", "release"].includes(mode) && environment.E2E_SERIAL !== "1" ? browserPorts(environment.E2E_PORT, count) : null;
   const browserChecks = ports ? [{
     name: "browser (build and public reading)", command: "parallel", args: [], env: buildEnv,
@@ -67,7 +76,19 @@ export function planChecks(argv, root, environment = process.env) {
         ["exec", "playwright", "test", ...(group === "public" ? ["-c", "playwright.public.config.ts"] : []), "--workers=1"],
         { ...buildEnv, E2E_PORT: port, E2E_BROWSER_GROUP: group, E2E_GROUPS: String(count) }), group,
     })),
-  }] : [step("browser (build)", ["test:e2e"], buildEnv), publicBrowser];
+  }] : [step("browser (build)", ["test:e2e"], buildEnv), publicBrowser("browser (public reading)")];
+  const prodEnv = { E2E_PROD_SKIP_BUILD: "1", E2E_PROD_PG: "1" };
+  const prodPorts = (group) => {
+    if (!ports) return {};
+    const port = Number(ports[group]);
+    return { E2E_PROD_PORT: String(port), E2E_PROD_APP_PORT: String(port + 1), E2E_PROD_SMTP_PORT: String(port + 2) };
+  };
+  const releaseVariants = [
+    { ...step("browser (production PostgreSQL, Google sign-in)", ["test:e2e:prod"], { ...prodEnv, ...prodPorts("a"), E2E_GOOGLE_LOGIN: "1" }), group: "prod-google" },
+    { ...step("browser (production PostgreSQL, motion figures)", ["test:e2e:prod", "e2e-prod/motion-figures.spec.ts"], { ...prodEnv, ...prodPorts("b"), E2E_MOTION_FIXTURES: "1", FIGURE_TRANSLATION: "1" }), group: "prod-motion", partial: true },
+    { ...publicBrowser("browser (public reading, speaking style)", ["e2e/nushi-voice.spec.ts"], { ...(ports ? { E2E_PORT: ports.public } : {}), VILLAGE_NUSHI_VOICE: "1" }), group: "public-voice", partial: true },
+  ];
+  const variantChecks = ports ? [{ name: "browser (release feature variants)", command: "parallel", args: [], env: buildEnv, parallel: releaseVariants }] : releaseVariants;
   const focused = files.length ? [step("focused unit", ["exec", "vitest", "run", "--config", !pg && files.every(file => FAST_TEST_FILES.includes(file)) ? "vitest.fast.config.ts" : "vitest.config.ts", ...files], pg ? { TOMOLA_TEST_PG: "1" } : {})] : [];
   if (selection?.browser.length) {
     // Browser scenarios exercise routes over HTTP, so retain both authority modes.
@@ -75,22 +96,23 @@ export function planChecks(argv, root, environment = process.env) {
     focused.push(step("focused browser (private)", ["exec", "playwright", "test", "--pass-with-no-tests", ...specs]));
     focused.push(step("focused browser (public)", ["exec", "playwright", "test", "-c", "playwright.public.config.ts", "--pass-with-no-tests", ...specs]));
   }
-  if (selection?.production?.length) {
+  if (selection?.production.length) {
     const specs = selection.production.map(file => file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     focused.push(step("focused browser (production)", ["exec", "playwright", "test", "-c", "playwright.prod.config.ts", "--pass-with-no-tests", ...specs], pg ? { E2E_PROD_PG: "1" } : {}));
   }
+  const typecheck = step("typecheck", ["typecheck"]);
+  const build = { ...step("build", ["build"]), requires: [typecheck.name] };
   const plans = {
     docs: [disclosure, step("documentation", ["exec", "vitest", "run", "--config", "vitest.fast.config.ts", "tests/documentation.test.ts"])],
     fast: [runnerTests, lint, step("no-DB unit", ["exec", "vitest", "run", "--config", "vitest.fast.config.ts", "--maxWorkers=4"])],
     focused,
-    integration: [runnerTests, lint, disclosure, step("typecheck", ["typecheck"]), full, step("build", ["build"]), bundleSize, ...browserChecks],
-    release: [runnerTests, lint, disclosure, step("typecheck", ["typecheck"]), ...releaseUnits, step("build", ["build"]), bundleSize, ...browserChecks,
-      step("browser (production PostgreSQL)", ["test:e2e:prod"], { E2E_PROD_SKIP_BUILD: "1", E2E_PROD_PG: "1" }),
-      step("migration metadata", ["exec", "drizzle-kit", "check"])],
+    integration: [runnerTests, lint, disclosure, typecheck, full, build, bundleSize, ...browserChecks],
+    release: [runnerTests, lint, disclosure, step("migration metadata", ["exec", "drizzle-kit", "check"]), typecheck, ...releaseUnits, build, bundleSize, ...browserChecks,
+      step("browser (production PostgreSQL)", ["test:e2e:prod"], prodEnv), ...variantChecks],
   };
-  return { mode, dryRun, options: [...(changed ? ["--changed", ...(base ? [base] : [])] : files), ...(pg ? ["--pg"] : [])], steps: plans[mode], ...(selection ? { selection: {
+  return { mode, dryRun, keepGoing, options: [...(keepGoing ? ["--keep-going"] : []), ...(changed ? ["--changed", ...(base ? [base] : [])] : []), ...explicit, ...(pg ? ["--pg"] : [])], steps: plans[mode], ...(selection ? { selection: {
     ...diagnostics, changedFileCount: changedInputs.length, ...(changedInputs.length <= 500 ? { changedFiles: changedInputs } : {}),
-    unit: selection.unit, browser: selection.browser, production: selection.production ?? [], all: selection.all,
+    ...selection,
   } } : {}) };
 }
 
@@ -149,7 +171,7 @@ async function execute(check, root, env) {
   const vitest = check.command === "pnpm" && check.args[0] === "exec" && check.args[1] === "vitest";
   const browser = isBrowserCheck(check);
   const browserReport = browser ? path.join(root, ".data/checks", `browser-results-${randomUUID()}.json`) : null;
-  if (browserReport) env = { ...env, TOMOLA_BROWSER_REPORT: browserReport, TOMOLA_BROWSER_COMPLETE: check.name.startsWith("focused") ? "0" : "1" };
+  if (browserReport) env = { ...env, TOMOLA_BROWSER_REPORT: browserReport, TOMOLA_BROWSER_COMPLETE: check.partial || check.name.startsWith("focused") ? "0" : "1" };
   const pgReport = vitest ? path.join(root, ".data/checks", `pg-skips-${randomUUID()}.json`) : null;
   const args = vitest ? [...check.args, "--reporter=default", "--reporter=./scripts/pg-skip-reporter.mjs"] : check.args;
   if (pgReport) env = { ...env, TOMOLA_CHECK_PG_REPORT: pgReport };
@@ -231,7 +253,10 @@ export function validationMetadata(environment) {
 
 export async function runChecks(plan, root, environment = process.env, executor = execute, logger = console) {
   cleanupBrowserRuns(root);
+  const childEnvironment = { ...environment };
+  if (plan.mode === "release") for (const name of releaseFeatures) delete childEnvironment[name];
   const report = { runId: randomUUID(), mode: plan.mode, standardMode: standardMode(plan, root, environment), ...gitState(root), postgresSkipped: 0, postgresSkippedInPglite: 0, quarantineRecovered: 0, input: inputFingerprint(root), startedAt: new Date().toISOString(), status: "running", steps: [],
+    resources: { start: hostResources() }, keepGoing: Boolean(plan.keepGoing), skipped: [],
     validation: validationMetadata(environment), browserExecution: plan.steps.some(check => check.parallel?.some(isBrowserCheck)) ? "parallel" : plan.steps.some(isBrowserCheck) ? "serial" : "none",
     ...(plan.selection ? { selection: plan.selection } : {}),
   };
@@ -242,7 +267,7 @@ export async function runChecks(plan, root, environment = process.env, executor 
   };
   save();
   const history = path.join(root, ".data/checks/history.jsonl");
-  fs.appendFileSync(history, `${JSON.stringify({ event: "started", runId: report.runId, mode: report.mode, commit: report.commit, input: report.input, startedAt: report.startedAt, validation: report.validation, browserExecution: report.browserExecution })}\n`);
+  fs.appendFileSync(history, `${JSON.stringify({ event: "started", runId: report.runId, mode: report.mode, commit: report.commit, input: report.input, startedAt: report.startedAt, resources: report.resources, validation: report.validation, browserExecution: report.browserExecution })}\n`);
   const recordOutcome = (detail, check, outcome) => {
     detail.exitCode = typeof outcome === "number" ? outcome : outcome.exitCode;
     if (typeof outcome === "object") {
@@ -261,13 +286,23 @@ export async function runChecks(plan, root, environment = process.env, executor 
   };
   let built = false;
   let exitCode = 0;
+  const blocked = new Set();
   for (const check of plan.steps) {
+    const dependencies = [...(check.requires ?? []), ...(reusesBuild(check) ? ["build"] : [])];
+    const blockedBy = dependencies.filter(name => blocked.has(name));
+    if (blockedBy.length) {
+      blocked.add(check.name);
+      report.skipped.push({ name: check.name, blockedBy });
+      logger.log(`[check] skipped ${check.name} (requires ${blockedBy.join(", ")})`);
+      save();
+      continue;
+    }
     const started = Date.now();
     const result = { name: check.name, command: [check.command, ...check.args], settings: check.env,
       ...(hasBrowserChecks(check) ? { browserServer: check.env.E2E_SERVER === "build" ? "build" : check.args.includes("test:e2e:prod") || check.args.includes("playwright.prod.config.ts") ? "production" : "development" } : {}) };
     report.steps.push(result);
     try {
-      if ((check.env.E2E_PROD_SKIP_BUILD || check.env.E2E_SERVER === "build") && (!built || !["build/server/index.js", "build/markdown/markdown-worker.mjs"].every(file => fs.existsSync(path.join(root, file))))) {
+      if (reusesBuild(check) && (!built || !["build/server/index.js", "build/markdown/markdown-worker.mjs"].every(file => fs.existsSync(path.join(root, file))))) {
         throw new Error("Production browser checks need the successful build from this invocation");
       }
       logger.log(`\n[check] ${check.name}`);
@@ -284,7 +319,7 @@ export async function runChecks(plan, root, environment = process.env, executor 
           const logFile = path.join(root, detail.log);
           logger.log(`[check] ${child.name} started`);
           try {
-            const outcome = await executor({ ...child, logFile }, root, checkEnvironment(environment, child.env));
+            const outcome = await executor({ ...child, logFile }, root, checkEnvironment(childEnvironment, child.env));
             recordOutcome(detail, child, outcome);
           }
           catch { detail.exitCode = 1; logger.error(`[check] Could not complete ${child.name}`); }
@@ -297,7 +332,7 @@ export async function runChecks(plan, root, environment = process.env, executor 
         }
         result.exitCode = result.groups.find(group => group.exitCode !== 0)?.exitCode ?? 0;
       } else {
-        const outcome = await executor(check, root, checkEnvironment(environment, check.env));
+        const outcome = await executor(check, root, checkEnvironment(childEnvironment, check.env));
         recordOutcome(result, check, outcome);
       }
     } catch {
@@ -312,22 +347,32 @@ export async function runChecks(plan, root, environment = process.env, executor 
     report.quarantineRecovered += result.quarantineRecovered ?? 0;
     result.durationMs = Date.now() - started;
     if (result.exitCode !== 0) {
-      report.status = "failed";
-      exitCode = result.exitCode;
-    } else if (inputFingerprint(root) !== report.input) {
+      exitCode ||= result.exitCode;
+      blocked.add(check.name);
+    }
+    if ((result.exitCode === 0 || plan.keepGoing) && inputFingerprint(root) !== report.input) {
       report.status = "stale";
       logger.error("[check] Inputs changed during the run. Results are not a final verification.");
       exitCode = 2;
     }
     save();
-    if (exitCode !== 0) break;
-    if (check.name === "build") built = true;
+    if (report.status === "stale" || exitCode !== 0 && !plan.keepGoing) break;
+    if (check.name === "build" && result.exitCode === 0) built = true;
   }
-  if (!exitCode) report.status = "passed";
+  if (report.status !== "stale") report.status = exitCode ? "failed" : "passed";
   report.finishedAt = new Date().toISOString();
-  report.unrun = plan.steps.slice(report.steps.length).map((check) => check.name);
+  report.resources.end = hostResources();
+  if (report.status === "failed") report.highLoadFailure = highLoadFailure(report.resources);
+  report.unrun = [...report.skipped.map(check => check.name), ...plan.steps.slice(report.steps.length + report.skipped.length).map(check => check.name)];
   save();
   fs.appendFileSync(history, `${JSON.stringify(report)}\n`);
+  if (plan.keepGoing && exitCode) {
+    const failures = report.steps.filter(check => check.exitCode !== 0).flatMap(check => {
+      const groups = check.groups?.filter(group => Number.isInteger(group.exitCode) && group.exitCode !== 0);
+      return groups?.length ? groups : [check];
+    });
+    if (failures.length) logger.error(`[check] failed steps: ${failures.map(check => `${check.name} (exit ${check.exitCode})`).join(", ")}`);
+  }
   logger.log(`[check] ${report.status}: ${report.quarantineRecovered} quarantined test(s) recovered on retry`);
   return exitCode;
 }

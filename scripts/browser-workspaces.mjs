@@ -42,7 +42,7 @@ export function createBrowserWorkspace(root, group, environment = {}) {
     }
     fs.cpSync(path.join(root, "node_modules"), path.join(directory, "node_modules"), { recursive: true, verbatimSymlinks: true, mode: fs.constants.COPYFILE_FICLONE });
     relocateDependencyShims(root, directory);
-    if (environment.E2E_SERVER === "build") {
+    if (environment.E2E_SERVER === "build" || environment.E2E_PROD_SKIP_BUILD === "1") {
       fs.cpSync(path.join(root, "build"), path.join(directory, "build"), { recursive: true, mode: fs.constants.COPYFILE_FICLONE });
     }
     return directory;
@@ -102,7 +102,7 @@ export function cleanupBrowserRuns(root, { now = Date.now(), retentionMs = 7 * 2
       try {
         const directory = path.join(parent, name), stat = fs.lstatSync(directory);
         if (stat.isSymbolicLink() || fs.existsSync(path.join(directory, ".keep"))) continue;
-        if (kind === "browser-workspaces" && (!stat.isDirectory() || !/^([a-e]|public)-/.test(name))) continue;
+        if (kind === "browser-workspaces" && (!stat.isDirectory() || !/^([a-e]|public|prod-google|prod-motion)-/.test(name))) continue;
         // Another runner may be between mkdir and writing its owner marker.
         if (kind === "browser-workspaces" && now - stat.mtimeMs < 60_000) continue;
         if (stat.isDirectory() && hasLiveOwner(directory)) continue;

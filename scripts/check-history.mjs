@@ -48,7 +48,13 @@ export async function readHistory(files, { since, mode } = {}) {
 
 const details = run => run.steps.flatMap(step => step.groups ?? [step]);
 const rows = value => Array.isArray(value) ? value.filter(row => row && typeof row === "object") : [];
-const browserMode = detail => detail.browser?.mode ?? (/public/i.test(detail.name) ? "public" : /production/i.test(detail.name) ? "production" : "private");
+function browserMode(detail) {
+  const mode = detail.browser?.mode ?? (/public/i.test(detail.name) ? "public" : /production/i.test(detail.name) ? "production" : "private");
+  if (detail.settings?.E2E_GOOGLE_LOGIN === "1") return `${mode} (Google sign-in)`;
+  if (detail.settings?.E2E_MOTION_FIXTURES === "1") return `${mode} (motion figures)`;
+  if (detail.settings?.VILLAGE_NUSHI_VOICE === "1") return `${mode} (speaking style)`;
+  return mode;
+}
 const execution = run => details(run).some(detail => detail.browser || /browser/i.test(detail.name))
   ? run.browserExecution ?? (run.steps.some(step => step.groups?.length) ? "parallel" : "serial") : "none";
 const isComplete = run => ["passed", "failed"].includes(run.status) && (Array.isArray(run.unrun) ? run.unrun.length === 0 : run.status === "passed")
@@ -87,15 +93,19 @@ export function summarizeHistory(runs, extra = {}) {
     entry.values.push(value); map.set(key, entry);
   };
   for (const run of runs) {
-    const mode = modes.get(run.mode) ?? { mode: run.mode, total: 0, passed: 0, failed: 0, stale: 0, interrupted: 0, firstAttemptPassed: 0 };
+    const mode = modes.get(run.mode) ?? { mode: run.mode, total: 0, passed: 0, failed: 0, stale: 0, interrupted: 0, highLoadFailed: 0, firstAttemptPassed: 0 };
     mode.total++; mode[run.status]++;
+    const highLoad = run.status === "failed" && run.highLoadFailure === true;
+    if (highLoad) mode.highLoadFailed++;
     if (run.status === "passed" && !(run.quarantineRecovered > 0)) mode.firstAttemptPassed++;
     modes.set(run.mode, mode);
     for (const field of ["lockWaitMs", "oldLockWaitMs", "memoryWaitMs"]) addTiming(waits, { name: field }, run.validation?.[field]);
     for (const [key, item] of testObservations(run)) {
       if (item.failed) {
-        const entry = failures.get(key) ?? { kind: item.kind, file: item.file, ...(item.kind === "browser" ? { line: item.line } : {}), title: item.title, scope: item.scope, failedRuns: 0 };
-        entry.failedRuns++; failures.set(key, entry);
+        const entry = failures.get(key) ?? { kind: item.kind, file: item.file, ...(item.kind === "browser" ? { line: item.line } : {}), title: item.title, scope: item.scope, failedRuns: 0, highLoadFailedRuns: 0 };
+        entry.failedRuns++;
+        if (highLoad) entry.highLoadFailedRuns++;
+        failures.set(key, entry);
       }
       if (typeof run.input !== "string" || !run.input || run.status === "stale") continue;
       const fingerprint = JSON.stringify([run.input, key]);
@@ -166,11 +176,11 @@ export function formatHistory(summary) {
   const lines = [`Runs: ${summary.totalRuns}; malformed lines skipped: ${summary.malformedLines ?? 0}`];
   const rate = value => `${value.passed}/${value.total} (${value.rate === null ? "n/a" : `${(100 * value.rate).toFixed(1)}%`})`;
   const rates = mode => `all runs: first attempt ${rate(mode.firstAttempt)}, including quarantine ${rate(mode.includingQuarantine)}; excluding interrupted (stale retained): first attempt ${rate(mode.excludingInterrupted.firstAttempt)}, including quarantine ${rate(mode.excludingInterrupted.includingQuarantine)}`;
-  for (const mode of summary.modes) lines.push(`${mode.mode}: passed=${mode.passed} failed=${mode.failed} stale=${mode.stale} interrupted=${mode.interrupted}; ${rates(mode)}`);
+  for (const mode of summary.modes) lines.push(`${mode.mode}: passed=${mode.passed} failed=${mode.failed} highLoadFailed=${mode.highLoadFailed} stale=${mode.stale} interrupted=${mode.interrupted}; ${rates(mode)}`);
   for (const mode of summary.repeatedInputRates) lines.push(`${mode.mode} repeated inputs=${mode.inputs}: ${rates(mode)}`);
   for (const [label, entries] of [["Unstable candidates", summary.unstableCandidates], ["Top failures", summary.topFailures]]) {
     lines.push(`${label}: ${entries.length}`);
-    for (const item of entries) lines.push(`  ${item.kind} ${item.file}${item.line ? `:${item.line}` : ""} ${item.title} [${item.scope}] failed=${item.failedRuns}${item.passedRuns ? ` passed=${item.passedRuns} input=${item.input}` : ""}`);
+    for (const item of entries) lines.push(`  ${item.kind} ${item.file}${item.line ? `:${item.line}` : ""} ${item.title} [${item.scope}] failed=${item.failedRuns}${item.highLoadFailedRuns ? ` highLoadFailed=${item.highLoadFailedRuns}` : ""}${item.passedRuns ? ` passed=${item.passedRuns} input=${item.input}` : ""}`);
   }
   for (const [label, entries] of [...Object.entries(summary.timings), ["waits", summary.waits]]) {
     lines.push(`${label}:`);

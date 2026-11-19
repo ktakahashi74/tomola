@@ -3,6 +3,29 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 
+export function hostResources() {
+  // /proc reports host-wide load, so compare it with the host's logical CPU count.
+  const cpuCount = os.cpus().length || null;
+  let loadAverage = process.platform === "win32" ? null : os.loadavg();
+  let availableMemoryKiB = null;
+  if (process.platform === "linux") {
+    try {
+      const values = fs.readFileSync("/proc/loadavg", "utf8").trim().split(/\s+/).slice(0, 3).map(Number);
+      if (values.length === 3 && values.every(Number.isFinite)) loadAverage = values;
+    } catch { /* Keep the OS load average if procfs is unavailable. */ }
+    try {
+      const match = /^MemAvailable:\s+(\d+) kB$/m.exec(fs.readFileSync("/proc/meminfo", "utf8"));
+      if (match) availableMemoryKiB = Number(match[1]);
+    } catch { /* Available memory is optional evidence. */ }
+  }
+  return { loadAverage, cpuCount, availableMemoryKiB };
+}
+
+export function highLoadFailure({ start, end }) {
+  const samples = [start, end].filter(sample => sample?.cpuCount > 0 && Number.isFinite(sample.loadAverage?.[0]));
+  return samples.length ? samples.some(sample => sample.loadAverage[0] >= sample.cpuCount) : null;
+}
+
 export function inValidationBudget(cgroup) {
   return cgroup.split("\n").some(line => line.startsWith("0::/") && line.slice(3).split("/").includes("agent-workers.slice"));
 }

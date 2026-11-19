@@ -141,6 +141,16 @@ test("flaky candidates require the same fingerprint and browser mode, preserving
   assert.equal(summary.topFailures[0].failedRuns, 2);
 });
 
+test("high-load failures are counted within their feature setting", () => {
+  const google = { ...browserStep("failed"), settings: { E2E_GOOGLE_LOGIN: "1" }, browser: { mode: "production", tests: [browserTest("failed")] } };
+  const baseline = { ...browserStep(), browser: { mode: "production", tests: [browserTest("passed")] } };
+  const summary = summarizeHistory([run({ status: "failed", highLoadFailure: true, steps: [google] }), run({ steps: [baseline] })]);
+  assert.equal(summary.modes[0].highLoadFailed, 1);
+  assert.equal(summary.topFailures[0].highLoadFailedRuns, 1);
+  assert.equal(summary.unstableCandidates.length, 0);
+  assert.equal(summary.timings.browserFiles.length, 2);
+});
+
 test("unit candidates require successful execution of the failed title, excluding skips, missing evidence and other backends", () => {
   const failure = { file: "tests/unit.test.ts", title: "suite > case", status: "failed", durationMs: 3 };
   const failed = run({ status: "failed", steps: [unitStep({ failures: [failure] })] });

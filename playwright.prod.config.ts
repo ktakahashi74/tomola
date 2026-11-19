@@ -12,6 +12,7 @@ export default defineConfig({
   retries: 0,
   timeout: 90_000,
   expect: { timeout: 20_000 },
+  ...(process.env.E2E_BROWSER_OUTPUT ? { outputDir: process.env.E2E_BROWSER_OUTPUT } : {}),
   reporter: [["list"], ["./scripts/browser-reporter.ts"]],
   use: {
     ignoreHTTPSErrors: true,

@@ -82,16 +82,17 @@ test('focused follows module dependencies and includes implicit route/document c
     write('tests/unrelated.test.ts', '');
     write('tests/dynamic.test.ts', 'await import(`../app/routes/${name}`);');
     write('tests/documentation.test.ts', '');
-    write('e2e/view.spec.ts', '');
+    write('e2e/view.spec.ts', 'import {value} from "../app/lib/wrapper";');
     write('e2e/other.spec.ts', '');
     write('e2e-prod/live.spec.ts', '');
-    assert.deepEqual(selectFocused(root, ['app/lib/value.ts']), { unit: ['tests/dynamic.test.ts', 'tests/value.test.ts'], browser: ['e2e/other.spec.ts', 'e2e/view.spec.ts'], all: false });
+    assert.deepEqual(selectFocused(root, ['app/lib/value.ts']), { unit: ['tests/dynamic.test.ts', 'tests/value.test.ts'], browser: ['e2e/view.spec.ts'], production: [], all: false });
     assert.deepEqual(selectFocused(root, ['tests/value.test.ts']).unit, ['tests/value.test.ts']);
     assert.deepEqual(selectFocused(root, ['e2e/view.spec.ts']).browser, ['e2e/view.spec.ts']);
     assert.deepEqual(selectFocused(root, ['docs/deploy.md']).unit, ['tests/documentation.test.ts']);
     assert.equal(selectFocused(root, ['vitest.config.ts']).all, true);
+    assert.deepEqual(selectFocused(root, ['vitest.config.ts']).browser, []);
     assert.deepEqual(selectFocused(root, ['e2e-prod/live.spec.ts']), { unit: [], browser: [], production: ['e2e-prod/live.spec.ts'], all: false });
-    assert.deepEqual(selectFocused(root, []), { unit: [], browser: [], all: false });
+    assert.deepEqual(selectFocused(root, []), { unit: [], browser: [], production: [], all: false });
     assert.throws(() => selectFocused(root, ['../outside.ts']));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
