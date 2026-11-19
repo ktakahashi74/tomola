@@ -54,7 +54,8 @@ test("wide article figures follow the frame while prose, captions and small imag
     const caption = body.getByText(lang === "ja" ? /^図の説明。/ : /^Figure caption\./);
     const motion = body.locator("[data-motion-figure]");
     const breakpoint = await readingBreakpoint(page);
-    for (const width of [1024, 1280, 1366, 1440, 1920, 390]) {
+    // 768 and 800 are tablet portrait widths between the figure and side-column boundaries.
+    for (const width of [768, 800, 1024, 1280, 1366, 1440, 1920, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator(".reading-toc-sidebar > nav")).toBeVisible({ visible: width >= breakpoint });
       await wide.evaluate(image => image.scrollIntoView({ block: "center" }));
@@ -79,7 +80,8 @@ test("wide article figures follow the frame while prose, captions and small imag
       expect(layout.text.width).toBeCloseTo(Math.min(measure, frameWidth));
       const center = (layout.frame.left + layout.frame.right) / 2;
       const available = 2 * Math.min(center - 8, layout.viewport - 8 - center, layout.rail - 24 - center);
-      const limit = Math.min(layout.figureMax, available);
+      // The untranslated layout box starts at the text edge and must not widen the page.
+      const limit = Math.min(layout.figureMax, available, layout.viewport - layout.text.left);
       for (const image of [wide, body.getByRole("img", { name: "Medium diagram" }), body.getByRole("img", { name: "Small diagram" }), motion.locator("img")]) {
         const bounds = (await image.boundingBox())!;
         const nativeWidth = Number(await image.getAttribute("width"));

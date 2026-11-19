@@ -41,7 +41,7 @@ export function VillageHeader({ village, current, chat, actions, purpose, childr
   const tabs = chat ? <VillageTabs village={village} current={current} chat={chat} /> : null;
   if (current === "chat") {
     return <header data-village-header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-background py-2">
-      {/* The side column carries the places from 68em (the boundary in app.css); the drawer is for narrower screens. */}
+      {/* The side column carries the places from 64em (the boundary in app.css); the drawer is for narrower screens. */}
       <div className="contents min-[64em]:hidden"><NavigationDrawer /></div>
       <h1 title={villageNameTitle(village)} lang={villageNameLang(village)} className="min-w-0 font-bold">{icon}{name}</h1>
       {tabs}

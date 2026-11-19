@@ -355,7 +355,9 @@ main:focus {
     html:has([data-reading-body]) { container-type: inline-size; }
     [data-reading-body] {
       --reading-figure-direction: 1;
-      --reading-figure-width: min(var(--reading-figure-max), var(--reading-figure-viewport, calc(100cqi - 16px)), var(--reading-figure-rail, var(--reading-figure-max)));
+      /* Translate moves only the painted image: its layout box still starts at the text edge,
+         so below the side-column boundary the width also stays within the space to the viewport's end. */
+      --reading-figure-width: min(var(--reading-figure-max), var(--reading-figure-viewport, min(calc(100cqi - 16px), calc((100cqi + var(--reading-cjk-measure)) / 2))), var(--reading-figure-rail, var(--reading-figure-max)));
     }
     [data-reading-body]:dir(rtl) { --reading-figure-direction: -1; }
     :where([data-reading-body] > p) > :is(img, a:has(> img:only-child)):only-child,
