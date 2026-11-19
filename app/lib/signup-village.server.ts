@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { invitations, notifications, profiles, verification, villageDepartures, villageMembers, villages } from "~/lib/db/schema";
 import { createInvitation, INVITATION_TTL_DAYS, type Invitation } from "~/lib/invitations.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -84,7 +84,7 @@ export async function joinedSignupVillage(db: Db, userId: string) {
 
 // Acquire existing profile locks before even the implicit village FK locks
 // taken by automatic language enrollment. Ownership mutations use this order.
-export async function lockSignupInvitationOwner(db: Db, userId: string) {
+export async function lockSignupInvitationOwner(db: Tx, userId: string) {
   const invitation = await consumedInvitation(db, userId);
   if (!invitation?.createdBy || !invitation.villageId) return null;
   await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.userId, invitation.createdBy)).for("update");
@@ -93,7 +93,7 @@ export async function lockSignupInvitationOwner(db: Db, userId: string) {
 
 // Called only inside the transaction inserting this member's first profile,
 // after lockSignupInvitationOwner and the normal language enrollment.
-export async function enrollFromSignupInvitation(db: Db, userId: string, invitation: Invitation | null) {
+export async function enrollFromSignupInvitation(db: Tx, userId: string, invitation: Invitation | null) {
   if (!invitation?.createdBy || !invitation.villageId) return null;
   await db.select({ id: villages.id }).from(villages).where(eq(villages.id, invitation.villageId)).for("update");
   const { village, denied } = await signupInvitationDestination(db, invitation);

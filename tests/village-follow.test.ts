@@ -95,7 +95,7 @@ it("gives no right to write or to chat, and the village page only says whether t
   await h.db.delete(villageFollows).where(eq(villageFollows.userId, h.ids.vf_loner));
   await h.db.insert(villageFollows).values({ userId: h.ids.vf_loner, villageId: await idOf("other-club") });
   expect(await h.db.select().from(villageMembers).where(and(eq(villageMembers.userId, h.ids.vf_loner), eq(villageMembers.villageId, await idOf("other-club"))))).toEqual([]);
-  expect(await villageForTopic(h.db, h.ids.vf_loner, "other-club")).toBeNull();
+  expect(await h.db.transaction(tx => villageForTopic(tx, h.ids.vf_loner, "other-club"))).toBeNull();
   expect(await createTopic(h.db, h.ids.vf_loner, { lang: "en", title: "Not allowed", body: "No.", village: "other-club" })).toEqual({ ok: false, error: "village_required" });
   const page = await villageLoader(h.args(h.request("/v/other-club", { as: "vf_loner" }), { slug: "other-club" })) as unknown as { following: boolean; membership: { joined: boolean; owner: boolean } };
   expect(page.following).toBe(true);

@@ -5,7 +5,7 @@ import { villageChatEnabled } from "./village-chat-enabled.server";
 import { closeVillageChatConnections } from "./village-chat-events.server";
 import { clearVillageChatMemberState } from "./village-chat-notifications.server";
 import { and, asc, count, eq, inArray, isNotNull, isNull, or, exists, sql } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, profiles, villageDepartures, villageMembers, villages } from "~/lib/db/schema";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -111,7 +111,7 @@ export async function changeVillageMembershipResult(db: Db, userId: string, slug
 }
 
 // Serialize posting with join/leave through the profile lock. Only called when enabled.
-export async function lockVillageProfile(db: Db, userId: string) {
+export async function lockVillageProfile(db: Tx, userId: string) {
   const [profile] = await db.select({ defaultVillageId: profiles.defaultVillageId, homeArea: profiles.homeArea, handle: profiles.handle }).from(profiles)
     .where(eq(profiles.userId, userId)).for("update");
   return profile ?? null;
@@ -123,7 +123,7 @@ const postingMemberCondition = (userId: string) => or(
 );
 
 // Caller is in the write transaction. Explicit invalid targets never fall back to the default.
-export async function villageForTopic(db: Db, userId: string, slug?: unknown, storedId?: string | null): Promise<(PublicVillage & { id: string }) | null> {
+export async function villageForTopic(db: Tx, userId: string, slug?: unknown, storedId?: string | null): Promise<(PublicVillage & { id: string }) | null> {
   const profile = await lockVillageProfile(db, userId);
   if (!profile) return null;
   const explicit = slug !== undefined && slug !== null;

@@ -5,7 +5,7 @@ import { enabledTargetLangs } from "./enabled-langs.server";
 import { notificationEmailDedupeKey, enqueueImmediateEmails } from "./notifications.server";
 import { randomUUID } from "node:crypto";
 import { and, asc, count, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { chatNushiRequests, chatNushiReservations, entries, jobs, nushiAnswers, nushiQuotaLock, nushiRequests, nushiReservations, nushiSources, nushiTranslations, notifications, profiles, villages } from "./db/schema";
 import { callsNushi } from "./nushi-call.server";
 import { NUSHI_PROMPT_VERSION, nushiEnabled, nushiLimits, nushiModel } from "./nushi-config.server";
@@ -48,7 +48,7 @@ async function enqueueNushiEmails(db: Db, created: Array<{ id: number; userId: s
   const keys = new Set(previous.map(row => row.key));
   await enqueueImmediateEmails(db, created.filter(row => !keys.has(notificationEmailDedupeKey(row.id))), { now });
 }
-async function notifyResult(db: Db, request: typeof nushiRequests.$inferSelect, now: Date) {
+async function notifyResult(db: Tx, request: typeof nushiRequests.$inferSelect, now: Date) {
   if (!request.callerId) return;
   await db.insert(notifications).values({ userId: request.callerId, kind: "nushi_result", nushiRequestId: request.id, threadId: request.threadId, createdAt: now }).onConflictDoNothing();
   const rows = await db.select({ id: notifications.id, userId: notifications.userId }).from(notifications)
@@ -63,7 +63,7 @@ async function finish(db: Db, id: string, failure: string, now: Date, token?: st
   });
 }
 
-export async function quotaLock(db: Db) {
+export async function quotaLock(db: Tx) {
   await db.insert(nushiQuotaLock).values({ id: 1 }).onConflictDoNothing();
   await db.select().from(nushiQuotaLock).where(eq(nushiQuotaLock.id, 1)).for("update");
 }

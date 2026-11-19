@@ -66,7 +66,7 @@ export function signingFormHash(form: FormData): string {
 }
 
 // Serialize login-counter updates, enrollment, recovery, and signed writes on the same member row. NO KEY UPDATE is compatible with unrelated foreign-key checks.
-export async function lockSigningMember(tx: Db, userId: string): Promise<void> {
+export async function lockSigningMember(tx: Tx, userId: string): Promise<void> {
   const [member] = await tx.select({ id: user.id, email: user.email }).from(user).where(eq(user.id, userId)).for("no key update");
   if (!member || isDeletedIdentity(member.id, member.email)) throw new SigningError("not_a_member");
 }
@@ -122,7 +122,7 @@ export function signingPreferenceValue(form: FormData): boolean {
   return value === "1";
 }
 
-async function loadIntent(tx: Db, userId: string, pathname: string, form: FormData): Promise<Intent> {
+async function loadIntent(tx: Tx, userId: string, pathname: string, form: FormData): Promise<Intent> {
   const { operation, id } = routeOperation(pathname, form);
   if (villagesEnabled() && (operation === "create-topic" || operation === "publish-draft")) await lockVillageProfile(tx, userId);
   if (id !== null && (!Number.isSafeInteger(id) || id < 1)) throw new SigningError("invalid_target", 400);
@@ -305,7 +305,7 @@ export async function issueSignedWrite(db: Db, userId: string, pathname: string,
   });
 }
 
-export async function verifySignedAssertion(tx: Db, userId: string, challenge: string, response: AuthenticationResponseJSON) {
+export async function verifySignedAssertion(tx: Tx, userId: string, challenge: string, response: AuthenticationResponseJSON) {
   if (!response || typeof response.id !== "string") throw new SigningError("invalid_signature");
   const [key] = await tx.select().from(passkey).where(and(eq(passkey.userId, userId), eq(passkey.credentialID, response.id))).for("update");
   if (!key) throw new SigningError("wrong_passkey");

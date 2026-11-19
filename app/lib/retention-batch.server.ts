@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { sql, type SQL } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { RETENTION_BATCH_SIZE, RETENTION_MAX_BATCHES, RETENTION_MAX_RUN_MS } from "~/lib/retention";
 import { withRetentionBatch } from "~/lib/retention-guard.server";
 
@@ -35,7 +35,7 @@ export async function countRetentionRows(db: Db, table: AnyPgTable, where: SQL):
 
 // The hold lock is released between batches, allowing a new hold to stop a drain.
 // Callbacks change at most RETENTION_BATCH_SIZE rows in total per transaction.
-export function drainRetentionBatches(db: Db, category: string, batch: (tx: Db) => Promise<BatchResult>, pending: () => Promise<number>, results: RetentionResults = {}): Promise<RetentionResult> {
+export function drainRetentionBatches(db: Db, category: string, batch: (tx: Tx) => Promise<BatchResult>, pending: () => Promise<number>, results: RetentionResults = {}): Promise<RetentionResult> {
   return withRetentionRun({}, async () => {
     const run = runs.getStore()!;
     const result: RetentionResult = { removed: 0, remaining: 0, skipped: 0, batches: 0, stop: "complete" };
@@ -67,14 +67,14 @@ export function drainRetentionRows(db: Db, category: string, table: AnyPgTable, 
 
 // ctid is used only inside this statement, never persisted across transactions.
 // Row locking keeps concurrent workers from waiting on or changing the same rows.
-export async function deleteRetentionRows(db: Db, table: AnyPgTable, where: SQL, limit = RETENTION_BATCH_SIZE): Promise<number> {
+export async function deleteRetentionRows(db: Tx, table: AnyPgTable, where: SQL, limit = RETENTION_BATCH_SIZE): Promise<number> {
   if (limit <= 0) return 0;
   const rows = await db.execute(sql`delete from ${table} where ctid in
     (select ctid from ${table} where ${where} limit ${limit} for update skip locked) returning 1`) as { rows: unknown[] };
   return rows.rows.length;
 }
 
-export async function updateRetentionRows(db: Db, table: AnyPgTable, where: SQL, values: SQL, limit = RETENTION_BATCH_SIZE): Promise<number> {
+export async function updateRetentionRows(db: Tx, table: AnyPgTable, where: SQL, values: SQL, limit = RETENTION_BATCH_SIZE): Promise<number> {
   if (limit <= 0) return 0;
   const rows = await db.execute(sql`update ${table} set ${values} where ctid in
     (select ctid from ${table} where ${where} limit ${limit} for update skip locked) returning 1`) as { rows: unknown[] };

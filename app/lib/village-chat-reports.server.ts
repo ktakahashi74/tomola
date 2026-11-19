@@ -5,7 +5,7 @@ import { recordRetentionResult, drainRetentionBatches, updateRetentionRows, type
 import { enqueueReportTriage } from "./moderation-automation.server";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { automaticallyResolvedReport } from "./report-resolution.server";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { appeals, chatAccessLog, chatConsents, chatMessages, chatReportSnapshots, moderationActions, notifications, profiles, reports, villageMembers, villages } from "./db/schema";
 import { checkInput, madeByOperator, MAX_REPORT_NOTE, type Actor, type ReportSummary } from "./moderation.server";
 import { isReason, type ReportReason } from "./moderation";
@@ -35,7 +35,7 @@ async function activeActor(db: Db, id: string, now: Date) {
 }
 
 // This lock order also serializes reporting, author edits/deletion, appeals and evidence pruning.
-export async function lockChatReportTarget(db: Db, messageId: string) {
+export async function lockChatReportTarget(db: Tx, messageId: string) {
   const [target] = await db.select({ villageId: chatMessages.villageId }).from(chatMessages).where(eq(chatMessages.id, messageId));
   if (!target) throw new ChatReportError("not_found");
   const [village] = await db.select({ id: villages.id }).from(villages).where(eq(villages.id, target.villageId)).for("share");

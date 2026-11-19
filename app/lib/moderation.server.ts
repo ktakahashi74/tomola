@@ -10,7 +10,7 @@ import { withMarkdownScope, MarkdownBudgetError } from "./markdown-budget.server
 import { checkBodyBudget } from "~/lib/markdown.server";
 import { notInArray, and, asc, desc, eq, gt, inArray, isNotNull, isNull, min, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, moderationActions, profiles, reports, user, villages } from "~/lib/db/schema";
 import { enqueueEmbedding, purgeEmbeddings } from "~/lib/embeddings.server";
 import { applyEntryEdit, entryIdPrefix, hasNul, parseTopicText, softDeleteEntry, type EntryError } from "~/lib/entries.server";
@@ -124,7 +124,7 @@ type ActionInput = {
 const fail = (error: ModerationError) => ({ ok: false as const, error });
 
 // Read post with a row lock to serialize actions with other actions and deletion.
-export async function lockEntry(db: Db, entryId: number) {
+export async function lockEntry(db: Tx, entryId: number) {
   await lockReferenceTopics(db, { entryId });
   const [row] = await db
     .select({
@@ -364,7 +364,7 @@ async function usableReport(
 }
 
 // Read and row-lock the member, including suspension, reaction exclusion and operator status.
-export async function lockMember(db: Db, userId: string) {
+export async function lockMember(db: Tx, userId: string) {
   const [row] = await db
     .select({
       userId: profiles.userId,

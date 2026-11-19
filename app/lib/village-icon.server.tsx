@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Languages, MapPinHouse } from "lucide-react";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { media, moderationActions, profiles, reports, user, villageEvents, villageMembers, villages } from "./db/schema";
 import { AVATAR_EDGE } from "./avatar-image.server";
 import { memberAvatarUrl } from "./member-avatar.server";
@@ -35,7 +35,7 @@ export async function withVillageIcons<T extends { slug: string | null; kind: st
   return rows.map(row => ({ ...row, iconUrl: urls.get(row.slug) ?? VILLAGE_ICON }));
 }
 
-export async function requireVillageIconOwner(db: Db, userId: string, slug: string) {
+export async function requireVillageIconOwner(db: Tx, userId: string, slug: string) {
   const [place] = await db.select().from(villages).where(eq(villages.slug, slug.toLowerCase())).for("update");
   if (!place || !isSharedVillageKind(place.kind) || place.language || place.endedAt) throw new MediaError("generic", 404);
   const [owner] = await db.select({ id: villageMembers.userId }).from(villageMembers).where(and(eq(villageMembers.villageId, place.id), eq(villageMembers.userId, userId), eq(villageMembers.role, "owner")));

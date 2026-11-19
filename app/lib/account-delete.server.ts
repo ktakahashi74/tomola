@@ -5,7 +5,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { signupInvitationIdentifier } from "./signup-village.server";
 import { and, eq, inArray, is, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import * as schema from "./db/schema";
 import { accountDeletions, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, entries, entryMedia, entryMentionSnapshots, invitations, invitationNoteTranslations, jobs, media, memberSignatures, moderationActions, notifications, nushiReports, nushiSources, profiles, reports, suspendedEmailHashes, translations, user, verification, villageEvents, villageInvites, villageMembers, villages } from "./db/schema";
 import { discardPaidTranslationCalls } from "./jobs/paid-translation.server";
@@ -129,7 +129,7 @@ async function clearLoginRecords(tx: Db, userId: string, email: string) {
 }
 
 type Completed = { ok: true; requestId: string };
-type Execute = (mutate: (tx: Db) => Promise<Completed>, lock: (tx: Db) => Promise<void>) => Promise<Completed>;
+type Execute = (mutate: (tx: Tx) => Promise<Completed>, lock: (tx: Tx) => Promise<void>) => Promise<Completed>;
 export async function completeAccountDeletion(db: Db, id: string, opts: { now?: Date; execute?: Execute } = {}): Promise<Completed> {
   const now = opts.now ?? new Date();
   const [operation] = await db.select().from(accountDeletions).where(eq(accountDeletions.id, id));
@@ -146,14 +146,14 @@ export async function completeAccountDeletion(db: Db, id: string, opts: { now?: 
     return { ok: true, requestId: id };
   };
   const targetIds = Object.values(operation.villageDecisions).filter(value => value.startsWith("member:")).map(value => value.slice(7));
-  const lock = async (tx: Db) => {
+  const lock = async (tx: Tx) => {
     const ids = [...new Set([userId, ...targetIds])].sort();
     await tx.select({ id: user.id }).from(user).where(inArray(user.id, ids)).orderBy(user.id).for("no key update");
     await lockHandleNamespace(tx, now);
     const members = await tx.select({ id: profiles.userId }).from(profiles).where(inArray(profiles.userId, ids)).orderBy(profiles.userId).for("update");
     if (targetIds.some(id => !members.some(member => member.id === id))) fail("village_changed");
   };
-  const mutate = async (tx: Db): Promise<Completed> => {
+  const mutate = async (tx: Tx): Promise<Completed> => {
     await lock(tx);
     const [account] = await tx.select().from(user).where(eq(user.id, userId)).for("no key update");
     const [profile] = await tx.select().from(profiles).where(eq(profiles.userId, userId)).for("update");

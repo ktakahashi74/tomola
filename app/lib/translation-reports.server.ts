@@ -5,7 +5,7 @@ import { checkBodyBudget } from "./markdown.server";
 import { withMarkdownScope, MarkdownBudgetError } from "./markdown-budget.server";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, profiles, translationReports, translations } from "~/lib/db/schema";
 import { isStale, pickTranslation, SHOWN_KINDS, type ShownKind } from "~/lib/display";
 import { MAX_TITLE_LENGTH, tryRenderTranslationHtml } from "~/lib/entries.server";
@@ -135,7 +135,7 @@ export async function createTranslationReport(
 
 // Check daily automatic retry limits: slots used by this member and across the site in the preceding 24 hours must both be below their limits. Serialize first reports with an advisory lock while counting slots
 // to prevent simultaneous reports exceeding the limits. Count rows with retry_slot true even after their route changes to moderator: they represent stronger-model calls made or planned.
-async function withinRetryCaps(tx: Db, reporterId: string, now: Date, caps: { perMember: number; total: number }): Promise<boolean> {
+async function withinRetryCaps(tx: Tx, reporterId: string, now: Date, caps: { perMember: number; total: number }): Promise<boolean> {
   if (caps.perMember <= 0 || caps.total <= 0) return false;
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('translation-retry-cap', 0))`);
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);

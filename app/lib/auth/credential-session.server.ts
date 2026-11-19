@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { eq } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { profiles } from "~/lib/db/schema";
 import { safeLocalPath } from "~/lib/display-lang.server";
 import { bindAuthToDatabase, getAuth, type Auth } from "./auth.server";
@@ -22,7 +22,7 @@ export function isCredentialSessionFresh(createdAt: unknown, now = Date.now()): 
 // Credential creation and complete revocation share the profile mutex. Re-read
 // the session inside it: a request authenticated before revocation may not mint
 // a new credential after the revocation commits.
-export async function withCredentialSession<T>(db: Db, userId: string, request: Request, returnTo: string, run: (tx: Db, auth: Auth) => Promise<T>): Promise<T> {
+export async function withCredentialSession<T>(db: Db, userId: string, request: Request, returnTo: string, run: (tx: Tx, auth: Auth) => Promise<T>): Promise<T> {
   return db.transaction(async tx => {
     const [member] = await tx.select({ id: profiles.userId }).from(profiles).where(eq(profiles.userId, userId)).for("update");
     if (!member) throw redirect("/onboarding");

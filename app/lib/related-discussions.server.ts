@@ -3,7 +3,7 @@ import { cursorTime } from "~/lib/reading-page.server";
 import { withMarkdownPersistedRead } from "./markdown-budget.server";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, entryReferences } from "~/lib/db/schema";
 import { parseEntryReferences } from "~/lib/entry-references.server";
 import { loadTitleDisplays } from "~/lib/entry-display.server";
@@ -39,7 +39,7 @@ async function resolvedTargets(db: Db, body: string, ownTopic: number | null) {
 // Take topic locks in ID order before taking a post's usual mutation locks.
 // This includes both old and new references so reciprocal edits/replies do
 // not each hold their own topic while waiting for the other one.
-export async function lockReferenceTopics(db: Db, opts: { entryId?: number; threadId?: number; body?: string }) {
+export async function lockReferenceTopics(db: Tx, opts: { entryId?: number; threadId?: number; body?: string }) {
   const [entry] = opts.entryId ? await db.select({ id: entries.id, threadId: entries.threadId }).from(entries).where(eq(entries.id, opts.entryId)) : [];
   const own = opts.threadId ?? (entry ? entry.threadId ?? entry.id : null);
   const pairs = opts.entryId ? await referencePairs(db, opts.entryId) : [];
@@ -89,18 +89,18 @@ async function rebuildEntryReferencesImplementation(db: Db, opts: { fromId: numb
     .orderBy(asc(entries.id)).limit(limit);
   let changed = 0;
   for (const row of rows) {
-    const update = async (tx: Db) => {
-      if (opts.write) await lockReferenceTopics(tx, { entryId: row.id, body: row.body });
+    const update = async (...[tx, write]: [db: Db, write: false] | [tx: Tx, write: true]) => {
+      if (write) await lockReferenceTopics(tx, { entryId: row.id, body: row.body });
       const [current] = await tx.select({ body: entries.body }).from(entries).where(eq(entries.id, row.id));
       if (!current) return;
       const old = (await tx.select().from(entryReferences).where(eq(entryReferences.sourceEntryId, row.id))).map(ref => ref.targetEntryId).sort((a, b) => a - b);
       const next = [...new Set((await resolvedTargets(tx, current.body, row.threadId ?? row.id)).map(link => link.entryId))].sort((a, b) => a - b);
       if (JSON.stringify(old) !== JSON.stringify(next)) {
         changed++;
-        if (opts.write) await syncEntryReferences(tx, row.id, opts.now ?? new Date(), true);
+        if (write) await syncEntryReferences(tx, row.id, opts.now ?? new Date(), true);
       }
     };
-    if (opts.write) await db.transaction(update); else await update(db);
+    if (opts.write) await db.transaction(tx => update(tx, true)); else await update(db, false);
   }
   return { checked: rows.length, changed, nextId: rows.length === limit && rows.at(-1)!.id < opts.toId ? rows.at(-1)!.id + 1 : null };
 }

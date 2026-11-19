@@ -2,7 +2,7 @@ import { villagesEnabled } from "./villages-enabled.server";
 import { lockFigureMedia, queueEntryFigures } from "./figure-translation.server";
 import { and, eq, exists, inArray, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { appeals, entries, entryMedia, media, motionPairs, moderationActions, profiles, villages } from "~/lib/db/schema";
 import { motionCandidates } from "./motion-display.server";
 import { publicPostVillageCondition } from "./villages.server";
@@ -15,7 +15,7 @@ export function referencedMediaIds(body: string): string[] {
   return [...new Set([...body.matchAll(/\/media\/([a-f0-9]{64})-[1-9]\d{0,3}x[1-9]\d{0,3}\.webp\b/g)].map(match => match[1]))];
 }
 
-export async function syncMediaReferences(db: Db, entryId: number, body: string, renderedHtml?: string): Promise<void> {
+export async function syncMediaReferences(db: Tx, entryId: number, body: string, renderedHtml?: string): Promise<void> {
   const [entry] = await db.select({ authorId: entries.authorId }).from(entries).where(eq(entries.id, entryId));
   const previous = await db.select({ id: entryMedia.mediaId }).from(entryMedia).where(eq(entryMedia.entryId, entryId));
   const ids = referencedMediaIds(body), affected = [...new Set([...ids, ...previous.map(row => row.id)])];

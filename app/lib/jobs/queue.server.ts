@@ -192,6 +192,7 @@ async function recoverStuck(db: Db, now: Date): Promise<number> {
 }
 
 // Claim one due queued job as running using FOR UPDATE SKIP LOCKED, preventing concurrent workers claiming the same job twice.
+// The locking select is a subquery of the update, so the statement holds the lock through the claim.
 // Claim only kinds with registered handlers.
 // skip contains jobs already attempted in this call, avoiding repeated zero-delay failures/deferrals within one call.
 async function claimOne(db: Db, kinds: string[], now: Date, skip: number[]): Promise<JobRow | undefined> {

@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import type pg from "pg";
-import type { Db } from "../../app/lib/db/client.server";
+import type { Db, Tx } from "../../app/lib/db/client.server";
 
 // Helpers for real-PostgreSQL two-connection concurrency tests (tests/pg-concurrency.test.ts).
 // Make races deterministic instead of relying on timing: pause one transaction while it holds a lock,
@@ -10,7 +10,7 @@ import type { Db } from "../../app/lib/db/client.server";
 class Rollback extends Error {}
 export type HeldTx<T> = { ready: Promise<T>; commit(): Promise<void>; rollback(): Promise<void> };
 
-export function holdTx<T>(db: Db, body: (tx: Db) => Promise<T>): HeldTx<T> {
+export function holdTx<T>(db: Db, body: (tx: Tx) => Promise<T>): HeldTx<T> {
   let resolveGate!: (mode: "commit" | "rollback") => void;
   const gate = new Promise<"commit" | "rollback">((resolve) => (resolveGate = resolve));
   let resolveReady!: (value: T) => void;

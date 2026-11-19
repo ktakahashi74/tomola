@@ -8,7 +8,7 @@ import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { AI_ASSISTANCE, type AiAssistance } from "~/lib/ai-assistance";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { apiTokens, drafts, entries, profiles } from "~/lib/db/schema";
 import {
   createReply,
@@ -278,13 +278,16 @@ export async function createDraft(...args: Parameters<typeof createDraftImplemen
   });
 }
 
-// Handle only the member's own drafts. Present others' drafts as nonexistent (not_found).
-async function updateDraftImplementation(
-  db: Db,
+type DraftUpdateArgs<SkipUnchanged extends boolean> = [
   authorId: string,
   draftId: number,
   input: unknown,
-  opts: { now?: Date; expectedVersion?: number; returnVersion?: boolean; villageId?: string | null; skipUnchanged?: boolean } = {},
+  opts?: { now?: Date; expectedVersion?: number; returnVersion?: boolean; villageId?: string | null; skipUnchanged?: SkipUnchanged },
+];
+
+// Handle only the member's own drafts. Present others' drafts as nonexistent (not_found).
+async function updateDraftImplementation(
+  ...[db, authorId, draftId, input, opts = {}]: [db: Db, ...args: DraftUpdateArgs<false>] | [tx: Tx, ...args: DraftUpdateArgs<boolean>]
 ): Promise<{ ok: true; version?: number } | { ok: false; error: DraftError }> {
   if (opts.expectedVersion !== undefined && (!Number.isSafeInteger(opts.expectedVersion) || opts.expectedVersion < 1)) return { ok: false, error: "draft_conflict" };
   const parsed = updateSchema.safeParse(input);
@@ -340,11 +343,15 @@ async function updateDraftImplementation(
   return opts.expectedVersion === undefined && !opts.returnVersion ? { ok: true } : { ok: true, version: updated[0].version };
 }
 
-export async function updateDraft(...args: Parameters<typeof updateDraftImplementation>): Promise<Awaited<ReturnType<typeof updateDraftImplementation>>> {
-  const [db, authorId, draftId, input, opts = {}] = args;
+export async function updateDraft(
+  db: Db, ...[authorId, draftId, input, opts = {}]: DraftUpdateArgs<boolean>
+): Promise<Awaited<ReturnType<typeof updateDraftImplementation>>> {
+  const { skipUnchanged, ...unlockedOpts } = opts;
   const parsed = updateSchema.safeParse(input);
-  if (!parsed.success) return updateDraftImplementation(...args);
-  if (!villagesEnabled()) return opts.skipUnchanged ? db.transaction(tx => updateDraftImplementation(tx, authorId, draftId, input, opts)) : updateDraftImplementation(...args);
+  if (!parsed.success) return updateDraftImplementation(db, authorId, draftId, input, unlockedOpts);
+  if (!villagesEnabled()) return skipUnchanged
+    ? db.transaction(tx => updateDraftImplementation(tx, authorId, draftId, input, opts))
+    : updateDraftImplementation(db, authorId, draftId, input, unlockedOpts);
   return db.transaction(async tx => {
     await lockVillageProfile(tx, authorId);
     const [existing] = await tx.select({ kind: drafts.kind, villageId: drafts.villageId, via: drafts.via }).from(drafts)

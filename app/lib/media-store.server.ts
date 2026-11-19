@@ -3,7 +3,7 @@ import { villagesEnabled } from "./villages-enabled.server";
 import { lockFigureMedia } from "./figure-translation.server";
 import { createHash, randomBytes } from "node:crypto";
 import { and, count, desc, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, entryMedia, figureMedia, media, motionPairs, moderationActions, profiles, user, villages } from "~/lib/db/schema";
 import type { RewrittenMedia } from "./media-processing.server";
 import { MEDIA_LIMITS, MediaError, mediaPath } from "~/lib/media";
@@ -110,7 +110,7 @@ function pairGroups(pairs: { motionId: string; stillId: string }[], active: Set<
   }
   return groups;
 }
-async function lockMediaContext(db: Db, id: string) {
+async function lockMediaContext(db: Tx, id: string) {
   const [image] = await db.select({ avatar: media.avatar, villageId: media.villageId, uploadedBy: media.uploadedBy }).from(media).where(eq(media.id, id));
   if (image?.villageId) await db.select({ id: villages.id }).from(villages).where(eq(villages.id, image.villageId)).for("update");
   else if (image?.avatar) await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.userId, image.uploadedBy)).for("update");

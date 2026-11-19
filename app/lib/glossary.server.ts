@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries, glossaryEntries, glossaryRevisions, profiles } from "~/lib/db/schema";
 import { siteOrigin } from "~/lib/http/csrf.server";
 import { GLOSSARY_PAGE_SIZE, glossaryChangeKind, SINGLE_LINE, type GlossaryChangeKind, type GlossaryContent, type GlossaryVia } from "~/lib/glossary";
@@ -151,7 +151,7 @@ class Abort<E extends string> extends Error {
 
 // Run the change inside a transaction. If Abort is thrown, roll back writes and return its error result.
 // If db is already transactional (imports wrap the entire operation), this creates a nested transaction/savepoint.
-async function atomically<T, E extends string>(db: Db, run: (tx: Db) => Promise<T>): Promise<T | { ok: false; error: E }> {
+async function atomically<T, E extends string>(db: Db, run: (tx: Tx) => Promise<T>): Promise<T | { ok: false; error: E }> {
   try {
     return await db.transaction(async (tx) => run(tx));
   } catch (err) {
@@ -545,7 +545,7 @@ export async function countGlossaryRevisions(db: Db, entryIds: readonly number[]
 // first, so a screen edit that commits after that read would be overwritten without --overwrite-edited. EXCLUSIVE conflicts with the ROW SHARE lock that
 // SELECT ... FOR UPDATE takes, so a screen edit waits on the table before it takes a row lock (a weaker mode would let the two wait for each other).
 // Call it first in the import transaction, before reading anything.
-export async function lockGlossaryForImport(tx: Db): Promise<void> {
+export async function lockGlossaryForImport(tx: Tx): Promise<void> {
   await tx.execute(sql`lock table glossary_entries in exclusive mode`);
 }
 

@@ -8,7 +8,7 @@ import { closeVillageChatConnections } from "./village-chat-events.server";
 import { clearVillageChatMemberState } from "./village-chat-notifications.server";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNull, not, or, sql } from "drizzle-orm";
 import { hitMemberLimit } from "~/lib/rate-limit.server";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { notifications, profiles, reports, user, villageEvents, villageInvites, villageMembers, villages } from "~/lib/db/schema";
 import { isOperatorEmail } from "~/lib/operators.server";
 import { enqueueImmediateEmails } from "~/lib/notifications.server";
@@ -28,14 +28,14 @@ type Actor = { userId: string; handle: string; suspendedUntil: Date | null };
 // All mutations lock involved profiles in ascending user ID, then the village.
 // Posting already locks profile -> draft/reference topic -> village. No mutation
 // acquires another profile, draft or topic after locking a village.
-async function lockActors(db: Db, ids: string[]): Promise<Actor[]> {
+async function lockActors(db: Tx, ids: string[]): Promise<Actor[]> {
   return db.select({ userId: profiles.userId, handle: profiles.handle, suspendedUntil: profiles.suspendedUntil })
     .from(profiles).where(inArray(profiles.userId, [...new Set(ids)].sort())).orderBy(asc(profiles.userId)).for("update");
 }
 function canWrite(actor: Actor | undefined, now = new Date()): actor is Actor {
   return !!actor && !(actor.suspendedUntil && actor.suspendedUntil > now);
 }
-async function lockedVillage(db: Db, slug: string) {
+async function lockedVillage(db: Tx, slug: string) {
   const [village] = await db.select().from(villages).where(and(sharedVillageCondition(), eq(villages.slug, slug))).for("update");
   return village ?? null;
 }

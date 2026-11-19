@@ -7,7 +7,7 @@ import { AVATAR_EDGE } from "./avatar-image.server";
 import { avatarAppealUrl } from "./avatar-moderation.server";
 import { enqueueReportTriage } from "./moderation-automation.server";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { moderationActions, profiles, reports, villageEvents, villageInvites, villageMembers, villageReportSnapshots, villages } from "~/lib/db/schema";
 import { checkInput, MAX_REPORT_NOTE, type Actor, type ModerationError, type ReportSummary } from "~/lib/moderation.server";
 import { isReason, type ReportReason } from "~/lib/moderation";
@@ -39,11 +39,11 @@ export type VillageReportCard = {
   reports: Array<ReportSummary & { target: VillageReportTarget; voiceEventId?: number | null; iconUrl?: string | null; snapshot: Omit<VillageMetadata, "language"> | null }>;
 };
 
-export async function lockVillageActor(db: Db, id: string) {
+export async function lockVillageActor(db: Tx, id: string) {
   const [actor] = await db.select({ handle: profiles.handle, suspendedUntil: profiles.suspendedUntil }).from(profiles).where(eq(profiles.userId, id)).for("update");
   return actor;
 }
-export async function lockModeratedVillage(db: Db, id: string) {
+export async function lockModeratedVillage(db: Tx, id: string) {
   const [village] = await db.select().from(villages).where(eq(villages.id, id)).for("update");
   return village;
 }
@@ -209,7 +209,7 @@ export async function villageAppealMetadata(db: Db, id: string, eventId: number 
 }
 
 // Caller holds actor profile -> slug claims -> village -> appeal locks, in that order.
-export async function reverseVillageAction(db: Db, action: { id: number; action: string; targetVillageId: string; villageEventId: number | null; iconMediaIdBefore?: string | null }, reviewerId: string, handle: string, appealId: number, now: Date): Promise<boolean> {
+export async function reverseVillageAction(db: Tx, action: { id: number; action: string; targetVillageId: string; villageEventId: number | null; iconMediaIdBefore?: string | null }, reviewerId: string, handle: string, appealId: number, now: Date): Promise<boolean> {
   const village = await lockModeratedVillage(db, action.targetVillageId);
   if (!village) return false;
   if (action.action === "clear_village_icon") {

@@ -9,7 +9,7 @@ import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { enrollInVillage, languageVillage } from "~/lib/villages.server";
 import { z } from "zod";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { profiles, handleHolds, user } from "~/lib/db/schema";
 import { handleKey, isReservedHandle } from "~/lib/handles";
 import { defaultUiLocale, enabledLangs, isEnabledLang } from "~/lib/enabled-langs.server";
@@ -29,7 +29,7 @@ export function nextHandleChangeAt(profile: Pick<Profile, "handleChangedAt">): D
 }
 
 // Serialize claims across profiles and holds, including a name with no current row.
-export async function lockHandleNamespace(tx: Db, now: Date): Promise<void> {
+export async function lockHandleNamespace(tx: Tx, now: Date): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(2026100301)`);
   await tx.delete(handleHolds).where(lte(handleHolds.heldUntil, now));
 }

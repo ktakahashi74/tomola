@@ -610,7 +610,7 @@ it("exports only referenced public images into HTML and Markdown, preserving alt
   expect((await markdownToPlainText(body))).toContain("source diagram"); expect((await markdownToPlainText(body))).not.toContain("![");
   const [topic] = await db.insert(entries).values({ kind: "topic", authorId: "media-member", lang: "ja", title: "Diagram", body, sourceHash: "media-body" }).returning({ id: entries.id });
   const { syncMediaReferences } = await import("~/lib/media-references.server");
-  await syncMediaReferences(db, topic.id, body);
+  await db.transaction(tx => syncMediaReferences(tx, topic.id, body));
   const [hidden] = await db.insert(entries).values({ kind: "topic", authorId: "media-member", lang: "ja", body: `![hidden](${privateImage.url})`, sourceHash: "hidden-media", hiddenAt: new Date() }).returning({ id: entries.id });
   const translated = `![translated diagram](${saved.url})`;
   await db.insert(translations).values({ entryId: topic.id, field: "body", lang: "en", kind: "primary", sourceHash: "media-body", text: translated });

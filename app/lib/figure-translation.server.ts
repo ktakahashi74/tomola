@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { entries, entryMedia, figureMedia, figureReadings, figureTranslations, media } from "./db/schema";
 import { enabledTargetLangs, isEnabledLang } from "./enabled-langs.server";
 import { FIGURE_VERSION, hasFigureLiteralNewlines, type FigureReading, type FigureLabelResult } from "./figure";
@@ -15,7 +15,7 @@ export const READ_FIGURE_JOB = "read_figure";
 export const TRANSLATE_FIGURE_JOB = "translate_figure";
 // All supported image withdrawals acquire this before locking media rows.
 // Registration uses the same short transaction lock; model calls hold no lock.
-export async function lockFigureMedia(db: Db): Promise<void> {
+export async function lockFigureMedia(db: Tx): Promise<void> {
   await db.execute(sql`select pg_advisory_xact_lock(732108, 1)`);
 }
 export const readingKeyOf = (bytes: Buffer) => `${createHash("sha256").update(bytes).digest("hex")}:v${FIGURE_VERSION}`;
@@ -71,14 +71,14 @@ export async function queueEntryFigures(db: Db, entryId: number): Promise<void> 
 
 // Called inside the preparation transaction. A copied URL never authorizes
 // sending somebody else's image.
-export async function enqueueEntryFigures(db: Db, entryId: number): Promise<void> {
+export async function enqueueEntryFigures(db: Tx, entryId: number): Promise<void> {
   if (!figureTranslationEnabled()) return;
   await enqueuePublicFigures(db, undefined, process.env, entryId);
 }
 
 // Call inside a short transaction. Backfill rechecks eligibility here, so a
 // source hidden or withdrawn since its preview never enters a reading job.
-export async function enqueuePublicFigures(db: Db, ids: readonly string[] | undefined, env: LlmEnv = process.env, entryId?: number, rereadRejected = false, rerenderLiteralNewlines = false): Promise<number> {
+export async function enqueuePublicFigures(db: Tx, ids: readonly string[] | undefined, env: LlmEnv = process.env, entryId?: number, rereadRejected = false, rerenderLiteralNewlines = false): Promise<number> {
   if (rereadRejected && rerenderLiteralNewlines) throw new Error("Choose either rejected readings or literal newlines");
   if (!figureTranslationEnabled(env) || ids?.length === 0) return 0;
   await lockFigureMedia(db);

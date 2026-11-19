@@ -1,17 +1,19 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { entries } from "~/lib/db/schema";
 import type { StanceAttrInput } from "~/lib/stances";
 
 // DB-reading helpers for question asks_stance topics. Attribute validation checkStanceAttributes is pure and does not access DB (app/lib/stances.ts),
 // These helpers read the facts needed by that validation inside a transaction.
 
+type StanceFactsInput = { kind: "topic" | "reply"; threadId?: number | null; altOf?: number | null };
+
 // Read whether the reply topic is a question and the alt_of target's state: the DB-dependent validation inputs.
 // lockAltTarget at creation reads/locks the original with FOR NO KEY UPDATE to serialize with concurrent hiding/deletion. Order: alternative row (already taken by moderation/edit), then
 // original-question row. Saving drafts does not lock; publication revalidates as creation.
 export async function loadStanceAttrFacts(
-  db: Db,
-  input: { kind: "topic" | "reply"; threadId?: number | null; altOf?: number | null; lockAltTarget?: boolean },
+  ...[db, input]: [db: Db, input: StanceFactsInput & { lockAltTarget?: false }]
+    | [tx: Tx, input: StanceFactsInput & { lockAltTarget: true }]
 ): Promise<Pick<StanceAttrInput, "threadAsksStance" | "altTarget">> {
   const facts: Pick<StanceAttrInput, "threadAsksStance" | "altTarget"> = {};
   if (input.kind === "reply" && input.threadId) {

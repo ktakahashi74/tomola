@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-
 import { alias, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { entries, villages } from "~/lib/db/schema";
 import { SHARED_VILLAGE_KINDS } from "~/lib/villages";
-import type { Db } from "~/lib/db/client.server";
+import type { Tx } from "~/lib/db/client.server";
 
 // Closed or unaddressable villages have no supported reading path. Fail closed everywhere,
 // including signed-in/operator reads and exports, without requiring a join.
@@ -33,7 +33,7 @@ export const reviewableWithTopic = (): SQL =>
 
 // Call inside a transaction. Lock the root before the post, matching deletion,
 // then recheck review eligibility while holding both locks.
-export async function lockReviewableEntry(db: Db, id: number, mode: "share" | "update" = "share") {
+export async function lockReviewableEntry(db: Tx, id: number, mode: "share" | "update" = "share") {
   const [peek] = await db.select({ threadId: entries.threadId }).from(entries).where(eq(entries.id, id));
   if (!peek) return undefined;
   const rootId = peek.threadId ?? id;

@@ -11,7 +11,7 @@ import { chatMentionTargets, resolveChatMentions, saveChatMentions } from "./vil
 import { normalizeNewlines } from "./text";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { chatConsents, chatMessages, chatReads, chatSequences, notifications, profiles, villageMembers, villages } from "./db/schema";
 import { CHAT_CONSENT_VERSION } from "./village-chat-consent";
 import { villageChatEnabled } from "./village-chat-enabled.server";
@@ -40,7 +40,7 @@ export async function chatAccess(db: Db, slug: string, userId: string, countRead
 }
 
 // Lock the village before the member, matching lifecycle operations. Never lock profiles.
-async function lockAccess(db: Db, slug: string, userId: string, intent?: { consentVersion: unknown }) {
+async function lockAccess(db: Tx, slug: string, userId: string, intent?: { consentVersion: unknown }) {
   if (!villageChatEnabled()) throw new ChatError("not_found");
   const [village] = await db.select().from(villages).where(and(eq(villages.slug, slug.toLowerCase()), chatVillageCondition())).for("share");
   if (!village) throw new ChatError("not_found");
@@ -67,7 +67,7 @@ export async function currentChatSequence(db: Db, villageId: string): Promise<nu
   const [row] = await db.select({ seq: chatSequences.seq }).from(chatSequences).where(eq(chatSequences.villageId, villageId));
   return row?.seq ?? 0;
 }
-async function lockRead(db: Db, villageId: string, userId: string) {
+async function lockRead(db: Tx, villageId: string, userId: string) {
   await db.insert(chatReads).values({ villageId, userId }).onConflictDoNothing();
   await db.select({ seq: chatReads.seq }).from(chatReads).where(and(eq(chatReads.villageId, villageId), eq(chatReads.userId, userId))).for("update");
 }

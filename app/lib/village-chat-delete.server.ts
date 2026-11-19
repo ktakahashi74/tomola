@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Tx } from "./db/client.server";
 import { chatMentions, chatMessages, chatTranslationReports, notifications } from "./db/schema";
 import { ChatError } from "./village-chat";
 import { nextChatSequence } from "./village-chat-sequence.server";
@@ -9,7 +9,7 @@ export const CHAT_OWN_DELETE_LIMIT = 500;
 
 // Caller holds the village lock and has checked account authority. Message
 // ownership is checked here too; membership is intentionally not required.
-export async function deleteChatRows(db: Db, villageId: string, userId: string, id?: string) {
+export async function deleteChatRows(db: Tx, villageId: string, userId: string, id?: string) {
   const rows = await db.select({ id: chatMessages.id, deletedAt: chatMessages.deletedAt, changedSeq: chatMessages.changedSeq }).from(chatMessages)
     .where(and(eq(chatMessages.villageId, villageId), eq(chatMessages.authorId, userId), id === undefined ? isNull(chatMessages.deletedAt) : eq(chatMessages.id, id)))
     .orderBy(asc(chatMessages.id)).limit(id === undefined ? CHAT_OWN_DELETE_LIMIT : 1).for("update");

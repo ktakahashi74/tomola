@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { chatConsents, chatMentions, notifications, profiles, villageMembers } from "./db/schema";
 import { CHAT_CONSENT_VERSION } from "./village-chat-consent";
 import { chatParts, type ChatMentionTarget } from "./village-chat";
@@ -12,7 +12,7 @@ type Token = { spelling: string; prefix: string };
 type Target = { userId: string; publicId: string; tokens: Token[] };
 
 // Parse only plain-text parts, never URL destinations or Markdown. Membership locks precede the sequence allocator.
-export async function resolveChatMentions(tx: Db, villageId: string, body: string): Promise<Target[]> {
+export async function resolveChatMentions(tx: Tx, villageId: string, body: string): Promise<Target[]> {
   const candidates = chatParts(body).flatMap(part => part.type === "text" ? mentionCandidates(part.text).map(candidate => ({ ...candidate, spelling: part.text.slice(candidate.start, candidate.end) })) : []);
   const keys = [...new Set(candidates.flatMap(candidate => tokenPrefixes(candidate.token).map(handleKey)))];
   if (!keys.length) return [];
@@ -41,7 +41,7 @@ export async function resolveChatMentions(tx: Db, villageId: string, body: strin
 
 // Current bindings are replaced, while told recipients survive edits and notification cleanup.
 // A NULL notification timestamp is an active binding only; obsolete untold bindings can be removed.
-export async function saveChatMentions(tx: Db, input: { messageId: string; villageId: string; authorId: string; targets: Target[]; replyAuthorId?: string | null; now: Date; isNew: boolean }) {
+export async function saveChatMentions(tx: Tx, input: { messageId: string; villageId: string; authorId: string; targets: Target[]; replyAuthorId?: string | null; now: Date; isNew: boolean }) {
   const { messageId, villageId, authorId, now } = input;
   const targets = [...input.targets];
   // The reply recipient goes first and shares the durable once-per-message ledger with mentions.

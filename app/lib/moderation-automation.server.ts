@@ -1,6 +1,6 @@
 import { siteUrl } from "./site-url";
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { chatMessages, chatReportSnapshots, entries, moderationActions, notifications, profiles, reports } from "./db/schema";
 import { ABUSE_THRESHOLDS, scoreAbuse } from "./abuse";
 import { enqueue } from "./jobs/queue.server";
@@ -12,7 +12,7 @@ import { createModerationNotification } from "./notifications.server";
 import { spamEnabled, aiSpamEnabled, triageEnabled } from "./moderation-ai-config.server";
 
 // Serialize the history check with writes by this author, across topics and chat villages.
-export async function lockAbuseWriter(db: Db, authorId: string) {
+export async function lockAbuseWriter(db: Tx, authorId: string) {
   if (spamEnabled()) await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`moderation-writer:${authorId}`}, 0))`);
 }
 export async function enqueueReportTriage(db: Db, reportId: number) {
@@ -20,7 +20,7 @@ export async function enqueueReportTriage(db: Db, reportId: number) {
 }
 
 // Caller holds the entry/topic locks. A source hash prevents delayed verdicts hiding an edited post.
-export async function automaticallyHideEntry(db: Db, id: number, note: string, now: Date, sourceHash?: string) {
+export async function automaticallyHideEntry(db: Tx, id: number, note: string, now: Date, sourceHash?: string) {
   const entry = await lockEntry(db, id);
   if (!entry || entry.deletedAt || entry.hiddenAt || sourceHash !== undefined && entry.sourceHash !== sourceHash) return false;
   // A human review protects that source revision from a queued verdict. A later author edit is inspected again.
@@ -36,7 +36,7 @@ export async function automaticallyHideEntry(db: Db, id: number, note: string, n
   return true;
 }
 
-export async function inspectEntrySpam(db: Db, entry: { id: number; authorId: string; body: string; sourceHash: string | null }, now: Date) {
+export async function inspectEntrySpam(db: Tx, entry: { id: number; authorId: string; body: string; sourceHash: string | null }, now: Date) {
   if (!spamEnabled()) return false;
   const since = new Date(now.getTime() - ABUSE_THRESHOLDS.windowMs);
   const duplicateSince = new Date(now.getTime() - ABUSE_THRESHOLDS.duplicateWindowMs);

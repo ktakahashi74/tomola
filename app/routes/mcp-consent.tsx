@@ -7,7 +7,7 @@ import { bindAuthToDatabase, getAuth } from "~/lib/auth/auth.server";
 import { eq } from "drizzle-orm";
 import { oauthClient } from "~/lib/db/schema";
 import { requireMember, getSessionUser, getCredentialSessionFresh } from "~/lib/auth/session.server";
-import { getDb } from "~/lib/db/client.server";
+import { getDb, type Tx } from "~/lib/db/client.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { getWriter } from "~/lib/members.server";
 import { authorizationRedirect, consentRequestValid, loadConsentRequest } from "~/lib/mcp/consent.server";
@@ -47,7 +47,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Keeping the connection alone is not a permission: read, draft or media must be chosen.
   if (accept && scope.every((item) => item === "offline_access")) throw data("Select a permission", { status: 400 });
   if (accept && scope.some(item => item === "draft" || item === "media") && !(await getWriter(db, user.id)).ok) throw data("Writing permission unavailable", { status: 403 });
-  const approve = async (tx: typeof db, transactional: typeof auth) => {
+  const approve = async (tx: Tx, transactional: typeof auth) => {
     await tx.select({ id: oauthClient.id }).from(oauthClient).where(eq(oauthClient.clientId, consent.clientId)).for("no key update");
     return transactional.api.oauth2Consent({ request, headers: request.headers, body: { accept, ...(accept ? { scope: scope.join(" ") } : {}), oauth_query: consent.query } });
   };

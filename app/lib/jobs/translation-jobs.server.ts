@@ -6,7 +6,7 @@ import { safeErrorText } from "~/lib/error-text.server";
 import { MarkdownBusyError } from "../markdown-budget.server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { divergences, entries, jobs, translationReports, translations } from "~/lib/db/schema";
 import { isUsablePrimary, pickTranslation, SHOWN_KINDS } from "~/lib/display";
 import { tryRenderTranslationHtml } from "~/lib/entries.server";
@@ -202,7 +202,7 @@ async function saveTranslation(db: Db, input: SaveInput, now: Date): Promise<boo
 
 // Check that the entry still has this source revision and is undeleted/unhidden. Call within a transaction, locking with FOR SHARE so edits, deletion, and hiding
 // wait until writing finishes.
-export async function entryStillCurrent(tx: Db, entryId: number, sourceHash: string, mentionRevision?: number, lock: "share" | "no key update" = "share"): Promise<boolean> {
+export async function entryStillCurrent(tx: Tx, entryId: number, sourceHash: string, mentionRevision?: number, lock: "share" | "no key update" = "share"): Promise<boolean> {
   const [row] = await tx
     .select({ sourceHash: entries.sourceHash, mentionRevision: entries.mentionRevision, deletedAt: entries.deletedAt, hiddenAt: entries.hiddenAt })
     .from(entries)

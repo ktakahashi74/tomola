@@ -1,11 +1,11 @@
 import { and, eq, gt, ne, sql } from "drizzle-orm";
-import type { Db } from "~/lib/db/client.server";
+import type { Db, Tx } from "~/lib/db/client.server";
 import { villageEvents } from "~/lib/db/schema";
 
 export const VILLAGE_SLUG_HOLD_DAYS = 90;
 // Acquire after the actor profile and before any village lock. A common lock
 // serializes claims with reservation creation and appeal restoration.
-export async function lockVillageSlugClaims(db: Db): Promise<void> {
+export async function lockVillageSlugClaims(db: Tx): Promise<void> {
   await db.execute(sql`select pg_advisory_xact_lock(hashtextextended('village-slug-claims', 0))`);
 }
 export async function villageSlugHeld(db: Db, slug: string, now: Date, restoringVillageId?: string): Promise<boolean> {
