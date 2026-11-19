@@ -17,6 +17,8 @@ import { getGlossaryVersion } from "~/lib/translations.server";
 import { m } from "~/paraglide/messages.js";
 import { addMember, createTestDb } from "./helpers/db";
 
+vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
+
 // Glossary edits affect only subsequent translations and report-triggered retranslations. Edits queue no translation jobs and leave existing translations untouched.
 // One test creates a topic and runs translation jobs for nine languages, which can exceed the default five seconds under load.
 vi.setConfig({ testTimeout: 30_000 });

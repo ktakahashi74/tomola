@@ -10,7 +10,7 @@ import { discardPaidTranslationCalls } from "~/lib/jobs/paid-translation.server"
 import { cleanCandidates, termAppearsIn } from "~/lib/glossary-forms";
 import { enabledTargetLangs } from "~/lib/enabled-langs.server";
 import type { Lang, SourceLang } from "~/lib/languages";
-import { nushi_name } from "~/paraglide/messages.js";
+import { m } from "~/paraglide/messages.js";
 import { eagerBodyLangs } from "./translation-eager.server";
 import { segmentSentences } from "~/lib/segment";
 
@@ -268,13 +268,13 @@ export function matchGlossary(
 }
 
 // Use the interface spelling for site terms in member posts and chat.
-const siteTerms = [{ message: nushi_name, note: "tomola's name for its AI discussion participant" }];
+const siteTerms = [{ name: (locale: Lang) => m.nushi_name({}, { locale }), note: "tomola's name for its AI discussion participant" }];
 export function matchMemberGlossary(rows: GlossaryRow[], text: string, from: SourceLang, to: Lang) {
   const sourceLocales = from === "other" ? ["ja", "en"] as const : [from];
-  const siteHints = siteTerms.flatMap(({ message, note }) =>
-    [...new Set(sourceLocales.map(locale => message({}, { locale })))]
+  const siteHints = siteTerms.flatMap(({ name, note }) =>
+    [...new Set(sourceLocales.map(name))]
       .filter(term => termAppearsIn(term, text))
-      .map(term => ({ term, candidates: [message({}, { locale: to })], note })),
+      .map(term => ({ term, candidates: [name(to)], note })),
   );
   const siteSpellings = new Set(siteHints.map(hint => hint.term.toLowerCase()));
   return [...siteHints, ...matchGlossary(rows, text).filter(hint => !siteSpellings.has(hint.term.toLowerCase()))];

@@ -22,6 +22,8 @@ import { leakedReasoning } from "./helpers/translation-leak";
 import { LlmError } from "~/lib/llm/errors.server";
 import { m } from "~/paraglide/messages.js";
 
+vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
+
 it("retains the attempt cap through private-error wrappers and marks truncated chat translations failed", async () => {
   const w = await world(); await w.send();
   let calls = 0;
