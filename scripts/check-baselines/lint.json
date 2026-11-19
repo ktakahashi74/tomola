@@ -54,9 +54,6 @@
   "app/components/route-error.tsx": {
     "react-hooks/set-state-in-effect": 1
   },
-  "app/components/signed-form.tsx": {
-    "react-hooks/set-state-in-effect": 1
-  },
   "app/components/topic-fields.tsx": {
     "react-hooks/exhaustive-deps": 1
   },

@@ -99,7 +99,7 @@ test("long originals and translations stay readable at desktop and phone widths"
     const build = process.env.E2E_SERVER === "build";
     let release!: () => void;
     const pause = new Promise<void>(resolve => { release = resolve; });
-    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
     if (build) await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
     let passage: string;
     let replyPassage: string;

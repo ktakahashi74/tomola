@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { useMember, state, waitForClientRoute, waitForFormReady, captureScreenshot, uiMessages, formatMessage } from "./helpers";
+import { useMember, state, waitForClientRoute, waitForFormReady, captureScreenshot, uiMessages, formatMessage, openReplyMore } from "./helpers";
 import { beforeHydration } from "./support/prehydration";
 
 type Fixture = { topicId: number; rootA: number; rootB: number; a: number[]; b: number[]; chronological: number[]; hiddenRoot: number; hiddenChild: number; deletedRoot: number; deletedChild: number; continuationId: number; previousRoot: number; firstPageContinued: number[]; continued: number[]; spareRoot: number };
@@ -196,15 +196,33 @@ test("shows a posted reply inside a long branch and excludes one's own reply fro
   await page.goto(`/t/${f.topicId}?reply_to=c-${f.rootA}#reply`);
   await waitForClientRoute(page);
   const messages = await uiMessages(page);
-  await waitForFormReady(page.locator("#reply form"));
-  await page.getByLabel(messages.field_body, { exact: true }).fill("Posted inside branch A");
+  const reply = page.locator("#reply form");
+  const body = reply.getByLabel(messages.field_body, { exact: true });
+  const aiText = reply.getByLabel(messages.ai_write_text, { exact: true });
+  const openAiText = async () => {
+    await openReplyMore(page);
+    await reply.getByRole("button", { name: messages.ai_write_button, exact: true }).click();
+    await reply.getByText(messages.ai_write_send, { exact: true }).click();
+  };
+  await waitForFormReady(reply);
+  const written = "Posted inside branch A";
+  await body.fill(written);
+  await openAiText();
+  await expect(aiText).toHaveValue(written);
   await page.getByRole("button", { name: messages.submit_reply, exact: true }).click();
-  await expect(page.getByText("Posted inside branch A", { exact: true })).toBeVisible();
+  const published = page.locator("#replies article p").and(page.getByText(written, { exact: true }));
+  await expect(published).toBeVisible();
   const id = Number(new URL(page.url()).hash.slice(3));
   expect(new URL(page.url()).searchParams.get("posted")).toBe(String(id));
   await visibleTarget(page, id);
   await expect(tail(page, f.rootA)).toHaveJSProperty("open", true);
   await expect(page.locator(`#c-${id}[data-new-reply]`)).toHaveCount(0);
+  await expect(body).toBeEmpty();
+  await openAiText();
+  await expect(aiText).toBeEmpty();
+  const next = "A new reply after publication";
+  await body.fill(next);
+  await expect(aiText).toHaveValue(next);
 });
 
 test("native branch tails work without JavaScript and query targets are open in server HTML", async ({ browser }) => {

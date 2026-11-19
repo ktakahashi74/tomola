@@ -3,7 +3,7 @@ import { BodyCounter } from "~/components/body-counter";
 import { DraftKeeper } from "~/components/draft-keeper";
 import { MentionTextarea } from "~/components/mention-autocomplete";
 import { QuietBoundary, usePageReady } from "~/components/quiet-boundary";
-import { SendButton } from "~/components/signed-form";
+import { SendButton } from "~/components/signed-form-frame";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { entryFieldError } from "~/lib/entry-field-error";
 import { m } from "~/paraglide/messages.js";

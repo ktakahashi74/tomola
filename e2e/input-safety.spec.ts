@@ -112,6 +112,7 @@ test("another member's reply and an Insightful refresh preserve text; own public
   const readerContext = await browser.newContext();
   const author = await authorContext.newPage();
   const reader = await readerContext.newPage();
+  const publishedReply = (page: Page, text: string) => page.locator("#replies article p").and(page.getByText(text, { exact: true }));
   try {
     await useMember(author, "safety_author@example.com");
     const path = await publish(author, "---\ntitle: Input preservation question\nasks_stance: true\nlang: en\n---\nInput preservation topic.");
@@ -121,12 +122,12 @@ test("another member's reply and an Insightful refresh preserve text; own public
     await body(reader).fill("Unsent reader reply.");
     await body(author).fill("A reply arriving from another member.");
     await author.getByRole("button", { name: m.submit_reply, exact: true }).click();
-    await expect(author.getByText("A reply arriving from another member.", { exact: true })).toBeVisible();
+    await expect(publishedReply(author, "A reply arriving from another member.")).toBeVisible();
     await reader.getByRole("button", { name: m.insightful_give, exact: true }).first().click();
     await waitForClientRoute(reader);
     // Explicit refresh also covers pages which intentionally skip vote revalidation.
     await reader.evaluate(() => (window as unknown as { __reactRouterDataRouter: { revalidate(): void } }).__reactRouterDataRouter.revalidate());
-    await expect(reader.getByText("A reply arriving from another member.", { exact: true })).toBeVisible();
+    await expect(publishedReply(reader, "A reply arriving from another member.")).toBeVisible();
     await expect(body(reader)).toHaveValue("Unsent reader reply.");
     const stance = reader.getByRole("group", { name: m.stance_title, exact: true });
     const agree = stance.getByRole("button", { name: m.stance_agree, exact: true });
@@ -137,7 +138,7 @@ test("another member's reply and an Insightful refresh preserve text; own public
     await expect(stance).toBeFocused();
     await expect(body(reader)).toHaveValue("Unsent reader reply.");
     await reader.getByRole("button", { name: m.submit_reply, exact: true }).click();
-    await expect(reader.getByText("Unsent reader reply.", { exact: true })).toBeVisible();
+    await expect(publishedReply(reader, "Unsent reader reply.")).toBeVisible();
     await expect(body(reader)).toHaveValue("");
     const clock = join(state().dir, "server-clock.txt");
     const previous = fs.readFileSync(clock, "utf8");

@@ -135,7 +135,7 @@ test("text typed in the reply field goes with the member to another reply target
   const form = page.locator("#reply form");
   const draftText = "Typed for the first reply";
   if (process.env.E2E_SERVER === "build") {
-    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
     let release!: () => void;
     const pause = new Promise<void>(resolve => { release = resolve; });
     await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
@@ -172,7 +172,7 @@ test("text typed in the reply field goes with the member to another reply target
   await page.getByRole("button", { name: en.local_draft_discard, exact: true }).click();
   expect(await kept(page)).toEqual([]);
   if (process.env.E2E_SERVER === "build") {
-    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
     let fail!: () => void;
     const pause = new Promise<void>(resolve => { fail = resolve; });
     await page.route(asset, async route => { await pause; await route.abort(); });

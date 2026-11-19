@@ -87,7 +87,7 @@ import { villageNameTitle } from "~/lib/village-translation-view";
 import { postingVillageName, villageName } from "~/lib/village-name";
 import { m } from "~/paraglide/messages.js";
 import { SigningFailureResponse } from "~/lib/signing.server";
-import { afterPageIdle } from "~/lib/initial-activation";
+import TopicReplyForm from "~/components/topic-reply-form";
 import { ListMeta } from "~/components/list-meta";
 import { LocalTime } from "~/components/local-time";
 import { ActionPanel } from "~/components/ui/action-panel";
@@ -123,22 +123,6 @@ const ModerationPanelContent: ComponentType<ComponentProps<typeof LazyModeration
 const ModerationPanel = memo(function ModerationPanel({ className, ...props }: ComponentProps<typeof LazyModerationPanel> & { className?: string }) {
   return <ActionPanel label={m.mod_panel_summary()} className={className ?? "text-sm"} summaryClassName="touch-action h-auto px-1 ui-meta"><Suspense fallback={null}><ModerationPanelContent {...props} /></Suspense></ActionPanel>;
 });
-// Suspense keeps the server's form in place while the browser waits for idle
-// time or interaction to hydrate it.
-let startReplyFormLoad: () => void;
-const replyFormReady = new Promise<void>(resolve => { startReplyFormLoad = () => resolve(); });
-const LazyTopicReplyForm = lazy(() => replyFormReady
-  .then(() => import("~/components/topic-reply-form"))
-  // A failed import leaves the server's native form in place for submission.
-  .catch(() => new Promise<never>(() => {})));
-const ServerTopicReplyForm = import.meta.env.SSR ? (await import("~/components/topic-reply-form")).default : null;
-const TopicReplyForm = ServerTopicReplyForm ?? LazyTopicReplyForm;
-
-function LoadClientReplyForm() {
-  // On client navigation the fallback mounts without a server form to show.
-  useEffect(() => { startReplyFormLoad(); }, []);
-  return null;
-}
 
 const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params }, next) => {
   const response = await next();
@@ -660,37 +644,14 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const translating = loaderData.translating.filter(lang => !(settled.id === topic.id && settled.langs.includes(lang)));
   const quoteRoot = useRef<HTMLElement>(null);
   const [replyRound, setReplyRound] = useState(0);
-  const hasReplyForm = canReply && !!loaderData.ownerId;
   const replyFormKey = `${loaderData.ownerId}:${topic.id}:${replyRound}`;
-  const replySection = useRef<HTMLElement>(null);
-  const serverReplyBody = useRef<{ key: string; field: HTMLTextAreaElement } | null>(null);
-  const captureReplySection = useCallback((section: HTMLElement | null) => {
-    if (!section || replySection.current === section) return;
-    replySection.current = section;
-    const field = section.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
-    if (field) serverReplyBody.current = { key: replyFormKey, field };
-  }, [replyFormKey]);
-  const adoptReplyBody = useCallback(() => {
-    const previous = serverReplyBody.current;
-    serverReplyBody.current = null;
-    // A route update can replace the server form before the editor hydrates.
-    // Keep native input within the same member, topic and publication round.
-    if (previous?.key !== replyFormKey || previous.field.value === previous.field.defaultValue) return;
-    const field = replySection.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
-    if (!field || field === previous.field || field.value !== field.defaultValue) return;
-    field.value = previous.field.value;
-    field.setSelectionRange(previous.field.selectionStart, previous.field.selectionEnd, previous.field.selectionDirection);
-  }, [replyFormKey]);
-  useEffect(() => hasReplyForm ? afterPageIdle(startReplyFormLoad) : undefined, [hasReplyForm]);
   // The translation that the topic's "wrong translation" button is about (TranslatedEntry reports it, since the reader can switch to the original); the button is drawn in the end of the article, outside the entry.
   const [topicReported, setTopicReported] = useState(() => topic.placeholder === null ? initialReportedTranslation(topic.display) : null);
   const reportTopicTranslationChange = useCallback((reported: typeof topicReported) => {
     if (reported === topicReported) return;
-    if (hasReplyForm) startReplyFormLoad();
     startTransition(() => setTopicReported(reported));
-  }, [hasReplyForm, topicReported]);
+  }, [topicReported]);
   const settleTranslations = (langs: Lang[]) => {
-    if (hasReplyForm) startReplyFormLoad();
     startTransition(() => setSettled(previous => ({
       id: topic.id,
       langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])],
@@ -700,17 +661,15 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const previousPostedReply = useRef(postedReply);
   useEffect(() => {
     if (postedReply !== undefined && postedReply !== previousPostedReply.current) {
-      if (hasReplyForm) startReplyFormLoad();
       startTransition(() => setReplyRound(round => round + 1));
     }
     if (postedReply !== undefined) previousPostedReply.current = postedReply;
-  }, [hasReplyForm, postedReply]);
+  }, [postedReply]);
   const replyFailed = actionData?.intent === "reply" && Boolean(actionData.error);
   // A real navigation replaces the target, including clearing it on the same URL.
   // Refused replies and fetcher revalidation preserve the target chosen by quoting.
   const resetReplyTarget = useEffectEvent(() => {
     if (replyFailed || replyTarget === loaderData.replyTarget) return;
-    if (hasReplyForm) startReplyFormLoad();
     startTransition(() => setReplyTarget(loaderData.replyTarget));
   });
   useEffect(() => {
@@ -727,7 +686,6 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const selectQuotedReply = useEffectEvent((id: number) => {
     const reply = replies.find(r => r.id === id && r.placeholder === null && !r.hidden);
     if (reply && reply.placeholder === null) {
-      if (hasReplyForm) startReplyFormLoad();
       startTransition(() => setReplyTarget({ id, href: `${location.pathname}${location.search}#c-${id}`, handle: reply.authorHandle }));
     }
   });
@@ -1053,10 +1011,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         </div>
         <Pagination page={page} hasNext={hasNextPage} lastPage={loaderData.pageCount} anchor="#replies" />
       </section>
-      <section id="reply" ref={captureReplySection} className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}
-        onPointerOver={hasReplyForm ? startReplyFormLoad : undefined}
-        onPointerDownCapture={hasReplyForm ? startReplyFormLoad : undefined}
-        onFocusCapture={hasReplyForm ? startReplyFormLoad : undefined}>
+      <section id="reply" className={loaderData.reader ? "public-reading-end space-y-1 ui-help text-muted-foreground" : "border-t pt-4"}>
         {!loaderData.reader && <div className="flex flex-wrap items-center justify-between gap-2" data-reply-heading="">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="text-lg font-semibold">{m.reply_write_title()}</h2>
@@ -1072,29 +1027,27 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {(topic.placeholder !== null || topic.hidden) && <p className="ui-help text-muted-foreground">{m.reply_closed_hidden()}</p>}
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
         {canReply && loaderData.ownerId && (
-          <Suspense fallback={<LoadClientReplyForm />}>
-            <TopicReplyForm key={replyFormKey} adoptReplyBody={adoptReplyBody} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
-              nushiAvailable={loaderData.nushiAvailable}
-              owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
-              error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined}
-              defaultLang={defaultLang} defaultBody={replyInput?.body} selectedLang={replyInput?.lang}
-              above={<>
-                {replyTarget && <p className="flex flex-wrap gap-2 ui-meta [overflow-wrap:anywhere]">
-                  <input type="hidden" name="parentId" value={replyTarget.id} />
-                  <span>{replyTarget.handle ? m.reply_target_note({ handle: replyTarget.handle }) : m.reply_parent_unavailable()}</span>
-                  {replyTarget.href && <Link to={replyTarget.href} className="underline">{m.reply_target_link()}</Link>}
-                  <Link to={replyTargetHref(location.pathname, location.search, null)} className="underline">{m.reply_target_clear()}</Link>
-                </p>}
-                {/* Reply tags are selectable only on question replies; ?write=<tag> preselects one. Keyed by the mark of ?write=, so that following "Write a reason" on this same page
-                    (a client-side navigation) chooses the mark; the text typed so far is kept. */}
-                {question.asksStance && <StanceTagChips error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error" key={writeTag ?? "none"} defaultValue={writeTag} />}
-              </>}
-              aiTools={{ ownerId: loaderData.ownerId, connectDraftLabel: loaderData.connectDraftLabel, kind: "reply", threadId: topic.id }}
-            >
-              {renderNushi(loaderData.nushi.reply)}
-              {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
-            </TopicReplyForm>
-          </Suspense>
+          <TopicReplyForm key={replyFormKey} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
+            nushiAvailable={loaderData.nushiAvailable}
+            owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}
+            error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined}
+            defaultLang={defaultLang} defaultBody={replyInput?.body} selectedLang={replyInput?.lang}
+            above={<>
+              {replyTarget && <p className="flex flex-wrap gap-2 ui-meta [overflow-wrap:anywhere]">
+                <input type="hidden" name="parentId" value={replyTarget.id} />
+                <span>{replyTarget.handle ? m.reply_target_note({ handle: replyTarget.handle }) : m.reply_parent_unavailable()}</span>
+                {replyTarget.href && <Link to={replyTarget.href} className="underline">{m.reply_target_link()}</Link>}
+                <Link to={replyTargetHref(location.pathname, location.search, null)} className="underline">{m.reply_target_clear()}</Link>
+              </p>}
+              {/* Reply tags are selectable only on question replies; ?write=<tag> preselects one. Keyed by the mark of ?write=, so that following "Write a reason" on this same page
+                  (a client-side navigation) chooses the mark; the text typed so far is kept. */}
+              {question.asksStance && <StanceTagChips error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error" key={writeTag ?? "none"} defaultValue={writeTag} />}
+            </>}
+            aiTools={{ ownerId: loaderData.ownerId, connectDraftLabel: loaderData.connectDraftLabel, kind: "reply", threadId: topic.id }}
+          >
+            {renderNushi(loaderData.nushi.reply)}
+            {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
+          </TopicReplyForm>
         )}
       </section>
       <RelatedDiscussions id={topic.id} rows={loaderData.related.rows} omitted={loaderData.related.omitted} lang={langParam} />

@@ -1,9 +1,10 @@
 import { routeModule } from "./support/module-route";
-import { expect, type BrowserContext, type Page } from "@playwright/test";
+import { beforeHydration } from "./support/prehydration";
+import { expect, type BrowserContext, type ElementHandle, type Page } from "@playwright/test";
 import { test, richEditorTest } from "./editor-fixture";
 import fs from "node:fs";
 import path from "node:path";
-import { useMember, waitForClientRoute, waitForFormReady, state, enMessages as m, openReplyMore } from "./helpers";
+import { useMember, waitForClientRoute, waitForFormReady, waitForHydration, state, enMessages as m, openReplyMore } from "./helpers";
 import { acceptSignedWrite, enableSigningAuthenticator } from "./signing-helper";
 
 const body = (page: Page) => page.locator('textarea[name="body"]');
@@ -178,19 +179,43 @@ test("reply AI saves a reply draft and imports text before publication", async (
   await context.route(/^https:\/\/(chatgpt\.com|claude\.ai)\//, route => route.fulfill({ contentType: "text/html", body: "Mock AI" }));
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
-  const formModule = await routeModule(page, "app/components/topic-reply-form.tsx", async route => { await held; await route.continue(); });
+  let releaseTarget!: () => void;
+  const heldTarget = new Promise<void>(resolve => { releaseTarget = resolve; });
   const topicPath = `/t/${fixture().questionId}`;
+  const reply = page.locator("#reply form");
+  const written = "My original reply.";
+  await useMember(page, "ux_reply@example.com");
+  await page.evaluate(() => localStorage.setItem("tomola.openInAi", JSON.stringify({ provider: "chatgpt" })));
   try {
-    await useMember(page, "ux_reply@example.com", topicPath);
-    await page.evaluate(() => localStorage.setItem("tomola.openInAi", JSON.stringify({ provider: "chatgpt" })));
-    await waitForClientRoute(page);
-    await formModule.assertHit();
-    await body(page).fill("My original reply.");
-    await page.getByRole("link", { name: m.reply_to_button, exact: true }).first().click();
+    let controls!: Awaited<ReturnType<typeof routeModule>>;
+    let field!: ElementHandle;
+    await beforeHydration(page, topicPath, async () => {
+      await body(page).fill("My original");
+      field = await body(page).elementHandle();
+      controls = await routeModule(page, "app/components/signed-form-controls.tsx", async route => { await held; await route.continue(); });
+    }, () => waitForHydration(page));
+    await controls.assertHit();
+    await expect(reply).not.toHaveAttribute("data-ready", "true");
+    await expect(body(page)).toHaveValue("My original");
+    const target = page.getByRole("link", { name: m.reply_to_button, exact: true }).first();
+    const parent = new URL((await target.getAttribute("href"))!, page.url()).searchParams.get("reply_to")!.slice(2);
+    const targetData = (url: URL) => url.pathname === `${topicPath}.data` && url.searchParams.get("reply_to") === `c-${parent}`;
+    await page.route(targetData, async route => { await heldTarget; await route.continue(); }, { times: 1 });
+    const requested = page.waitForRequest(request => targetData(new URL(request.url())));
+    await target.click();
+    await requested;
+    await body(page).press("End");
+    releaseTarget();
     await expect(page).toHaveURL(/reply_to=c-\d+#reply$/);
-  } finally { release(); }
-  await waitForFormReady(page.locator("#reply form"));
-  await expect(body(page)).toHaveValue("My original reply.");
+    await waitForClientRoute(page);
+    // Finish typing after the target navigation, with the optional controls still loading.
+    await page.keyboard.insertText(" reply.");
+    release();
+    await waitForFormReady(reply);
+    await expect(reply.locator('input[name="parentId"]')).toHaveValue(parent);
+    expect(await field.evaluate(el => el === document.querySelector('#reply textarea[name="body"]'))).toBe(true);
+  } finally { releaseTarget(); release(); }
+  await expect(body(page)).toHaveValue(written);
   // Asking the AI saves a draft and opens the AI in another tab; the reply screen is not left, and the reply is posted from here.
   await openReplyMore(page);
   await page.getByRole("button", { name: m.ai_write_button, exact: true }).click();
@@ -246,19 +271,20 @@ for (const clearPastedTarget of [false, true]) test(`changing the reply target d
   await page.evaluate(() => localStorage.setItem("tomola.openInAi", JSON.stringify({ provider: "chatgpt" })));
   await waitForClientRoute(page);
   const links = page.getByRole("link", { name: m.reply_to_button, exact: true });
-  const firstHref = await links.nth(0).getAttribute("href");
-  const firstTarget = new URL(firstHref!, page.url()).searchParams.get("reply_to")!.slice(2);
+  const [firstTarget, secondTarget] = await Promise.all([0, 1].map(async index =>
+    new URL((await links.nth(index).getAttribute("href"))!, page.url()).searchParams.get("reply_to")!.slice(2)));
   if (!clearPastedTarget) await links.nth(0).click();
-  const written = `${clearPastedTarget ? `---\ntype: reply\nreply_to: c-${firstTarget}\n---\n` : ""}A reply whose destination changes during saving.`;
+  const prose = "A reply whose destination changes during saving.";
+  const written = `${clearPastedTarget ? `---\ntype: reply\nreply_to: c-${firstTarget}\n---\n` : ""}${prose}`;
   await body(page).fill(written);
   let release!: () => void;
   let saved!: () => void;
-  let firstId = 0;
+  let firstSave!: { id: number; body: string };
   const held = new Promise<void>(resolve => { release = resolve; });
   const received = new Promise<void>(resolve => { saved = resolve; });
   await page.route("**/drafts/ai-write", async route => {
     const response = await route.fetch();
-    firstId = (await response.json()).id;
+    firstSave = await response.json();
     saved();
     await held;
     await route.fulfill({ response });
@@ -269,15 +295,24 @@ for (const clearPastedTarget of [false, true]) test(`changing the reply target d
     await page.getByRole("button", { name: m.ai_write_button, exact: true }).click();
     await ask.click();
     await received;
+    expect(firstSave).toMatchObject({ id: expect.any(Number), body: prose });
     await links.nth(1).click();
+    await expect(page.locator('input[name="parentId"]')).toHaveValue(secondTarget);
     if (clearPastedTarget) await page.getByRole("link", { name: m.reply_target_clear, exact: true }).click();
-    await expect(page.locator('input[name="parentId"]')).not.toHaveValue(firstTarget);
+    if (clearPastedTarget) await expect(page.locator('input[name="parentId"]')).toHaveValue("");
+    await expect(body(page)).toHaveValue(written);
   } finally { release(); }
   await expect(page.getByRole("alert")).toHaveText(m.ai_write_edited);
   await page.unroute("**/drafts/ai-write");
+  const next = page.waitForResponse(response => response.url().endsWith("/drafts/ai-write") && response.request().method() === "POST");
   await ask.click();
   // The next draft is a new one, for the new target: the draft that travels with the form is not the first.
-  await expect(page.locator('input[name="fromDraft"]')).not.toHaveValue(String(firstId));
+  const response = await next;
+  expect(response.ok()).toBe(true);
+  const nextSave = await response.json();
+  expect(nextSave).toMatchObject({ id: expect.any(Number), body: prose });
+  expect(nextSave.id).not.toBe(firstSave.id);
+  await expect(page.locator('input[name="fromDraft"]')).toHaveValue(String(nextSave.id));
   // The writing screen is not left, so the field still holds what was written (the pasted header included).
   await expect(body(page)).toHaveValue(written);
 });

@@ -129,7 +129,7 @@ test("opted-in writes and both preference changes use real UV assertions; unsign
     await expect(page.getByText("My signed reply", { exact: true })).toBeVisible();
     await expect(page.locator('[data-member-menu-trigger][title="@signer"]').first()).toBeVisible();
     if (process.env.E2E_SERVER === "build") {
-      const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+      const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
       await page.route(asset, route => route.abort());
       const failed = page.waitForEvent("requestfailed", request => asset.test(request.url()));
       await page.goto(topicPath);
