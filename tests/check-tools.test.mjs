@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { countFindings, increases } from '../scripts/finding-baseline.mjs';
 import { disclosureFindings } from '../scripts/check-disclosure.mjs';
 import { measuredWeights } from '../scripts/update-browser-weights.mjs';
@@ -37,6 +39,51 @@ test('disclosure covers numbered work references and distinguishes local propert
     assert.deepEqual(disclosureFindings(file, 'Run it on nas.' + 'local first.'), [{ file, rule: 'private-host' }], file);
   }
   assert.deepEqual(disclosureFindings('sample.ts', 'const last = parts - 1; a[part-1]; <div id="task-2">; retry the work 3 times;'), []);
+});
+
+test('disclosure scans commit bodies and branch names in manual checks and before push', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tomola-disclosure-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'user.name=Example', '-c', 'user.email=example@example.com', ...args], { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const scan = fileURLToPath(new URL('../scripts/check-disclosure.mjs', import.meta.url));
+  const hook = fileURLToPath(new URL('../scripts/git-hooks/pre-push', import.meta.url));
+  const check = (...args) => spawnSync(process.execPath, [scan, ...args], { cwd: root, encoding: 'utf8' });
+  const prePush = (input) => spawnSync(hook, ['origin'], { cwd: root, encoding: 'utf8', input: input + '\n' });
+  git('init', '-b', 'main');
+  git('commit', '--allow-empty', '-m', 'Public starting point');
+  const start = git('rev-parse', 'HEAD');
+  git('checkout', '-b', 'topic');
+  const privateHost = 'test.' + 'internal';
+  git('commit', '--allow-empty', '-m', 'Update the guide', '-m', privateHost);
+  const tip = git('rev-parse', 'HEAD');
+  const badRange = check('--commits', `${start}..HEAD`);
+  assert.equal(badRange.status, 1);
+  assert.match(badRange.stderr, new RegExp(`commit ${tip}: private-host`));
+  assert.ok(!badRange.stderr.includes(privateHost));
+  assert.equal(check('--commits', 'main..main').status, 0);
+  assert.equal(check('--commits', 'missing..HEAD').status, 1);
+
+  const newRef = '0'.repeat(tip.length);
+  git('update-ref', 'refs/remotes/origin/main', start);
+  assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${newRef}`).status, 1);
+  assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${start}`).status, 1);
+  git('update-ref', 'refs/remotes/origin/topic', tip);
+  assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${newRef}`).status, 0);
+  assert.equal(prePush(`(delete) ${newRef} refs/heads/${privateHost} ${tip}`).status, 0);
+  const destination = prePush(`refs/heads/topic ${tip} refs/heads/${privateHost} ${newRef}`);
+  assert.equal(destination.status, 1);
+  assert.match(destination.stderr, /push destination branch: private-host/);
+
+  git('branch', '-m', privateHost);
+  const branch = check();
+  assert.equal(branch.status, 1);
+  assert.match(branch.stderr, /current branch: private-host/);
+  git('checkout', '--detach', tip);
+  assert.equal(check().status, 0);
 });
 
 test('disclosure enforces a zero construction allowance only in the five Markdown regression files', () => {

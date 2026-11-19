@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { checkBaseline, countFindings } from './finding-baseline.mjs';
+import { parseArgs } from 'node:util';
+import { checkBaseline, countFindings, increases } from './finding-baseline.mjs';
 
 const patterns = {
   'local-path': /(?:\/home\/[^\s/'"`]+\/|\/Users\/[^\s/'"`]+\/|[A-Z]:\\Users\\[^\\\s]+\\)/g,
@@ -44,7 +45,58 @@ export function scanDisclosure(root) {
   return countFindings(findings);
 }
 
+function git(root, args, failure, allowDetached = false) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (allowDetached && result.status === 1) return '';
+  if (result.status !== 0) throw new Error(failure);
+  return result.stdout;
+}
+
+function commitFindings(root, revision, remote) {
+  const exclude = remote === undefined ? [] : ['--not', `--remotes=${remote}`, '--not'];
+  const log = git(root, ['log', '--no-show-signature', '--no-notes', '-z', '--format=%H%x00%B', ...exclude, '--end-of-options', revision, '--'], 'Could not read commit messages for disclosure');
+  const records = log.split('\0');
+  const findings = [];
+  for (let i = 0; i + 1 < records.length; i += 2) {
+    findings.push(...disclosureFindings(`commit ${records[i]}`, records[i + 1]));
+  }
+  return findings;
+}
+
+function pushFindings(root, remote, updates) {
+  const findings = [];
+  for (const line of updates.trim().split('\n').filter(Boolean)) {
+    const [localRef, localOid, remoteRef, remoteOid] = line.split(' ');
+    if (![localOid, remoteOid].every(oid => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(oid))) throw new Error('Invalid pre-push ref update');
+    if (/^0+$/.test(localOid)) continue;
+    for (const [ref, label] of [[localRef, 'push source branch'], [remoteRef, 'push destination branch']]) {
+      if (ref.startsWith('refs/heads/')) findings.push(...disclosureFindings(label, ref.slice('refs/heads/'.length)));
+    }
+    if (/^0+$/.test(remoteOid)) findings.push(...commitFindings(root, localOid, remote));
+    else findings.push(...commitFindings(root, `${remoteOid}..${localOid}`));
+  }
+  return findings;
+}
+
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
-  try { checkBaseline(scanDisclosure(process.cwd()), new URL('./check-baselines/disclosure.json', import.meta.url), process.argv.includes('--update-baseline')); }
+  try {
+    const { values } = parseArgs({ options: {
+      commits: { type: 'string' },
+      'pre-push': { type: 'string' },
+      'update-baseline': { type: 'boolean' },
+    } });
+    const root = process.cwd();
+    const branch = git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD'], 'Could not read current branch for disclosure', true).trim();
+    const findings = disclosureFindings('current branch', branch);
+    if (values.commits !== undefined) findings.push(...commitFindings(root, values.commits));
+    if (values['pre-push'] !== undefined) findings.push(...pushFindings(root, values['pre-push'], fs.readFileSync(0, 'utf8')));
+    const added = increases(countFindings(findings), {});
+    if (added.length) {
+      for (const { file, rule, count } of added) console.error(`${file}: ${rule}: ${count}`);
+      process.exitCode = 1;
+    } else if (values['pre-push'] === undefined) {
+      checkBaseline(scanDisclosure(root), new URL('./check-baselines/disclosure.json', import.meta.url), values['update-baseline']);
+    }
+  }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }
