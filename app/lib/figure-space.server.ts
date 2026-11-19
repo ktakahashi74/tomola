@@ -27,22 +27,57 @@ const padded = (box: FigureBox, amount: number, width: number, height: number): 
   width: Math.min(width, box.left + box.width + amount) - Math.max(0, box.left - amount),
   height: Math.min(height, box.top + box.height + amount) - Math.max(0, box.top - amount),
 });
-export type FigureInk = { box: FigureBox; points: number[]; protectedPoints?: number[]; lineCount: number; lineHeights: number[]; uncertain: boolean };
+export type FigureInk = { box: FigureBox; points: number[]; protectedPoints?: number[]; lineCount: number; lineHeights: number[]; uncertain: boolean; original?: FigureInk };
+type InkComponent = { box: FigureBox; points: number[]; touches: boolean };
+const maxInkPadding = 64, maxLetterGap = 6;
 
-// Keep components touching the OCR box and nearby character-sized fragments.
-// Enclosures and components outside the small recovery margin remain obstacles.
-export function measureFigureInk(data: Buffer, width: number, height: number, box: FigureBox, others: FigureBox[], threshold: number = FIGURE_SPACE.contrast): FigureInk {
+function extendInkLine(chosen: InkComponent[], eligible: InkComponent[], box: FigureBox, search: FigureBox, characterHeight: number): void {
+  // Use a fraction of the glyph height to cross letter spacing in tight OCR
+  // boxes. Cap the gap so larger text does not bridge to nearby diagram marks.
+  const maxGap = Math.min(maxLetterGap, Math.ceil(characterHeight / 3));
+  const sameLine = (a: FigureBox, b: FigureBox) =>
+    Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top) >= Math.max(a.height, b.height) * .5;
+  const seeds = chosen.filter(c => c.box.height >= characterHeight * .5);
+  const measured = new Set(chosen);
+  for (const direction of [-1, 1]) {
+    const start = (b: FigureBox) => direction === 1 ? b.left : -(b.left + b.width);
+    const candidates = eligible.filter(c => {
+      const b = c.box;
+      return !measured.has(c) && start(b) >= start(box) + box.width &&
+        b.left > search.left && b.left + b.width < search.left + search.width &&
+        b.width <= characterHeight * 1.5 && b.height >= characterHeight * .5 && b.height <= characterHeight * 1.5 &&
+        seeds.some(s => sameLine(s.box, b));
+    });
+    for (const c of candidates.sort((a, b) => start(a.box) - start(b.box))) {
+      if (chosen.some(p => {
+        const gap = start(c.box) - start(p.box) - p.box.width;
+        return gap >= 0 && gap <= maxGap && sameLine(p.box, c.box);
+      })) chosen.push(c);
+    }
+  }
+}
+
+// Keep components touching the OCR box, nearby fragments and a continuing row.
+// Other components remain obstacles.
+export function measureFigureInk(data: Buffer, width: number, height: number, box: FigureBox, others: FigureBox[]): FigureInk {
+  return measureInk(data, width, height, box, others, FIGURE_SPACE.contrast);
+}
+
+function measureInk(data: Buffer, width: number, height: number, box: FigureBox, others: FigureBox[], threshold: number, original?: FigureInk): FigureInk {
   const color = background(data, width, height, box), light = luminance(color) > 128;
-  let final: FigureInk = { box, points: [], lineCount: 0, lineHeights: [], uncertain: false };
-  for (let padding = 8; padding <= 64; padding *= 2) {
-    const search = padded(box, padding, width, height), n = boxArea(search), mask = new Uint8Array(n), seen = new Uint8Array(n);
+  let final: FigureInk = original ?? { box, points: [], lineCount: 0, lineHeights: [], uncertain: false };
+  for (let padding = 8; padding <= maxInkPadding; padding *= 2) {
+    const local = padded(box, padding, width, height);
+    const wide = original ? padded(box, maxInkPadding, width, height) : local;
+    const search = { ...local, left: wide.left, width: wide.width };
+    const n = boxArea(search), mask = new Uint8Array(n), seen = new Uint8Array(n);
     for (let y = 0; y < search.height; y++) for (let x = 0; x < search.width; x++) {
       const gx = x + search.left, gy = y + search.top, p = (gy * width + gx) * 4;
       if (others.some(b => inside(b, gx, gy))) continue;
       const contrast = color[3] <= 16 ? data[p + 3] - color[3] : (light ? 1 : -1) * (luminance(color) - (data[p] * .299 + data[p + 1] * .587 + data[p + 2] * .114));
       if (contrast > threshold) mask[y * search.width + x] = 1;
     }
-    const components: { box: FigureBox; points: number[]; touches: boolean }[] = [], tinyPoints = new Set<number>();
+    const components: InkComponent[] = [], tinyPoints = new Set<number>();
     for (let p = 0; p < n; p++) {
       if (!mask[p] || seen[p]) continue;
       const queue = [p]; seen[p] = 1;
@@ -89,7 +124,7 @@ export function measureFigureInk(data: Buffer, width: number, height: number, bo
       }
       contrasts.sort((a, b) => a - b);
       const stronger = (contrasts[Math.floor(contrasts.length * .95)] ?? 0) * .5;
-      if (stronger > FIGURE_SPACE.contrast) return measureFigureInk(data, width, height, box, others, stronger);
+      if (stronger > FIGURE_SPACE.contrast) return measureInk(data, width, height, box, others, stronger, original);
     }
     const primary = eligible.filter(c => c.touches);
     const characterHeight = primary.length ? median(primary.map(c => c.box.height)) : box.height;
@@ -98,6 +133,15 @@ export function measureFigureInk(data: Buffer, width: number, height: number, bo
       c.box.width <= characterHeight * 1.5 && c.box.height <= characterHeight * 1.5 &&
       primary.some(p => c.box.top < p.box.top + p.box.height && p.box.top < c.box.top + c.box.height));
     if (!chosen.length) return final;
+    if (original) {
+      // Widening the raster can join strokes to artwork. Keep the original
+      // measurement unless the wider raster adds a continuation to the same ink.
+      const core = chosen.flatMap(c => c.points), originalPoints = new Set(original.points);
+      if (core.length !== original.points.length || core.some(p => !originalPoints.has(p))) return original;
+      const count = chosen.length;
+      extendInkLine(chosen, eligible, box, search, characterHeight);
+      if (chosen.length === count) return original;
+    }
     const points = chosen.flatMap(c => c.points), rows = new Uint32Array(height);
     let left = width, right = 0, top = height, bottom = 0;
     for (const p of points) { const x = p % width, y = Math.floor(p / width); left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y); rows[y]++; }
@@ -122,9 +166,11 @@ export function measureFigureInk(data: Buffer, width: number, height: number, bo
     const measuredLines = groups.length > lineHeights.length ? groups.map(g => g.bottom - g.top) : lineHeights;
     const tight = { left, top, width: right - left + 1, height: bottom - top + 1 };
     const clipped = left === search.left && left > 0 || top === search.top && top > 0 || right + 1 === search.left + search.width && right + 1 < width || bottom + 1 === search.top + search.height && bottom + 1 < height;
-    const own = new Set(points), protectedPoints: number[] = [];
+    const own = new Set(points), protectedPoints: number[] = [], protection = padded(tight, FIGURE_SPACE.glyphFringe, width, height);
     for (let p = 0; p < n; p++) if (mask[p]) {
-      const global = (Math.floor(p / search.width) + search.top) * width + p % search.width + search.left;
+      const x = p % search.width + search.left, y = Math.floor(p / search.width) + search.top;
+      if (!inside(local, x, y) && !inside(protection, x, y)) continue;
+      const global = y * width + x;
       if (own.has(global)) continue;
       // Tiny disconnected antialias fragments inside the OCR label belong to
       // its erasure fringe. Substantial components and exterior marks do not.
@@ -137,10 +183,14 @@ export function measureFigureInk(data: Buffer, width: number, height: number, bo
       }
       if (!fringe) protectedPoints.push(global);
     }
-    final = { box: tight, points, protectedPoints, lineCount: measuredLines.length, lineHeights: measuredLines, uncertain: clipped };
+    final = { box: tight, points, protectedPoints, lineCount: measuredLines.length, lineHeights: measuredLines, uncertain: clipped, ...(original && { original }) };
     if (!clipped) break;
   }
-  return final;
+  const right = box.left + box.width, inkRight = final.box.left + final.box.width;
+  const nearSide = box.left >= 8 && final.box.left - box.left <= maxLetterGap ||
+    width - right >= 8 && right - inkRight <= maxLetterGap;
+  return !original && !final.uncertain && nearSide
+    ? measureInk(data, width, height, box, others, threshold, final) : final;
 }
 
 export function measureFigure(data: Buffer, width: number, height: number, reading: FigureReading): FigureInk[] {
@@ -548,4 +598,11 @@ export function figureEraseMask(width: number, height: number, index: number, me
     if (inside(window, x, y)) mask[(y - window.top) * window.width + x - window.left] = 0;
   }
   return mask;
+}
+
+export function figureInkIsRemovable(ink: FigureInk, width: number, mask: Uint8Array, window: FigureBox): boolean {
+  return ink.points.every(p => {
+    const x = p % width, y = Math.floor(p / width);
+    return inside(window, x, y) && mask[(y - window.top) * window.width + x - window.left] !== 0;
+  });
 }

@@ -203,6 +203,36 @@ it("preserves an arrowhead beside the label with readable clearance", async () =
   }
 });
 
+it.each([1, 2])("erases %i trailing glyphs beyond the reading while preserving nearby marks", async omitted => {
+  const width = 400, height = 200, left = 50, top = 60;
+  const glyph = (x: number) => `<path transform="translate(${x} ${top})" d="M 0 0 H 3 V 8 H 11 V 0 H 14 V 20 H 11 V 11 H 3 V 20 H 0 Z"/>`;
+  const suffix = Array.from({ length: omitted }, (_, i) => left + 16 * (3 + i));
+  const right = suffix.at(-1)! + 14, other = right + 7, rule = other + 18;
+  const svg = Buffer.from(`<svg width="${width}" height="${height}">
+    ${[left, left + 16, left + 32, ...suffix, other].map(glyph).join("")}
+    <path d="M ${rule} 35 h 2 v 70 h -2 Z"/>
+    <path d="M ${left - 4} 70 l -10 -6 v 4 h -24 v 4 h 24 v 4 Z"/>
+  </svg>`);
+  const bytes = await image(width, height).composite([{ input: svg }]).png().toBuffer();
+  const source = reading([
+    { ...label, text: "H".repeat(3 + omitted), x: left / width, y: top / height, width: 46 / width, height: 20 / height },
+    { ...label, text: "H", x: other / width, y: top / height, width: 14 / width, height: 20 / height },
+  ]);
+  const result = await renderFigureLabels(bytes, source, ["I", "H"], "en");
+  expect(result.results.map(r => r.status)).toEqual(["rendered", "unchanged"]);
+  const original = await sharp(bytes).extractChannel("red").raw().toBuffer();
+  const out = await sharp(result.bytes!).extractChannel("red").raw().toBuffer();
+  for (const x of suffix) {
+    expect(original[(top + 9) * width + x + 6]).toBeLessThan(128);
+    expect(out[(top + 9) * width + x + 6]).toBeGreaterThan(128);
+  }
+  for (const x of [other + 2, rule, left - 16]) {
+    const p = (top + 9) * width + x;
+    expect(original[p]).toBeLessThan(128);
+    expect(out[p]).toEqual(original[p]);
+  }
+});
+
 it.each([
   { shape: "rectangle", stroke: 2, gap: 5, external: false },
   { shape: "rectangle", stroke: 2, gap: 4 },
@@ -252,7 +282,7 @@ it("retains source when a protected rule prevents safe glyph erasure", async () 
   ]).png().toBuffer();
   const result = await renderFigureLabels(bytes, reading([{ ...label, x: left / width, y: top / height, width: glyph.info.width / width, height: glyph.info.height / height }]), ["Data"], "en");
   expect(result.bytes).toBeNull();
-  expect(result.results[0]).toMatchObject({ status: "external", reason: "does_not_fit" });
+  expect(result.results).toEqual([{ source: label.text, translation: "Data", status: "external", reason: "unusable_reading" }]);
 });
 
 it("bounds the search raster and retains global coordinates away from the image origin", () => {

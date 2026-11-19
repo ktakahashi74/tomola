@@ -1,8 +1,11 @@
-import { FIGURE_SPACE, background, figureEraseMask, figureSpaceWindow, inside, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
+import { FIGURE_SPACE, background, figureEraseMask, figureInkIsRemovable, figureSpaceWindow, inside, surfaceColor, type FigureBackground, type FigureBox, type FigureInk } from "./figure-space.server";
 
 export const FIGURE_OVERLAP = { maxRatio: .1, maxErasureDeviationRatio: .1, treatment: "halo" as "halo" | "backing" };
 
 const intersects = (a: FigureBox, b: FigureBox) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
+// Bright glyphs on dark fields can meet artwork without clearing its fringe.
+export const figureOverlapEraseGuard = (color: number[]) => color[0] * .299 + color[1] * .587 + color[2] * .114 > 128 ? FIGURE_SPACE.guard : 0;
 
 // Sampling artwork beneath source text can leave bright streaks. When too many
 // restored pixels differ, use the smooth field within the same erasure mask.
@@ -30,13 +33,11 @@ export function prepareFigureOverlap(data: Buffer, width: number, height: number
   const anchor = measured[index].box, window = figureSpaceWindow(anchor, width, height);
   const stride = window.width + 1;
   const color = background(data, width, height, anchor);
-  // Keep the existing erasure protection for dark rules on light fields.
-  // Bright glyphs on dark fields can meet artwork without clearing its fringe.
-  const eraseGuard = color[0] * .299 + color[1] * .587 + color[2] * .114 > 128 ? 2 : 0;
+  const eraseGuard = figureOverlapEraseGuard(color);
   // Measure after source-text erasure, including its shadow and antialias
   // fringe. Protected artwork remains in the obstacle count.
   const removable = figureEraseMask(width, height, index, measured, window, bounds, eraseGuard);
-  if (measured[index].points.some(p => !removable[(Math.floor(p / width) - window.top) * window.width + p % width - window.left])) return null;
+  if (!figureInkIsRemovable(measured[index], width, removable, window)) return null;
   const elements = new Uint32Array(stride * (window.height + 1));
   const obstacles = forbidden.filter(b => intersects(b, window));
   for (let y = 0; y < window.height; y++) {
@@ -54,7 +55,7 @@ export function prepareFigureOverlap(data: Buffer, width: number, height: number
     const l = box.left - window.left, t = box.top - window.top, r = l + box.width, b = t + box.height;
     return elements[b * stride + r] - elements[t * stride + r] - elements[b * stride + l] + elements[t * stride + l];
   };
-  return { anchor, window, elements, stride, count, obstacles, eraseGuard, canvasWidth: width };
+  return { anchor, window, elements, stride, count, obstacles, canvasWidth: width };
 }
 
 export function figureOverlapPosition(space: NonNullable<ReturnType<typeof prepareFigureOverlap>>, width: number, height: number, maxRatio: number, align: "left" | "centre" | "right" = "centre") {

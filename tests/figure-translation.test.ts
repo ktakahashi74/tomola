@@ -671,6 +671,28 @@ describe("figure translation pipeline", () => {
     expect(w.engine.translate).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the full translation without a shortening call when source ink cannot be erased", async () => {
+    const width = 320, height = 180, left = 40, top = 40, text = "HHH";
+    const glyph = await sharp({ text: { text, font: "Noto Sans 28", rgba: true } }).png().toBuffer({ resolveWithObject: true });
+    const rule = { create: { width: glyph.info.width + 4, height: 2, channels: 4 as const, background: "black" } };
+    const bytes = await sharp({ create: { width, height, channels: 4, background: "white" } }).composite([
+      { input: glyph.data, left, top },
+      { input: rule, left: left - 2, top: top + glyph.info.height + 1 },
+    ]).webp({ lossless: true }).toBuffer();
+    const w = await world(bytes);
+    const region = { ...sourceReading.regions[0], text, x: left / width, y: top / height, width: glyph.info.width / width, height: glyph.info.height / height };
+    vi.mocked(w.reader.read).mockResolvedValue({
+      text: readingResponse({ ...sourceReading, regions: [region] }), model: w.reader.model, promptVersion: "test", inputTokens: 10, outputTokens: 50,
+    });
+    const full = "元の長さの訳";
+    vi.mocked(w.engine.translate).mockResolvedValue({ text: JSON.stringify([full]), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 50 });
+    expect(await w.run()).toMatchObject({ failed: 0 });
+    expect(w.engine.translate).toHaveBeenCalledTimes(1);
+    const [saved] = await db.select().from(figureTranslations);
+    expect(saved).toMatchObject({ state: "skipped", bytes: null, labels: [full] });
+    expect(saved.labelResults).toEqual([{ source: text, translation: full, status: "external", reason: "unusable_reading" }]);
+  });
+
   it.each([{ other: false, sacrifice: false }, { other: true, sacrifice: false }, { other: true, sacrifice: true }])("omits unusable budgets and preserves prior rendered labels (other: $other, sacrifice: $sacrifice)", async ({ other, sacrifice }) => {
     const w = await world();
     const sources = other ? ["First", "Second", "Third"] : ["First"];
