@@ -14,6 +14,7 @@ import { decorateMotionHtml, motionImages } from "./motion-display.server";
 // Saved, sanitized HTML only. Tokenize complete tags so an apparent img inside a
 // quoted title/alt or a comment is never interpreted as a separate image.
 const tags = /<!--[\s\S]*?-->|<\/?[a-z][\w:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi;
+const linkedImage = /(<a\b(?:[^"'<>]|"[^"]*"|'[^']*')*>)\s*(<img\b(?:[^"'<>]|"[^"]*"|'[^']*')*>)\s*(<\/a>)/gi;
 const attrs = /\s+([^\s"'=<>`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 function imageIn(tag: string) {
@@ -36,8 +37,10 @@ export function decorateFigureHtml(html: string, originalHtml: string, available
     if (image) originals.set(image.id, [...(originals.get(image.id) ?? []), image]);
   }
   const occurrences = new Map<string, number>();
-  return html.replace(tags, raw => {
-    const image = imageIn(raw);
+  // Preserve an authored image link inside the figure so its translation link is a sibling.
+  return html.replace(new RegExp(`${linkedImage.source}|${tags.source}`, "gi"), (raw, linkOpen, linkedTag, linkClose) => {
+    const imageTag = linkedTag ?? raw;
+    const image = imageIn(imageTag);
     const index = image ? occurrences.get(image.id) ?? 0 : 0;
     if (image) occurrences.set(image.id, index + 1);
     const source = image && originals.get(image.id)?.[index];
@@ -47,7 +50,8 @@ export function decorateFigureHtml(html: string, originalHtml: string, available
     // any translation made together with that body. Figure reading supplies no alt.
     const display = available.get(image.id);
     if (!display) return raw;
-    const tag = display.hasImage ? raw.slice(0, image.src.index!) + ` src="${translated}"` + raw.slice(image.src.index! + image.src[0].length) : raw;
+    const tag = display.hasImage ? imageTag.slice(0, image.src.index!) + ` src="${translated}"` + imageTag.slice(image.src.index! + image.src[0].length) : imageTag;
+    const content = linkedTag ? linkOpen + tag + linkClose : tag;
     const translatedLabel = `${m.figure_translated()} · ${m.figure_show_original()}`;
     const originalLabel = `${m.label_original()} · ${m.figure_show_translation()}`;
     const reasons: Record<FigureFallbackReason, () => string> = {
@@ -68,7 +72,7 @@ export function decorateFigureHtml(html: string, originalHtml: string, available
     const heading = allUnavailable ? "" : `<span class="block font-semibold">${escape(m.figure_fallback_heading({}, { locale: lang }))}</span>`;
     const fallback = external.length ? `<span class="block mt-2 text-sm [overflow-wrap:anywhere]" data-figure-fallback role="note">${heading}${details}</span>` : "";
     const toggle = display.hasImage ? `<span class="block ui-meta"><a href="${original}" data-figure-toggle data-figure-source-label="${escape(translatedLabel)}" data-figure-translation-label="${escape(originalLabel)}">${escape(translatedLabel)}</a></span>` : "";
-    return `<span class="inline-block max-w-full" data-translated-figure data-figure-original="${original}" data-figure-translated="${display.hasImage ? translated : original}">${tag}${toggle}${fallback}</span>`;
+    return `<span class="inline-block max-w-full" data-translated-figure data-figure-original="${original}" data-figure-translated="${display.hasImage ? translated : original}">${content}${toggle}${fallback}</span>`;
   });
 }
 

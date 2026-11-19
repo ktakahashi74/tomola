@@ -42,7 +42,7 @@ export function VillageHeader({ village, current, chat, actions, purpose, childr
   if (current === "chat") {
     return <header data-village-header className="sticky top-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-background py-2">
       {/* The side column carries the places from 68em (the boundary in app.css); the drawer is for narrower screens. */}
-      <div className="contents min-[68em]:hidden"><NavigationDrawer /></div>
+      <div className="contents min-[64em]:hidden"><NavigationDrawer /></div>
       <h1 title={villageNameTitle(village)} lang={villageNameLang(village)} className="min-w-0 font-bold">{icon}{name}</h1>
       {tabs}
       {/* At the right end when it shares the row; on a narrow screen it wraps to a row of its own, which starts at the left like the name. */}

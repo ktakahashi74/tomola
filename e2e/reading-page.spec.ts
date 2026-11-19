@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { captureScreenshot, useMember, formatMessage, messagePattern, clientHeaders, enMessages as en, state, waitForFormReady, escapeRegex } from "./helpers";
+import { breakpointEm } from "./reading-style";
 
 
 type Fixture = { topicId: number; englishId: number; placeholderId: number; replyId: number; invitation: string };
@@ -38,7 +39,8 @@ test("long originals and translations stay readable at desktop and phone widths"
       const topic = page.locator(`#p-${f.topicId}`);
       const body = topic.locator("[data-reading-body]");
       const toc = topic.getByRole("navigation", { name: en.reading_toc });
-      await expect(page.getByRole("button", { name: en.open_in_ai, exact: true })).toHaveCount(width >= 1024 ? 2 : 1);
+      const sidebarVisible = await page.evaluate(em => matchMedia(`(min-width: ${em}em)`).matches, breakpointEm);
+      await expect(page.getByRole("button", { name: en.open_in_ai, exact: true })).toHaveCount(sidebarVisible ? 2 : 1);
       await expect(topic.locator("[data-reading-byline]").getByRole("button")).toHaveCount(0);
       await expect(page.locator("#reply [data-reply-heading]").getByRole("button", { name: en.open_in_ai, exact: true })).toBeVisible();
       for (const version of ["original", "translation"] as const) {

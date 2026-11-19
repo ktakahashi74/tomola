@@ -4,17 +4,12 @@ import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { captureScreenshot, clientHeaders, enMessages as en, state, useMember, waitForClientRoute } from "./helpers";
+import { breakpointEm, centeredBreakpointEm, cjkCharacters, latinEms, navigationBreakpointEm } from "./reading-style";
 
 type Fixture = { topicId: number; noHeadingsId: number; longTocId: number };
 const fixture = (): Fixture => JSON.parse(fs.readFileSync(path.join(state().dir, "reading-page.json"), "utf8"));
-// Read layout values from CSS so the boundary and measure checks follow their definitions.
-const readingCss = fs.readFileSync(new URL("../app/app.css", import.meta.url), "utf8");
-const [breakpointEm, centeredBreakpointEm] = [...readingCss
-  .matchAll(/@media \(min-width: ([\d.]+)em\) \{(?:(?!@media)[\s\S])*?body:has\(\.reading-toc-sidebar\)/g)]
-  .map(match => Number(match[1]));
-const navigationBreakpointEm = Number(readingCss
-  .match(/@media \(min-width: ([\d.]+)em\) \{\s+\/\*[\s\S]*?\*\/\s+body:has\(\.site-navigation\)/)![1]);
-const cjkCharacters = Number(readingCss.match(/--reading-cjk-measure:\s*calc\(([\d.]+)\s*\*/)![1]);
+const figureFixture = (): { figureTopics: Record<string, number>; motionUrl: string } =>
+  JSON.parse(fs.readFileSync(path.join(state().dir, "reading-layout.json"), "utf8"));
 
 async function readingBreakpoint(page: Page) {
   return page.evaluate(em => Math.ceil(em * parseFloat(getComputedStyle(document.documentElement).fontSize)), breakpointEm);
@@ -43,6 +38,108 @@ async function signInReader(page: Page, scenario: "layout" | "scroll" | "ai") {
 async function photograph(page: Page, name: string) {
   await captureScreenshot(page, { path: `${name}.png`, animations: "disabled" }, "e2e-reading-rail");
 }
+
+test("wide article figures follow the frame while prose, captions and small images follow the text", async ({ page }) => {
+  const { figureTopics } = figureFixture();
+  const publicReading = test.info().project.metadata.publicReading;
+  if (!publicReading) await useMember(page, "reading_layout@example.com");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const body = page.locator("[data-reading-body]");
+  for (const lang of ["ja", "en"]) {
+    const id = figureTopics[lang];
+    await page.goto(`/t/${id}?lang=${lang}&orig=${id}`);
+    await expect(body).toHaveAttribute("lang", lang);
+    await waitForClientRoute(page);
+    const wide = body.getByRole("img", { name: "Wide diagram" });
+    const caption = body.getByText(lang === "ja" ? /^図の説明。/ : /^Figure caption\./);
+    const motion = body.locator("[data-motion-figure]");
+    const breakpoint = await readingBreakpoint(page);
+    for (const width of [1024, 1280, 1366, 1440, 1920, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator(".reading-toc-sidebar > nav")).toBeVisible({ visible: width >= breakpoint });
+      await wide.evaluate(image => image.scrollIntoView({ block: "center" }));
+      await wide.evaluate(image => (image as HTMLImageElement).decode());
+      const layout = await body.evaluate(element => {
+        const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().toJSON();
+        const root = getComputedStyle(document.documentElement);
+        const gutter = parseFloat(root.getPropertyValue("--site-gutter")) * parseFloat(root.fontSize);
+        const frame = document.body.getBoundingClientRect();
+        const rail = rect(".reading-toc-sidebar");
+        return {
+          frame: { left: frame.left + gutter, right: frame.right - gutter },
+          text: element.getBoundingClientRect().toJSON(), size: parseFloat(getComputedStyle(element).fontSize),
+          rail: rail.width ? rail.left : Infinity,
+          figureMax: parseFloat(root.getPropertyValue("--reading-figure-max")),
+          viewport: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        };
+      });
+      const measure = layout.size * (lang === "ja" ? cjkCharacters : latinEms);
+      const frameWidth = layout.frame.right - layout.frame.left;
+      expect(layout.text.width).toBeCloseTo(Math.min(measure, frameWidth));
+      const center = (layout.frame.left + layout.frame.right) / 2;
+      const available = 2 * Math.min(center - 8, layout.viewport - 8 - center, layout.rail - 24 - center);
+      const limit = Math.min(layout.figureMax, available);
+      for (const image of [wide, body.getByRole("img", { name: "Medium diagram" }), body.getByRole("img", { name: "Small diagram" }), motion.locator("img")]) {
+        const bounds = (await image.boundingBox())!;
+        const nativeWidth = Number(await image.getAttribute("width"));
+        const expected = Math.min(nativeWidth, width === 390 ? layout.text.width : limit);
+        expect(bounds.width, `${lang} at ${width}: ${await image.getAttribute("alt")}`).toBeCloseTo(expected, 0);
+        expect(bounds.x).toBeGreaterThanOrEqual(8);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(Math.min(layout.viewport - 8, layout.rail - 24) + 0.1);
+        if (width !== 390 && expected > measure) expect(bounds.x + bounds.width / 2).toBeCloseTo(center, 0);
+        else expect(bounds.x).toBeCloseTo(layout.text.left, 0);
+      }
+      expect(layout.scrollWidth).toBe(layout.viewport);
+      expect((await caption.boundingBox())!.width).toBeCloseTo(layout.text.width);
+      expect((await motion.locator(":scope > .ui-meta").first().boundingBox())!.width).toBeCloseTo(layout.text.width);
+      expect(await wide.evaluate(image => {
+        const link = image.closest("a");
+        const { left, right, top, height } = image.getBoundingClientRect();
+        const hit = (x: number) => document.elementFromPoint(x, top + height / 2)?.closest("a");
+        return [left + 1, right - 1].every(x => hit(x) === link) && [left - 1, right + 1].every(x => hit(x) !== link);
+      })).toBe(true);
+      if ([1440, 1280, 390].includes(width)) {
+        await page.evaluate(() => document.fonts.ready);
+        await captureScreenshot(page, { path: `${publicReading ? "public" : "member"}-${lang}-${width}.png`, animations: "disabled" }, "figures");
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ media: "print" });
+    expect((await wide.boundingBox())!.width).toBeCloseTo((await body.boundingBox())!.width);
+    await page.emulateMedia({ media: "screen" });
+  }
+});
+
+test("a wide motion figure autoplays when half of its still is visible", async ({ page }) => {
+  const { figureTopics, motionUrl } = figureFixture();
+  const id = figureTopics.ja;
+  if (!test.info().project.metadata.publicReading) await useMember(page, "reading_layout@example.com");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const requests: string[] = [];
+  page.on("request", request => { if (new URL(request.url()).pathname === motionUrl) requests.push(request.url()); });
+  await page.goto(`/t/${id}?lang=ja&orig=${id}`);
+  const body = page.locator("[data-reading-body]");
+  const figure = body.locator("[data-motion-figure]");
+  const still = figure.locator("img").first();
+  await expect(figure.getByRole("button")).toBeAttached();
+  const width = (await still.boundingBox())!.width;
+  expect(width).toBeGreaterThan((await body.boundingBox())!.width);
+  await still.evaluate(image => {
+    const bounds = image.getBoundingClientRect();
+    window.scrollBy(0, bounds.top - window.innerHeight + bounds.height * 0.45);
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await expect(still).toBeInViewport({ ratio: 0.4 });
+  await expect(still).not.toBeInViewport({ ratio: 0.5 });
+  expect(requests).toHaveLength(0);
+  await still.scrollIntoViewIfNeeded();
+  await expect(still).toBeHidden();
+  const moving = figure.locator('img[src^="data:image/webp;playback="]');
+  expect((await moving.boundingBox())!.width).toBeCloseTo(width);
+  await expect(still).toBeVisible();
+  expect(requests).toHaveLength(1);
+});
 
 test("CJK reading titles add relative spacing while English retains normal spacing and balanced wrapping", async ({ browser }) => {
   const f: { topics: Record<string, number> } = JSON.parse(fs.readFileSync(path.join(state().dir, "reading-layout.json"), "utf8"));
@@ -256,7 +353,7 @@ test("reading frames center on wide screens and share space with contents on nar
       await page.goto(url);
       await waitForClientRoute(page);
       await page.evaluate(() => document.fonts.ready);
-      const expected = await cssLengths(page, ".reading-column article .longread", ["--site-gutter", "--reading-toc-gap", "--reading-toc-width", "--_lr-size-narrow"]);
+      const expected = await cssLengths(page, ".reading-column article .longread", ["--site-gutter", "--reading-toc-gap", "--reading-toc-width", "--_lr-size-narrow", "--reading-cjk-measure"]);
       const metrics = await page.evaluate(() => {
         const frame = document.body.getBoundingClientRect();
         const style = getComputedStyle(document.body);
@@ -281,7 +378,7 @@ test("reading frames center on wide screens and share space with contents on nar
         };
       });
       const cjk = ["ja", "zh-Hans", "zh-Hant", "ko"].includes(lang);
-      expect(metrics.text.max).toBeCloseTo(metrics.text.size * (cjk ? cjkCharacters : 34));
+      expect(metrics.text.max).toBeCloseTo(cjk ? metrics.text.size * cjkCharacters : Math.min(metrics.text.size * latinEms, expected["--reading-cjk-measure"]));
       if (width >= breakpoint) {
         const centered = width >= centeredBreakpoint ? metrics.frame : metrics.pair;
         expect(Math.abs(centered.start - (width - centered.end))).toBeLessThanOrEqual(2);
@@ -385,7 +482,8 @@ test("larger browser default text keeps reading frames visible across the conten
           const style = getComputedStyle(element);
           return { max: parseFloat(style.maxInlineSize), size: parseFloat(style.fontSize) };
         });
-        expect(measure.max).toBeCloseTo(measure.size * (name === "topic-ja" ? cjkCharacters : 34));
+        const { "--reading-cjk-measure": cjkMeasure } = await cssLengths(page, ".reading-column article .longread", ["--reading-cjk-measure"]);
+        expect(measure.max).toBeCloseTo(name === "topic-ja" ? measure.size * cjkCharacters : Math.min(measure.size * latinEms, cjkMeasure));
         if (width >= breakpoint) {
           const column = (await text.boundingBox())!;
           const panel = (await sidebar.boundingBox())!;

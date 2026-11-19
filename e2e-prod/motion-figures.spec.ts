@@ -123,6 +123,7 @@ for (const reduced of [false, true]) test(`motion loads on visibility once, or o
 
 test("translated still figures explain the source-language motion", async ({ page }) => {
   test.skip(process.env.E2E_MOTION_FIXTURES !== "1" || process.env.FIGURE_TRANSLATION !== "1", "Requires motion fixtures and figure translation");
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   const fixture = JSON.parse(fs.readFileSync(path.join(state().dir, "motion-figure.json"), "utf8"));
   await useMember(page, "motion_figure_reader@example.com");
@@ -134,6 +135,11 @@ test("translated still figures explain the source-language motion", async ({ pag
   const still = await image.getAttribute("src"); expect(requests).toEqual([]);
   const fallback = figure.locator("[data-figure-fallback]");
   await expect(fallback).toBeVisible();
+  const imageWidth = (await image.boundingBox())!.width;
+  const textWidth = (await page.locator("[data-reading-body]").boundingBox())!.width;
+  const figureMax = await page.locator("html").evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue("--reading-figure-max")));
+  expect(imageWidth).toBeCloseTo(figureMax);
+  expect((await fallback.boundingBox())!.width).toBeCloseTo(textWidth);
   const fallbackHeight = (await fallback.boundingBox())!.height;
   const translationHeight = (await figure.locator("[data-translated-figure]").boundingBox())!.height;
   const following = page.getByText("Text after the figure.", { exact: true });
@@ -145,7 +151,9 @@ test("translated still figures explain the source-language motion", async ({ pag
   expect((await fallback.boundingBox())!.height).toBe(fallbackHeight);
   expect((await figure.locator("[data-translated-figure]").boundingBox())!.height).toBe(translationHeight);
   expect((await following.boundingBox())!.y).toBe(followingY);
-  await expect(figure.locator("img").last()).toHaveAttribute("src", /^data:image\/webp;playback=/);
+  const moving = figure.locator("img").last();
+  await expect(moving).toHaveAttribute("src", /^data:image\/webp;playback=/);
+  expect((await moving.boundingBox())!.width).toBeCloseTo(imageWidth);
   await figure.getByRole("button", { name: en.motion_show_still, exact: true }).click();
   await expect(image).toHaveAttribute("src", still!);
   await expect(image).toBeVisible();

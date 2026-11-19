@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 import { clientHeaders, state, useMember, waitForHydration } from "./helpers";
 const ja = JSON.parse(fs.readFileSync(new URL("../messages/ja.json", import.meta.url), "utf8"));
 
-type Fixture = { id: number; reply: number; url: string; alt: string; translatedAlt: string };
+type Fixture = { id: number; reply: number; url: string; alt: string; translatedAlt: string; width: number };
 const fixture = (name: string): Fixture => JSON.parse(fs.readFileSync(path.join(state().dir, "figure-translation.json"), "utf8"))[name];
 const destination = (data: Fixture) => `/t/${data.id}?lang=ja&tr=${data.id}&tr=${data.reply}`;
 
@@ -20,7 +20,7 @@ test("translated figures switch to the original and back in topics and replies",
     const translated = await image.getAttribute("src");
     expect(translated).toMatch(/\.ja\.v\d+\.webp$/);
     await expect(image).toHaveAttribute("alt", data.translatedAlt);
-    await expect.poll(() => image.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(360);
+    await expect.poll(() => image.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(data.width);
     const fallback = figure.locator("[data-figure-fallback]");
     await expect(fallback).toBeVisible();
     await expect(fallback).toContainText(ja.figure_fallback_space);
@@ -38,6 +38,19 @@ test("translated figures switch to the original and back in topics and replies",
     await link.click(); await expect(image).toHaveAttribute("src", translated!);
     await expect(fallback).toBeVisible();
   }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const body = page.locator("[data-reading-body]");
+  const figure = body.locator("[data-translated-figure]");
+  const image = figure.locator("img");
+  await image.scrollIntoViewIfNeeded();
+  const figureMax = await page.locator("html").evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue("--reading-figure-max")));
+  const textWidth = (await body.boundingBox())!.width;
+  expect((await image.boundingBox())!.width).toBeCloseTo(figureMax);
+  expect((await figure.locator("[data-figure-fallback]").boundingBox())!.width).toBeCloseTo(textWidth);
+  expect(await image.evaluate(element => {
+    const { right, top, height } = element.getBoundingClientRect();
+    return document.elementFromPoint(right - 1, top + height / 2)?.closest("a")?.getAttribute("href");
+  })).toBe("/help");
   const guest = await browser.newContext({ extraHTTPHeaders: clientHeaders("192.0.2.207") });
   try {
     const translated = await figures.first().locator("img").getAttribute("src");

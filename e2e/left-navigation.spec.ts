@@ -2,10 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { closePlaces, enMessages as m, openPlaces, state, useMember, waitForClientRoute } from "./helpers";
+import { navigationBreakpointEm } from "./reading-style";
 
 const fixture = (scenario: string) => JSON.parse(fs.readFileSync(path.join(state().dir, "left-navigation.json"), "utf8"))[scenario] as { slug: string; topic: number };
-const navigationBoundaryEm = Number(fs.readFileSync(new URL("../app/app.css", import.meta.url), "utf8")
-  .match(/@media \(min-width: ([\d.]+)em\) \{[\s\S]*?body:has\(\.site-navigation\)/)![1]);
 
 test("wide navigation appears only on browsing routes and yields to the header below its boundary", async ({ page, browser }) => {
   const guest = await browser.newContext({ locale: "en-US", viewport: { width: 1280, height: 900 } });
@@ -38,7 +37,8 @@ test("wide navigation appears only on browsing routes and yields to the header b
     const separated = await side.evaluate(el => el.getBoundingClientRect().right <= document.querySelector("main")!.getBoundingClientRect().left);
     expect(separated).toBe(true);
   }
-  for (const width of [1023, 390]) {
+  const boundary = await page.evaluate(em => em * parseFloat(getComputedStyle(document.documentElement).fontSize), navigationBreakpointEm);
+  for (const width of [boundary - 1, 390]) {
     await page.setViewportSize({ width, height: 844 }); await page.goto("/"); await waitForClientRoute(page);
     await expect(side).not.toBeVisible();
     await expect(header.locator("[data-navigation-drawer] > summary")).toBeVisible();
@@ -70,7 +70,7 @@ test("the column also appears on narrower wide screens and moves the body clear 
   const session = await page.context().newCDPSession(page);
   for (const defaultSize of [16, 20]) {
     await session.send("Page.setFontSizes", { fontSizes: { standard: defaultSize } });
-    const boundary = navigationBoundaryEm * defaultSize;
+    const boundary = navigationBreakpointEm * defaultSize;
     await page.setViewportSize({ width: boundary - 1, height: 900 });
     await page.goto("/"); await waitForClientRoute(page);
     await expect(page.locator("html")).toHaveCSS("font-size", `${defaultSize}px`);

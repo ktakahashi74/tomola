@@ -14,14 +14,15 @@ import { runDueJobs } from "../app/lib/jobs/queue.server";
 
 export async function seedMotionFigures(db: Db, dir: string) {
   const [author] = await db.select({ id: user.id }).from(user).where(eq(user.email, "motion_figure_author@example.com"));
-  const saved = await putUploadedMedia(db, author.id, await rewriteMedia((await motionImage("gif", 4, 360, 200, 300)).bytes));
+  const width = 960, height = 200;
+  const saved = await putUploadedMedia(db, author.id, await rewriteMedia((await motionImage("gif", 4, width, height, 300)).bytes));
   if (!("posterUrl" in saved)) throw new Error("Motion poster missing");
   // Match the fake reader's invented label and box so this case exercises a
   // translated still rather than the legitimate external-label fallback.
-  const bytes = await sharp({ create: { width: 360, height: 200, channels: 3, background: "#e3edf7" } }).composite([
-    { input: { text: { text: "Synthetic figure label", font: "sans 18", width: 280, height: 60, rgba: true } }, left: 40, top: 50 },
+  const bytes = await sharp({ create: { width, height, channels: 3, background: "#e3edf7" } }).composite([
+    { input: { text: { text: "Synthetic figure label", font: "sans 18", width: 280, height: 60, rgba: true } }, left: 100, top: 50 },
   ]).webp({ lossless: true }).toBuffer();
-  const still = await putMedia(db, author.id, { bytes, width: 360, height: 200 });
+  const still = await putMedia(db, author.id, { bytes, width, height });
   const body = `[![Synthetic diagram](${still.url})](${saved.url})`;
   const previous = process.env.FIGURE_TRANSLATION;
   process.env.FIGURE_TRANSLATION = "1";

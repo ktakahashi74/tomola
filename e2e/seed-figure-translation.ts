@@ -10,16 +10,18 @@ import { createFigureHandlers } from "../app/lib/jobs/figure-jobs.server";
 import { runDueJobs } from "../app/lib/jobs/queue.server";
 
 export async function seedFigureTranslation(db: Db, dir: string) {
-  const fixtures: Record<string, { id: number; reply: number; url: string; alt: string; translatedAlt: string }> = {};
+  const fixtures: Record<string, { id: number; reply: number; url: string; alt: string; translatedAlt: string; width: number }> = {};
   for (const scenario of ["toggle", "nojs", "missing", "fallback_all", "unavailable", "unchanged"]) {
     const [author] = await db.select().from(user).where(eq(user.email, `figure_${scenario}_author@example.com`));
-    const image = await sharp({ create: { width: 360, height: 200, channels: 3, background: "#e3edf7" } }).composite([
-      { input: { text: { text: "Synthetic figure label", font: "sans 18", width: 280, height: 60, rgba: true } }, left: 40, top: 50 },
+    const width = scenario === "toggle" ? 960 : 360;
+    const image = await sharp({ create: { width, height: 200, channels: 3, background: "#e3edf7" } }).composite([
+      { input: { text: { text: "Synthetic figure label", font: "sans 18", width: 280, height: 60, rgba: true } }, left: width / 10 + 4, top: 50 },
     ]).webp({ lossless: true }).toBuffer();
-    const upload = await putMedia(db, author.id, { bytes: image, width: 360, height: 200 });
+    const upload = await putMedia(db, author.id, { bytes: image, width, height: 200 });
     const alt = `Authored figure ${scenario}`;
     const translatedAlt = `Translated caption ${scenario}`;
-    const body = `A figure.\n\n![${alt}](${upload.url})`;
+    const markup = `![${alt}](${upload.url})`;
+    const body = `A figure.\n\n${scenario === "toggle" ? `[${markup}](/help)` : markup}`;
     const topic = await createTopic(db, author.id, { title: `Figure ${scenario}`, body, lang: "en" }, { now: new Date("2025-01-01T00:00:00Z") });
     if (!topic.ok) throw new Error(topic.error);
     const reply = await createReply(db, author.id, topic.id, { body, lang: "en" }, { now: new Date("2025-01-01T00:01:00Z") });
@@ -28,7 +30,7 @@ export async function seedFigureTranslation(db: Db, dir: string) {
       const [source] = await db.select().from(entries).where(eq(entries.id, id));
       await db.insert(translations).values({ entryId: id, field: "body", kind: "primary", lang: "ja", text: `[ja] ${body.replace(alt, translatedAlt)}`, sourceHash: source.sourceHash, engine: "fake" });
     }
-    fixtures[scenario] = { id: topic.id, reply: reply.id, url: upload.url, alt, translatedAlt };
+    fixtures[scenario] = { id: topic.id, reply: reply.id, url: upload.url, alt, translatedAlt, width };
   }
   // Use the actual fake pipeline, with just the one target used by these cases.
   const result = await runDueJobs(db, createFigureHandlers({ llm: { env: { ...process.env, FIGURE_TRANSLATION: "1", TRANSLATION_PRIMARY: "fake", TRANSLATION_SECONDARY: "none", DIVERGENCE_JUDGE: "none", ENABLED_LANGS: "ja,en" } } }), { limit: 100 });

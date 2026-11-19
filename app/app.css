@@ -68,7 +68,7 @@
 .site-navigation-header-links { display: contents; }
 /* The side column sits in the left margin beside the centred site frame. The one boundary below decides both the column and the header links it replaces.
    Keep this boundary aligned with the .reading-toc-sidebar media query below. */
-@media (min-width: 68em) {
+@media (min-width: 64em) {
   /* When the centred margin is too narrow, push the body right of the column (start 1rem + width 11rem + 1rem gap). */
   body:has(.site-navigation) { margin-inline: max(13rem, calc((100% - var(--site-width)) / 2)) auto; }
   .site-navigation {
@@ -176,7 +176,9 @@ main:focus {
   /* Running text in the reading voice: Latin, Cyrillic and other scripts without a size of their own, and Japanese, Chinese and Korean. */
   --reading-latin-size: 1.125rem;
   --reading-cjk-size: 1.0625rem;
-  --reading-cjk-measure: calc(45 * var(--reading-cjk-size));
+  --reading-latin-measure: 36;
+  --reading-cjk-measure: calc(41 * var(--reading-cjk-size));
+  --reading-figure-max: 765px;
   --site-gutter: 1rem;
   --site-width: calc(var(--reading-cjk-measure) + 2 * var(--site-gutter));
   --reading-toc-gap: 4rem;
@@ -327,7 +329,7 @@ main:focus {
   --reading-size: var(--reading-latin-size);
   /* Resolve longread's em measure in the body's type size, independently of the surrounding UI.
      No column is wider than the site frame, which the Japanese, Chinese and Korean measure sets. */
-  --reading-measure: min(calc(34 * var(--reading-size)), var(--reading-cjk-measure));
+  --reading-measure: min(calc(var(--reading-latin-measure) * var(--reading-size)), var(--reading-cjk-measure));
   max-inline-size: var(--reading-measure);
 }
 .reading-column:has(> article > .longread:is(:lang(ja), :lang(zh), :lang(ko)), > article > :where(.reading-article-content) > .longread:is(:lang(ja), :lang(zh), :lang(ko))) {
@@ -339,9 +341,37 @@ main:focus {
 }
 /* Keep the original text edge when a public document starts on the right. */
 .reading-column:has(> article[dir="rtl"], > article > .longread:dir(rtl), > article > :where(.reading-article-content) > .longread:dir(rtl)) { margin-inline-start: auto; }
+.reading-column .longread:not(.longread-compact) {
+  --longread-measure: min(calc(var(--reading-latin-measure) * 1em), var(--reading-cjk-measure));
+}
 .reading-column .longread:not(.longread-compact):is(:lang(ja), :lang(zh), :lang(ko)) {
   --longread-measure: var(--reading-cjk-measure);
 }
+
+/* Once the full frame fits, let standalone article images use its side space.
+   Measure the viewport inside any scrollbar, and leave control and caption rows in the prose. */
+@media screen and (min-width: 48em) {
+  @supports (translate: calc(1px * sign(100% - 1px))) {
+    html:has([data-reading-body]) { container-type: inline-size; }
+    [data-reading-body] {
+      --reading-figure-direction: 1;
+      --reading-figure-width: min(var(--reading-figure-max), var(--reading-figure-viewport, calc(100cqi - 16px)), var(--reading-figure-rail, var(--reading-figure-max)));
+    }
+    [data-reading-body]:dir(rtl) { --reading-figure-direction: -1; }
+    :where([data-reading-body] > p) > :is(img, a:has(> img:only-child)):only-child,
+    :where([data-reading-body] > p > [data-motion-figure]:only-child, [data-reading-body] > p > [data-translated-figure]:only-child,
+      [data-reading-body] > p > [data-motion-figure]:only-child > [data-translated-figure]) > :is(img, a:has(> img:only-child)) {
+      max-inline-size: max(100%, var(--reading-figure-width));
+      /* Percentages in translate refer to the rendered image. Keep small images at the text edge. */
+      translate: calc(var(--reading-figure-direction) * (var(--reading-cjk-measure) / 2 - 50%) * max(0, sign(100% - var(--reading-measure))));
+    }
+    :where([data-reading-body] > p > a:only-child, [data-reading-body] > p > [data-translated-figure]:only-child > a):has(> img:only-child) {
+      display: inline-block;
+      inline-size: max-content;
+    }
+  }
+}
+
 /* The running text size comes from the two variables above. Scripts with tall marks keep longread's own larger size;
    the list follows longread's. */
 .longread:not(.longread-compact):not(:lang(th), :lang(lo), :lang(km), :lang(my),
@@ -481,14 +511,17 @@ body:has(.reading-topic) {
 .reading-topic:has(.public-reading-end) #replies > h2 {
   border-block-start: 0;
 }
-/* 45 × 1.0625rem text + 4rem gap + 14rem contents + two 1rem gutters = 67.8125rem.
-   This fits within 68em: 1085px <= 1088px at a 16px browser default,
-   and 1356.25px <= 1360px at 20px. Keep this boundary aligned with the
+/* 41 × 1.0625rem text + 4rem gap + 14rem contents + two 1rem gutters = 63.5625rem.
+   This fits within 64em: 1017px <= 1024px at a 16px browser default,
+   and 1271.25px <= 1280px at 20px. Keep this boundary aligned with the
    .site-navigation media query above; CSS variables cannot appear in media queries. */
-@media (min-width: 68em) {
+@media (min-width: 64em) {
   .reading-mobile-fallback { display: none; }
   body:has(.reading-toc-sidebar) {
     margin-inline: calc((100% - var(--reading-layout-width)) / 2) auto;
+    /* The frame and rail share the viewport. Keep 8px at its edge and 24px at the rail. */
+    --reading-figure-viewport: calc(100cqi - var(--reading-layout-width) + var(--site-width) - 16px);
+    --reading-figure-rail: calc(var(--reading-cjk-measure) + 2 * (var(--reading-toc-gap) - 24px));
   }
   .reading-toc:has(> .reading-toc-folded) {
     display: none;
@@ -593,11 +626,11 @@ body:has(.reading-topic) {
   }
 }
 
-/* A centered 49.8125rem site frame leaves room for a 4rem gap and 14rem rail
-   on either side at 85.8125rem (49.8125 + 2 × (4 + 14)), so the boundary is 86em:
-   1376px at a 16px browser default, or 1720px at 20px. CSS variables cannot
+/* A centered 45.5625rem site frame leaves room for a 4rem gap and 14rem rail
+   on either side at 81.5625rem (45.5625 + 2 × (4 + 14)), so the boundary is 82em:
+   1312px at a 16px browser default, or 1640px at 20px. CSS variables cannot
    appear in media queries. Below this boundary the frame and rail stay centered together. */
-@media (min-width: 86em) {
+@media (min-width: 82em) {
   body:has(.reading-toc-sidebar),
   body:has(.reading-toc-sidebar):has(.reading-column > article[dir="rtl"], .reading-column > article > .longread:dir(rtl), .reading-column > article > .reading-article-content > .longread:dir(rtl)) {
     margin-inline: auto;
@@ -790,7 +823,7 @@ a.topic-title[data-remark] {
   }
 }
 .member-header .site-navigation-header-links { display: block; }
-@media (min-width: 68em) {
+@media (min-width: 64em) {
   .member-header .site-navigation-header-links { display: none; }
 }
 .site-header .locale-trigger {
