@@ -237,14 +237,16 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {shownDescription && <p lang={descriptionLang} className="whitespace-pre-wrap">{shownDescription}</p>}
       {restDescription && <MoreInfo label={m.village_description_more()} name={villageName(village)}><span lang={descriptionLang} className="whitespace-pre-wrap">{restDescription}</span></MoreInfo>}
       {village.translation && <VillageTranslationNote info={village.translation} />}
-      {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
-      {loaderData.writers.length > 0 && <div className="mt-1 ui-meta text-muted-foreground">
-        <span id="village-writers-label" className="me-2">{m.village_writers()}</span>{" "}
-        <span role="list" aria-labelledby="village-writers-label">
-          {loaderData.writers.map(writer => <span key={writer.handle} role="listitem" className="inline-block max-w-full pe-2 last:pe-0">
-            <AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} />{" "}
-          </span>)}
-        </span>
+      {(membership || loaderData.writers.length > 0) && <div className="mt-3 space-y-1">
+        {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
+        {loaderData.writers.length > 0 && <div className="ui-meta text-muted-foreground">
+          <span id="village-writers-label" className="me-2">{m.village_writers()}</span>{" "}
+          <span role="list" aria-labelledby="village-writers-label">
+            {loaderData.writers.map(writer => <span key={writer.handle} role="listitem" className="inline-block max-w-full pe-2 last:pe-0">
+              <AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} />{" "}
+            </span>)}
+          </span>
+        </div>}
       </div>}
     </>} />
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
