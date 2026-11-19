@@ -2,6 +2,7 @@ import { createMarkdownProcessor } from "~/lib/markdown-parser.core.server";
 import { FLAG_LINK_MISMATCH, FLAG_QUALITY_MISMATCH, FLAG_STRUCTURE_MISMATCH } from "./flags";
 import { chatParts } from "../village-chat";
 import { detailsShape } from "../markdown-details";
+import { unmatchedMath } from "./math-preservation.core.server";
 
 // Translation structure checks: compare code-block counts and parsed math, and ensure fenced/inline code contents are character-for-character identical in the same order,
 // including comments/docstrings; require translation absolute-link URLs and image src values to be a subset of
@@ -316,6 +317,37 @@ export const TRANSLATION_QUALITY_LIMITS = {
   paragraphTolerance: 1,
 } as const;
 
+function mathParts(tree: MdNode, source: string, figureLabel = false) {
+  const display: string[] = [], inline: { value: string; multiDollar: boolean }[] = [];
+  const rest: string[] = [];
+  let cursor = 0;
+  const walk = (node: MdNode) => {
+    if (node.type === "math" || node.type === "inlineMath") {
+      const value = (node.value ?? "").replace(/\r\n/g, "\n");
+      const start = node.position?.start.offset, end = node.position?.end.offset;
+      const multiDollar = start !== undefined && source.startsWith("$$", start);
+      if (figureLabel && start !== undefined && end !== undefined) {
+        // A plain OCR label can contain two dollar prices. A digit directly
+        // after the closing dollar marks the second price, as in "$5 to $10".
+        if (node.type === "inlineMath" && !multiDollar && /^\d/.test(value) && /\d/.test(source[end] ?? "")) return;
+        rest.push(source.slice(cursor, start));
+        cursor = end;
+      }
+      if (node.type === "math") display.push(value);
+      else inline.push({ value, multiDollar });
+    }
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+  return { display, inline, rest: rest.length ? [...rest, source.slice(cursor)].join(" ") : source };
+}
+
+// Figure labels also contain undelimited OCR math. Keep that text available
+// for the OCR checks after comparing Markdown formulas with the post rules.
+export function splitFigureMath(source: string) {
+  return mathParts(markdown.parse(source) as unknown as MdNode, source, true);
+}
+
 function qualityParts(source: string) {
   let tree = markdown.parse(source) as unknown as MdNode;
   // Normalize list markers only in prose text nodes. Never rewrite code, math,
@@ -344,22 +376,12 @@ function qualityParts(source: string) {
     tree = markdown.parse(source) as unknown as MdNode;
   }
   const counts = { heading: 0, listItem: 0, table: 0, paragraph: 0 };
-  const math = { display: [] as string[], inline: [] as string[], multiDollarInline: [] as string[] };
   const walk = (node: MdNode) => {
     if (node.type in counts) counts[node.type as keyof typeof counts]++;
-    if (node.type === "math" || node.type === "inlineMath") {
-      const value = (node.value ?? "").replace(/\r\n/g, "\n");
-      if (node.type === "math") math.display.push(value);
-      else {
-        math.inline.push(value);
-        const start = node.position?.start.offset;
-        if (start !== undefined && source.startsWith("$$", start)) math.multiDollarInline.push(value);
-      }
-    }
     node.children?.forEach(walk);
   };
   walk(tree);
-  return { counts, math, tree, source };
+  return { counts, math: mathParts(tree, source), tree, source };
 }
 
 const SYMBOL_LETTER = String.raw`[\p{L}&&[\p{Script=Latin}\p{Script=Greek}]]`;
@@ -391,25 +413,26 @@ function proseSymbols({ tree, source }: Pick<ReturnType<typeof qualityParts>, "t
   return new Set(Array.from(parts.join("").matchAll(PROSE_SYMBOL), ([symbol]) => symbolKey(symbol)));
 }
 
-function mathChanged(a: ReturnType<typeof qualityParts>, b: ReturnType<typeof qualityParts>): boolean {
-  if (a.math.display.length !== b.math.display.length || missingInline(a.math.display, b.math.display).length) return true;
-  if (missingInline(a.math.inline, b.math.inline).length) return true;
-  const extra = missingInline(b.math.inline, a.math.inline);
-  if (!extra.length) return false;
+function mathChanged(a: ReturnType<typeof qualityParts>, b: ReturnType<typeof qualityParts>, to?: string): boolean {
+  if (a.math.display.length !== b.math.display.length || unmatchedMath(a.math.display, b.math.display, to) === null) return true;
   // Existing inline formulas may use either delimiter length. Each
-  // multi-dollar span must still have a matching source formula.
-  if (missingInline(b.math.multiDollarInline, a.math.inline).length) return true;
+  // multi-dollar span must match a source formula before promoting prose.
+  const target = [...b.math.inline.filter(entry => entry.multiDollar), ...b.math.inline.filter(entry => !entry.multiDollar)];
+  const extra = unmatchedMath(a.math.inline.map(entry => entry.value), target.map(entry => entry.value), to);
+  if (extra === null) return true;
+  if (!extra.length) return false;
   const symbols = proseSymbols(a);
   return extra.some(index => {
-    const value = b.math.inline[index - 1].trim();
-    return !INLINE_SYMBOL.test(value) || !symbols.has(symbolKey(value));
+    const { value, multiDollar } = target[index];
+    const symbol = value.trim();
+    return multiDollar || !INLINE_SYMBOL.test(symbol) || !symbols.has(symbolKey(symbol));
   });
 }
 
 export function qualityMismatches(source: string, translated: string, opts: { from?: string; to?: string }): string[] {
   const a = qualityParts(source), b = qualityParts(translated);
   const out: string[] = [];
-  if (mathChanged(a, b)) out.push("math content changed: copy every formula exactly");
+  if (mathChanged(a, b, opts.to)) out.push("math content changed: copy every formula exactly");
   for (const key of Object.keys(a.counts) as Array<keyof typeof a.counts>) {
     const tolerance = key === "paragraph" && a.counts[key] >= TRANSLATION_QUALITY_LIMITS.paragraphToleranceFrom ? TRANSLATION_QUALITY_LIMITS.paragraphTolerance : 0;
     if (Math.abs(a.counts[key] - b.counts[key]) > tolerance) out.push(`${key} count: ${a.counts[key]} -> ${b.counts[key]}`);

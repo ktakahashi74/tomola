@@ -23,7 +23,7 @@ export type CheckedTranslation = TranslationResult & {
 export { UNTRANSLATED_MIN_LENGTH } from "./translation-inspect.core.server";
 export function judgeCopy(...args: Parameters<typeof core.judgeCopy>): Promise<ReturnType<typeof core.judgeCopy>> { return markdownTask("judgeCopy", args); }
 export async function looksUntranslated(...args: Parameters<typeof core.looksUntranslated>): Promise<boolean> { return (await judgeCopy(...args)).copy; }
-async function inspect(...args: Parameters<typeof core.inspectTranslation>): Promise<ReturnType<typeof core.inspectTranslation>> {
+export async function inspectTranslation(...args: Parameters<typeof core.inspectTranslation>): Promise<ReturnType<typeof core.inspectTranslation>> {
   try { return await markdownTask("inspectTranslation", args); }
   catch (error) {
     if (!(error instanceof MarkdownBudgetError)) throw error;
@@ -40,7 +40,7 @@ export async function translateChecked(engine: TranslationEngine, req: Translati
   let leakDetections = 0;
   try {
     const first = await engine.translate(req);
-    const firstProblems = await inspect(req, first.text, engine.id);
+    const firstProblems = await inspectTranslation(req, first.text, engine.id);
     if (firstProblems.flags.includes(FLAG_OUTPUT_LEAK)) leakDetections++;
     if (req.figure && req.figureCharacterBudgets) {
       if (firstProblems.flags.includes(FLAG_OUTPUT_LEAK)) throw new LlmError("output_leak", "Figure shortening output failed the leak check");
@@ -49,7 +49,7 @@ export async function translateChecked(engine: TranslationEngine, req: Translati
     if (firstProblems.notes.length === 0) return { ...first, text: firstProblems.normalizedText ?? first.text, flags: [], attempts: 1, leakDetections };
 
     const second = await engine.translate({ ...req, retryNote: firstProblems.notes.join(" Also, ") });
-    const secondProblems = await inspect(req, second.text, engine.id);
+    const secondProblems = await inspectTranslation(req, second.text, engine.id);
     if (secondProblems.flags.includes(FLAG_OUTPUT_LEAK)) {
       leakDetections++;
       throw new LlmError("output_leak", "Translation output failed the leak check after one retry");

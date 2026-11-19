@@ -102,7 +102,7 @@ export async function runEvaluation(db: Db, set: EvalSet, env: LlmEnv, deps: { t
         // Evaluation history also retains leaks fixed by the retry.
         if (leakDetections > 0) flags.push("output_leak_retried");
         if (!flags.some(f => HIDDEN_PRIMARY_FLAGS.includes(f))) completed.set(`${item.id}:${to}`, { body: out.text, title });
-        for (const check of item.checks) if (check.kind !== "semantic") results.push(await deterministicCheck(check, item.text, out.text, item.weight === "heavy"));
+        for (const check of item.checks) if (check.kind !== "semantic") results.push(await deterministicCheck(check, item.text, out.text, item.weight === "heavy", to));
         const semantic = item.checks.filter(c => c.kind === "semantic").map(({ id, description }) => ({ id, description }));
         if (semantic.length) {
           totals.calls++;

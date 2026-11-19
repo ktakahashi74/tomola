@@ -1,5 +1,7 @@
 import { createMarkdownProcessor } from "~/lib/markdown-parser.core.server";
 import { checkStructure, extractCode, proseOf, trimBareUrl } from "~/lib/llm/structure.core.server";
+import { unmatchedMath } from "~/lib/llm/math-preservation.core.server";
+import type { Lang } from "~/lib/languages";
 import { evalMentions, type EvalCheck, type CheckResult } from "./cases.server";
 
 type Node = { type: string; value?: string; url?: string; depth?: number; ordered?: boolean; children?: Node[]; position?: { start: { offset?: number } } };
@@ -56,7 +58,7 @@ function numbers(text: string): string[] {
     .replace(/(\d+(?:\.\d+)?)\s*%/g, (_, n: string) => String(Number(n) / 100));
   return sorted([...normalized.matchAll(/\d+(?:\.\d+)?/g)].map(m => String(Number(m[0]))));
 }
-export function deterministicCheck(check: EvalCheck, source: string, translation: string, heavy: boolean): CheckResult {
+export function deterministicCheck(check: EvalCheck, source: string, translation: string, heavy: boolean, to?: Lang): CheckResult {
   if (check.kind === "semantic") throw new Error("Semantic checks require the judge");
   let preserved: boolean;
   const tree = (text: string) => nodes(text);
@@ -67,10 +69,16 @@ export function deterministicCheck(check: EvalCheck, source: string, translation
       const a = extractCode(source), b = extractCode(translation);
       preserved = same(a.fenced, b.fenced) && same(sorted(a.inline), sorted(b.inline)); break;
     }
-    case "math": preserved = same(tree(source).filter(n => ["math", "inlineMath"].includes(n.type)).map(n => [n.type, n.value]), tree(translation).filter(n => ["math", "inlineMath"].includes(n.type)).map(n => [n.type, n.value])); break;
+    case "math": {
+      const formulas = (text: string) => tree(text).filter(n => n.type === "math" || n.type === "inlineMath");
+      const a = formulas(source), b = formulas(translation);
+      preserved = a.length === b.length && a.every((node, i) => node.type === b[i].type &&
+        unmatchedMath([node.value ?? ""], [b[i].value ?? ""], to) !== null);
+      break;
+    }
     case "markdown": {
       const shape = (text: string) => tree(text).filter(n => n.type !== "text").map(n => [n.type, n.depth, n.ordered]);
-      preserved = checkStructure(source, translation).ok && same(shape(source), shape(translation)); break;
+      preserved = checkStructure(source, translation, { to }).ok && same(shape(source), shape(translation)); break;
     }
     case "numbers": preserved = same(numbers(source), numbers(translation)); break;
   }

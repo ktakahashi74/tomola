@@ -331,6 +331,13 @@ pnpm translations:requeue --all-missing --lang fr --dry-run
 
 Run again without `--dry-run` after reviewing the scope. These commands require a configured primary engine; fake development engines still require `--allow-fake`. `pnpm langs:open <tag>` continues to cover all missing pairs in that language, including its dry-run estimate.
 
+After deploying a translation quality rule change, an operator can recheck saved machine translations of current titles and bodies using the deployed database settings. The default run prints the count and translation IDs. `--apply` rechecks the source version before clearing `quality_mismatch` and refreshing the primary body render. The command preserves other flags and uses local checks and rendering.
+
+```sh
+docker compose exec app pnpm exec tsx scripts/recheck-translation-quality.ts
+docker compose exec app pnpm exec tsx scripts/recheck-translation-quality.ts --apply
+```
+
 PostgreSQL pool connections wait at most 10 seconds for acquisition, run statements for at most 30 seconds, and close idle transactions after 60 seconds. Migrations use no statement deadline and a 10-second `lock_timeout`, including the migration advisory-lock connection. Operator scripts use a separate connection with the statement deadline disabled: migrations, site/glossary exports, glossary import, village preparation/checks, language opening, translation requeue, embedding/reference/render rebuilds, passkey recovery, invitations and media deletion. These connections retain acquisition and idle-transaction limits. A worker stops new claims immediately on shutdown, lets all lanes drain for eight seconds by default, then aborts unfinished handlers and requeues them without consuming an attempt.
 
 Import the initial glossary as an operator after reviewing its contents. Replace `<handle>` with the handle of a real operator.

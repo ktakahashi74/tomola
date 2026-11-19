@@ -134,3 +134,61 @@ it("includes two title calls, body context and thinking in opening-language esti
   expect(estimate.inputTokens).toBeGreaterThan(1000 + 2 * 1500);
   expect(estimate.outputTokens).toBeGreaterThan(3600);
 });
+
+const qualityFlag = "quality_mismatch";
+const inline = (math: string) => "$" + math + "$";
+
+it.each(["text", "textrm", "textit", "textbf", "textsf", "mbox"])("allows translated prose in \\%s arguments", command => {
+  const source = "\$\$\n\\underbrace{x+y}_{\\" + command + "{mean {response}}}\n\$\$";
+  const translated = "\$\$\n\\underbrace{x+y}_{\\" + command + "{réponse {moyenne}}}\n\$\$";
+  expect(checkStructure(source, translated, { from: "en", to: "fr" }).ok).toBe(true);
+});
+
+it("retains embedded math in explanatory labels", () => {
+  const source = "\$\$\n" + String.raw`x_{\text{estimated $y+1$ here}}` + "\n\$\$";
+  const translated = "\$\$\n" + String.raw`x_{\text{ここで $y+1$ を推定}}` + "\n\$\$";
+  expect(checkStructure(source, translated, { to: "ja" }).ok).toBe(true);
+  expect(checkStructure(source, translated.replace("y+1", "y+2"), { to: "ja" }).flags).toContain(qualityFlag);
+});
+
+it.each([
+  [String.raw`x_{\text{mean}}`, String.raw`y_{\text{moyenne}}`, "fr"],
+  [String.raw`x_{\text{mean}}`, String.raw`x_{\text{moyenne}\text{estimée}}`, "fr"],
+  [String.raw`x_{\text{mean}}+y`, String.raw`x+y_{\text{moyenne}}`, "fr"],
+  [String.raw`x_{\text{mean}}`, String.raw`x_{\textbf{moyenne}}`, "fr"],
+  [String.raw`x_{\text{mean \ensuremath{x}}}`, String.raw`x_{\text{moyenne \ensuremath{y}}}`, "fr"],
+  [String.raw`x_{\text{mean}}+x_{\text{mean}}`, String.raw`x_{\text{moyenne}}+x`, "fr"],
+  [String.raw`3.4\times10^{-7}`, String.raw`3,4\times10^{-7}`, "en"],
+  [String.raw`3.4\times10^{-7}`, String.raw`3,5\times10^{-7}`, "fr"],
+  [String.raw`3.4\times10^{-7}`, String.raw`3,4\times10^{-8}`, "fr"],
+  ["(2,0)", "(2.0)", "fr"],
+  ["(2,0)", "(2{,}0)", "fr"],
+  [String.raw`\left(2.0,3.0\right)`, String.raw`\left(2,0,3,0\right)`, "fr"],
+  ["f(2.0)", "f(2,0)", "fr"],
+  ["x_2.0", "x_2,0", "fr"],
+  ["2,0+1.5", "2.0+1,5", "fr"],
+  ["1.2.3", "1,2,3", "fr"],
+])("flags a protected formula change from %s to %s in %s", (source, translated, to) => {
+  expect(checkStructure(inline(source), inline(translated), { to }).flags).toContain(qualityFlag);
+});
+
+it.each(["fr", "de", "vi"])("accepts decimal comma conventions in %s", to => {
+  expect(checkStructure("値は " + inline(String.raw`3.4\times10^{-7}`) + "。", "Valeur " + inline(String.raw`3,4\times10^{-7}`) + ".", { from: "ja", to }).ok).toBe(true);
+  expect(checkStructure(inline("f(2.0,3.0)"), inline("f(2{,}0,3{,}0)"), { to }).ok).toBe(true);
+});
+
+it("matches localized numbers one to one while keeping original comma formulas", () => {
+  const source = "Terms $2.0+3,0$, $2,0+3.0$ and $2.0+3.0$.";
+  const translated = "Termes $2,0+3,0$, $2{,}0+3,0$ et $2,0+3{,}0$.";
+  expect(checkStructure(source, translated, { to: "fr" }).ok).toBe(true);
+  expect(checkStructure(source, translated.replace("2,0+3{,}0", "2.0+3{,}0"), { to: "fr" }).ok).toBe(true);
+  expect(checkStructure(source, "Termes $2.0+3.0$, $2{,}0+3,0$ et $2{,}0+3{,}0$.", { to: "fr" }).ok).toBe(false);
+});
+
+it("uses the target language when checking a machine-translated title", async () => {
+  const engine = { ...createFakeEngine(), async translate() {
+    return { text: "Valeur $2,0$.", model: "stub", promptVersion: "stub", inputTokens: 1, outputTokens: 1 };
+  } };
+  const result = await translateChecked(engine, { text: "値は $2.0$。", field: "title", from: "ja", to: "fr" });
+  expect(result).toMatchObject({ text: "Valeur $2,0$.", attempts: 1, flags: [] });
+});

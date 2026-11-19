@@ -288,4 +288,12 @@ describe("deterministic evaluation points", () => {
   ] as const)("checks %s without the judge", async (kind, source, translation, preserved) => {
     await expect(deterministicCheck({ id: "C1", kind, description: "Check" }, source, translation, true)).resolves.toMatchObject({ preserved, severe: !preserved });
   });
+
+  it.each(["math", "markdown"] as const)("uses the target decimal convention when evaluating %s", async kind => {
+    const check = { id: "C1", kind, description: "Preserve formulas" };
+    const source = String.raw`Value $2.0_{\text{mean}}$.`;
+    const translated = String.raw`Valeur $2,0_{\text{moyenne}}$.`;
+    await expect(deterministicCheck(check, source, translated, true, "fr")).resolves.toMatchObject({ preserved: true });
+    await expect(deterministicCheck(check, source, translated, true, "en")).resolves.toMatchObject({ preserved: false });
+  });
 });

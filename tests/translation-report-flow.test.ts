@@ -107,6 +107,24 @@ async function shown(db: Db, entryId: number, lang: Lang = "th") {
 }
 
 describe("a report is one tap, and the first one for a translation is for the automatic retry", () => {
+  it("accepts localized decimals when saving a French report retry", async () => {
+    const { db, topicId } = await setup({ translate: false });
+    await editEntry(db, "u1", topicId, { lang: "ja", title: "話題の題", body: "測定値は $2.0$ です。" });
+    await runJobs(db, llmWith(null), t0);
+    let calls = 0;
+    const text = "La mesure vaut $2,0$.";
+    const retry: TranslationEngine = { ...createFakeEngine({ model: "fake-retry" }), async translate() {
+      calls++;
+      return { text, model: "fake-retry", promptVersion: PROMPT_VERSION, inputTokens: 1, outputTokens: 1 };
+    } };
+    const llm = llmWith(retry);
+    expect(await report(db, llm, topicId, { lang: "fr" })).toMatchObject({ ok: true, route: "retry" });
+    expect(await runJobs(db, llm, t1)).toMatchObject({ failed: 0 });
+    expect(calls).toBe(1);
+    expect(await rowOf(db, topicId, "body", "fr")).toMatchObject({ text, flags: ["retried_after_report"] });
+    expect((await reports(db))[0]).toMatchObject({ status: "resolved" });
+  });
+
   it("starts a new retry version when only the source language was corrected", async () => {
     const { db, topicId } = await setup();
     const llm = llmWith(retryEngine([]));

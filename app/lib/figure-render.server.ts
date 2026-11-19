@@ -1,6 +1,7 @@
+import { preservesFigureMath } from "./figure-math.core.server";
 import { setImmediate } from "node:timers/promises";
 import sharp, { type OverlayOptions } from "sharp";
-import { FIGURE_CONFIDENCE, figureTranslationRegions, normalizeFigureReading, normalizeFigureNewlines, preservesFigureMath, sameFigureLabel, type FigureReading, type FigureRegion } from "./figure";
+import { FIGURE_CONFIDENCE, figureTranslationRegions, normalizeFigureReading, normalizeFigureNewlines, sameFigureLabel, type FigureReading, type FigureRegion } from "./figure";
 import type { Lang } from "./languages";
 import { MEDIA_LIMITS } from "./media";
 import { assertFigureFontsAvailable, canRenderFigureText, figureFontDescription, type FigureFontWeight } from "./figure-fonts.server";
@@ -290,8 +291,8 @@ export async function createFigureRenderer(bytes: Buffer, reading: FigureReading
     const demands = await Promise.all(regions.map(async (_, i) => {
       const text = labels[i];
       if (!text || text.length > 2000 || !text.trim()) { results[i].reason = "invalid_translation"; return 0; }
+      if (!preservesFigureMath(regions[i].text, text, lang)) { results[i].reason = "math_mismatch"; return 0; }
       if (sameFigureLabel(regions[i].text, text)) { results[i].status = "unchanged"; results[i].reason = null; return 0; }
-      if (!preservesFigureMath(regions[i].text, text)) { results[i].reason = "math_mismatch"; return 0; }
       if (!await canRenderFigureText([text], lang, undefined, regions[i].weight)) { results[i].reason = "font_missing"; return 0; }
       results[i].reason = "does_not_fit";
       const metrics = await textMetrics(text, lang, sizes[i], regions[i].weight, metricCache);

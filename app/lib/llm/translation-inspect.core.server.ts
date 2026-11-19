@@ -1,4 +1,4 @@
-import { preservesFigureMath, sameFigureLabel } from "~/lib/figure";
+import { preservesFigureMath } from "~/lib/figure-math.core.server";
 import type { Lang, SourceLang } from "~/lib/languages";
 import { FLAG_LINK_MISMATCH, FLAG_QUALITY_MISMATCH, FLAG_STRUCTURE_MISMATCH, FLAG_UNTRANSLATED, FLAG_UNTRANSLATED_SCRIPT, FLAG_UNTRANSLATED_SIMILAR } from "./flags";
 import { detectCopy, type CopyVerdict } from "./copy-detection.core.server";
@@ -37,7 +37,7 @@ export function inspectTranslation(req: TranslationRequest, text: string, engine
       if (!Array.isArray(source) || !Array.isArray(labels) || labels.length !== source.length || !source.every(item => typeof item === "string") || !labels.every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 2000)) throw new Error("labels");
       const checks = source.map((label, index) => {
         const check = inspectTranslation({ ...req, figure: false, invitationNote: true, text: label }, labels[index], engineId);
-        if (!sameFigureLabel(label, labels[index]) && !preservesFigureMath(label, labels[index])) {
+        if (!preservesFigureMath(label, labels[index], req.to)) {
           check.flags.push(FLAG_QUALITY_MISMATCH);
           check.notes.push("Preserve every mathematical formula and symbol exactly in its original label, including partial derivatives, Greek letters, superscripts, subscripts and function expressions.");
         }
