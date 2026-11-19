@@ -20,6 +20,7 @@ import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import type { TranslationEngine } from "~/lib/llm/types";
 import { leakedReasoning } from "./helpers/translation-leak";
 import { LlmError } from "~/lib/llm/errors.server";
+import { m } from "~/paraglide/messages.js";
 
 it("retains the attempt cap through private-error wrappers and marks truncated chat translations failed", async () => {
   const w = await world(); await w.send();
@@ -150,15 +151,18 @@ it("passes the direct reply target and chronological preceding context to the fa
   const parent = await w.send("古い返信先の秘密。");
   await w.send("直前の発言その一。"); await w.send("直前の発言その二。");
   await w.db.delete(jobs);
-  const sent = await mutateChat(w.db, "ctx_author", w.village.slug!, "send", { body: "日本語で返信します。", replyToId: parent.id });
+  const term = m.nushi_name({}, { locale: "ja" });
+  const body = `${term}はどう思う？`;
+  const sent = await mutateChat(w.db, "ctx_author", w.village.slug!, "send", { body, replyToId: parent.id });
   const base = createFakeEngine();
   const translate = vi.fn(base.translate);
   await w.run({ chatEngine: { ...base, translate } });
   expect(translate).toHaveBeenCalled();
   for (const [request] of translate.mock.calls) {
-    expect(request.text).toBe("日本語で返信します。");
+    expect(request.text).toBe(body);
     expect(request.chat?.context).toEqual(["古い返信先の秘密。", "直前の発言その一。", "直前の発言その二。"]);
     expect(JSON.stringify(request)).toContain("古い返信先の秘密");
+    expect(request.glossary).toContainEqual(expect.objectContaining({ term, candidates: [m.nushi_name({}, { locale: request.to })] }));
   }
   expect((await w.db.select().from(chatMessages).where(eq(chatMessages.id, sent.id)))[0].replyToId).toBe(parent.id);
 });

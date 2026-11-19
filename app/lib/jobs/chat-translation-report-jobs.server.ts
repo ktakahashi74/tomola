@@ -6,7 +6,7 @@ import { chatTranslationSource, saveChatTranslation } from "../village-chat-tran
 import { lockChatReportTarget } from "../village-chat-reports.server";
 import { BudgetPausedError, jobLlmOptions, LlmError, translateChat, type LlmOptions } from "../llm/index.server";
 import { CHAT_PROMPT_VERSION } from "../llm/prompt.server";
-import { loadGlossary, matchGlossary } from "../translations.server";
+import { loadGlossary, matchMemberGlossary } from "../translations.server";
 import { mentionCandidates } from "../mention-syntax";
 import { isLang } from "../languages";
 import { villageChatEnabled } from "../village-chat-enabled.server";
@@ -28,7 +28,7 @@ export function createChatTranslationReportHandlers(opts: LlmOptions = {}): JobH
       await ctx.db.update(chatTranslationReports).set({ status: "resolved", handledAt: ctx.now }).where(eq(chatTranslationReports.id, report.id)); return;
     }
     try {
-      const result = await translateChat(ctx.db, { text: source.message.body, from: source.message.lang, to: payload.lang, chat: { context: source.context }, glossary: matchGlossary(await loadGlossary(ctx.db, source.message.lang, payload.lang), source.message.body), mentions: mentionCandidates(source.message.body).map(m => source.message.body.slice(m.start, m.end)) }, {
+      const result = await translateChat(ctx.db, { text: source.message.body, from: source.message.lang, to: payload.lang, chat: { context: source.context }, glossary: matchMemberGlossary(await loadGlossary(ctx.db, source.message.lang, payload.lang), source.message.body, source.message.lang, payload.lang), mentions: mentionCandidates(source.message.body).map(m => source.message.body.slice(m.start, m.end)) }, {
         ...jobLlmOptions(ctx, opts), beforeTranslate: async () => {
           // Persist the consumed slot before any paid call. A crash leaves an
           // open moderator case, never an orphan retry or another paid attempt.

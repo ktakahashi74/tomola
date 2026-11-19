@@ -27,7 +27,7 @@ import {
   getGlossaryVersion,
   loadGlossary,
   loadSentences,
-  matchGlossary,
+  matchMemberGlossary,
   RETRANSLATE_REPORT_JOB,
   REFRESH_BODY_JOB,
   enqueueCurrentBodyTranslation,
@@ -218,9 +218,8 @@ export type TranslationJobDeps = {
 
 // Glossary for this language pair and entries whose terms occur in the source text.
 async function glossaryFor(db: Db, from: SourceLang, to: Lang, text: string): Promise<{ hints: GlossaryHint[]; version: string | null }> {
-  if (from === "other") return { hints: [], version: null };
-  const rows = await loadGlossary(db, from, to);
-  return { hints: matchGlossary(rows, text), version: rows.length > 0 ? await getGlossaryVersion(db) : null };
+  const rows = from === "other" ? [] : await loadGlossary(db, from, to);
+  return { hints: matchMemberGlossary(rows, text, from, to), version: rows.length > 0 ? await getGlossaryVersion(db) : null };
 }
 
 const isRefusal = (error: unknown) => error instanceof LlmError && error.code === "refusal";

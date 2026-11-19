@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { glossaryEntries, jobs, translations } from "~/lib/db/schema";
-import { createTopic, editEntry } from "~/lib/entries.server";
+import { createReply, createTopic, editEntry } from "~/lib/entries.server";
 import { expandGlossaryFile, importGlossaryRows, parseGlossaryFile } from "~/lib/glossary-io.server";
 import { createGlossaryEntry, deleteGlossaryEntry, updateGlossaryEntry, type GlossaryActor } from "~/lib/glossary.server";
 import { createTranslationHandlers } from "~/lib/jobs/translation-jobs.server";
@@ -14,6 +14,7 @@ import type { LlmOptions } from "~/lib/llm/index.server";
 import type { TranslationEngine, TranslationRequest } from "~/lib/llm/types";
 import { createTranslationReport } from "~/lib/translation-reports.server";
 import { getGlossaryVersion } from "~/lib/translations.server";
+import { m } from "~/paraglide/messages.js";
 import { addMember, createTestDb } from "./helpers/db";
 
 // Glossary edits affect only subsequent translations and report-triggered retranslations. Edits queue no translation jobs and leave existing translations untouched.
@@ -80,6 +81,23 @@ describe("a change to the glossary does not enqueue a job and does not touch the
 });
 
 describe("the new content works from the next translation on", () => {
+  it("passes the localized site term for topics, titles, and replies even when a glossary entry disagrees", async () => {
+    const { db } = await setup();
+    const term = m.nushi_name({}, { locale: "ja" });
+    expect(await createGlossaryEntry(db, op, { term, lang: "ja", targetLang: "th", candidates: "OP" })).toMatchObject({ ok: true });
+    const title = `${term}の題`, body = `${term}についての投稿です。`, reply = `${term}はどう思う？`;
+    const topic = await createTopic(db, "u1", { lang: "ja", title, body });
+    if (!topic.ok) throw new Error("topic failed");
+    expect(await createReply(db, "u1", topic.id, { lang: "ja", body: reply })).toMatchObject({ ok: true });
+    const seen: TranslationRequest[] = [];
+    await runJobs(db, llmWith(recording(seen)), t(3));
+    for (const text of [title, body, reply]) {
+      expect(thaiHint(seen, text)?.filter(hint => hint.term === term)).toMatchObject([
+        { term, candidates: [m.nushi_name({}, { locale: "th" })] },
+      ]);
+    }
+  });
+
   it("a post made after the change gets the new candidates in the prompt and the new glossary version on its translation; the post made before keeps its translation", async () => {
     const { db, glossaryId, topicId } = await setup();
     const oldVersion = await getGlossaryVersion(db);
