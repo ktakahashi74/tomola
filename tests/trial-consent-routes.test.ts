@@ -9,6 +9,10 @@ import { setupRouteHarness } from "./helpers/route-harness";
 import { trialForm } from "./helpers/trial";
 
 
+
+// A form submitted without JavaScript; script submissions receive data instead of a redirect.
+const DOCUMENT = { "sec-fetch-dest": "document" };
+
 it("requires country, adult confirmation and agreement on direct signup POSTs", async () => {
   const h = await setupRouteHarness();
   try {
@@ -55,8 +59,13 @@ it("requires separate stance agreement, preserves records on revocation and stil
     await h.db.update(profiles).set({ stanceConsentVersion: null, stanceConsentAt: null }).where(eq(profiles.userId, h.ids.trial_stance));
     const { action } = await import("~/routes/stance");
     const settings = await import("~/routes/settings-stances");
-    const choose = (position: string, version: string) => action(h.args(h.request("/stance", { as: "trial_stance", form: { questionId: String(question.id), position, version, returnTo: `/t/${question.id}` } })));
-    expect(await h.outcome(() => choose("agree", "0"))).toMatchObject({ status: 307, location: expect.stringContaining("/settings/stances?") });
+    const choose = (position: string, version: string, headers?: Record<string, string>) => action(h.args(h.request("/stance", { as: "trial_stance", form: { questionId: String(question.id), position, version, returnTo: `/t/${question.id}` }, headers })));
+    const documentConsent = await h.outcome(() => choose("agree", "0", DOCUMENT));
+    expect(documentConsent).toMatchObject({ status: 307, location: expect.stringContaining("/settings/stances?") });
+    // A script submission gets the same consent step as data and opens it itself.
+    expect(await h.outcome(() => choose("agree", "0"))).toMatchObject({
+      status: 409, value: { data: { ok: false, error: "consent_required", questionId: question.id, position: "agree", consentHref: documentConsent.location } },
+    });
     expect(await h.db.select().from(stances)).toHaveLength(0);
     const consent = (intent: string, version = String(STANCE_CONSENT_VERSION)) => settings.action(h.args(h.request("/settings/stances", { as: "trial_stance", form: { intent, version, agree: "1", next: `/t/${question.id}` } })));
     expect(await h.outcome(() => consent("consent", "0"))).toMatchObject({ status: 400 });
@@ -65,7 +74,7 @@ it("requires separate stance agreement, preserves records on revocation and stil
     expect(await h.outcome(() => consent("revoke-consent"))).toMatchObject({ status: 302 });
     expect(await h.db.select().from(stances)).toHaveLength(1);
     expect(await h.db.select().from(stanceChanges)).toHaveLength(1);
-    expect(await h.outcome(() => choose("disagree", "1"))).toMatchObject({ status: 307 });
+    expect(await h.outcome(() => choose("disagree", "1", DOCUMENT))).toMatchObject({ status: 307 });
     expect(await h.outcome(() => choose("none", "1"))).toMatchObject({ status: 200 });
     expect(await h.db.select().from(stances)).toHaveLength(0);
     expect(await h.db.select().from(stanceChanges)).toHaveLength(2);
@@ -84,7 +93,7 @@ it.each(["agree", "disagree", "neither"])("carries the intended %s choice throug
     const { action } = await import("~/routes/stance");
     const settings = await import("~/routes/settings-stances");
     const fields = { questionId: String(question.id), position, version: "0", returnTo: `/t/${question.id}?lang=en#stance` };
-    const redirected = await h.outcome(() => action(h.args(h.request("/stance", { as: "consent_return", form: fields }))));
+    const redirected = await h.outcome(() => action(h.args(h.request("/stance", { as: "consent_return", form: fields, headers: DOCUMENT }))));
     expect(redirected.status).toBe(307);
     expect(redirected.location).not.toMatch(/stance_(?:choice|q|msg)/);
     const consentUrl = new URL(redirected.location!, "http://localhost");
@@ -149,7 +158,7 @@ it.each([
     const { action } = await import("~/routes/stance");
     const result = await h.outcome(() => action(h.args(h.request("/stance", { as: "paging_consent", form: {
       questionId: String(question.id), position: "agree", version: "0", returnTo: source.replace("QUESTION", String(question.id)),
-    } }))));
+    }, headers: DOCUMENT }))));
     expect(result.status).toBe(307);
     expect(new URL(result.location!, "http://localhost").searchParams.get("next")).toBe(`/t/${question.id}${search}#stance`);
     expect(await h.db.select().from(stances)).toHaveLength(0);
