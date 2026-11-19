@@ -176,23 +176,63 @@ test("text typed in the reply field goes with the member to another reply target
     let fail!: () => void;
     const pause = new Promise<void>(resolve => { fail = resolve; });
     await page.route(asset, async route => { await pause; await route.abort(); });
-    const nativeReply = "Written before the reply editor failed to load";
+    const reply = "Written before the reply controls failed to load";
     const failed = page.waitForEvent("requestfailed", request => asset.test(request.url()));
     try {
       const requested = page.waitForRequest(asset);
       await page.goto(thread, { waitUntil: "commit" });
       await requested;
-      await body(page, "#reply").fill(nativeReply);
+      await body(page, "#reply").fill(reply);
     } finally { fail(); }
     await failed;
     await waitForClientRoute(page);
     await expect(form).not.toHaveAttribute("data-ready", "true");
-    await expect(body(page, "#reply")).toHaveValue(nativeReply);
-    const sent = page.waitForRequest(request => request.method() === "POST" && request.isNavigationRequest() && new URL(request.url()).pathname === thread);
+    await expect(body(page, "#reply")).toHaveValue(reply);
+    await expect.poll(() => kept(page)).not.toEqual([]);
+    const sent = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === `${thread}.data`);
     await form.getByRole("button", { name: en.submit_reply, exact: true }).click();
     await sent;
-    await expect(page.locator("#replies").getByText(nativeReply, { exact: true })).toBeVisible();
+    await expect(page.locator("#replies").getByText(reply, { exact: true })).toBeVisible();
+    await expect(form).toHaveAttribute("data-draft-recovery", "ready");
+    await expect(body(page, "#reply")).toBeEmpty();
+    expect(await kept(page)).toEqual([]);
   }
+});
+
+test("sending a reply while its controls load clears the device draft after posting", async ({ page }) => {
+  test.skip(process.env.E2E_SERVER !== "build", "Intercepts the production controls chunk");
+  await useMember(page, "zlds_third@example.com", "/t/new");
+  await waitForFormReady(page.locator('form:has(textarea[name="body"])'));
+  await body(page).fill("A topic for a reply with deferred controls");
+  await page.getByRole("button", { name: en.submit_post, exact: true }).click();
+  await expect(page).toHaveURL(/\/t\/\d+\?posted=\d+/);
+
+  const thread = new URL(page.url()).pathname;
+  const form = page.locator("#reply form");
+  const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
+  let release!: () => void;
+  const pause = new Promise<void>(resolve => { release = resolve; });
+  await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
+  const reply = "Written while the reply controls were loading";
+  try {
+    const requested = page.waitForRequest(asset);
+    await page.goto(thread, { waitUntil: "commit" });
+    await requested;
+    await expect(form).toHaveAttribute("data-draft-recovery", "ready");
+    await body(page, "#reply").fill(reply);
+    await expect.poll(() => kept(page)).toEqual([expect.stringContaining(`:reply:${thread.split("/").at(-1)}:`)]);
+    await expect(form).not.toHaveAttribute("data-ready", "true");
+    await form.getByRole("button", { name: en.submit_reply, exact: true }).click({ noWaitAfter: true });
+    // A deferred enhancement can change the language field without editing the reply.
+    await form.locator('input[name="lang"]').evaluate((input: HTMLInputElement) => { input.value = input.value === "" ? "en" : ""; });
+    // The next form must get the already loaded controls without another idle callback.
+    await page.evaluate(() => { window.requestIdleCallback = () => 0; });
+  } finally { release(); }
+  await expect(page.locator("#replies article p").filter({ hasText: reply })).toHaveCount(1);
+  await expect(form).toHaveAttribute("data-draft-recovery", "ready");
+  await expect(body(page, "#reply")).toBeEmpty();
+  expect(await kept(page)).toEqual([]);
+  await expect(form).toHaveAttribute("data-ready", "true");
 });
 
 

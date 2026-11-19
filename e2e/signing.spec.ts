@@ -137,13 +137,18 @@ test("opted-in writes and both preference changes use real UV assertions; unsign
       const reply = page.locator("#reply form");
       const textarea = reply.getByLabel(enMessages.field_body);
       const unsigned = "Reply kept after a failed editor load";
+      await expect(reply).toHaveAttribute("data-draft-recovery", "ready");
       await textarea.fill(unsigned);
-      const refused = page.waitForResponse(response => response.request().method() === "POST" && response.request().isNavigationRequest() && new URL(response.url()).pathname === topicPath);
+      const refused = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === `${topicPath}.data`);
       await reply.getByRole("button", { name: enMessages.submit_reply, exact: true }).click();
       expect((await refused).status()).toBe(403);
       await expect(reply.getByText(enMessages.signing_failed, { exact: true })).toBeVisible();
       await expect(textarea).toHaveValue(unsigned);
       await expect(page.locator("#replies").getByText(unsigned, { exact: true })).toHaveCount(0);
+      // Reloading after refusal restores the device copy as well.
+      await expect.poll(() => page.evaluate(text => Object.keys(localStorage).some(key => key.startsWith("tomola:draft:") && JSON.parse(localStorage.getItem(key)!).body === text), unsigned)).toBe(true);
+      await page.reload();
+      await expect(textarea).toHaveValue(unsigned);
       await page.unroute(asset);
     }
 
