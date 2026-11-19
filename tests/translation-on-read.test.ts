@@ -4,6 +4,7 @@ import { addMember, createTestDb } from "./helpers/db";
 import { getMd, parseThreadBlocks } from "./helpers/md";
 import { entries, jobs, llmUsage, profiles, rateLimits, roles, translations, villageFollows, villageMembers, villages } from "~/lib/db/schema";
 import * as metering from "~/lib/llm/metering.server";
+import { primaryModelOf } from "~/lib/llm/config.server";
 import { createReply, createTopic, editEntry } from "~/lib/entries.server";
 import { enqueueTranslations, TRANSLATE_JOB, TITLE_TRANSLATE_JOB } from "~/lib/translations.server";
 import { eagerBodyLangs } from "~/lib/translation-eager.server";
@@ -162,6 +163,28 @@ it("reuses translation-wait estimates while polling and checks the live budget b
   await db.insert(llmUsage).values({ engine: "fake", model: "fake", purpose: "translate", costUsdMicro: 1_000_000 });
   expect((await requestBodyTranslations(db, [source], "fr", true)).stopped).toBe(true);
   expect(await queued(db, TRANSLATE_JOB)).toHaveLength(0);
+});
+it("defers only the posts whose estimates exceed the remaining settled budget", async () => {
+  const db = await setup();
+  const source = await topic(db);
+  const [long, short] = await db.insert(entries).values(["長い返信。".repeat(200), source.body].map(body => ({
+    kind: "reply", threadId: source.id, authorId: "source", lang: "ja", body, sourceHash: "reply-fixture",
+  }))).returning();
+  await db.delete(jobs);
+  vi.stubEnv("TRANSLATION_PRIMARY", "claude");
+  const model = primaryModelOf();
+  const estimate = metering.translationEstimate("claude", model, { text: source.body, from: "ja", to: "en", field: "body" });
+  vi.stubEnv("LLM_MONTHLY_BUDGET_USD", (estimate * 5 / 1_000_000).toFixed(6));
+  await db.insert(llmUsage).values({ engine: "claude", model, purpose: "moderation", costUsdMicro: estimate * 4, createdAt: new Date() });
+
+  const inputs = [short, long].map(row => ({ ...row, lang: "ja" as const, kind: "reply" as const }));
+  expect(await requestBodyTranslations(db, [...inputs, source], "en", true)).toEqual({
+    ready: [], unavailable: [], paused: [long.id], stopped: false,
+  });
+  const work = (await queued(db, TRANSLATE_JOB)).sort((a, b) => a.id - b.id);
+  expect(work.map(job => job.payload)).toEqual([
+    expect.objectContaining({ entryId: source.id }), expect.objectContaining({ entryId: short.id }),
+  ]);
 });
 it("records a first browser display once in batches and reports aggregate counts and percentages", async () => {
   const db = await setup(); const source = await topic(db);

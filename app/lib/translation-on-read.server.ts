@@ -1,8 +1,8 @@
-import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { entries, translations } from "./db/schema";
 import { isStale } from "./display";
-import { loadPickedTranslations, type DisplayInput } from "./entry-display.server";
+import { loadPickedTranslations, type DisplayInput, type PickedTranslations } from "./entry-display.server";
 import { availabilityKey, loadTranslationAvailability } from "./translation-availability.server";
 import { getBudgetStatus } from "./llm/usage.server";
 import { translationEstimate } from "./llm/metering.server";
@@ -36,15 +36,16 @@ export async function translationPageInputs(db: Db, threadId: number, opts: { pa
     .map(row => ({ id: row.id, kind: row.kind as DisplayInput["kind"], lang: row.lang as Lang, sourceHash: row.sourceHash }));
 }
 
+function hasCurrentBody(entry: DisplayInput, picked: PickedTranslations | undefined): boolean {
+  const body = picked?.body;
+  return !!body && body.sourceHash === entry.sourceHash && !isStale(body.flags);
+}
+
 // Call with only the readable posts of this page. Source locks make enqueueing
-// atomic with edits/deletion. Unfinished work stays deduplicated; remembering
-// the requested revision lets restored text retain one necessary rerun.
+// atomic with edits/deletion. Each post still gets its own deduplicated job.
 export async function requestBodyTranslations(db: Db, inputs: readonly DisplayInput[], lang: Lang, requestWork: boolean) {
   const picked = await loadPickedTranslations(db, inputs, lang, ["body"]);
-  const ready = inputs.filter(e => {
-    const body = picked.get(e.id)?.body;
-    return e.lang === lang || (body && body.sourceHash === e.sourceHash && !isStale(body.flags));
-  }).map(e => e.id);
+  const ready = inputs.filter(e => e.lang === lang || hasCurrentBody(e, picked.get(e.id))).map(e => e.id);
   const missing = inputs.filter(e => !ready.includes(e.id));
   const availability = await loadTranslationAvailability(db, missing, [lang], undefined, { currentOnly: true });
   const unavailable = missing.filter(e => availability.get(availabilityKey(e.id, lang)) === "unavailable").map(e => e.id);
@@ -53,18 +54,34 @@ export async function requestBodyTranslations(db: Db, inputs: readonly DisplayIn
   const paused = missing.filter(e => availability.get(availabilityKey(e.id, lang)) !== "unavailable" &&
     translationWaitForAvailability(wait, availability.get(availabilityKey(e.id, lang))).kind === "stopped").map(e => e.id);
   if (requestWork && !stopped) {
-    for (const entry of missing.filter(e => !unavailable.includes(e.id) && !paused.includes(e.id)).sort((a, b) => a.id - b.id)) {
-      await db.transaction(async tx => {
-        const [current] = await tx.select({ sourceHash: entries.sourceHash, lang: entries.lang, body: entries.body, mentionRevision: entries.mentionRevision }).from(entries)
-          .where(and(eq(entries.id, entry.id), isNull(entries.deletedAt), isNull(entries.hiddenAt))).for("no key update");
-        if (!current?.sourceHash || current.sourceHash !== entry.sourceHash || current.lang !== entry.lang) return;
-        const found = (await loadPickedTranslations(tx, [entry], lang, ["body"])).get(entry.id)?.body;
-        if (found && found.sourceHash === entry.sourceHash && !isStale(found.flags)) return;
+    const wanted = new Map(missing.filter(e => !unavailable.includes(e.id) && !paused.includes(e.id)).map(e => [e.id, e]));
+    if (wanted.size) {
+      stopped = await db.transaction(async tx => {
+        // Use a consistent lock order for overlapping requests and source edits.
+        const rows = await tx.select({ id: entries.id, sourceHash: entries.sourceHash, lang: entries.lang, body: entries.body, mentionRevision: entries.mentionRevision }).from(entries)
+          .where(and(inArray(entries.id, [...wanted.keys()]), isNull(entries.deletedAt), isNull(entries.hiddenAt)))
+          .orderBy(asc(entries.id)).for("no key update");
+        const current = rows.flatMap(row => {
+          const input = wanted.get(row.id);
+          return input && row.sourceHash && row.sourceHash === input.sourceHash && row.lang === input.lang
+            ? [{ input, row: { ...row, sourceHash: row.sourceHash } }] : [];
+        });
+        const found = await loadPickedTranslations(tx, current.map(({ input }) => input), lang, ["body"]);
+        const pending = current.filter(({ input }) => !hasCurrentBody(input, found.get(input.id)));
+        if (!pending.length) return false;
+
+        // Use one settled-cost snapshot. Each post is eligible against the same
+        // remaining amount. Workers reserve the cost of each actual model call.
         const budget = await getBudgetStatus(tx);
-        const estimate = translationEstimate(primaryEngineId(), primaryModelOf(), { text: current.body, from: entry.lang, to: lang, field: "body" });
-        if (budget.state === "stopped") { stopped = true; return; }
-        if (budget.usedMicro + estimate > budget.budgetMicro) { paused.push(entry.id); return; }
-        await enqueueCurrentBodyTranslation(tx, { id: entry.id, ...current, sourceHash: current.sourceHash }, lang, { priority: 1 });
+        if (budget.state === "stopped") return true;
+        const engine = primaryEngineId();
+        const model = primaryModelOf();
+        for (const { input, row } of pending) {
+          const estimate = translationEstimate(engine, model, { text: row.body, from: input.lang, to: lang, field: "body" });
+          if (budget.usedMicro + estimate > budget.budgetMicro) paused.push(row.id);
+          else await enqueueCurrentBodyTranslation(tx, row, lang, { priority: 1 });
+        }
+        return false;
       });
     }
   }
