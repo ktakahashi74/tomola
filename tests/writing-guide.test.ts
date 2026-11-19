@@ -135,6 +135,8 @@ describe("public writing instructions", () => {
       const text = (await import("~/lib/api/writing.server")).writingMarkdown(BASE);
       const limits = text.split("## Limits\n")[1].split("## Examples")[0];
       for (const value of [...Object.values(body), media.perPost, media.inputBytes, media.pixels, media.edge, media.storedBytes, motion.width, motion.height, motion.frames, motion.durationMs / 1000, motion.pixels, motion.storedBytes]) expect(limits).toContain(formatted(value));
+      const figures = text.split("### Prepare figures for reading\n")[1]?.split("\n### ")[0];
+      expect(figures).toContain(formatted(media.edge));
     } finally {
       vi.doUnmock("~/lib/body-length");
       vi.doUnmock("~/lib/media");

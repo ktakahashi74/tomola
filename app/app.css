@@ -178,6 +178,7 @@ main:focus {
   --reading-cjk-size: 1.0625rem;
   --reading-latin-measure: 36;
   --reading-cjk-measure: calc(41 * var(--reading-cjk-size));
+  /* The writing guide (app/lib/api/writing.server.ts) gives approximate reading and figure widths. */
   --reading-figure-max: 765px;
   --site-gutter: 1rem;
   --site-width: calc(var(--reading-cjk-measure) + 2 * var(--site-gutter));

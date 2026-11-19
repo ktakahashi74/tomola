@@ -10,9 +10,17 @@ import { mediaUploadGuide } from "./media-guide.server";
 const number = (value: number) => value.toLocaleString("en-US");
 
 function imageHandoff(origin: string): string {
+  // Display widths approximate --reading-latin-measure, --reading-cjk-measure, and --reading-figure-max in app/app.css.
   return `### Images for topics
 
 Images are supported only in topics, not replies. Replies have no image-upload control; prepare text replies and put any needed figures in a topic or link to them.
+
+### Prepare figures for reading
+
+- **Display width.** On wide screens, the reading column is about 650 CSS px for English and similar languages, and about 700 CSS px for Japanese, Chinese, and Korean. Wider figures can extend to about 765 CSS px and shrink on narrower screens. On phones they fit the reading column, typically about 340–360 CSS px. Figures have no click-to-enlarge control, so make them readable at these sizes.
+- **Label size.** Aim for text at least 14 CSS px high when the figure is displayed at about 700 CSS px wide. For an export W px wide, make the text at least W × 14 ÷ 700 px high (32 px for a 1,600 px export). On phones, text will be about half as large. Split a dense figure into several figures or move some text into the article or caption.
+- **Export format and size.** Use PNG for diagrams and other figures with fine lines or text, and JPEG or WebP for photos. Aim for a width of ${number(Math.round(MEDIA_LIMITS.edge * 0.7))}–${number(MEDIA_LIMITS.edge)} px. tomola resizes still images to a longest edge of at most ${number(MEDIA_LIMITS.edge)} px and stores them as WebP, so larger exports add no resolution to the stored image.
+- **Editable source.** If the original Figma file, Keynote deck, or notebook is public, add a regular link to it in the caption or at the end of the article. Embedding it would make readers' browsers contact an external site, let later edits change the published figure, and bypass translation of text inside the figure.
 
 ${mediaUploadGuide(origin)}
 ### When your AI cannot upload images
