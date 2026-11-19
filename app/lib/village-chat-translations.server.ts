@@ -1,4 +1,5 @@
 import { chatNushiEnabled } from "./chat-nushi-config.server";
+import type { JobPayload } from "./jobs/definitions.server";
 import { recordTranslationGeneration } from "./eval/signals.server";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, not, sql } from "drizzle-orm";
@@ -19,7 +20,7 @@ import { discardPaidTranslationCalls } from "./jobs/paid-translation.server";
 
 type Message = typeof chatMessages.$inferSelect;
 type Reader = Pick<typeof profiles.$inferSelect, "displayLang" | "readLangs" | "uiLocale">;
-export type ChatTranslationPayload = { messageId: string; lang: Lang; sourceHash: string };
+export type ChatTranslationPayload = JobPayload<"translate_chat">;
 export const chatSourceHash = (text: string) => createHash("sha256").update(text).digest("hex");
 // In addition to the first job, allow at most three replacements after crashes.
 const MAX_CHAT_JOB_RECREATIONS = 3;

@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
@@ -256,7 +257,7 @@ it("counts only queued jobs waiting for reservation capacity for the operator", 
   const { enqueue, runDueJobs } = await import("~/lib/jobs/queue.server");
   const now = new Date();
   for (const reason of ["insufficient", "state"] as const) {
-    await enqueue(db, "budget_fixture", { reason });
+    await enqueueFixture(db, "budget_fixture", { reason });
   }
   await runDueJobs(db, { budget_fixture: async job => {
     const error = new BudgetPausedError("normal", new Date(now.getTime() + 60_000), "primary", (job.payload as { reason: "insufficient" | "state" }).reason);

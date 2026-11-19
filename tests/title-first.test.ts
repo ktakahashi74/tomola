@@ -1,12 +1,11 @@
-import { and, eq, sql } from "drizzle-orm";
+import { enqueueFixture } from "./helpers/enqueue-fixture";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { entries, jobs, llmUsage, translationReports, translationRevisions, translations } from "~/lib/db/schema";
 import { createReply, createTopic, editEntry, softDeleteEntry } from "~/lib/entries.server";
 import { loadEntryDisplays, loadTitleDisplays } from "~/lib/entry-display.server";
 import { createTranslationHandlers, TITLE_CONTEXT_MAX_CHARS } from "~/lib/jobs/translation-jobs.server";
-import { enqueue, runDueJobs } from "~/lib/jobs/queue.server";
-import { MAIL_JOB_KINDS } from "~/lib/jobs/mail-kinds";
-import { jobHandlers } from "~/lib/jobs/handlers.server";
+import { runDueJobs } from "~/lib/jobs/queue.server";
 import { createNotificationHandlers } from "~/lib/jobs/notification-jobs.server";
 import { createPasskeyHandlers } from "~/lib/jobs/passkey-jobs.server";
 import { createAccountDeletionHandlers } from "~/lib/jobs/account-delete-jobs.server";
@@ -45,27 +44,24 @@ const recording = (requests: TranslationRequest[], refine = false): TranslationE
 };
 const handlers = (primary = createFakeEngine(), env: Record<string, string> = {}, secondary: TranslationEngine | null = null) =>
   createTranslationHandlers({ llm: { engines: { primary, secondary, judge: null }, env } });
-const runKind = (db: Awaited<ReturnType<typeof createTestDb>>, kind: string, hs = handlers()) =>
+const runKind = (db: Awaited<ReturnType<typeof createTestDb>>, kind: keyof ReturnType<typeof handlers>, hs = handlers()) =>
   runDueJobs(db, { [kind]: hs[kind] }, { now, limit: 100, logger: quiet });
 const titleRow = async (db: Awaited<ReturnType<typeof createTestDb>>, id: number) =>
   (await db.select().from(translations).where(and(eq(translations.entryId, id), eq(translations.field, "title"), eq(translations.lang, "en"), eq(translations.kind, "primary"))))[0];
 
 describe("title-first translation", () => {
-  it("prioritizes every registered mail handler", () => {
-    const mailHandlers = { ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createAccountDeletionHandlers() };
-    expect([...MAIL_JOB_KINDS].sort()).toEqual(Object.keys(mailHandlers).sort());
-    expect(Object.keys(jobHandlers).filter(kind => kind.startsWith("send_")).sort()).toEqual([...MAIL_JOB_KINDS].sort());
-  });
-
   it("prioritizes all mail kinds, then titles, then older body work; preserves due-time and ID order within tiers", async () => {
     const db = await createTestDb();
-    const seen: string[] = [];
-    const kinds = ["translate_entry", "translate_title", "send_notification_email", "send_digest", "send_passkey_notice"];
-    for (const [i, kind] of kinds.entries()) await enqueue(db, kind, {}, { runAt: new Date(now.getTime() - (100 - i) * 1000) });
-    await enqueue(db, "translate_title", { later: true }, { runAt: now });
-    await enqueue(db, "send_digest", {}, { runAt: new Date(now.getTime() + 1000) });
-    await runDueJobs(db, Object.fromEntries(kinds.map(kind => [kind, async (job: { kind: string }) => { seen.push(job.kind); }])), { now, logger: quiet });
-    expect(seen).toEqual(["send_notification_email", "send_digest", "send_passkey_notice", "translate_title", "translate_title", "translate_entry"]);
+    const seen: number[] = [];
+    const mailKinds = Object.keys({ ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createAccountDeletionHandlers() });
+    const kinds = ["translate_entry", "translate_title", ...mailKinds];
+    for (const [i, kind] of kinds.entries()) await enqueueFixture(db, kind, {}, { runAt: new Date(now.getTime() - (100 - i) * 1000) });
+    const later = await enqueueFixture(db, "translate_title", {}, { runAt: now });
+    const tied = await enqueueFixture(db, "translate_title", {}, { runAt: now });
+    await enqueueFixture(db, "send_digest", {}, { runAt: new Date(now.getTime() + 1000) });
+    const [body, firstTitle, ...mail] = await db.select().from(jobs).orderBy(asc(jobs.id)).limit(kinds.length);
+    await runDueJobs(db, Object.fromEntries(kinds.map(kind => [kind, async (job: { id: number }) => { seen.push(job.id); }])), { now, logger: quiet });
+    expect(seen).toEqual([...mail.map(job => job.id), firstTitle.id, later.id, tied.id, body.id]);
   });
 
   it("saves a displayable provisional title alone, with usage recorded", async () => {

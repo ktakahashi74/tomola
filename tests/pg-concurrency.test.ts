@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { quietLogger as quiet } from "./helpers/logger";
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import type pg from "pg";
@@ -13,7 +14,7 @@ import { markFollowedThreadRead, setFollow } from "~/lib/follows.server";
 import { createInvitation, markInvitationUsed } from "~/lib/invitations.server";
 import { createEmbeddingHandlers } from "~/lib/jobs/embedding-jobs.server";
 import { createNotificationHandlers } from "~/lib/jobs/notification-jobs.server";
-import { enqueue, runDueJobs, STUCK_AFTER_MS, type JobHandlers } from "~/lib/jobs/queue.server";
+import { runDueJobs, STUCK_AFTER_MS, type JobHandlers } from "~/lib/jobs/queue.server";
 import { createTranslationHandlers, entryStillCurrent } from "~/lib/jobs/translation-jobs.server";
 import { loadChanges } from "~/lib/md/changes.server";
 import { createMailer } from "~/lib/mail/mail.server";
@@ -276,7 +277,7 @@ describe.skipIf(!REAL_PG_URL)("two connections on PostgreSQL (TEST_DATABASE_URL)
       const [w1, w2, writer] = await Promise.all([scratch.open("w1"), scratch.open("w2"), scratch.open("writer")]);
       const kind = `pg_claim_${++seq}`;
       const ids: number[] = [];
-      for (let i = 0; i < 60; i++) ids.push((await enqueue(writer, kind, { i })).id);
+      for (let i = 0; i < 60; i++) ids.push((await enqueueFixture(writer, kind, { i })).id);
       const ran = new Map<number, number>();
       const byWorker = [0, 0];
       const handlerFor = (worker: number): JobHandlers => ({
@@ -310,7 +311,7 @@ describe.skipIf(!REAL_PG_URL)("two connections on PostgreSQL (TEST_DATABASE_URL)
     ] as const)("%s", async (_name, heartbeatMs, takenBack) => {
       const [w1, w2] = await Promise.all([scratch.open("w1"), scratch.open("w2")]);
       const kind = `pg_long_${++seq}`;
-      const { id } = await enqueue(w1, kind, {});
+      const { id } = await enqueueFixture(w1, kind, {});
       const claimedAt = new Date("2031-01-01T00:00:00Z");
       let release!: () => void;
       const gate = new Promise<void>((resolve) => (release = resolve));

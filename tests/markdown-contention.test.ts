@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import fs from "node:fs";
 import { eq } from "drizzle-orm";
 import { createStaticHandler } from "react-router";
@@ -6,7 +7,7 @@ import { setupRouteHarness } from "./helpers/route-harness";
 import { markdownFixture } from "./helpers/markdown-fixture";
 import { createTopic, getThread } from "~/lib/entries.server";
 import { MarkdownBusyError, setMarkdownExecutorForTests, withMarkdownScope } from "~/lib/markdown-budget.server";
-import { enqueue, runDueJobs } from "~/lib/jobs/queue.server";
+import { runDueJobs } from "~/lib/jobs/queue.server";
 import { drafts, entries, entryReferences, jobs, signingChallenges } from "~/lib/db/schema";
 import { createDraft, getDraft } from "~/lib/drafts.server";
 import { resolveSourceMentions } from "~/lib/mentions.server";
@@ -153,7 +154,7 @@ it("a job waits for the worker before calling its engine and preserves mention p
   const { h, f, p } = await setup();
   const topic = await createTopic(h.db, h.ids.writer, { lang: "en", body: "Hello @reader." });
   if (!topic.ok) throw new Error("control failed");
-  await h.db.delete(jobs); await enqueue(h.db, "markdown-test");
+  await h.db.delete(jobs); await enqueueFixture(h.db, "markdown-test");
   const holds = await fill(f, p); const engine = vi.fn(async () => "Hello reader.");
   const running = runDueJobs(h.db, { "markdown-test": async () => {
     const source = await resolveSourceMentions(h.db, "Hello @reader.", topic.id);

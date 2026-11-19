@@ -1,4 +1,5 @@
 import { loadDisplayNames, selectDisplayName } from "./display-names.server";
+import type { JobPayload } from "./jobs/definitions.server";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "./db/client.server";
@@ -18,7 +19,7 @@ export const TRANSLATE_VILLAGE_JOB = "translate_village";
 // The error_code of a row whose texts came back as the same characters as the source: nothing to translate, so the original is read with no mark of a translation, and the
 // operator's preparation does not queue it again. It is not a failure of the engine.
 export const SAME_AS_SOURCE = "same_as_source";
-export type VillageTranslationPayload = { villageId: string; lang: Lang; sourceHash: string };
+export type VillageTranslationPayload = JobPayload<typeof TRANSLATE_VILLAGE_JOB>;
 
 type Source = { sourceLang: string | null; name: string; description: string; language: string | null };
 
@@ -34,7 +35,7 @@ export function villageSourceHash(village: Source): string {
 
 export const villageJobKey = (villageId: string, lang: Lang, sourceHash: string) => `translate-village:${villageId}:${lang}:${sourceHash}`;
 const enqueueVillage = (db: Db, payload: VillageTranslationPayload) =>
-  enqueue(db, TRANSLATE_VILLAGE_JOB, payload, { dedupeKey: villageJobKey(payload.villageId, payload.lang, payload.sourceHash), maxAttempts: 5, priority: 2 });
+  enqueue(db, TRANSLATE_VILLAGE_JOB, payload, { dedupeKey: villageJobKey(payload.villageId, payload.lang, payload.sourceHash), maxAttempts: 5 });
 
 // Bring the translations of one village up to date with its texts: drop rows and unstarted jobs of older texts or of languages that are no longer targets, then make sure each
 // target language has a row with a job. Run it in the transaction that creates or changes the village (the caller holds the village row, or has just inserted it).

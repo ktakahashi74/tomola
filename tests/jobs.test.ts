@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { quietLogger as silent } from "./helpers/logger";
 import { deferred } from "./helpers/deferred";
 import { asc, eq } from "drizzle-orm";
@@ -8,13 +9,13 @@ import {
   backoffMs,
   countFailedJobs,
   DeferJob,
-  enqueue,
   isPermanentFailure,
   runDueJobs,
   STUCK_AFTER_MS,
   type JobHandler,
   type JobRow,
 } from "~/lib/jobs/queue.server";
+import { createNushiTranslationHandlers } from "~/lib/nushi-translations.server";
 import { isWorkerEnabled, startWorker } from "~/lib/jobs/worker.server";
 import { createTestDb } from "./helpers/db";
 import { LlmError } from "~/lib/llm/errors.server";
@@ -36,10 +37,36 @@ const one = async (db: Db, id: number): Promise<JobRow> => {
   return row;
 };
 
+it("records malformed saved payloads as permanent failures without logging their contents", async () => {
+  const db = await createTestDb();
+  const malformed = [{ answerId: "private payload", lang: "ja" }, "private payload"];
+  for (const payload of malformed) {
+    await enqueueFixture(db, "translate_nushi", payload, { runAt: t0 });
+  }
+  // A supported but disabled language is still valid queue input.
+  vi.stubEnv("ENABLED_LANGS", "en,ja");
+  await enqueueFixture(db, "translate_nushi", { answerId: 1, lang: "fr" }, { runAt: t0 });
+  const error = vi.fn(), warn = vi.fn();
+  try {
+    const handlers = createNushiTranslationHandlers();
+    expect(await runDueJobs(db, handlers, { now: t0, logger: { error, warn } })).toMatchObject({ failed: 2, retried: 0, done: 1 });
+    const rows = await all(db);
+    for (const row of rows.slice(0, malformed.length)) {
+      expect(row).toMatchObject({ status: "failed", attempts: 1, lockedAt: null });
+      expect(row.lastError).toContain(row.kind);
+    }
+    expect(rows.at(-1)).toMatchObject({ status: "done", lastError: null });
+    expect(JSON.stringify([rows.map(row => row.lastError), error.mock.calls, warn.mock.calls])).not.toContain("private payload");
+    expect(await run(db, handlers, at(3600))).toMatchObject({ ran: 0 });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
 describe("enqueue", () => {
   it("creates a queued job with defaults", async () => {
     const db = await createTestDb();
-    const { id, created } = await enqueue(db, "demo", { a: 1, nested: { b: [1, 2] } });
+    const { id, created } = await enqueueFixture(db, "demo", { a: 1, nested: { b: [1, 2] } });
     expect(created).toBe(true);
     expect(await one(db, id)).toMatchObject({
       kind: "demo",
@@ -55,21 +82,21 @@ describe("enqueue", () => {
 
   it("takes runAt and maxAttempts", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "demo", {}, { runAt: at(90), maxAttempts: 2 });
+    const { id } = await enqueueFixture(db, "demo", {}, { runAt: at(90), maxAttempts: 2 });
     expect(await one(db, id)).toMatchObject({ runAt: at(90), maxAttempts: 2 });
   });
 
   it("does not create a second job while one with the same dedupe key is queued or running", async () => {
     const db = await createTestDb();
-    const first = await enqueue(db, "demo", { n: 1 }, { dedupeKey: "k" });
-    const second = await enqueue(db, "demo", { n: 2 }, { dedupeKey: "k" });
+    const first = await enqueueFixture(db, "demo", { n: 1 }, { dedupeKey: "k" });
+    const second = await enqueueFixture(db, "demo", { n: 2 }, { dedupeKey: "k" });
     expect(first.created).toBe(true);
     expect(second).toEqual({ id: first.id, created: false });
     expect(await all(db)).toHaveLength(1);
     // Different keys or no key create separate jobs.
-    expect((await enqueue(db, "demo", {}, { dedupeKey: "other" })).created).toBe(true);
-    expect((await enqueue(db, "demo", {})).created).toBe(true);
-    expect((await enqueue(db, "demo", {})).created).toBe(true);
+    expect((await enqueueFixture(db, "demo", {}, { dedupeKey: "other" })).created).toBe(true);
+    expect((await enqueueFixture(db, "demo", {})).created).toBe(true);
+    expect((await enqueueFixture(db, "demo", {})).created).toBe(true);
     expect(await all(db)).toHaveLength(4);
 
     // Same behavior while running.
@@ -78,7 +105,7 @@ describe("enqueue", () => {
       db,
       {
         demo: async (job) => {
-          if (job.id === first.id) duringRun = await enqueue(db, "demo", {}, { dedupeKey: "k" });
+          if (job.id === first.id) duringRun = await enqueueFixture(db, "demo", {}, { dedupeKey: "k" });
         },
       },
       t0,
@@ -89,25 +116,25 @@ describe("enqueue", () => {
 
   it("allows the same dedupe key again once the job is done or failed", async () => {
     const db = await createTestDb();
-    const a = await enqueue(db, "ok", {}, { dedupeKey: "k" });
+    const a = await enqueueFixture(db, "ok", {}, { dedupeKey: "k" });
     await run(db, { ok });
     expect((await one(db, a.id)).status).toBe("done");
-    const b = await enqueue(db, "bad", {}, { dedupeKey: "k", maxAttempts: 1 });
+    const b = await enqueueFixture(db, "bad", {}, { dedupeKey: "k", maxAttempts: 1 });
     expect(b).toMatchObject({ created: true });
     expect(b.id).not.toBe(a.id);
     await run(db, { bad: boom });
     expect((await one(db, b.id)).status).toBe("failed");
-    const c = await enqueue(db, "ok", {}, { dedupeKey: "k" });
+    const c = await enqueueFixture(db, "ok", {}, { dedupeKey: "k" });
     expect(c.created).toBe(true);
     expect(await all(db)).toHaveLength(3);
   });
 
   it("persists an opted-in request at the completion boundary, including an unchanged requested time, without consuming retry attempts", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "demo", {}, { dedupeKey: "again", runAt: t0, maxAttempts: 1 });
+    const { id } = await enqueueFixture(db, "demo", {}, { dedupeKey: "again", runAt: t0, maxAttempts: 1 });
     let calls = 0;
     const handler: JobHandler = async () => {
-      if (++calls === 1) await enqueue(db, "demo", {}, { dedupeKey: "again", runAt: t0, rescheduleRunning: true });
+      if (++calls === 1) await enqueueFixture(db, "demo", {}, { dedupeKey: "again", runAt: t0, rescheduleRunning: true });
     };
     expect(await run(db, { demo: handler })).toMatchObject({ ran: 1, deferred: 1, done: 0 });
     expect(await one(db, id)).toMatchObject({ status: "queued", attempts: 0, runAt: new Date(t0.getTime() + 1) });
@@ -118,9 +145,9 @@ describe("enqueue", () => {
 
   it("preserves a later running request when the handler defers", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "demo", {}, { dedupeKey: "later", runAt: t0 });
+    const { id } = await enqueueFixture(db, "demo", {}, { dedupeKey: "later", runAt: t0 });
     await run(db, { demo: async () => {
-      await enqueue(db, "demo", {}, { dedupeKey: "later", runAt: at(100), rescheduleRunning: true });
+      await enqueueFixture(db, "demo", {}, { dedupeKey: "later", runAt: at(100), rescheduleRunning: true });
       throw new DeferJob(at(10));
     } });
     expect(await one(db, id)).toMatchObject({ status: "queued", attempts: 0, runAt: at(100) });
@@ -130,15 +157,15 @@ describe("enqueue", () => {
     const db = await createTestDb();
     await expect(
       db.transaction(async (tx) => {
-        await enqueue(tx, "demo", {}, { dedupeKey: "k" });
+        await enqueueFixture(tx, "demo", {}, { dedupeKey: "k" });
         throw new Error("rollback");
       }),
     ).rejects.toThrow("rollback");
     expect(await all(db)).toHaveLength(0);
     await db.transaction(async (tx) => {
-      await enqueue(tx, "demo", {}, { dedupeKey: "k" });
+      await enqueueFixture(tx, "demo", {}, { dedupeKey: "k" });
       // Deduplicate within one transaction too.
-      expect((await enqueue(tx, "demo", {}, { dedupeKey: "k" })).created).toBe(false);
+      expect((await enqueueFixture(tx, "demo", {}, { dedupeKey: "k" })).created).toBe(false);
     });
     expect(await all(db)).toHaveLength(1);
   });
@@ -151,9 +178,9 @@ describe("runDueJobs", () => {
     const handler: JobHandler = async (job, ctx) => {
       seen.push([job.kind, job.payload, ctx.now]);
     };
-    await enqueue(db, "later", { n: 2 }, { runAt: at(-10) });
-    await enqueue(db, "early", { n: 1 }, { runAt: at(-100) });
-    const future = await enqueue(db, "later", { n: 3 }, { runAt: at(60) });
+    await enqueueFixture(db, "later", { n: 2 }, { runAt: at(-10) });
+    await enqueueFixture(db, "early", { n: 1 }, { runAt: at(-100) });
+    const future = await enqueueFixture(db, "later", { n: 3 }, { runAt: at(60) });
     const stats = await run(db, { early: handler, later: handler });
     expect(stats).toMatchObject({ ran: 2, done: 2, retried: 0, failed: 0 });
     expect(seen).toEqual([
@@ -170,14 +197,14 @@ describe("runDueJobs", () => {
 
   it("respects the limit", async () => {
     const db = await createTestDb();
-    for (let i = 0; i < 5; i++) await enqueue(db, "demo", { i });
+    for (let i = 0; i < 5; i++) await enqueueFixture(db, "demo", { i });
     expect(await run(db, { demo: ok }, t0, 3)).toMatchObject({ ran: 3, done: 3 });
     expect((await all(db)).filter((r) => r.status === "queued")).toHaveLength(2);
   });
 
   it("leaves jobs without a registered handler alone", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "unknown");
+    const { id } = await enqueueFixture(db, "unknown");
     expect(await run(db, { other: ok })).toMatchObject({ ran: 0 });
     expect(await run(db, {})).toMatchObject({ ran: 0 });
     expect(await one(db, id)).toMatchObject({ status: "queued", attempts: 0 });
@@ -185,7 +212,7 @@ describe("runDueJobs", () => {
 
   it("does not run the same job twice when called concurrently", async () => {
     const db = await createTestDb();
-    await enqueue(db, "demo");
+    await enqueueFixture(db, "demo");
     let calls = 0;
     const entered = deferred(), release = deferred();
     const handler: JobHandler = async () => { calls++; entered.resolve(); await release.promise; };
@@ -201,7 +228,7 @@ describe("runDueJobs", () => {
 
   it("delays a failed job exponentially and runs it again when it is due", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "flaky");
+    const { id } = await enqueueFixture(db, "flaky");
     let calls = 0;
     const flaky: JobHandler = async () => {
       calls++;
@@ -226,7 +253,7 @@ describe("runDueJobs", () => {
 
   it("marks a job failed when it runs out of attempts, and does not run it again", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "bad", {}, { maxAttempts: 3 });
+    const { id } = await enqueueFixture(db, "bad", {}, { maxAttempts: 3 });
     let now = t0;
     const stats = [];
     for (let i = 0; i < 4; i++) {
@@ -244,10 +271,10 @@ describe("runDueJobs", () => {
 
   it("keeps running other jobs when a handler throws (also for non-Error values)", async () => {
     const db = await createTestDb();
-    const a = await enqueue(db, "ok");
-    const b = await enqueue(db, "bad");
-    const c = await enqueue(db, "weird");
-    const d = await enqueue(db, "ok");
+    const a = await enqueueFixture(db, "ok");
+    const b = await enqueueFixture(db, "bad");
+    const c = await enqueueFixture(db, "weird");
+    const d = await enqueueFixture(db, "ok");
     const weird: JobHandler = async () => {
       throw "just a string";
     };
@@ -261,7 +288,7 @@ describe("runDueJobs", () => {
 
   it("truncates a very long error message", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "bad");
+    const { id } = await enqueueFixture(db, "bad");
     await run(db, {
       bad: async () => {
         throw new Error("x".repeat(10_000));
@@ -272,7 +299,7 @@ describe("runDueJobs", () => {
 
   it("puts a deferred job back without counting an attempt", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "paused", {}, { maxAttempts: 1 });
+    const { id } = await enqueueFixture(db, "paused", {}, { maxAttempts: 1 });
     let paused = true;
     const handler: JobHandler = async () => {
       if (paused) throw new DeferJob(at(600), "budget stopped");
@@ -301,7 +328,7 @@ describe("errors that are not retried", () => {
     ["config", 4, 0, 4], ["unavailable", 4, 0, 4],
   ] as const)("uses the smaller job/error limit for %s (job limit %s, prior attempts %s)", async (code, maxAttempts, prior, expected) => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "limited", {}, { maxAttempts });
+    const { id } = await enqueueFixture(db, "limited", {}, { maxAttempts });
     await db.update(jobs).set({ attempts: prior }).where(eq(jobs.id, id));
     let now = t0;
     const handlers = { limited: async () => { throw new LlmError(code, "test failure"); } };
@@ -318,7 +345,7 @@ describe("errors that are not retried", () => {
 
   it("fails a job at once (attempt 1, no retry scheduled) when the error says it is not retryable", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "a", {}, { maxAttempts: 10 });
+    const { id } = await enqueueFixture(db, "a", {}, { maxAttempts: 10 });
     const stats = await run(db, {
       a: async () => {
         throw new NoRetry("refused");
@@ -332,7 +359,7 @@ describe("errors that are not retried", () => {
 
   it("still retries ordinary errors and errors that say retryable: true", async () => {
     const db = await createTestDb();
-    const a = await enqueue(db, "a");
+    const a = await enqueueFixture(db, "a");
     class Flaky extends Error {
       readonly retryable = true;
     }
@@ -352,10 +379,10 @@ describe("errors that are not retried", () => {
   it("counts failed jobs per kind", async () => {
     const db = await createTestDb();
     expect(await countFailedJobs(db)).toEqual([]);
-    await enqueue(db, "b", {}, { maxAttempts: 1 });
-    await enqueue(db, "a", {}, { maxAttempts: 1 });
-    await enqueue(db, "a", {}, { maxAttempts: 1 });
-    await enqueue(db, "c");
+    await enqueueFixture(db, "b", {}, { maxAttempts: 1 });
+    await enqueueFixture(db, "a", {}, { maxAttempts: 1 });
+    await enqueueFixture(db, "a", {}, { maxAttempts: 1 });
+    await enqueueFixture(db, "c");
     await run(db, { a: boom, b: boom, c: ok });
     expect(await countFailedJobs(db)).toEqual([
       { kind: "a", count: 2 },
@@ -412,7 +439,7 @@ describe("recovery of stuck jobs", () => {
 
   it("does not overwrite a job that another worker took over while the handler was running", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "slow");
+    const { id } = await enqueueFixture(db, "slow");
     const slow: JobHandler = async (job) => {
       // Simulate another worker reclaiming the job.
       await db

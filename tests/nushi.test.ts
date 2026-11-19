@@ -390,6 +390,25 @@ it("bounds retries without retaining provider text in requests or errors", async
   expect(JSON.stringify(request)).not.toContain("PROVIDER_PAYLOAD");
 });
 
+it("defers a live post lease and reclaims it at expiration without spending another daily allowance", async () => {
+  const f = await nushiFixture(), fake = resolveNushiCompleter();
+  const now = new Date();
+  await f.db.update(nushiRequests).set({ state: "processing", leaseUntil: now, token: "old-lease", attempts: 1 })
+    .where(eq(nushiRequests.id, f.request.id));
+  await f.db.insert(nushiReservations).values({ requestId: f.request.id, key: "member:nushi-caller", day: now.toISOString().slice(0, 10) });
+  const complete = vi.fn(fake.complete);
+  const options = { env: { ...process.env, VILLAGE_NUSHI_MEMBER_DAILY_LIMIT: "1" }, completer: { ...fake, complete } };
+  await expect(processNushiRequest(f.db, f.request.id, { ...options, now: new Date(now.getTime() - 1) }))
+    .rejects.toMatchObject({ name: "DeferJob", until: now });
+  expect(complete).not.toHaveBeenCalled();
+  await processNushiRequest(f.db, f.request.id, { ...options, now });
+  expect(complete).toHaveBeenCalledTimes(1);
+  const [request] = await f.db.select().from(nushiRequests);
+  expect(request).toMatchObject({ state: "answered", attempts: 2, leaseUntil: null });
+  expect(request.token).not.toBe("old-lease");
+  expect(await f.db.select().from(nushiReservations).where(eq(nushiReservations.key, "member:nushi-caller"))).toHaveLength(1);
+});
+
 it("counts only published cited authors and keeps other authors available after a cap", async () => {
   const f = await nushiFixture();
   await published(f);

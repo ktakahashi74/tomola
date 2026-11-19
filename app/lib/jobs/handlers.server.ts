@@ -15,7 +15,10 @@ import { createTranslationHandlers } from "./translation-jobs.server";
 import { createVillageTranslationHandlers } from "./village-translation-jobs.server";
 import { createInvitationNoteHandlers } from "./invitation-note-jobs.server";
 import { createTranslationRecoveryHandlers } from "./translation-recovery.server";
-import type { JobHandlers } from "./queue.server";
+import type { JobKind } from "./definitions.server";
+import type { chatJobHandlers } from "./chat-translation-jobs.server";
+import type { SEND_PUSH_JOB } from "../push/enqueue.server";
+import type { JobHandler, JobHandlers } from "./queue.server";
 
 // translate_village translates the name and description of a village (jobs/village-translation-jobs.server.ts).
 // translate_title makes a provisional title before translate_entry refines it using its own body.
@@ -26,4 +29,4 @@ import type { JobHandlers } from "./queue.server";
 // cleanup_jobs (remove jobs finished over 30 days ago, daily UTC 03:00): jobs/maintenance-jobs.server.ts.
 // rebuild_render_cache rebuilds saved body and card HTML at the current version, newest topics first (render-cache.server.ts).
 // Handlers throw on failure for retry; throw DeferJob when temporarily unable to run, such as a budget limit.
-export const jobHandlers: JobHandlers = { ...createChatNushiHandlers(), ...createNushiHandlers(), ...createNushiTranslationHandlers(), ...createSourceLanguageHandlers(), ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() };
+export const jobHandlers: JobHandlers = { ...createChatNushiHandlers(), ...createNushiHandlers(), ...createNushiTranslationHandlers(), ...createSourceLanguageHandlers(), ...createPushHandlers(), ...createFigureHandlers(), ...createAccountDeletionHandlers(), ...createModerationHandlers(), ...createTranslationHandlers(), ...createVillageTranslationHandlers(), ...createInvitationNoteHandlers(), ...createEmbeddingHandlers(), ...createNotificationHandlers(), ...createPasskeyHandlers(), ...createMaintenanceHandlers(), ...createRenderCacheHandlers(), ...createTranslationRecoveryHandlers() } satisfies Record<Exclude<JobKind, keyof typeof chatJobHandlers | typeof SEND_PUSH_JOB>, JobHandler>;

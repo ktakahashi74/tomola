@@ -1,4 +1,5 @@
 import { isChatNotification } from "./notifications";
+import { jobDefinitions, type JobPayload } from "./jobs/definitions.server";
 import { enqueuePush } from "./push/enqueue.server";
 import type { TranslationReportResult } from "./translation-report-results";
 import { selectDisplayName } from "./display-names.server";
@@ -81,8 +82,8 @@ export async function enqueueImmediateEmails(
   if (!eligible.length) return 0;
   for (const batch of notificationBatches(eligible)) {
     const followedKeys = batch.filter(c => c.kind === "followed_thread").map(c => notificationEmailDedupeKey(c.id));
-    await db.insert(jobs).values(batch.map(c => ({ kind: SEND_NOTIFICATION_EMAIL_JOB, payload: { notificationId: c.id },
-      dedupeKey: notificationEmailDedupeKey(c.id), runAt, priority: 0, maxAttempts: DEFAULT_MAX_ATTEMPTS,
+    await db.insert(jobs).values(batch.map(c => ({ kind: SEND_NOTIFICATION_EMAIL_JOB, payload: { notificationId: c.id } satisfies JobPayload<typeof SEND_NOTIFICATION_EMAIL_JOB>,
+      dedupeKey: notificationEmailDedupeKey(c.id), runAt, priority: jobDefinitions[SEND_NOTIFICATION_EMAIL_JOB].priority, maxAttempts: DEFAULT_MAX_ATTEMPTS,
     }))).onConflictDoUpdate({
       target: jobs.dedupeKey,
       targetWhere: sql`${jobs.status} in ('queued', 'running')`,

@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { chatMessageTranslations, chatTranslationReports } from "../db/schema";
 import { CHAT_TRANSLATION_REPORT_JOB } from "../chat-translation-reports.server";
 import { chatTranslationSource, saveChatTranslation } from "../village-chat-translations.server";
@@ -10,13 +9,10 @@ import { loadGlossary, matchMemberGlossary } from "../translations.server";
 import { mentionCandidates } from "../mention-syntax";
 import { isLang } from "../languages";
 import { villageChatEnabled } from "../village-chat-enabled.server";
-import type { JobHandlers } from "./queue.server";
-const payloadSchema = z.object({ reportId: z.number().int().positive() }).strict();
-export function createChatTranslationReportHandlers(opts: LlmOptions = {}): JobHandlers {
-  return { async [CHAT_TRANSLATION_REPORT_JOB](job, ctx) {
-    const parsed = payloadSchema.safeParse(job.payload);
-    if (!parsed.success) return;
-    const [report] = await ctx.db.select().from(chatTranslationReports).where(eq(chatTranslationReports.id, parsed.data.reportId));
+import { defineJobHandlers } from "./queue.server";
+export function createChatTranslationReportHandlers(opts: LlmOptions = {}) {
+  return defineJobHandlers({ async [CHAT_TRANSLATION_REPORT_JOB](job, ctx) {
+    const [report] = await ctx.db.select().from(chatTranslationReports).where(eq(chatTranslationReports.id, job.payload.reportId));
     if (!report || report.status !== "retry" || report.retryAttemptedAt || !isLang(report.lang)) return;
     if (!villageChatEnabled()) {
       await ctx.db.update(chatTranslationReports).set({ status: "open" }).where(and(eq(chatTranslationReports.id, report.id), eq(chatTranslationReports.status, "retry")));
@@ -53,5 +49,5 @@ export function createChatTranslationReportHandlers(opts: LlmOptions = {}): JobH
       await ctx.db.update(chatTranslationReports).set({ status: "open", retryAttemptedAt: ctx.now }).where(and(eq(chatTranslationReports.id, report.id), eq(chatTranslationReports.status, "retry")));
       if (error instanceof LlmError && error.code === "output_leak") throw error;
     }
-  } };
+  } });
 }

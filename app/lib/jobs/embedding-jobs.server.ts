@@ -1,12 +1,11 @@
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import type { Db } from "~/lib/db/client.server";
 import { EMBEDDING_DIM, entries, entryEmbeddings } from "~/lib/db/schema";
 import { embeddingInput } from "~/lib/embeddings.server";
 import { embed, jobLlmOptions, resolveEmbeddingEngine, type LlmOptions } from "~/lib/llm/index.server";
 import { LlmError } from "~/lib/llm/errors.server";
 import { entryStillCurrent } from "./translation-jobs.server";
-import type { JobContext, JobHandler, JobHandlers, JobRow } from "./queue.server";
+import { defineJobHandlers, type JobContext, type TypedJobHandler } from "./queue.server";
 
 // embed_entry embeds the current source revision of an undeleted, unhidden entry and saves entry_embeddings.
 // - Do nothing if this model's current-revision row already exists, covering retries/backfill overlaps.
@@ -14,22 +13,14 @@ import type { JobContext, JobHandler, JobHandlers, JobRow } from "./queue.server
 // - Save after locking the entry with FOR SHARE and rechecking revision, deletion, and hidden state, like translation saves.
 //   Edits/deletion/hiding during embedding cannot leave embeddings of stale or undisplayable content.
 
-const payloadSchema = z.object({ entryId: z.number().int().positive(), sourceHash: z.string().min(1) });
-
-function parsePayload(job: JobRow): z.infer<typeof payloadSchema> {
-  const parsed = payloadSchema.safeParse(job.payload);
-  if (!parsed.success) throw new Error(`Invalid ${job.kind} payload: ${parsed.error.issues[0]?.message ?? "invalid"}`);
-  return parsed.data;
-}
-
 export type EmbeddingJobDeps = { llm?: LlmOptions };
 
-export function createEmbeddingHandlers(deps: EmbeddingJobDeps = {}): JobHandlers {
+export function createEmbeddingHandlers(deps: EmbeddingJobDeps = {}) {
   const llm = (ctx: JobContext): LlmOptions => jobLlmOptions(ctx, deps.llm);
 
-  const embedEntry: JobHandler = async (job, ctx) => {
+  const embedEntry: TypedJobHandler<"embed_entry"> = async (job, ctx) => {
     const { db } = ctx;
-    const p = parsePayload(job);
+    const p = job.payload;
     const [entry] = await db
       .select({ id: entries.id, title: entries.title, body: entries.body, sourceHash: entries.sourceHash, deletedAt: entries.deletedAt, hiddenAt: entries.hiddenAt })
       .from(entries)
@@ -51,7 +42,7 @@ export function createEmbeddingHandlers(deps: EmbeddingJobDeps = {}): JobHandler
     });
   };
 
-  return { embed_entry: embedEntry };
+  return defineJobHandlers({ embed_entry: embedEntry });
 }
 
 async function alreadyEmbedded(db: Db, entryId: number, model: string, sourceHash: string): Promise<boolean> {

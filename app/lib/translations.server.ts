@@ -1,4 +1,5 @@
 import { completeTranslationReports } from "./translation-report-results.server";
+import type { JobPayload } from "./jobs/definitions.server";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
@@ -24,13 +25,13 @@ export const refreshBodyDedupeKey = (entryId: number, lang: Lang) => `refresh-bo
 export const DIVERGENCE_JOB = "measure_divergence";
 // One automatic retry after the first mistranslation report (app/lib/jobs/translation-jobs.server.ts). Payload is { reportId, entryId }.
 export const RETRANSLATE_REPORT_JOB = "retranslate_after_report";
-export type RetranslateReportPayload = { reportId: number; entryId: number };
+export type RetranslateReportPayload = JobPayload<typeof RETRANSLATE_REPORT_JOB>;
 export const retranslateDedupeKey = (reportId: number) => `retranslate-report:${reportId}`;
 // Maximum translate_entry attempts. Tolerate several hours of LLM outage: exponential delays from 30 seconds, capped at one hour; 10 attempts span about three hours.
 export const TRANSLATE_MAX_ATTEMPTS = 10;
 
 // redoFlagged: translate again even if the current translation is usable, when it carries a near-copy flag (translations:requeue --include-flagged).
-export type TranslateJobPayload = { entryId: number; lang: Lang; sourceHash: string; redoFlagged?: true };
+export type TranslateJobPayload = JobPayload<typeof DIVERGENCE_JOB>;
 
 export function translateDedupeKey(p: TranslateJobPayload, sourceLang: string): string {
   return `translate:${p.entryId}:${sourceLang}:${p.lang}:${p.sourceHash}`;

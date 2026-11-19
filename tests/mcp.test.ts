@@ -181,8 +181,8 @@ describe("MCP ownership and output security", () => {
 
   it.each([MarkdownBusyError, MarkdownBudgetError])("retains successful draft payloads when diagnostics raise %s", async (DiagnosticError) => {
     const run = markdownBudget.markdownTask;
-    const spy = vi.spyOn(markdownBudget, "markdownTask").mockImplementation(<T>(operation: string, args: unknown[]): Promise<T> =>
-      operation === "inspectDraftMarkdown" ? Promise.reject(new DiagnosticError()) : run<T>(operation, args));
+    const spy = vi.spyOn(markdownBudget, "markdownTask").mockImplementation((...call) =>
+      call[0] === "inspectDraftMarkdown" ? Promise.reject(new DiagnosticError()) : run(...call));
     try {
       const call = async (name: string, args: object) => {
         const response = await modern("tools/call", draftToken, { name, arguments: args });

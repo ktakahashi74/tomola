@@ -6,13 +6,12 @@ import { getMailer, type Mailer } from "~/lib/mail/mail.server";
 import { mailLocale } from "~/lib/mail/magic-link.server";
 import { RETENTION, daysBefore } from "~/lib/retention";
 import { m } from "~/paraglide/messages.js";
-import type { JobHandlers } from "./queue.server";
+import { defineJobHandlers } from "./queue.server";
 import { SEND_ACCOUNT_DELETED_JOB } from "./mail-kinds";
 
-export function createAccountDeletionHandlers(mailer: () => Mailer = getMailer): JobHandlers {
-  return { [SEND_ACCOUNT_DELETED_JOB]: async (job, { db, now }) => {
-    const payload = job.payload as { requestId?: string; to?: string; posts?: string; locale?: string };
-    if (!payload.requestId) throw new Error("Invalid account deletion notice");
+export function createAccountDeletionHandlers(mailer: () => Mailer = getMailer) {
+  return defineJobHandlers({ [SEND_ACCOUNT_DELETED_JOB]: async (job, { db, now }) => {
+    const { payload } = job;
     const [request] = await db.select().from(accountDeletions).where(eq(accountDeletions.id, payload.requestId));
     if (!request || request.state !== "completed") throw new Error("Account deletion is not completed");
     const erase = async (state: "sent" | "failed") => db.transaction(async tx => {
@@ -30,5 +29,5 @@ export function createAccountDeletionHandlers(mailer: () => Mailer = getMailer):
       if (job.attempts >= job.maxAttempts) await erase("failed");
       throw new Error("Account deletion notice delivery failed");
     }
-  } };
+  } });
 }

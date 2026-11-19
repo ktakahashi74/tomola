@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { afterEach, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { loadConsentRequest } from "~/lib/mcp/consent.server";
@@ -5,7 +6,7 @@ import type { McpAuth } from "~/lib/mcp/auth.server";
 import { createGeminiEmbeddingEngine } from "~/lib/llm/engines/gemini-embedding.server";
 import { transientFailureMessage } from "~/lib/jobs/transient-failure.server";
 import { createNotificationHandlers } from "~/lib/jobs/notification-jobs.server";
-import { enqueue, runDueJobs } from "~/lib/jobs/queue.server";
+import { runDueJobs } from "~/lib/jobs/queue.server";
 import { jobs } from "~/lib/db/schema";
 import { createTestDb } from "./helpers/db";
 import { MarkdownBusyError } from "~/lib/markdown-budget.server";
@@ -30,14 +31,14 @@ it.each(["query", "document"] as const)("bounds %s embeddings independently", as
 });
 it("records actual exhausted formatting contention for daily outage recovery", async () => {
   const db = await createTestDb();
-  await enqueue(db, "translate_entry", {}, { maxAttempts: 1 });
+  await enqueueFixture(db, "translate_entry", {}, { maxAttempts: 1 });
   await runDueJobs(db, { translate_entry: async () => { throw new MarkdownBusyError(); } }, { now: new Date(Date.now() + 1000), logger: { warn() {}, error() {} } });
   expect(transientFailureMessage((await db.select().from(jobs))[0].lastError!)).toBe(true);
   expect(transientFailureMessage("LlmError: invalid_output")).toBe(false);
 });
 it("permanently fails an invalid per-member digest payload", async () => {
   const db = await createTestDb();
-  await enqueue(db, "send_member_digest", { date: "not a date" });
+  await enqueueFixture(db, "send_member_digest", { date: "not a date" });
   const result = await runDueJobs(db, createNotificationHandlers(), { limit: 1, logger: { warn() {}, error() {} } });
   expect(result).toMatchObject({ failed: 1, retried: 0 });
   expect((await db.select().from(jobs))[0]).toMatchObject({ status: "failed", attempts: 1 });

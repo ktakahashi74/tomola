@@ -59,14 +59,14 @@ export async function enqueueFigureTranslations(db: Db, mediaId: string, key: st
   for (const lang of enabledTargetLangs(reading.lang, env)) {
     const [saved] = await db.select({ id: figureTranslations.mediaId }).from(figureTranslations)
       .where(and(eq(figureTranslations.mediaId, mediaId), eq(figureTranslations.readingKey, key), eq(figureTranslations.lang, lang)));
-    if (!saved) await enqueue(db, TRANSLATE_FIGURE_JOB, { mediaId, key, lang }, { dedupeKey: `figure:${mediaId}:${key}:${lang}`, priority: 4, rescheduleRunning });
+    if (!saved) await enqueue(db, TRANSLATE_FIGURE_JOB, { mediaId, key, lang }, { dedupeKey: `figure:${mediaId}:${key}:${lang}`, rescheduleRunning });
   }
 }
 
 // Publication only schedules preparation. Image/cache locks are acquired in a
 // separate, short job transaction, after all post/notification locks are gone.
 export async function queueEntryFigures(db: Db, entryId: number): Promise<void> {
-  if (figureTranslationEnabled()) await enqueue(db, PREPARE_FIGURES_JOB, { entryId }, { dedupeKey: `figure:prepare:${entryId}`, priority: 4, rescheduleRunning: true });
+  if (figureTranslationEnabled()) await enqueue(db, PREPARE_FIGURES_JOB, { entryId }, { dedupeKey: `figure:prepare:${entryId}`, rescheduleRunning: true });
 }
 
 // Called inside the preparation transaction. A copied URL never authorizes
@@ -111,7 +111,7 @@ export async function enqueuePublicFigures(db: Tx, ids: readonly string[] | unde
       if (saved.state === "skipped") await db.update(figureReadings).set({ state: "ready" }).where(eq(figureReadings.key, key));
       await enqueueFigureTranslations(db, image.id, key, saved.reading, env, rerenderLiteralNewlines);
     }
-    else if (saved.state === "pending") await enqueue(db, READ_FIGURE_JOB, { key }, { dedupeKey: `figure:read:${key}`, priority: 4, rescheduleRunning: true });
+    else if (saved.state === "pending") await enqueue(db, READ_FIGURE_JOB, { key }, { dedupeKey: `figure:read:${key}`, rescheduleRunning: true });
   }
   return registered;
 }

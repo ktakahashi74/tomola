@@ -1,10 +1,11 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { quietLogger as silent } from "./helpers/logger";
 import { GoogleGenAI } from "@google/genai";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { jobs, llmUsage } from "~/lib/db/schema";
-import { enqueue, runDueJobs, type JobHandler } from "~/lib/jobs/queue.server";
+import { runDueJobs, type JobHandler } from "~/lib/jobs/queue.server";
 import type { EngineSet } from "~/lib/llm/config.server";
 import { createClaudeEngine, type ClaudeClient, type ClaudeMessage } from "~/lib/llm/engines/claude.server";
 import { createFakeEngine, createFakeJudge } from "~/lib/llm/engines/fake.server";
@@ -399,7 +400,7 @@ describe("translate (budget gating and ledger)", () => {
       await translate(ctx.db, "primary", { text: p.text, from: "ja", to: "en" }, { now: ctx.now, env, engines: fakeSet() });
     };
 
-    const { id } = await enqueue(db, "translate_entry", { text: "本文" }, { maxAttempts: 1 });
+    const { id } = await enqueueFixture(db, "translate_entry", { text: "本文" }, { maxAttempts: 1 });
     const stats = await runDueJobs(db, { translate_entry: handler }, { now, logger: silent });
     expect(stats).toMatchObject({ ran: 1, deferred: 1, failed: 0 });
     const [waiting] = await db.select().from(jobs).where(eq(jobs.id, id));

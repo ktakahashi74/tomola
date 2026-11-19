@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from "drizz
 import type { Db } from "~/lib/db/client.server";
 import { entries, translations } from "~/lib/db/schema";
 import { renderEntryHtml, renderTranslationHtml } from "~/lib/entries.server";
-import { DeferJob, enqueue, type JobHandler, type JobHandlers } from "~/lib/jobs/queue.server";
+import { DeferJob, enqueue, defineJobHandlers, type TypedJobHandler } from "~/lib/jobs/queue.server";
 import { RENDER_VERSION } from "~/lib/markdown.server";
 import { resolveSavedMentionsFor, resolveTranslationMentionsFor } from "~/lib/mentions.server";
 
@@ -153,8 +153,8 @@ export async function queueRenderRebuildIfStale(db: Db): Promise<boolean> {
   return (await enqueue(db, REBUILD_RENDER_CACHE_JOB, { version: RENDER_VERSION }, { dedupeKey: renderCacheDedupeKey() })).created;
 }
 
-export function createRenderCacheHandlers(): JobHandlers {
-  const rebuild: JobHandler = async (_job, ctx) => {
+export function createRenderCacheHandlers() {
+  const rebuild: TypedJobHandler<typeof REBUILD_RENDER_CACHE_JOB> = async (_job, ctx) => {
     const result = await rebuildRenderCache(ctx.db, { maxRows: REBUILD_JOB_MAX_ROWS });
     const done = result.entries + result.translations;
     if (done > 0) console.log(`[render-cache] rebuilt ${result.entries} post(s) and ${result.translations} translation(s); ${result.remaining} left`);
@@ -163,7 +163,7 @@ export function createRenderCacheHandlers(): JobHandlers {
       throw new DeferJob(new Date(ctx.now.getTime() + 1000), "render cache rows left");
     }
   };
-  return { [REBUILD_RENDER_CACHE_JOB]: rebuild };
+  return defineJobHandlers({ [REBUILD_RENDER_CACHE_JOB]: rebuild });
 }
 
 export function rebuildRenderCache(...args: Parameters<typeof rebuildRenderCacheImplementation>): ReturnType<typeof rebuildRenderCacheImplementation> {

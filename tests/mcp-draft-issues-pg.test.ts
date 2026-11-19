@@ -28,9 +28,9 @@ describe.skipIf(!REAL_PG_URL)("draft diagnostics after PostgreSQL commit", { tag
     const entered = new Promise<void>(resolve => { announce = resolve; });
     const resume = new Promise<void>(resolve => { release = resolve; });
     const run = markdownBudget.markdownTask;
-    vi.spyOn(markdownBudget, "markdownTask").mockImplementation(async <T>(operation: string, args: unknown[]): Promise<T> => {
-      if (operation === "inspectDraftMarkdown") { announce(); await resume; }
-      return run<T>(operation, args);
+    vi.spyOn(markdownBudget, "markdownTask").mockImplementation(async (...call) => {
+      if (call[0] === "inspectDraftMarkdown") { announce(); await resume; }
+      return run(...call);
     });
     const updating = updateClientDraft(db, "draft-writer", client, initial.id, { body: "Saved edit @missing" });
     try {

@@ -3,25 +3,23 @@ import { nushiAnswers, nushiTranslations } from "./db/schema";
 import { isEnabledLang } from "./enabled-langs.server";
 import { readNushiAnswer } from "./nushi.server";
 import { resolveEngines } from "./llm/config.server";
-import { translateChecked } from "./llm/translate.server";
-import { meteredEngine } from "./llm/metering.server";
+import { nushiReadingTranslator } from "./short-field-translation.server";
 import { HIDDEN_PRIMARY_FLAGS } from "./llm/flags";
 import { BudgetPausedError } from "./llm/errors.server";
 import type { SourceLang } from "./languages";
-import type { JobHandlers } from "./jobs/queue.server";
+import { defineJobHandlers } from "./jobs/queue.server";
 
-export function createNushiTranslationHandlers(): JobHandlers {
-  return { async translate_nushi(job, ctx) {
-    const payload = job.payload as { answerId?: unknown; lang?: unknown };
-    if (typeof payload.answerId !== "number" || !isEnabledLang(payload.lang)) return;
-    const id = payload.answerId, lang = payload.lang;
+export function createNushiTranslationHandlers() {
+  return defineJobHandlers({ async translate_nushi(job, ctx) {
+    const { answerId: id, lang } = job.payload;
+    if (!isEnabledLang(lang)) return;
     const value = await readNushiAnswer(ctx.db, id);
     if (!value || value.hidden || value.originalLang === lang || !value.answer.readings.length) return;
     const [saved] = await ctx.db.select().from(nushiTranslations).where(and(eq(nushiTranslations.answerId, id), eq(nushiTranslations.lang, lang)));
     if (saved) return;
     const clock = ctx.clock ?? (() => new Date()), engine = resolveEngines().primary;
     if (!engine) return;
-    const metered = meteredEngine(ctx.db, { purpose: "ask_village", clock, signal: ctx.signal }).translation(engine);
+    const translateReading = nushiReadingTranslator(ctx.db, engine, { clock, signal: ctx.signal }, flag => HIDDEN_PRIMARY_FLAGS.includes(flag));
     try {
       const readings: string[] = [];
       // Translate only generated summaries. Human quotations and destinations
@@ -29,9 +27,9 @@ export function createNushiTranslationHandlers(): JobHandlers {
       for (const reading of value.answer.readings) {
         const current = await readNushiAnswer(ctx.db, id);
         if (!current || current.hidden) return;
-        const out = await translateChecked(metered, { text: reading.text, from: value.originalLang as SourceLang, to: lang, signal: ctx.signal });
-        if (out.flags.some(flag => HIDDEN_PRIMARY_FLAGS.includes(flag)) || out.text.length > 2400) return;
-        readings.push(out.text);
+        const text = await translateReading({ text: reading.text, from: value.originalLang as SourceLang, to: lang });
+        if (text === null) return;
+        readings.push(text);
       }
       await ctx.db.transaction(async tx => {
         await tx.select({ id: nushiAnswers.id }).from(nushiAnswers).where(eq(nushiAnswers.id, id)).for("share");
@@ -44,5 +42,5 @@ export function createNushiTranslationHandlers(): JobHandlers {
       // The queue must never retain a provider error containing post text.
       throw new Error("Nushi translation is temporarily unavailable");
     }
-  } };
+  } });
 }

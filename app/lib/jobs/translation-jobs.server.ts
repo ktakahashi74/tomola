@@ -5,7 +5,6 @@ import { recordTranslationGeneration } from "../eval/signals.server";
 import { safeErrorText } from "~/lib/error-text.server";
 import { MarkdownBusyError } from "../markdown-budget.server";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
 import type { Db, Tx } from "~/lib/db/client.server";
 import { divergences, entries, jobs, translationReports, translations } from "~/lib/db/schema";
 import { isUsablePrimary, pickTranslation, SHOWN_KINDS } from "~/lib/display";
@@ -16,11 +15,12 @@ import { LlmError } from "~/lib/llm/errors.server";
 import { BudgetPausedError, hasSavedTranslation, isSecondaryAvailable, jobLlmOptions, judgeDivergence, shouldMeasureDivergence, translate, type LlmOptions, type TranslationOutcome } from "~/lib/llm/index.server";
 import type { GlossaryHint, TranslationRequest } from "~/lib/llm/types";
 import { isEnabledLang } from "~/lib/enabled-langs.server";
-import { LANGS, type Lang, type SourceLang } from "~/lib/languages";
+import type { Lang, SourceLang } from "~/lib/languages";
 import { RENDER_VERSION } from "~/lib/markdown.server";
 import { resolveSourceMentions } from "~/lib/mentions.server";
 import {
   currentSourceHash,
+  TRANSLATE_JOB,
   TITLE_TRANSLATE_JOB,
   DIVERGENCE_JOB,
   divergenceDedupeKey,
@@ -39,7 +39,7 @@ import { postTerminologyBodies, translationTermsFor } from "~/lib/translation-te
 import { firstSeenAtForSource } from "~/lib/translation-first-seen.server";
 import { availabilityKey, loadTranslationAvailability } from "~/lib/translation-availability.server";
 import { joinResponsePostLine, localizeResponseBodies, prepareResponsePostTranslation } from "~/lib/response-line.server";
-import { DeferJob, enqueue, isFinalJobFailure, jobAttemptLimit, type JobContext, type JobHandler, type JobHandlers, type JobRow } from "./queue.server";
+import { DeferJob, defineJobHandlers, enqueue, isFinalJobFailure, jobAttemptLimit, type JobContext, type TypedJobHandler, type TypedJobRow } from "./queue.server";
 
 // Translation jobs.
 // - translate_entry (entry × target language × source revision): translate title for topics and body with the primary engine, saving kind=primary.
@@ -51,19 +51,6 @@ import { DeferJob, enqueue, isFinalJobFailure, jobAttemptLimit, type JobContext,
 // retain the original failure: refusal becomes failed, other failures retry. Skip disagreement measurement for this language because the primary output already came from the secondary.
 // Both jobs finish without doing anything (the job is done) when the language of the payload is not enabled (ENABLED_LANGS) at the time of running, so that a job queued before a language
 // was closed does not make a translation after it was closed. When the language is opened again, pnpm langs:open queues the work again.
-
-const payloadSchema = z.object({
-  entryId: z.number().int().positive(),
-  lang: z.enum(LANGS),
-  sourceHash: z.string().min(1),
-  redoFlagged: z.literal(true).optional(),
-});
-
-function parsePayload(job: JobRow): TranslateJobPayload {
-  const parsed = payloadSchema.safeParse(job.payload);
-  if (!parsed.success) throw new Error(`Invalid ${job.kind} payload: ${parsed.error.issues[0]?.message ?? "invalid"}`);
-  return parsed.data;
-}
 
 // Reuse the existing context budget, including the translated body's terms.
 export const TITLE_CONTEXT_MAX_CHARS = TITLE_BODY_MAX_CHARS;
@@ -224,11 +211,6 @@ async function glossaryFor(db: Db, from: SourceLang, to: Lang, text: string): Pr
 
 const isRefusal = (error: unknown) => error instanceof LlmError && error.code === "refusal";
 
-const retranslatePayloadSchema = z.object({
-  reportId: z.number().int().positive(),
-  entryId: z.number().int().positive(),
-});
-
 // Automatically close retry reports when source edits made the reported translation obsolete.
 async function resolveAutomatically(db: Db, reportId: number, now: Date): Promise<void> {
   await db.transaction(async tx => {
@@ -242,14 +224,14 @@ async function resolveAutomatically(db: Db, reportId: number, now: Date): Promis
   });
 }
 
-export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHandlers {
+export function createTranslationHandlers(deps: TranslationJobDeps = {}) {
   const llm = (ctx: JobContext): LlmOptions => jobLlmOptions(ctx, deps.llm);
 
   // Dispatch through the same revision key as browser requests. This job never
   // calls a model itself, so readers and delayed work share one bounded attempt
   // budget, paid-call recovery and budget-wait state.
-  const refreshEditedBody: JobHandler = async (job, ctx) => {
-    const p = z.object({ entryId: z.number().int().positive(), lang: z.enum(LANGS) }).parse(job.payload);
+  const refreshEditedBody: TypedJobHandler<typeof REFRESH_BODY_JOB> = async (job, ctx) => {
+    const p = job.payload;
     if (!isEnabledLang(p.lang)) return;
     await ctx.db.transaction(async tx => {
       const [entry] = await tx.select().from(entries).where(eq(entries.id, p.entryId)).for("no key update");
@@ -267,7 +249,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
 
   // Translate with primary; substitute secondary on refusal or repeated failure only when available. skipPrimary means this execution found primary failing; do not try it for later fields.
   const translateWithFallback = async (
-    job: JobRow,
+    job: TypedJobRow<typeof TRANSLATE_JOB | typeof TITLE_TRANSLATE_JOB>,
     ctx: JobContext,
     req: Parameters<typeof translate>[2],
     state: { skipPrimary: boolean },
@@ -282,7 +264,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     if (hasSavedTranslation("secondary", req, options)) {
       try { return restored(await translate(ctx.db, "secondary", req, options), true); }
     catch (error) {
-      if (isRefusal(error)) Object.assign(error as object, { sourceContentFailure: (job.payload as { primaryRefused?: boolean }).primaryRefused === true });
+      if (isRefusal(error)) Object.assign(error as object, { sourceContentFailure: job.payload.primaryRefused === true });
       throw error;
     }
     }
@@ -295,7 +277,7 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
         if (error instanceof LlmError && error.code === "output_leak") throw error;
         if (!(isRefusal(error) || job.attempts >= Math.min(FALLBACK_AFTER_ATTEMPTS, jobAttemptLimit(job, error))) || !(await isSecondaryAvailable(ctx.db, options))) throw error;
         if (!isRefusal(error)) state.skipPrimary = true;
-        job.payload = { ...job.payload as object, primaryRefused: isRefusal(error) };
+        job.payload = { ...job.payload, primaryRefused: isRefusal(error) };
         await ctx.db.update(jobs).set({ payload: sql`${jobs.payload} || ${JSON.stringify({ primaryRefused: isRefusal(error) })}::jsonb` }).where(eq(jobs.id, job.id));
         console.warn(`[translate] primary failed for job ${job.id} (${safeErrorText(error)}); translating with the secondary engine`);
       }
@@ -303,13 +285,13 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     // Rethrow fallback failures unchanged. Refusal immediately becomes failed; other failures trigger job retries.
     try { return restored(await translate(ctx.db, "secondary", req, options), true); }
     catch (error) {
-      if (isRefusal(error)) Object.assign(error as object, { sourceContentFailure: (job.payload as { primaryRefused?: boolean }).primaryRefused === true });
+      if (isRefusal(error)) Object.assign(error as object, { sourceContentFailure: job.payload.primaryRefused === true });
       throw error;
     }
   };
 
-  const translateTitle: JobHandler = async (job, ctx) => {
-    const p = parsePayload(job);
+  const translateTitle: TypedJobHandler<typeof TITLE_TRANSLATE_JOB> = async (job, ctx) => {
+    const p = job.payload;
     if (!isEnabledLang(p.lang)) return;
     const entry = await loadEntry(ctx.db, p);
     if (!entry || entry.kind !== "topic" || !entry.title?.trim()) return;
@@ -330,9 +312,9 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     }, ctx.now);
   };
 
-  const translateEntry: JobHandler = async (job, ctx) => {
+  const translateEntry: TypedJobHandler<typeof TRANSLATE_JOB> = async (job, ctx) => {
     const { db } = ctx;
-    const p = parsePayload(job);
+    const p = job.payload;
     if (!isEnabledLang(p.lang)) return;
     const entry = await loadEntry(db, p);
     if (!entry) return;
@@ -412,13 +394,14 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     }
     // Queue disagreement measurement for topics only when secondary/judge are available and this translation was sampled (DIVERGENCE_SAMPLE_RATE). Skip if degraded or unconfigured.
     if (entry.kind === "topic" && (await shouldMeasureDivergence(db, { entryId: entry.id, lang: p.lang, sourceHash: p.sourceHash }, llm(ctx)))) {
-      await enqueue(db, DIVERGENCE_JOB, p, { dedupeKey: divergenceDedupeKey(p) });
+      const { entryId, lang, sourceHash, redoFlagged } = p;
+      await enqueue(db, DIVERGENCE_JOB, { entryId, lang, sourceHash, redoFlagged }, { dedupeKey: divergenceDedupeKey(p) });
     }
   };
 
-  const measureDivergence: JobHandler = async (job, ctx) => {
+  const measureDivergence: TypedJobHandler<typeof DIVERGENCE_JOB> = async (job, ctx) => {
     const { db } = ctx;
-    const p = parsePayload(job);
+    const p = job.payload;
     if (!isEnabledLang(p.lang)) return;
     const entry = await loadEntry(db, p);
     if (!entry || entry.kind !== "topic") return;
@@ -540,11 +523,9 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
   // No progress: do nothing unless report is open with route retry. For deleted/hidden entries, route to moderator and finish. If source was edited (a separate job will retranslate it), resolve the report and finish.
   // If the displayed translation is human, route to moderator. Refusal routes there immediately; other failures route there after exhausting attempts.
   // While budget is degraded/stopped, wait without calling. BudgetPausedError is DeferJob and keeps the job queued.
-  const retranslateAfterReport: JobHandler = async (job, ctx) => {
+  const retranslateAfterReport: TypedJobHandler<typeof RETRANSLATE_REPORT_JOB> = async (job, ctx) => {
     const { db } = ctx;
-    const payload = retranslatePayloadSchema.safeParse(job.payload);
-    if (!payload.success) throw new Error(`Invalid ${job.kind} payload: ${payload.error.issues[0]?.message ?? "invalid"}`);
-    const [report] = await db.select().from(translationReports).where(eq(translationReports.id, payload.data.reportId));
+    const [report] = await db.select().from(translationReports).where(eq(translationReports.id, job.payload.reportId));
     if (!report || report.status !== "open" || report.route !== "retry" || report.sourceHash === null) return;
     const sourceHash = report.sourceHash;
     const lang = report.lang as Lang;
@@ -709,9 +690,8 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
     }
   };
 
-  return { [REFRESH_BODY_JOB]: refreshEditedBody, [TITLE_TRANSLATE_JOB]: translateTitle, translate_entry: async (job, ctx) => {
-    const p = parsePayload(job);
-    if (!p) return;
+  return defineJobHandlers({ [REFRESH_BODY_JOB]: refreshEditedBody, [TITLE_TRANSLATE_JOB]: translateTitle, translate_entry: async (job, ctx) => {
+    const p = job.payload;
     const entry = await loadEntry(ctx.db, p);
     if (!entry) return;
     try { await translateEntry(job, ctx); }
@@ -720,5 +700,5 @@ export function createTranslationHandlers(deps: TranslationJobDeps = {}): JobHan
       throw error;
     }
     await recordUntranslatable(job, ctx, false, entry.mentionRevision);
-  },  measure_divergence: measureDivergence, [RETRANSLATE_REPORT_JOB]: retranslateAfterReport };
+  }, [DIVERGENCE_JOB]: measureDivergence, [RETRANSLATE_REPORT_JOB]: retranslateAfterReport });
 }

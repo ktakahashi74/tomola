@@ -165,8 +165,8 @@ describe("POST /api/drafts: creating a draft", () => {
 
   it.each([MarkdownBusyError, MarkdownBudgetError])("saves a draft when only diagnostics raise %s", async (DiagnosticError) => {
     const run = markdownBudget.markdownTask;
-    const spy = vi.spyOn(markdownBudget, "markdownTask").mockImplementation(<T>(operation: string, args: unknown[]): Promise<T> =>
-      operation === "inspectDraftMarkdown" ? Promise.reject(new DiagnosticError()) : run<T>(operation, args));
+    const spy = vi.spyOn(markdownBudget, "markdownTask").mockImplementation((...call) =>
+      call[0] === "inspectDraftMarkdown" ? Promise.reject(new DiagnosticError()) : run(...call));
     try {
       const body = "Saved even when diagnostics are unavailable";
       const result = await post(md("lang: en", body));

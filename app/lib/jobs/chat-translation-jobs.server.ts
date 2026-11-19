@@ -2,7 +2,6 @@ import { CHAT_NUSHI_PROMPT_VERSION } from "../chat-nushi-config.server";
 import { translateChatNushi } from "../chat-nushi-translation.server";
 import { loadGlossary, matchMemberGlossary } from "../translations.server";
 import { createChatTranslationReportHandlers } from "./chat-translation-report-jobs.server";
-import { z } from "zod";
 import { isEnabledLang } from "../enabled-langs.server";
 import { villageChatEnabled } from "../village-chat-enabled.server";
 import { chatTranslationSettled, chatTranslationSource, saveChatTranslation } from "../village-chat-translations.server";
@@ -11,16 +10,14 @@ import { CHAT_PROMPT_VERSION } from "../llm/prompt.server";
 import { NEAR_COPY_FLAGS } from "../llm/flags";
 import { mentionCandidates } from "../mention-syntax";
 import { isLang } from "../languages";
-import { DeferJob, isFinalJobFailure, jobAttemptLimit, type JobHandlers } from "./queue.server";
+import { DeferJob, isFinalJobFailure, jobAttemptLimit, defineJobHandlers, type TypedJobHandler } from "./queue.server";
 
-const payloadSchema = z.object({ messageId: z.string().regex(/^[a-f0-9]{32}$/), lang: z.string().refine(isEnabledLang), sourceHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 class SettledTranslation extends Error {}
-export function createChatTranslationHandlers(opts: LlmOptions = {}): JobHandlers {
-  const handler: JobHandlers[string] = async (job, ctx) => {
+export function createChatTranslationHandlers(opts: LlmOptions = {}) {
+  const handler: TypedJobHandler<"translate_chat"> = async (job, ctx) => {
     if (!villageChatEnabled()) return;
-    const parsed = payloadSchema.safeParse(job.payload);
-    if (!parsed.success || !isEnabledLang(parsed.data.lang)) return;
-    const payload = { ...parsed.data, lang: parsed.data.lang };
+    const { payload } = job;
+    if (!isEnabledLang(payload.lang)) return;
     if (await chatTranslationSettled(ctx.db, payload)) return;
     const source = await chatTranslationSource(ctx.db, payload);
     if (!source || !isLang(source.message.lang)) return;
@@ -58,12 +55,12 @@ export function createChatTranslationHandlers(opts: LlmOptions = {}): JobHandler
       throw Object.assign(new Error(`Chat translation failed (${code})`), { retryable: !(error instanceof LlmError && !error.retryable), maxAttempts: jobAttemptLimit(job, error) });
     }
   };
-  return { ...createChatTranslationReportHandlers(opts), async translate_chat(job, ctx) {
+  return { ...createChatTranslationReportHandlers(opts), ...defineJobHandlers({ async translate_chat(job, ctx) {
     try { await handler(job, ctx); }
     catch (error) {
       if (error instanceof DeferJob) throw error;
       throw Object.assign(new Error("Chat translation failed"), { retryable: !(typeof error === "object" && error !== null && "retryable" in error && error.retryable === false), maxAttempts: jobAttemptLimit(job, error) });
     }
-  } };
+  } }) };
 }
 export const chatJobHandlers = createChatTranslationHandlers();

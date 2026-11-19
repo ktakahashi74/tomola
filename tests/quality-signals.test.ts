@@ -71,7 +71,7 @@ describe("aggregate translation quality signals", () => {
     expect((await db.select().from(translations))[0].flags).toContain(flag);
     expect(await db.select().from(translationSignalCounts)).toHaveLength(0);
     const [source] = await db.select().from(entries).where(eq(entries.id, topic.id));
-    await enqueue(db, "translate_entry", { entryId: topic.id, lang: "en", sourceHash: source.sourceHash, redoFlagged: true });
+    await enqueue(db, "translate_entry", { entryId: topic.id, lang: "en", sourceHash: source.sourceHash!, redoFlagged: true });
     await runDueJobs(db, createTranslationHandlers({ llm: { engines: { primary: fake, secondary: null, judge: null }, env: {} } }), options);
     expect((await db.select().from(translations))[0].flags).toEqual([]);
     expect(await db.select().from(translationSignalCounts)).toHaveLength(0);

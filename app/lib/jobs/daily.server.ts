@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, like, max } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { jobs } from "~/lib/db/schema";
+import type { JobKind, JobPayload } from "./definitions.server";
 import { enqueue } from "./queue.server";
 
 // Keep exactly one future job for work running once daily at a UTC time: daily digest email and finished-job cleanup.
@@ -19,7 +20,8 @@ export function nextDailyAt(now: Date, hourUtc: number): Date {
   return new Date(today > now.getTime() ? today : today + 24 * 60 * 60 * 1000);
 }
 
-export type DailyJobSpec = { kind: string; keyPrefix: string; hourUtc: number };
+type DailyJobKind = { [K in JobKind]: { date: string } extends JobPayload<K> ? K : never }[JobKind];
+export type DailyJobSpec = { kind: DailyJobKind; keyPrefix: string; hourUtc: number };
 
 // Keep exactly one future job. Do nothing if any job, in any status, already exists for this date or later. created indicates a newly queued job.
 export async function ensureDailyJob(db: Db, spec: DailyJobSpec, now: Date = new Date()): Promise<{ date: string; runAt: Date; created: boolean }> {

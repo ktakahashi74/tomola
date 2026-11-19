@@ -505,14 +505,14 @@ describe("translate_entry", () => {
       .toMatchObject({ sourceHash: restored.sourceHash, mentionRevision: restored.mentionRevision, text: `[en] ${body}` });
   });
 
-  it("skips deleted entries and fails invalid payloads (which then retry)", async () => {
+  it("skips deleted entries and permanently fails invalid payloads", async () => {
     const db = await setup();
     const topicId = await newTopic(db);
     await db.update(entries).set({ deletedAt: t0 }).where(eq(entries.id, topicId));
     expect(await run(db, noSecondary())).toMatchObject({ done: 16 });
     expect(await transRows(db, topicId)).toHaveLength(0);
     await db.insert(jobs).values({ kind: "translate_entry", payload: { entryId: "x" } });
-    expect(await run(db, noSecondary(), { now: new Date(t0.getTime() + 1000) })).toMatchObject({ retried: 1 });
+    expect(await run(db, noSecondary(), { now: new Date(t0.getTime() + 1000) })).toMatchObject({ failed: 1, retried: 0 });
   });
 });
 

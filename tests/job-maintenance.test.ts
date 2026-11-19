@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { quietLogger as silent } from "./helpers/logger";
 import { RETENTION } from "~/lib/retention";
 import { asc, eq } from "drizzle-orm";
@@ -14,7 +15,7 @@ import {
   ensureCleanupScheduledThrottled,
 } from "~/lib/jobs/maintenance-jobs.server";
 import { ensureDigestScheduled } from "~/lib/jobs/notification-jobs.server";
-import { enqueue, HEARTBEAT_MS, runDueJobs, STUCK_AFTER_MS, type JobHandler } from "~/lib/jobs/queue.server";
+import { HEARTBEAT_MS, runDueJobs, STUCK_AFTER_MS, type JobHandler } from "~/lib/jobs/queue.server";
 import { startWorker } from "~/lib/jobs/worker.server";
 import { SEND_DIGEST_JOB } from "~/lib/notifications.server";
 import { addMember, createTestDb } from "./helpers/db";
@@ -32,7 +33,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe("the heartbeat of running jobs", () => {
   it("retains a post translation lock through fifteen minutes and recovers a stopped worker", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "translate_entry", {}, { runAt: t0 });
+    const { id } = await enqueueFixture(db, "translate_entry", {}, { runAt: t0 });
     let elapsed = 0;
     const realNow = Date.now();
     const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow + elapsed);
@@ -53,7 +54,7 @@ describe("the heartbeat of running jobs", () => {
     expect(await one(db, id)).toMatchObject({ status: "done", attempts: 1 });
     // A container that stops leaves a running row but no heartbeats. Its next
     // worker recovers the row and retries after the existing stale-lock window.
-    const stopped = await enqueue(db, "translate_entry", {}, { runAt: t0 });
+    const stopped = await enqueueFixture(db, "translate_entry", {}, { runAt: t0 });
     await db.update(jobs).set({ status: "running", attempts: 1, lockedAt: t0 }).where(eq(jobs.id, stopped.id));
     expect(await runDueJobs(db, { translate_entry: async () => {} }, { now: new Date(t0.getTime() + STUCK_AFTER_MS + 1), logger: silent })).toMatchObject({ recovered: 1, done: 1 });
     expect(await one(db, stopped.id)).toMatchObject({ status: "done", attempts: 2 });
@@ -64,7 +65,7 @@ describe("the heartbeat of running jobs", () => {
 
   it("refreshes locked_at while the handler runs, so another worker does not take the job over, and clears it when done", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "slow", {}, { runAt: t0 });
+    const { id } = await enqueueFixture(db, "slow", {}, { runAt: t0 });
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     let started!: () => void;
@@ -88,7 +89,7 @@ describe("the heartbeat of running jobs", () => {
 
   it("without a heartbeat the same job would be taken over (the control)", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "slow", {}, { runAt: t0 });
+    const { id } = await enqueueFixture(db, "slow", {}, { runAt: t0 });
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     let started!: () => void;
@@ -106,7 +107,7 @@ describe("the heartbeat of running jobs", () => {
 
   it("stops beating when the job was taken over, and does not overwrite the new owner's result", async () => {
     const db = await createTestDb();
-    const { id } = await enqueue(db, "slow", {}, { runAt: t0 });
+    const { id } = await enqueueFixture(db, "slow", {}, { runAt: t0 });
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     let started!: () => void;
@@ -141,7 +142,7 @@ describe("the heartbeat of running jobs", () => {
       ran.push((job.payload as { n: string }).n);
       abort.abort();
     };
-    for (const n of ["a", "b", "c"]) await enqueue(db, "job", { n }, { runAt: t0 });
+    for (const n of ["a", "b", "c"]) await enqueueFixture(db, "job", { n }, { runAt: t0 });
     const stats = await runDueJobs(db, { job: handler }, { now: t0, logger: silent, signal: abort.signal });
     expect(stats).toMatchObject({ ran: 1, done: 1 });
     expect(ran).toEqual(["a"]);
@@ -249,7 +250,7 @@ describe("the digest is not created again for a day that already ran (clock skew
   it("does not recreate digest:D after it is done, when another process's clock is a little behind", async () => {
     const db = await createTestDb();
     // D=2030-10-06; the job ran at midnight D and became done.
-    await enqueue(db, SEND_DIGEST_JOB, { date: "2030-10-06" }, { runAt: new Date("2030-10-06T00:00:00Z"), dedupeKey: "digest:2030-10-06" });
+    await enqueueFixture(db, SEND_DIGEST_JOB, { date: "2030-10-06" }, { runAt: new Date("2030-10-06T00:00:00Z"), dedupeKey: "digest:2030-10-06" });
     await runDueJobs(db, { [SEND_DIGEST_JOB]: async () => {} }, { now: new Date("2030-10-06T00:00:00Z"), logger: silent });
     expect((await digests(db)).map((j) => [j.dedupeKey, j.status])).toEqual([["digest:2030-10-06", "done"]]);
     // A process two seconds behind midnight D does not requeue D.
@@ -265,7 +266,7 @@ describe("the digest is not created again for a day that already ran (clock skew
 
   it("still keeps exactly one future job when none exists yet, and ignores other kinds of jobs", async () => {
     const db = await createTestDb();
-    await enqueue(db, "other", {}, { dedupeKey: "digest:2099-01-01" });
+    await enqueueFixture(db, "other", {}, { dedupeKey: "digest:2099-01-01" });
     expect(await ensureDigestScheduled(db, new Date("2030-10-05T12:00:00Z"))).toMatchObject({ date: "2030-10-06", created: true });
     expect(await ensureDigestScheduled(db, new Date("2030-10-05T12:00:30Z"))).toMatchObject({ created: false });
     expect(await digests(db)).toHaveLength(1);
@@ -310,9 +311,9 @@ describe("cleanup_jobs", () => {
     await runMaintenanceCleanup(db, now);
     expect(await translateJobs()).toBe(0);
     const stopping = new AbortController(); stopping.abort();
-    await handler({} as never, { db, now, shutdownSignal: stopping.signal } as never);
+    await handler({ payload: { date: "2030-10-06" } } as never, { db, now, shutdownSignal: stopping.signal } as never);
     expect(await translateJobs()).toBe(0);
-    await handler({} as never, { db, now, shutdownSignal: new AbortController().signal } as never);
+    await handler({ payload: { date: "2030-10-06" } } as never, { db, now, shutdownSignal: new AbortController().signal } as never);
     expect(await translateJobs()).toBe(1);
   });
 
@@ -320,7 +321,7 @@ describe("cleanup_jobs", () => {
     const db = await createTestDb();
     const now = new Date("2030-11-15T03:00:00Z");
     const make = async (status: string, daysAgo: number, kind = "x") => {
-      const { id } = await enqueue(db, kind, {}, { runAt: t0 });
+      const { id } = await enqueueFixture(db, kind, {}, { runAt: t0 });
       await db.update(jobs).set({ status, updatedAt: new Date(now.getTime() - daysAgo * DAY) }).where(eq(jobs.id, id));
       return id;
     };
@@ -339,7 +340,7 @@ describe("cleanup_jobs", () => {
   it("the handler deletes them when it runs", async () => {
     const db = await createTestDb();
     const now = new Date("2030-11-15T03:00:00Z");
-    const { id } = await enqueue(db, "x", {}, { runAt: t0 });
+    const { id } = await enqueueFixture(db, "x", {}, { runAt: t0 });
     await db.update(jobs).set({ status: "done", updatedAt: new Date(now.getTime() - 40 * DAY) }).where(eq(jobs.id, id));
     for (const [key, expiresAt] of [["expired", new Date(now.getTime() - 1)], ["live", new Date(now.getTime() + DAY)]] as const) {
       await db.insert(rateLimits).values({ key, windowStart: t0, expiresAt });
@@ -356,7 +357,7 @@ describe("cleanup_jobs", () => {
 
   it("ensureDailyJob is generic: one job per date per key prefix", async () => {
     const db = await createTestDb();
-    const spec = { kind: "daily_x", keyPrefix: "daily-x", hourUtc: 5 };
+    const spec = { kind: CLEANUP_JOBS_JOB, keyPrefix: "daily-x", hourUtc: 5 } as const;
     expect(await ensureDailyJob(db, spec, new Date("2030-10-05T06:00:00Z"))).toMatchObject({ date: "2030-10-06", created: true });
     expect(await ensureDailyJob(db, spec, new Date("2030-10-05T07:00:00Z"))).toMatchObject({ created: false });
     expect(await ensureDailyJob(db, spec, new Date("2030-10-06T05:00:00Z"))).toMatchObject({ date: "2030-10-07", created: true });

@@ -6,12 +6,12 @@ import { isEnabledLang } from "~/lib/enabled-langs.server";
 import { getBudgetState } from "~/lib/llm/usage.server";
 import { rootTopic, rootTopicOn, visibleWithTopic } from "~/lib/visibility.server";
 import { dateOf, ensureDailyJob } from "./daily.server";
-import type { JobHandler, JobHandlers } from "./queue.server";
+import { defineJobHandlers, type TypedJobHandler } from "./queue.server";
 import { titleTranslateDedupeKey, translateDedupeKey } from "~/lib/translations.server";
 import { canRetryTranslationDaily } from "./transient-failure.server";
 
 export const RETRY_FAILED_TRANSLATIONS_JOB = "retry_failed_translations";
-const spec = { kind: RETRY_FAILED_TRANSLATIONS_JOB, keyPrefix: "retry-translations", hourUtc: 2 };
+const spec = { kind: RETRY_FAILED_TRANSLATIONS_JOB, keyPrefix: "retry-translations", hourUtc: 2 } as const;
 const payloadSchema = z.object({ entryId: z.number().int().positive(), lang: z.string(), sourceHash: z.string() }).passthrough();
 
 export const ensureTranslationRecoveryScheduled = (db: Db, now = new Date()) => ensureDailyJob(db, spec, now);
@@ -80,10 +80,10 @@ export async function retryFailedTranslations(db: Db, now = new Date(), env: Rec
   return count;
 }
 
-export function createTranslationRecoveryHandlers(): JobHandlers {
-  const recover: JobHandler = async (_job, ctx) => {
+export function createTranslationRecoveryHandlers() {
+  const recover: TypedJobHandler<typeof RETRY_FAILED_TRANSLATIONS_JOB> = async (_job, ctx) => {
     await ensureTranslationRecoveryScheduled(ctx.db, ctx.now);
     await retryFailedTranslations(ctx.db, ctx.now);
   };
-  return { [RETRY_FAILED_TRANSLATIONS_JOB]: recover };
+  return defineJobHandlers({ [RETRY_FAILED_TRANSLATIONS_JOB]: recover });
 }

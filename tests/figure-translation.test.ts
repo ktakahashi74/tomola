@@ -86,8 +86,8 @@ describe("figure translation pipeline", () => {
     const w = await world(); await w.run(1);
     vi.mocked(w.engine.translate).mockResolvedValue({ text: JSON.stringify(["図のラベル"]), model: w.engine.model, promptVersion: "test", inputTokens: 10, outputTokens: 10 });
     const run = markdownBudget.markdownTask;
-    vi.spyOn(markdownBudget, "markdownTask").mockImplementation(<T>(operation: string, args: unknown[]): Promise<T> =>
-      operation === "inspectTranslation" ? Promise.reject(new markdownBudget.MarkdownBudgetError()) : run<T>(operation, args));
+    vi.spyOn(markdownBudget, "markdownTask").mockImplementation((...call) =>
+      call[0] === "inspectTranslation" ? Promise.reject(new markdownBudget.MarkdownBudgetError()) : run(...call));
     const translate = vi.spyOn(llm, "translate");
     expect(await w.run()).toMatchObject({ done: 1, failed: 0 });
     expect((await translate.mock.results[0].value).flags).toContain(FLAG_MARKDOWN_BUDGET);

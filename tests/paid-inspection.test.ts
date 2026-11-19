@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { addMember, createTestDb } from "./helpers/db";
 import { chatMessages, chatMessageTranslations, entries, jobs, llmUsage, translations, villages } from "~/lib/db/schema";
@@ -36,15 +37,15 @@ it.each([1, 2])("resumes inspection after paid call %i without repeating either 
   const translateCall = vi.fn(async () => ({ text: busyAt === 2 && ++calls === 1 ? "bad" : "翻訳結果", model: "claude-haiku-4-5", promptVersion: "fixture", inputTokens: 10, outputTokens: 2 }));
   const engine: TranslationEngine = { id: "claude", model: "claude-haiku-4-5", translate: translateCall };
   let blocked = false;
-  vi.spyOn(markdown, "markdownTask").mockImplementation((async (_operation: string, args: unknown[]) => {
+  vi.spyOn(markdown, "markdownTask").mockImplementation(async (_operation, args) => {
     if (args[1] === "bad") return { flags: ["structure_mismatch"], notes: ["Preserve the structure"] };
     if (!blocked) { blocked = true; throw new markdown.MarkdownBusyError(); }
     return { flags: [], notes: [] };
-  }) as typeof markdown.markdownTask);
+  });
   let result: TranslationOutcome | undefined;
   const now = new Date("2026-10-17T00:00:00Z");
   const handlers = { paid_fixture: async () => { result = await translate(db, "primary", { text: "A clear original.", from: "en", to: "ja" }, { engines: { primary: engine, secondary: null, judge: null }, now }); } };
-  await enqueue(db, "paid_fixture", { retained: "original payload" }, { runAt: now });
+  await enqueueFixture(db, "paid_fixture", { retained: "original payload" }, { runAt: now });
   expect(await runDueJobs(db, handlers, { now, limit: 1, logger: { warn() {}, error() {} } })).toMatchObject({ retried: 1 });
   expect(translateCall).toHaveBeenCalledTimes(busyAt);
   const [stored] = await db.select().from(jobs);
@@ -69,11 +70,11 @@ it("resumes a paid fallback without calling the refused primary again", async ()
   const secondary: TranslationEngine = { id: "claude", model: "claude-haiku-4-5", translate: secondaryCall };
   const task = markdown.markdownTask;
   let blocked = false;
-  vi.spyOn(markdown, "markdownTask").mockImplementation((async (operation: string, args: unknown[]) => {
-    if (operation !== "inspectTranslation") return task(operation, args);
+  vi.spyOn(markdown, "markdownTask").mockImplementation(async (...call) => {
+    if (call[0] !== "inspectTranslation") return task(...call);
     if (!blocked) { blocked = true; throw new markdown.MarkdownBusyError(); }
     return { flags: [], notes: [] };
-  }) as typeof markdown.markdownTask);
+  });
   const now = new Date("2026-10-17T00:00:00Z");
   const handlers = createTranslationHandlers({ llm: { engines: { primary, secondary, judge: null }, now } });
   await enqueue(db, "translate_entry", { entryId: entry.id, lang: "ja", sourceHash: "h" }, { runAt: now });
@@ -96,10 +97,10 @@ it("resumes actual chat inspection with its strict handler payload and clears th
   const translateCall = vi.fn(async () => ({ text: "Hello there.", model: "claude-haiku-4-5", promptVersion: "fixture", inputTokens: 10, outputTokens: 2 }));
   const engine: TranslationEngine = { id: "claude", model: "claude-haiku-4-5", translate: translateCall };
   let blocked = false;
-  vi.spyOn(markdown, "markdownTask").mockImplementation((async () => {
+  vi.spyOn(markdown, "markdownTask").mockImplementation(async () => {
     if (!blocked) { blocked = true; throw new markdown.MarkdownBusyError(); }
     return { flags: [], notes: [] };
-  }) as typeof markdown.markdownTask);
+  });
   const now = new Date();
   const handlers = createChatTranslationHandlers({ engines: { primary: engine, secondary: null, judge: null, chat: engine }, now });
   await enqueue(db, "translate_chat", { messageId: message.id, lang: "en", sourceHash: chatSourceHash(message.body) }, { runAt: now });

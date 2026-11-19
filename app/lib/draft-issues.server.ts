@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { media } from "./db/schema";
 import { DRAFT_ISSUES_NOTICE, draftExcerpt, MAX_DRAFT_ISSUES, type DraftIssue } from "./draft-issues";
-import type { inspectDraftMarkdown } from "./draft-issues.core.server";
 import { detectSourceLanguage } from "./lang-detect";
 import { MarkdownBudgetError, MarkdownBusyError, markdownTask, withMarkdownScope } from "./markdown-budget.server";
 import { mediaImage } from "./markdown.server";
@@ -27,7 +26,7 @@ export async function checkDraftIssues(db: Db, draft: DraftIssuesInput, onBusy?:
 function collectDraftIssues(db: Db, draft: DraftIssuesInput) {
   return withMarkdownScope("write", draft.authorId, async () => {
     const targets = await resolveMentionTargets(db, draft.body);
-    const inspected = await markdownTask<ReturnType<typeof inspectDraftMarkdown>>("inspectDraftMarkdown", [draft.body, draft.lang, targets, draft.authorId]);
+    const inspected = await markdownTask("inspectDraftMarkdown", [draft.body, draft.lang, targets, draft.authorId]);
     // Worker results may be cached. Never append request-specific diagnostics to that cache.
     const issues: DraftIssue[] = [...inspected.issues];
     const add = (issue: DraftIssue) => { if (issues.length <= MAX_DRAFT_ISSUES) issues.push(issue); };

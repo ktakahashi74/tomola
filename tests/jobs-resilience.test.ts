@@ -1,10 +1,11 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { DrizzleQueryError, eq, SQL } from "drizzle-orm";
 import { afterEach, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { jobs, llmUsage } from "~/lib/db/schema";
 import * as queueRunner from "~/lib/jobs/queue.server";
 import * as budgetWaits from "~/lib/jobs/budget-wait.server";
-import { enqueue, runDueJobs, type JobHandlers, type RunOptions, type RunStats } from "~/lib/jobs/queue.server";
+import { runDueJobs, type JobHandlers, type RunOptions, type RunStats } from "~/lib/jobs/queue.server";
 import { startWorker, type Worker } from "~/lib/jobs/worker.server";
 import { createTestDb } from "./helpers/db";
 
@@ -12,7 +13,7 @@ const stats: RunStats = { ran: 0, done: 0, failed: 0, recovered: 0, retried: 0, 
 let worker: Worker | null = null;
 it("keeps database parameters out of job errors and worker logs", async () => {
   const db = await createTestDb();
-  const { id } = await enqueue(db, "private_failure", {}, { maxAttempts: 1 });
+  const { id } = await enqueueFixture(db, "private_failure", {}, { maxAttempts: 1 });
   const failure = new DrizzleQueryError("select * from session where token = $1", ["private-session-token"], Object.assign(new Error("private-session-token"), { code: "23505" }));
   const logger = { error: vi.fn(), warn: vi.fn() };
   await runDueJobs(db, { private_failure: async () => { throw failure; } }, { logger });
@@ -47,7 +48,7 @@ it("finalizes abandoned reservations on an idle worker tick without process-loca
 
 it("retries completion persistence without invoking a successful mail handler again", async () => {
   const db = await createTestDb();
-  const { id } = await enqueue(db, "send_notification_email");
+  const { id } = await enqueueFixture(db, "send_notification_email");
   const update = db.update.bind(db);
   let failCompletion = false;
   vi.spyOn(db, "update").mockImplementation(table => {
@@ -99,7 +100,7 @@ it("runs two public translations alongside mail and drains all three", async () 
 
 it("aborts after the grace period, returns the job to queued and refunds its attempt", async () => {
   const db = await createTestDb();
-  const { id } = await enqueue(db, "translate_entry");
+  const { id } = await enqueueFixture(db, "translate_entry");
   vi.useFakeTimers();
   let entered!: () => void;
   const started = new Promise<void>(resolve => { entered = resolve; });
@@ -126,7 +127,7 @@ it("aborts after the grace period, returns the job to queued and refunds its att
 
 it("drains ready short translations within a slot instead of waiting a poll between every job", async () => {
   const db = await createTestDb();
-  for (let i = 0; i < 12; i++) await enqueue(db, "translate_entry", { i });
+  for (let i = 0; i < 12; i++) await enqueueFixture(db, "translate_entry", { i });
   let complete!: (result: RunStats) => void;
   const finishedBatch = new Promise<RunStats>(resolve => { complete = resolve; });
   let calls = 0;
@@ -148,11 +149,11 @@ it("drains ready short translations within a slot instead of waiting a poll betw
 it("uses stored priorities so fresh translations precede older bulk translations", async () => {
   const db = await createTestDb();
   const order: string[] = [];
-  await enqueue(db, "translate_entry", { label: "bulk" }, { priority: 5 });
-  await enqueue(db, "embed_entry");
-  await enqueue(db, "translate_entry", { label: "fresh" });
-  await enqueue(db, "translate_title");
-  await enqueue(db, "send_notification_email");
+  await enqueueFixture(db, "translate_entry", { label: "bulk" }, { priority: 5 });
+  await enqueueFixture(db, "embed_entry");
+  await enqueueFixture(db, "translate_entry", { label: "fresh" });
+  await enqueueFixture(db, "translate_title");
+  await enqueueFixture(db, "send_notification_email");
   const handler = async (job: typeof jobs.$inferSelect) => { order.push((job.payload as { label?: string }).label ?? job.kind); };
   await runDueJobs(db, Object.fromEntries(["translate_entry", "embed_entry", "translate_title", "send_notification_email"].map(kind => [kind, handler])), { now: new Date("2030-01-01") });
   expect(order).toEqual(["send_notification_email", "translate_title", "fresh", "embed_entry", "bulk"]);

@@ -1,4 +1,5 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import type { JobPayload } from "./jobs/definitions.server";
 import type { Db } from "./db/client.server";
 import { invitationNoteTranslations, invitations, jobs } from "./db/schema";
 import { isEnabledLang } from "./enabled-langs.server";
@@ -9,7 +10,7 @@ import { daysBefore, RETENTION } from "./retention";
 import { readPostTranslationWait } from "./translation-wait.server";
 
 export const TRANSLATE_INVITATION_NOTE_JOB = "translate_invitation_note";
-export type InvitationNotePayload = { invitationId: string; lang: Lang };
+export type InvitationNotePayload = JobPayload<typeof TRANSLATE_INVITATION_NOTE_JOB>;
 export const activeInvitation = (now: Date) => and(isNull(invitations.usedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, now), isNotNull(invitations.email), isNotNull(invitations.createdBy), isNotNull(invitations.note));
 export type InvitationNoteView = { text: string; from: Lang; lang: Lang; translated: boolean; available: boolean; pending: boolean; unavailable: boolean };
 
@@ -31,7 +32,7 @@ export async function readInvitationNote(db: Db, invitationId: string, lang: str
     if (original) return source;
     if (saved?.state === "failed" || (await readPostTranslationWait(async () => tx)).kind === "stopped") return { ...source, unavailable: true };
     await tx.insert(invitationNoteTranslations).values({ invitationId, lang }).onConflictDoNothing();
-    await enqueue(tx, TRANSLATE_INVITATION_NOTE_JOB, { invitationId, lang }, { dedupeKey: `invitation-note:${invitationId}:${lang}`, maxAttempts: 5, priority: 2 });
+    await enqueue(tx, TRANSLATE_INVITATION_NOTE_JOB, { invitationId, lang }, { dedupeKey: `invitation-note:${invitationId}:${lang}`, maxAttempts: 5 });
     return { ...source, pending: true };
   });
 }

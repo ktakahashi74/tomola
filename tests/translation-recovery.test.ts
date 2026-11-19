@@ -11,7 +11,7 @@ it("recovers only transient failures on visible current posts, once daily and at
   await addMember(db, "writer", "writer");
   const [post] = await db.insert(entries).values({ kind: "topic", authorId: "writer", lang: "ja", body: "source", sourceHash: "h" }).returning();
   const ids: number[] = [];
-  for (const [lang, lastError, sourceHash] of [["en", "APIError: 503 service unavailable", "h"], ["fr", "LlmError: invalid translation structure", "h"], ["de", "Error: network fetch failed", "old"]]) {
+  for (const [lang, lastError, sourceHash] of [["en", "APIError: 503 service unavailable", "h"], ["fr", "LlmError: invalid translation structure", "h"], ["de", "Error: network fetch failed", "old"]] as const) {
     const { id } = await enqueue(db, "translate_entry", { entryId: post.id, lang, sourceHash }, { dedupeKey: `${post.id}:${lang}:${sourceHash}` });
     await db.update(jobs).set({ status: "failed", attempts: 10, lastError }).where(eq(jobs.id, id));
     ids.push(id);

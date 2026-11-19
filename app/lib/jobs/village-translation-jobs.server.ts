@@ -1,23 +1,17 @@
-import { z } from "zod";
 import { isEnabledLang } from "../enabled-langs.server";
-import { FLAG_UNTRANSLATED, HIDDEN_PRIMARY_FLAGS } from "../llm/flags";
-import { jobLlmOptions, translate, type LlmOptions } from "../llm/index.server";
+import { jobLlmOptions, type LlmOptions } from "../llm/index.server";
 import { LlmError } from "../llm/errors.server";
-import { loadGlossary, matchGlossary } from "../translations.server";
-import { SAME_AS_SOURCE, saveVillageTranslation, TRANSLATE_VILLAGE_JOB, translatableParts, villageTranslationSettled, villageTranslationSource, type VillageTranslationPayload } from "../village-translations.server";
-import { translatedVillageDescription, translatedVillageName } from "../villages";
-import { DeferJob, isFinalJobFailure, type JobHandlers } from "./queue.server";
+import { translatePlainField } from "../short-field-translation.server";
+import { SAME_AS_SOURCE, saveVillageTranslation, TRANSLATE_VILLAGE_JOB, translatableParts, villageTranslationSettled, villageTranslationSource } from "../village-translations.server";
+import { DeferJob, isFinalJobFailure, defineJobHandlers } from "./queue.server";
 
-const payloadSchema = z.object({ villageId: z.string().regex(/^[a-f0-9]{32}$/), lang: z.string().refine(isEnabledLang), sourceHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
-const unusable = () => Object.assign(new LlmError("invalid_output", "The village translation could not be used"), { retryable: false });
 
 // translate_village: the name and then the description of one village, into one language, with the same engine, budget and glossary as the posts. Nothing of another member's
 // text is sent. An output that the checks hide, or that is not plain text of the right shape (one line for a name, no markup), is not shown: the row is failed and the original is read.
-export function createVillageTranslationHandlers(deps: { llm?: LlmOptions } = {}): JobHandlers {
-  return { async [TRANSLATE_VILLAGE_JOB](job, ctx) {
-    const parsed = payloadSchema.safeParse(job.payload);
-    if (!parsed.success || !isEnabledLang(parsed.data.lang)) return;
-    const payload: VillageTranslationPayload = { ...parsed.data, lang: parsed.data.lang };
+export function createVillageTranslationHandlers(deps: { llm?: LlmOptions } = {}) {
+  return defineJobHandlers({ async [TRANSLATE_VILLAGE_JOB](job, ctx) {
+    const { payload } = job;
+    if (!isEnabledLang(payload.lang)) return;
     if (await villageTranslationSettled(ctx.db, payload)) return;
     const village = await villageTranslationSource(ctx.db, payload);
     if (!village) return;
@@ -29,17 +23,8 @@ export function createVillageTranslationHandlers(deps: { llm?: LlmOptions } = {}
       for (const part of ["name", "description"] as const) {
         const text = parts[part];
         if (text === null) continue;
-        const out = await translate(ctx.db, "primary", { text, from: village.sourceLang, to: payload.lang, village: part,
-          glossary: matchGlossary(await loadGlossary(ctx.db, village.sourceLang, payload.lang), text) }, options);
-        const hidden = out.flags.filter(flag => HIDDEN_PRIMARY_FLAGS.includes(flag));
-        // A name that is the same as the source is a valid result (a proper noun is kept as it is): the original name is shown and the description is still translated.
-        // A description that is a copy of a text long enough to be translated, and every other hidden flag, still fails the row: that is the engine not translating.
-        const keepsName = part === "name" && hidden.every(flag => flag === FLAG_UNTRANSLATED);
-        const clean = part === "name" ? translatedVillageName(out.text, text) : translatedVillageDescription(out.text, text);
-        if (hidden.length && !keepsName) throw unusable();
-        if (clean === null) throw unusable();
-        const same = hidden.length > 0 || clean.normalize("NFKC").trim() === text.normalize("NFKC").trim();
-        result[part] = same ? null : clean;
+        const out = await translatePlainField(ctx.db, part, { text, from: village.sourceLang, to: payload.lang }, options);
+        result[part] = out.same ? null : out.text;
         result.model = out.model;
         result.promptVersion = out.promptVersion;
       }
@@ -56,5 +41,5 @@ export function createVillageTranslationHandlers(deps: { llm?: LlmOptions } = {}
       return;
     }
     await saveVillageTranslation(ctx.db, payload, { state: "ready", name: result.name, description: result.description, model: result.model, promptVersion: result.promptVersion }, { preserveSettled: true });
-  } };
+  } });
 }

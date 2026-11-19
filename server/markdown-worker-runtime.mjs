@@ -1,6 +1,6 @@
 import { parentPort } from "node:worker_threads";
 import { serialize } from "node:v8";
-import { markdownOperations as operations, warmMarkdownWorker } from "./markdown-operations-core.mjs";
+import { markdownOperations as operations, warmMarkdownWorker } from "../app/lib/markdown-operations.core.server.ts";
 warmMarkdownWorker();
 parentPort.postMessage({ phase: "ready" });
 parentPort.on("message", message => {

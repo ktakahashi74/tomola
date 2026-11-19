@@ -14,7 +14,7 @@ import { pruneExpiredInvitationRecipients } from "~/lib/invitations.server";
 import { pruneInvitationNotes } from "~/lib/invitation-note.server";
 import { pruneRotationReplays, pruneUnusedClients } from "~/lib/mcp/connections.server";
 import { ensureDailyJob } from "./daily.server";
-import type { JobHandler, JobHandlers } from "./queue.server";
+import { defineJobHandlers, type TypedJobHandler } from "./queue.server";
 
 // Maintenance jobs.
 // - cleanup_jobs ({ date }; dedupe: cleanup-jobs:<YYYY-MM-DD>): daily UTC 03:00, delete finished jobs older than the configured retention period
@@ -44,8 +44,8 @@ export async function deleteFinishedJobs(db: Db, now: Date, results?: RetentionR
     and(inArray(jobs.status, ["done", "failed"]), ne(jobs.kind, "translation_retry_marker"), sql`not (${jobs.kind} = 'source_language_receipt' and exists (select 1 from entries e where e.id::text = ${jobs.payload}->>'entryId' and e.source_hash = ${jobs.payload}->>'sourceHash' and e.mention_revision::text = ${jobs.payload}->>'revision' and e.deleted_at is null))`, lt(jobs.updatedAt, daysBefore(now, RETENTION.finishedJobDays)))!, results)).removed;
 }
 
-export function createMaintenanceHandlers(): JobHandlers {
-  const cleanup: JobHandler = async (_job, ctx) => {
+export function createMaintenanceHandlers() {
+  const cleanup: TypedJobHandler<typeof CLEANUP_JOBS_JOB> = async (_job, ctx) => {
     // Queue the next day first; it remains queued even if cleanup fails and retries.
     await ensureCleanupScheduled(ctx.db, ctx.now);
     const signal = ctx.shutdownSignal ?? ctx.signal;
@@ -54,7 +54,7 @@ export function createMaintenanceHandlers(): JobHandlers {
     // once the worker is stopping or the cleanup ran out of its time.
     if (!signal?.aborted && !Object.values(results).some(result => result.stop === "time" || result.stop === "signal")) await reconcileMissingTranslations(ctx.db, { now: ctx.now });
   };
-  return { [CLEANUP_JOBS_JOB]: cleanup };
+  return defineJobHandlers({ [CLEANUP_JOBS_JOB]: cleanup });
 }
 
 // Used after a restore too: run only cleanup, without claiming unrelated jobs.

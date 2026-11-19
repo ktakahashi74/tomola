@@ -19,25 +19,18 @@ import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import { preservesFigureMath } from "~/lib/figure";
 import { loadGlossary, matchGlossary } from "~/lib/translations.server";
 import { currentJobSignal } from "./signal.server";
-import type { JobHandlers } from "./queue.server";
+import { defineJobHandlers } from "./queue.server";
 
-const keySchema = z.string().regex(/^[a-f0-9]{64}:v[1-9]\d{0,5}$/);
-const readPayload = z.object({ key: keySchema }).strict();
-const translatePayload = z.object({ key: keySchema, mediaId: z.string().regex(/^[a-f0-9]{64}$/), lang: z.string() }).strict();
-
-export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOptions } = {}): JobHandlers {
-  return {
+export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOptions } = {}) {
+  return defineJobHandlers({
     async [PREPARE_FIGURES_JOB](job, ctx) {
       if (!figureTranslationEnabled(deps.llm?.env)) return;
-      const payload = z.object({ entryId: z.number().int().positive() }).strict().safeParse(job.payload);
-      if (payload.success) await ctx.db.transaction(tx => enqueueEntryFigures(tx, payload.data.entryId));
+      await ctx.db.transaction(tx => enqueueEntryFigures(tx, job.payload.entryId));
     },
     async [READ_FIGURE_JOB](job, ctx) {
       const options = jobLlmOptions(ctx, deps.llm);
       if (!figureTranslationEnabled(options.env)) return;
-      const payload = readPayload.safeParse(job.payload);
-      if (!payload.success) return;
-      const key = payload.data.key;
+      const { key } = job.payload;
       const [saved] = await ctx.db.select().from(figureReadings).where(and(eq(figureReadings.key, key), eq(figureReadings.version, FIGURE_VERSION)));
       if (!saved) return;
       const image = await readFigureSource(ctx.db, key);
@@ -76,9 +69,8 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
     async [TRANSLATE_FIGURE_JOB](job, ctx) {
       const options = jobLlmOptions(ctx, deps.llm);
       if (!figureTranslationEnabled(options.env)) return;
-      const payload = translatePayload.safeParse(job.payload);
-      if (!payload.success || !isEnabledLang(payload.data.lang, options.env)) return;
-      const { key, mediaId, lang } = payload.data;
+      const { key, mediaId, lang } = job.payload;
+      if (!isEnabledLang(lang, options.env)) return;
       const [source] = await ctx.db.select({ reading: figureReadings.reading }).from(figureMedia)
         .innerJoin(figureReadings, and(eq(figureReadings.key, figureMedia.readingKey), eq(figureReadings.state, "ready"), eq(figureReadings.version, FIGURE_VERSION)))
         .where(and(eq(figureMedia.mediaId, mediaId), eq(figureMedia.readingKey, key)));
@@ -155,5 +147,5 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
         await tx.insert(figureTranslations).values({ mediaId, readingKey: key, lang, state: bytes ? "ready" : "skipped", bytes: bytes || null, labels: labelResults.some(r => r.translation !== null) ? labelResults.map(r => r.translation ?? "") : null, labelResults, model: metadata.model, engine: metadata.engine, promptVersion: metadata.promptVersion }).onConflictDoNothing();
       });
     },
-  };
+  });
 }

@@ -30,7 +30,7 @@ export async function checkRenderable(markdown: string): Promise<boolean> { retu
 export async function checkBodyBudget(markdown: string, member?: string): Promise<"body_too_complex" | "body_unrenderable" | null> {
   const check = async () => {
     try {
-      return await markdownTask<"body_unrenderable" | null>("admitMarkdown", [markdown]);
+      return await markdownTask("admitMarkdown", [markdown]);
     } catch (error) {
       if (error instanceof MarkdownBudgetError) return "body_too_complex" as const;
       throw error;
@@ -43,7 +43,7 @@ export async function renderMarkdownOrPlain(...args: Parameters<typeof core.rend
 }
 export async function renderMarkdownResult(...args: Parameters<typeof core.renderMarkdownOrPlain>): Promise<core.RenderedEntry> {
   try {
-    const html = await markdownTask<string | null>("tryRenderMarkdown", args);
+    const html = await markdownTask("tryRenderMarkdown", args);
     return { html: html ?? plain(args[0]), cardHtml: null, cardTruncated: false };
   } catch (error) {
     if (!canFallbackMarkdown(error)) throw error;
@@ -51,7 +51,7 @@ export async function renderMarkdownResult(...args: Parameters<typeof core.rende
   }
 }
 export async function renderEntryOrPlain(...args: Parameters<typeof core.renderEntryOrPlain>): Promise<core.RenderedEntry> {
-  try { return await markdownTask<core.RenderedEntry | null>("tryRenderEntry", args) ?? plainEntry(args[0]); }
+  try { return await markdownTask("tryRenderEntry", args) ?? plainEntry(args[0]); }
   catch (error) {
     if (!canFallbackMarkdown(error)) throw error;
     return { ...plainEntry(args[0]), ...(error instanceof MarkdownBusyError ? { cacheable: false } : {}) };

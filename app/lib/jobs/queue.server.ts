@@ -3,14 +3,14 @@ import { withMarkdownScope } from "../markdown-budget.server";
 import { and, asc, eq, inArray, isNotNull, lt, lte, notInArray, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { jobs } from "~/lib/db/schema";
-import { MAIL_JOB_KINDS } from "./mail-kinds";
+import { DEFAULT_JOB_PRIORITY, jobDefinitions, type JobKind, type JobPayload } from "./definitions.server";
 import { abortable, withJobSignal } from "./signal.server";
 import { withoutPaidTranslationMetadata, withPaidTranslationCalls } from "./paid-translation.server";
 import { canRetryTranslationDaily, isTransientFailure } from "./transient-failure.server";
 
 // Small queue using the DB `jobs` table; pg-boss is incompatible with PGlite.
 // Usage: enqueue adds jobs; runDueJobs executes them, called every second by startWorker in app/lib/jobs/worker.server.ts.
-// Register executable kinds and handlers in app/lib/jobs/handlers.server.ts.
+// Register payloads in definitions.server.ts and executable handlers in handlers.server.ts.
 
 export type JobRow = typeof jobs.$inferSelect;
 export type JobStatus = "queued" | "running" | "done" | "failed";
@@ -31,6 +31,33 @@ export type JobContext = {
 // Throw DeferJob for temporary inability to run, such as a budget limit, rather than failure.
 export type JobHandler = (job: JobRow, ctx: JobContext) => Promise<void>;
 export type JobHandlers = Record<string, JobHandler>;
+export type TypedJobRow<K extends JobKind> = Omit<JobRow, "payload"> & { payload: JobPayload<K> };
+export type TypedJobHandler<K extends JobKind> = (job: TypedJobRow<K>, ctx: JobContext) => Promise<void>;
+
+class InvalidJobPayloadError extends Error {
+  readonly retryable = false;
+
+  constructor(kind: JobKind) {
+    // Payloads may contain private data. Persist only the known kind.
+    super(`Invalid ${kind} payload`);
+    this.name = "InvalidJobPayloadError";
+  }
+}
+
+export function defineJobHandlers<K extends JobKind>(handlers: { [P in K]: TypedJobHandler<P> }): Record<K, JobHandler> {
+  const registered = {} as Record<K, JobHandler>;
+  for (const kind in handlers) registered[kind] = validateHandler(kind, handlers[kind]);
+  return registered;
+}
+
+function validateHandler<K extends JobKind>(kind: K, handler: TypedJobHandler<K>): JobHandler {
+  return async (job, ctx) => {
+    const parsed = jobDefinitions[kind].schema.safeParse(withoutPaidTranslationMetadata(job.payload));
+    if (!parsed.success) throw new InvalidJobPayloadError(kind);
+    // The same key indexes the schema and its handler.
+    await handler({ ...job, payload: parsed.data as JobPayload<K> }, ctx);
+  };
+}
 
 // A handler reports temporary inability to execute until a specified time.
 // Return the job to queued with run_at = until. Do not increment attempts or approach the failure limit.
@@ -96,15 +123,15 @@ export type EnqueueOptions = {
 };
 
 // Enqueue, also usable within tx assignable to Db. created indicates insertion; false means an unfinished job already had this key.
-export async function enqueue(
+export async function enqueue<K extends JobKind>(
   db: Db,
-  kind: string,
-  payload: unknown = {},
+  kind: K,
+  payload: JobPayload<NoInfer<K>>,
   opts: EnqueueOptions = {},
 ): Promise<{ id: number; created: boolean }> {
   const values = {
     kind,
-    priority: opts.priority ?? (MAIL_JOB_KINDS.includes(kind as typeof MAIL_JOB_KINDS[number]) ? 0 : kind === "translate_title" ? 1 : kind === "translate_entry" ? 2 : kind === "rebuild_render_cache" ? 5 : 3),
+    priority: opts.priority ?? jobDefinitions[kind]?.priority ?? DEFAULT_JOB_PRIORITY,
     payload,
     runAt: opts.runAt,
     dedupeKey: opts.dedupeKey,
@@ -174,6 +201,11 @@ function errorMessage(error: unknown): string {
   return `${isTransientFailure(error) ? "transient: " : ""}${text}`.slice(0, LAST_ERROR_MAX);
 }
 
+// JSON scalars are invalid handler inputs, but still need to reach the queue's
+// failed state. PostgreSQL does not support deleting a key from a scalar.
+const withoutPayloadKey = (key: "paidTranslationCalls" | "discardPaidTranslationCalls") =>
+  sql`case when jsonb_typeof(${jobs.payload}) = 'object' then ${jobs.payload} - ${key}::text else ${jobs.payload} end`;
+
 // Recover stale running jobs.
 async function recoverStuck(db: Db, now: Date): Promise<number> {
   const rows = await db
@@ -183,7 +215,7 @@ async function recoverStuck(db: Db, now: Date): Promise<number> {
       lockedAt: null,
       runAt: now,
       lastError: "stuck in running (worker stopped?)",
-      payload: sql`case when ${jobs.attempts} >= ${jobs.maxAttempts} then ${jobs.payload} - 'paidTranslationCalls' else ${jobs.payload} end`,
+      payload: sql`case when ${jobs.attempts} >= ${jobs.maxAttempts} then ${withoutPayloadKey("paidTranslationCalls")} else ${jobs.payload} end`,
       updatedAt: now,
     })
     .where(and(eq(jobs.status, "running"), isNotNull(jobs.lockedAt), lt(jobs.lockedAt, new Date(now.getTime() - STUCK_AFTER_MS))))
@@ -217,7 +249,7 @@ async function claimOne(db: Db, kinds: string[], now: Date, skip: number[]): Pro
     .update(jobs)
     // A deletion fence belongs to the previous execution. A new attempt first
     // revalidates its source and may checkpoint fresh work after restoration.
-    .set({ status: "running", payload: sql`${jobs.payload} - 'discardPaidTranslationCalls'`, lockedAt: now, attempts: sql`${jobs.attempts} + 1`, updatedAt: now })
+    .set({ status: "running", payload: withoutPayloadKey("discardPaidTranslationCalls"), lockedAt: now, attempts: sql`${jobs.attempts} + 1`, updatedAt: now })
     .where(inArray(jobs.id, next))
     .returning();
   return job;
@@ -279,7 +311,7 @@ export async function runDueJobs(db: Db, handlers: JobHandlers, opts: RunOptions
       const requestedAgain = sql`date_trunc('milliseconds', ${jobs.runAt}) is distinct from ${job.runAt}::timestamptz`;
       const [completed] = await db.update(jobs).set({
         status: sql`case when ${requestedAgain} then 'queued' else 'done' end`,
-        payload: sql`${jobs.payload} - 'paidTranslationCalls'`,
+        payload: withoutPayloadKey("paidTranslationCalls"),
         attempts: sql`case when ${requestedAgain} then greatest(0, ${jobs.attempts} - 1) else ${jobs.attempts} end`,
         lockedAt: null,
         updatedAt: now,
@@ -333,7 +365,7 @@ export async function runDueJobs(db: Db, handlers: JobHandlers, opts: RunOptions
       const message = errorMessage(error);
       if (isFinalJobFailure(job, error)) {
         await db.update(jobs).set({ status: "failed", lockedAt: null, lastError: message, updatedAt: now,
-          ...(!isPermanentFailure(error) && canRetryTranslationDaily(job.kind, message, job.payload) ? {} : { payload: sql`${jobs.payload} - 'paidTranslationCalls'` }),
+          ...(!isPermanentFailure(error) && canRetryTranslationDaily(job.kind, message, job.payload) ? {} : { payload: withoutPayloadKey("paidTranslationCalls") }),
         }).where(owned);
         stats.failed++;
         logger.error(`[jobs] job ${job.id} (${job.kind}) failed after ${job.attempts} attempt(s)${isPermanentFailure(error) ? " (not retryable)" : ""}: ${message}`);

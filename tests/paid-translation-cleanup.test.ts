@@ -1,3 +1,4 @@
+import { enqueueFixture } from "./helpers/enqueue-fixture";
 import { expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
@@ -5,7 +6,7 @@ import { addMember, createTestDb } from "./helpers/db";
 import { chatMessages, entries, jobs, villages } from "~/lib/db/schema";
 import { softDeleteEntry } from "~/lib/entries.server";
 import { deleteChatRows } from "~/lib/village-chat-delete.server";
-import { enqueue, runDueJobs, STUCK_AFTER_MS } from "~/lib/jobs/queue.server";
+import { runDueJobs, STUCK_AFTER_MS } from "~/lib/jobs/queue.server";
 import { paidTranslationCall } from "~/lib/jobs/paid-translation.server";
 import { MarkdownBusyError } from "~/lib/markdown-budget.server";
 
@@ -42,7 +43,7 @@ it.each(["entry", "chat"])("erases %s translation checkpoints in unfinished and 
 
 it("clears paid text on completion and refuses to put it back in a completed job", async () => {
   const db = await createTestDb();
-  await enqueue(db, "translate_entry", saved);
+  await enqueueFixture(db, "translate_entry", saved);
   await runDueJobs(db, { translate_entry: async () => {} }, { logger: quiet });
   const [job] = await db.select().from(jobs);
   expect(job.status).toBe("done");
@@ -59,7 +60,7 @@ it.each([
   ["translate_entry", "permanent", 0, false],
 ] as const)("retains failed %s checkpoints only for daily recovery (%s, count %i)", async (kind, failure, automaticRetryCount, retain) => {
   const db = await createTestDb();
-  await enqueue(db, kind, { ...saved, automaticRetryCount }, { maxAttempts: 1 });
+  await enqueueFixture(db, kind, { ...saved, automaticRetryCount }, { maxAttempts: 1 });
   await runDueJobs(db, { [kind]: async () => { throw failure === "transient" ? new MarkdownBusyError() : Object.assign(new Error("refusal"), { retryable: false }); } }, { now: new Date(Date.now() + 1000), logger: quiet });
   const [job] = await db.select().from(jobs);
   expect(job.status).toBe("failed");
@@ -79,7 +80,7 @@ it.each(["entry", "chat"])("cannot restore deleted %s text when an in-flight pai
   let started!: () => void, release!: () => void;
   const ready = new Promise<void>(resolve => { started = resolve; });
   const gate = new Promise<void>(resolve => { release = resolve; });
-  await enqueue(db, kind, payload);
+  await enqueueFixture(db, kind, payload);
   const running = runDueJobs(db, { [kind]: async () => {
     await paidTranslationCall("a".repeat(64), async () => { started(); await gate; return call; });
     throw new MarkdownBusyError();
@@ -96,7 +97,7 @@ it("checkpoints a new paid result after a deleted source is restored", async () 
   const db = await createTestDb();
   const { payload, kind, remove } = await sourceToDelete(db, "entry");
   const now = new Date(Date.now() + 1000);
-  const { id } = await enqueue(db, kind, payload, { runAt: now });
+  const { id } = await enqueueFixture(db, kind, payload, { runAt: now });
   await db.update(jobs).set({ status: "running" }).where(eq(jobs.id, id));
   await remove();
   // Simulate the interrupted execution returning to queued, then source restore.

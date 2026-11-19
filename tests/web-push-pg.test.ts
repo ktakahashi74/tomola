@@ -43,7 +43,7 @@ it.skipIf(!PG_MODE).each(["accepted", "gone", "retry"] as const)("releases all d
     let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
     let started!: () => void; const sending = new Promise<void>(resolve => { started = resolve; });
     const send = vi.fn(async () => { started(); await held; return { kind }; });
-    const handler = createPushHandlers({ send }).send_push;
+    const handler = createPushHandlers({ send }).send_push!;
     const now = new Date(Date.now() + 61000);
     const work = handler(job, { db, now });
     try {
@@ -86,7 +86,7 @@ it.skipIf(!PG_MODE)("serializes competing reservations after a leader notificati
     const leaderJob = queued.find(job => (job.payload as { deliveryId: number }).deliveryId === leader.id)!;
     const peerJob = queued.find(job => (job.payload as { deliveryId: number }).deliveryId === peer.id)!;
     const send = vi.fn().mockResolvedValueOnce({ kind: "retry", retryAfterSeconds: 120 }).mockResolvedValue({ kind: "accepted" });
-    const handler = createPushHandlers({ send }).send_push;
+    const handler = createPushHandlers({ send }).send_push!;
     const now = new Date(Date.now() + 61000);
     await expect(handler(leaderJob, { db, now })).rejects.toMatchObject({ name: "DeferJob" });
     await db.delete(notifications).where(eq(notifications.id, leader.notificationId));

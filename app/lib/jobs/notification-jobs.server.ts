@@ -5,7 +5,6 @@ import { notificationHref } from "../notification-opening.server";
 import { selectDisplayName } from "~/lib/display-names.server";
 import { DELETED_MEMBER_HANDLE } from "~/lib/deleted-member";
 import { and, asc, eq, gt, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
-import { z } from "zod";
 import type { Db } from "~/lib/db/client.server";
 import { chatMessages, villageInvites, villages, appeals, entries, jobs, moderationActions, notifications, profiles, user } from "~/lib/db/schema";
 import { resolveDisplayLang } from "~/lib/display";
@@ -24,7 +23,7 @@ import { AUTO_IMMEDIATE_KINDS, IN_APP_ONLY_KINDS, effectiveEmailMode, isContentK
 import { listNotifications, notificationEmailDelaySeconds, SEND_DIGEST_JOB, SEND_NOTIFICATION_EMAIL_JOB } from "~/lib/notifications.server";
 import { getProfile, type Profile } from "~/lib/profiles.server";
 import { dateOf, ensureDailyJob, nextDailyAt } from "./daily.server";
-import { DeferJob, enqueue, type JobHandler, type JobHandlers } from "./queue.server";
+import { DeferJob, enqueue, defineJobHandlers, type TypedJobHandler } from "./queue.server";
 import { SEND_MEMBER_DIGEST_JOB } from "./mail-kinds";
 import { activeSharedVillageCondition } from "~/lib/villages.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
@@ -272,23 +271,17 @@ const settingsUrl = () => siteUrl("/settings");
 
 // ---- Jobs ----
 
-const emailPayload = z.object({ notificationId: z.number().int().positive() });
-const digestPayload = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
-const memberDigestPayload = digestPayload.extend({ userId: z.string().min(1) });
-
 export type NotificationJobDeps = { mailer?: () => Mailer };
 
-export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobHandlers {
+export function createNotificationHandlers(deps: NotificationJobDeps = {}) {
   const mailer = deps.mailer ?? getMailer;
 
   // Immediate email: skip already emailed notifications and members no longer preferring immediate. Digests pick them up if the preference changed to daily.
   // Immediate email of one notification. It is not sent when the notification was already mailed, or when its actual mode is no longer `immediate` (the preference changed; a
   // member who moved to `daily` gets it in the digest).
-  const sendOne: JobHandler = async (job, ctx) => {
+  const sendOne: TypedJobHandler<typeof SEND_NOTIFICATION_EMAIL_JOB> = async (job, ctx) => {
     const { db } = ctx;
-    const parsed = emailPayload.safeParse(job.payload);
-    if (!parsed.success) throw new Error(`Invalid ${job.kind} payload`);
-    const [row] = await db.select(notificationColumns()).from(notifications).where(eq(notifications.id, parsed.data.notificationId));
+    const [row] = await db.select(notificationColumns()).from(notifications).where(eq(notifications.id, job.payload.notificationId));
     if (!row || row.emailedAt || (row.kind === "followed_thread" && row.readAt)) return;
     const recipient = await loadRecipient(db, row.userId);
     if (!recipient || effectiveEmailMode(recipient.profile.emailPref, row.kind as NotificationKind) !== "immediate") return;
@@ -332,9 +325,9 @@ export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobH
 
   // Fan out in bounded pages of member IDs, never loading everyone's content or
   // sending mail in this job. Completed child keys also prevent duplicate fanout.
-  const sendDigest: JobHandler = async (job, ctx) => {
+  const sendDigest: TypedJobHandler<typeof SEND_DIGEST_JOB> = async (job, ctx) => {
     const { db, now } = ctx;
-    const payload = digestPayload.parse(job.payload);
+    const { payload } = job;
     await ensureDigestScheduled(db, now);
     let cursor: string | undefined;
     for (;;) {
@@ -351,11 +344,9 @@ export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobH
     }
   };
 
-  const sendMemberDigest: JobHandler = async (job, ctx) => {
+  const sendMemberDigest: TypedJobHandler<typeof SEND_MEMBER_DIGEST_JOB> = async (job, ctx) => {
     const { db, now } = ctx;
-    const parsed = memberDigestPayload.safeParse(job.payload);
-    if (!parsed.success) throw Object.assign(new Error(`Invalid ${job.kind} payload`), { retryable: false });
-    const { date, userId } = parsed.data;
+    const { date, userId } = job.payload;
     const rows = await db.select(notificationColumns()).from(notifications)
       .innerJoin(profiles, eq(profiles.userId, notifications.userId))
       .where(and(eq(notifications.userId, userId), pendingConditions(date, now)))
@@ -392,5 +383,5 @@ export function createNotificationHandlers(deps: NotificationJobDeps = {}): JobH
     }
   };
 
-  return { [SEND_NOTIFICATION_EMAIL_JOB]: sendOne, [SEND_DIGEST_JOB]: sendDigest, [SEND_MEMBER_DIGEST_JOB]: sendMemberDigest };
+  return defineJobHandlers({ [SEND_NOTIFICATION_EMAIL_JOB]: sendOne, [SEND_DIGEST_JOB]: sendDigest, [SEND_MEMBER_DIGEST_JOB]: sendMemberDigest });
 }

@@ -1,4 +1,5 @@
 import { and, eq, isNull, ne, notExists, sql } from "drizzle-orm";
+import type { JobPayload } from "./jobs/definitions.server";
 import type { Db } from "~/lib/db/client.server";
 import { entries, entryEmbeddings, jobs } from "~/lib/db/schema";
 import { enqueue } from "~/lib/jobs/queue.server";
@@ -12,7 +13,7 @@ export const EMBED_JOB = "embed_entry";
 // Allow long waits for budget stops and failures, as with translation: double delays starting at 30 seconds, capped at one hour; ten attempts span roughly three hours. Budget stops do not count as attempts.
 export const EMBED_MAX_ATTEMPTS = 10;
 
-export type EmbedJobPayload = { entryId: number; sourceHash: string };
+export type EmbedJobPayload = JobPayload<typeof EMBED_JOB>;
 
 export function embedDedupeKey(p: EmbedJobPayload): string {
   return `embed:${p.entryId}:${p.sourceHash}`;

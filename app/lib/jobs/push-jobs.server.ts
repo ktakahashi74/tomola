@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { z } from "zod";
 import { notifications, profiles, pushDeliveries, pushSubscriptions } from "../db/schema";
 import { immediateNotifications } from "../notification-access.server";
 import { memberMailLocale } from "../mail/magic-link.server";
@@ -10,19 +9,16 @@ import { PUSH_WINDOW_MS, SEND_PUSH_JOB } from "../push/enqueue.server";
 import { pushMessage } from "../push/messages.server";
 import { pushSessionCondition, pushStoppedValues } from "../push/subscriptions.server";
 import { sendWebPush, type PushSender } from "../push/send.server";
-import { DeferJob, type JobHandlers } from "./queue.server";
+import { DeferJob, defineJobHandlers, type JobHandler } from "./queue.server";
 
-const payload = z.object({ deliveryId: z.number().int().positive() });
 // Longer than the transport's total deadline. A crashed attempt can be reclaimed.
 const ATTEMPT_LEASE_MS = 30_000;
-export function createPushHandlers(deps: { send?: PushSender } = {}): JobHandlers {
+export function createPushHandlers(deps: { send?: PushSender } = {}): Partial<Record<typeof SEND_PUSH_JOB, JobHandler>> {
   if (!webPushEnabled()) return {};
-  return { [SEND_PUSH_JOB]: async (job, ctx) => {
+  return defineJobHandlers({ [SEND_PUSH_JOB]: async (job, ctx) => {
     if (!webPushEnabled()) return;
-    const parsed = payload.safeParse(job.payload);
-    if (!parsed.success) throw Object.assign(new Error("Invalid push delivery job"), { retryable: false });
     const reserved = await ctx.db.transaction(async tx => {
-      const [peek] = await tx.select().from(pushDeliveries).where(eq(pushDeliveries.id, parsed.data.deliveryId));
+      const [peek] = await tx.select().from(pushDeliveries).where(eq(pushDeliveries.id, job.payload.deliveryId));
       if (!peek || peek.completedAt) return;
       // Serialize reservation with stop/re-registration, then release every DB
       // lock before DNS/HTTPS. A committed reservation is an in-flight send.
@@ -110,5 +106,5 @@ export function createPushHandlers(deps: { send?: PushSender } = {}): JobHandler
     });
     if (outcome?.operator) throw Object.assign(new Error("Push provider rejected the request; check VAPID configuration"), { retryable: false });
     if (outcome?.defer !== undefined) throw new DeferJob(new Date(outcome.defer), "Push delivery deferred");
-  } };
+  } });
 }

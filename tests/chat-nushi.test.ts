@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
 import { consentChatMembers } from "./helpers/chat-consent";
-import { chatConsents, chatMessages, chatMessageTranslations, chatNushiRequests, chatNushiSources, chatNushiReservations, chatReads, entries, jobs, llmUsage, notifications, profiles, villageMembers, villages } from "~/lib/db/schema";
+import { chatConsents, chatMessages, chatMessageTranslations, chatNushiRequests, chatNushiSources, chatNushiReservations, chatReads, entries, jobs, llmUsage, notifications, nushiRequests, profiles, villageMembers, villages } from "~/lib/db/schema";
 import { chatChanges, chatPage, chatUnreadCounts, markChatRead, mutateChat } from "~/lib/village-chat.server";
 import { processChatNushiRequest, expireChatNushiRequests } from "~/lib/chat-nushi.server";
 import { createTopic } from "~/lib/entries.server";
@@ -12,7 +12,7 @@ import { findChatMessages } from "~/lib/village-chat-search.server";
 import { chatTranslationSource, chatSourceHash } from "~/lib/village-chat-translations.server";
 import { countUnreadNotifications, listNotifications } from "~/lib/notifications.server";
 import { createChatReport, readChatEvidence } from "~/lib/village-chat-reports.server";
-import { readNushiAnswer, resolveNushiCompleter, threadNushi } from "~/lib/nushi.server";
+import { processNushiRequest, readNushiAnswer, resolveNushiCompleter, threadNushi } from "~/lib/nushi.server";
 import { aiUsePage } from "~/lib/ai-use-page.server";
 import { m } from "~/paraglide/messages.js";
 import { CHAT_CASE_CONTEXT_COUNT } from "~/lib/chat-access";
@@ -231,6 +231,52 @@ it.each([true, false])("counts processing requests only while their lease is act
   const second = await w.call(); await processChatNushiRequest(w.db, second.request.id, { env, clock: () => now });
   expect((await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, second.request.id)))[0]).toMatchObject(active ? { state: "failed", failure: "interval" } : { state: "answered", failure: null });
 });
+it("defers a live chat lease, reclaims it at expiration and stops after the last attempt", async () => {
+  const w = await world(), { request } = await w.call(), fake = resolveNushiCompleter();
+  let now = new Date();
+  const clock = () => now;
+  await w.db.update(chatNushiRequests).set({ state: "processing", leaseUntil: now, token: "old-lease", attempts: 1 })
+    .where(eq(chatNushiRequests.id, request.id));
+  const read = async () => (await w.db.select().from(chatNushiRequests).where(eq(chatNushiRequests.id, request.id)))[0];
+  const complete = vi.fn(async () => { throw new Error("Private provider detail"); });
+  const options = { clock, completer: { ...fake, complete } };
+  const leaseUntil = now;
+  now = new Date(leaseUntil.getTime() - 1);
+  await expect(processChatNushiRequest(w.db, request.id, options)).rejects.toMatchObject({ name: "DeferJob", until: leaseUntil });
+  expect(complete).not.toHaveBeenCalled();
+  now = leaseUntil;
+  await expect(processChatNushiRequest(w.db, request.id, options)).rejects.toMatchObject({ name: "DeferJob" });
+  expect(await read()).toMatchObject({ state: "pending", attempts: 2, leaseUntil: null });
+  expect((await read()).token).not.toBe("old-lease");
+  await processChatNushiRequest(w.db, request.id, options);
+  await processChatNushiRequest(w.db, request.id, options);
+  expect(complete).toHaveBeenCalledTimes(2);
+  expect(await read()).toMatchObject({ state: "failed", failure: "unavailable", attempts: 3 });
+  expect(await w.db.select().from(chatNushiReservations).where(eq(chatNushiReservations.key, "member:zcn_caller"))).toHaveLength(1);
+});
+
+it.each(["chat counts posts", "posts count enabled chat", "posts skip disabled chat"] as const)("shares the member quota when %s", async mode => {
+  const w = await world(), { request: chat } = await w.call();
+  vi.stubEnv("VILLAGE_NUSHI", "1");
+  vi.stubEnv("VILLAGE_NUSHI_MEMBER_DAILY_LIMIT", "1");
+  const post = await createTopic(w.db, "zcn_caller", { body: "@nushi orchard", lang: "en", village: w.village.slug });
+  if (!post.ok) throw new Error(post.error);
+  const [request] = await w.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, post.id));
+  const now = new Date();
+  if (mode === "chat counts posts") {
+    await processNushiRequest(w.db, request.id, { now });
+    await processChatNushiRequest(w.db, chat.id, { now, env: { ...process.env, VILLAGE_NUSHI: "0" } });
+    expect((await w.db.select().from(chatNushiRequests))[0]).toMatchObject({ state: "failed", failure: "limit", attempts: 0 });
+  } else {
+    await processChatNushiRequest(w.db, chat.id, { now });
+    const env = { ...process.env, VILLAGE_CHAT_NUSHI: mode === "posts count enabled chat" ? "1" : "0" };
+    await processNushiRequest(w.db, request.id, { now, env });
+    expect((await w.db.select().from(nushiRequests))[0]).toMatchObject(mode === "posts count enabled chat"
+      ? { state: "failed", failure: "limit", attempts: 0 }
+      : { state: "answered", attempts: 1 });
+  }
+});
+
 it("reads chat interval defaults and trimmed integer overrides", () => {
   expect(chatNushiLimits({})).toEqual({ intervalSeconds: 60, intervalLimit: 2 });
   expect(chatNushiLimits({ VILLAGE_CHAT_NUSHI_INTERVAL_SECONDS: " ", VILLAGE_CHAT_NUSHI_INTERVAL_LIMIT: "" })).toEqual({ intervalSeconds: 60, intervalLimit: 2 });
@@ -303,8 +349,6 @@ it("does not notify cited authors without current chat access, and hides citatio
 });
 it.skipIf(!PG_MODE)("serializes duplicate claims and shares concurrent capacity across destinations on PostgreSQL", { tags: ["postgres"] }, async () => {
   const w = await world(), c = await w.call();
-  const { resolveNushiCompleter, processNushiRequest } = await import("~/lib/nushi.server");
-  const { nushiRequests } = await import("~/lib/db/schema");
   vi.stubEnv("VILLAGE_NUSHI", "1"); vi.stubEnv("VILLAGE_NUSHI_CONCURRENT_LIMIT", "1");
   const post = await createTopic(w.db, "zcn_caller", { body: "@nushi orchard", lang: "en", village: w.village.slug });
   if (!post.ok) throw new Error(post.error);

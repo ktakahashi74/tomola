@@ -86,7 +86,7 @@ describe.skipIf(!PG_MODE)("concurrent figure ownership and deletion", { tags: ["
       const started = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
       const reader = createFigureReader(env), engine = createFakeEngine();
       const handlers = createFigureHandlers({ reader, llm: { env, engines: { primary: engine, secondary: null, judge: null } } });
-      const run = (selected = handlers) => runDueJobs(db, selected, { now: jobNow, logger: quietLogger });
+      const run = (selected: Parameters<typeof runDueJobs>[1] = handlers) => runDueJobs(db, selected, { now: jobNow, logger: quietLogger });
       expect(await run({ prepare_figures: handlers.prepare_figures })).toMatchObject({ done: 1, failed: 0 });
       if (phase === "translation") expect(await run({ read_figure: handlers.read_figure })).toMatchObject({ done: 1, failed: 0 });
       if (phase === "reading") { const read = reader.read; reader.read = async (...args) => { entered(); await gate; return read(...args); }; }

@@ -1,3 +1,4 @@
+import type { markdownOperations } from "./markdown-operations.core.server";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -287,6 +288,16 @@ const global = globalThis as typeof globalThis & { __tomolaMarkdown?: Executor }
 const executor = () => global.__tomolaMarkdown ??= createMarkdownExecutor();
 export function initializeMarkdown(options?: MarkdownExecutorOptions) { return (global.__tomolaMarkdown ??= createMarkdownExecutor(options)).initialize(); }
 export const stopMarkdown = () => executor().stop();
-export const markdownTask = <T>(operation: string, args: unknown[]): Promise<T> => executor().run<T>(operation, args);
+type MarkdownOperations = typeof markdownOperations;
+type OperationName = Extract<keyof MarkdownOperations, string>;
+type MarkdownTaskCall = {
+  [K in OperationName]: MarkdownOperations[K] extends (...args: infer Args) => unknown
+    ? [operation: K, args: Args]
+    : never;
+}[OperationName];
+
+export function markdownTask<Call extends MarkdownTaskCall>(...[operation, args]: Call): Promise<ReturnType<MarkdownOperations[Call[0]]>> {
+  return executor().run(operation, args);
+}
 export async function setMarkdownExecutorForTests(replacement: Executor): Promise<void> { await global.__tomolaMarkdown?.stop(); global.__tomolaMarkdown = replacement; }
 export function isMarkdownStop(error: unknown): boolean { return error instanceof MarkdownBudgetError || error instanceof MarkdownBusyError; }

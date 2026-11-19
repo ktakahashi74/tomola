@@ -47,8 +47,9 @@ describe("the call sites of the Markdown renderer", () => {
         const before = code.slice(Math.max(0, match.index! - 20), match.index!);
         // The definition (`function renderMarkdown(`), and a method of an object type are not calls.
         if (/function\s+$/.test(before) || /export\s+const\s+$/.test(before)) continue;
-        // markdown.server.ts: renderMarkdown delegates with the options it was given.
-        if (file.endsWith(path.join("app", "lib", "markdown.server.ts")) || file.endsWith(path.join("app", "lib", "markdown.core.server.ts"))) continue;
+        // Renderer internals forward their caller's options or render only
+        // synthetic worker calibration text. Check the application callers.
+        if (["markdown.server.ts", "markdown.core.server.ts", "markdown-operations.core.server.ts"].some(name => file.endsWith(path.join("app", "lib", name)))) continue;
         const args = argumentsAt(code, match.index! + match[0].length - 1);
         const document = SITE_DOCUMENTS[path.relative(root, file)];
         if (document && (!document.arguments || document.arguments.test(args.trim()))) continue;
