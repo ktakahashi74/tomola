@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNull, lt, ne } from "drizzle-orm";
-import type { Db } from "./db/client.server";
+import type { Db, Tx } from "./db/client.server";
 import { entries, postAiMaterials, postAiMaterialVersions, profiles } from "./db/schema";
 import { publicTopicPlace } from "./visibility.server";
 import { authorLabel } from "./deleted-member";
@@ -67,7 +67,7 @@ export async function writePostAiMaterial(db: Db, userId: string, topicId: numbe
   });
 }
 
-export async function moderatePostAiMaterial(db: Db, actor: Viewer, topicId: number, hide: boolean, note: string, expectedVersion: number) {
+export async function moderatePostAiMaterial(db: Db, actor: Viewer, topicId: number, hide: boolean, note: string, expectedVersion: number, beforeWrite?: (tx: Tx) => Promise<void>) {
   if (!note.trim() || note.length > 1000) return fail("invalid");
   return db.transaction(async tx => {
     const [entry] = await tx.select().from(entries).where(eq(entries.id, topicId)).for("no key update");
@@ -76,6 +76,7 @@ export async function moderatePostAiMaterial(db: Db, actor: Viewer, topicId: num
     const [old] = await tx.select().from(postAiMaterials).where(eq(postAiMaterials.topicId, topicId));
     if (!old?.body) return fail("not_found");
     if (!hide && old.operatorHidden && !actor.scope.operator) return fail("forbidden");
+    await beforeWrite?.(tx);
     if (hide && old.hiddenAt) return fail("conflict");
     if (old.version !== expectedVersion) return fail("conflict");
     const version = old.version + 1, now = new Date();

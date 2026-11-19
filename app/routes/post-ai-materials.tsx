@@ -1,6 +1,6 @@
 import { data, Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/post-ai-materials";
-import { getReader, requireWriter } from "~/lib/auth/session.server";
+import { getReader, requirePrivilegedWriteSession, requireWriter } from "~/lib/auth/session.server";
 import { getViewer, inScope } from "~/lib/roles.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { enforceMemberLimit } from "~/lib/http/limits.server";
@@ -43,8 +43,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") throw data("Method not allowed", { status: 405 });
   assertSameOrigin(request);
   const { db, user } = await requireWriter(request);
-  await enforceMemberLimit(db, "edit", user.id);
   const topicId = parseId(params.id), form = await request.formData(), intent = String(form.get("intent") ?? "save");
+  const moderating = intent === "hide" || intent === "unhide";
+  if (!moderating) await enforceMemberLimit(db, "edit", user.id);
   const version = Number(form.get("version"));
   if (!Number.isSafeInteger(version) || version < 0) throw data("Invalid", { status: 400 });
   if (intent === "report") {
@@ -53,8 +54,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     const result = await createReport(db, user.id, { entryId: topicId, reason: form.get("reason"), note: `AI supplement: /t/${topicId}/ai-materials (version ${version}). ${String(form.get("note") ?? "").slice(0, 800)}` });
     return data({ message: result.ok || result.error === "duplicate" ? m.flag_already_reported() : m.ai_material_error(), body: undefined }, { status: result.ok || result.error === "duplicate" ? 200 : 400 });
   }
-  if (intent === "hide" || intent === "unhide") {
-    const result = await moderatePostAiMaterial(db, await getViewer(db, user), topicId, intent === "hide", String(form.get("note") ?? ""), version);
+  if (moderating) {
+    const result = await moderatePostAiMaterial(db, await getViewer(db, user), topicId, intent === "hide", String(form.get("note") ?? ""), version, async tx => {
+      await requirePrivilegedWriteSession(request);
+      await enforceMemberLimit(tx, "edit", user.id);
+    });
     if (!result.ok) throw data(result.error, { status: result.error === "forbidden" ? 403 : result.error === "conflict" ? 409 : 400 });
     throw redirect(`/t/${topicId}/ai-materials`);
   }

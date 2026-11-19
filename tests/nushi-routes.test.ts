@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
 import { createTopic } from "~/lib/entries.server";
-import { nushiAnswers, nushiReports, nushiRequests } from "~/lib/db/schema";
+import { moderationActions, nushiAnswers, nushiReports, nushiRequests, rateLimits } from "~/lib/db/schema";
 import { personalVillage } from "~/lib/personal-villages.server";
 import { setVillageNushi } from "~/lib/nushi-settings.server";
 import { processNushiRequest } from "~/lib/nushi.server";
@@ -151,6 +152,32 @@ it("lets readers clear hide preferences on topics without answers while Nushi is
     expect(await controls(visitor)).toBe("");
     expect(await controls({ as })).toBe("");
   } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
+});
+
+it("requires a recent sign-in before resolving a Nushi report", async () => {
+  vi.stubEnv("OPERATOR_EMAILS", "znushi_route_operator@example.com");
+  const created = await createTopic(h.db, h.ids.znushi_route_owner, { body: "@nushi orchard re-verification", lang: "en" });
+  if (!created.ok) throw new Error(created.error);
+  const [request] = await h.db.select().from(nushiRequests).where(eq(nushiRequests.entryId, created.id));
+  await processNushiRequest(h.db, request.id);
+  const answers = () => h.db.select().from(nushiAnswers).where(eq(nushiAnswers.requestId, request.id));
+  const [answer] = await answers();
+  const submit = (as: string, form: Record<string, string>) => h.outcome(() => action(h.args(h.request("/nushi/action", { as, form }))));
+  expect((await submit("znushi_route_reader", { intent: "report", answerId: String(answer.id), kind: "moderation", reason: "other", note: "Review this answer" })).status).toBe(302);
+  const reports = () => h.db.select().from(nushiReports).where(eq(nushiReports.answerId, answer.id));
+  const [report] = await reports();
+  const rates = () => h.db.select().from(rateLimits).where(eq(rateLimits.key, `member:edit:${h.ids.znushi_route_operator}`));
+  const log = () => h.db.select().from(moderationActions).where(eq(moderationActions.targetNushiAnswerId, answer.id));
+  const rateBefore = await rates();
+  const form = { intent: "moderate", reportId: String(report.id), hide: "1", note: "Hide after review" };
+  await withStaleSession(h, "znushi_route_operator", async () => {
+    expectModerationReauthentication(await submit("znushi_route_operator", form), "/nushi/reports");
+    expect(await answers()).toEqual([answer]);
+    expect(await reports()).toEqual([report]);
+    expect(await log()).toEqual([]);
+    expect(await rates()).toEqual(rateBefore);
+  });
+  expect((await submit("znushi_route_operator", form)).status).toBe(302);
 });
 
 it.each(["", ".data"])("keeps member state and AI requests fresh and varies ordinary topic reads by cookie on %s", async (suffix) => {

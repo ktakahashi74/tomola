@@ -1,8 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
-import { profiles, villageInvites, villageMembers, villages } from "~/lib/db/schema";
+import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
+import { profiles, rateLimits, reports, villageEvents, villageInvites, villageMembers, villages } from "~/lib/db/schema";
 import { createVillage, inviteToVillage } from "~/lib/village-management.server";
+import { createVillageReport } from "~/lib/village-moderation.server";
 import { changeVillageMembership, ensureLanguageVillages, listJoinedVillages, listVillages } from "~/lib/villages.server";
 import { action as createAction, loader as createLoader } from "~/routes/village-create";
 import { action as villageAction, loader as villageLoader } from "~/routes/village";
@@ -24,6 +26,36 @@ beforeAll(async () => {
 afterEach(() => { vi.unstubAllEnvs(); vi.stubEnv("VILLAGES", "1"); });
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
 const post = (as: string, form: Record<string, string>, slug = "route-club") => h.outcome(() => villageAction(h.args(h.request(`/v/${slug}`, { as, form }), { slug })));
+
+it("requires a recent sign-in for language-village edits that use operator authority", async () => {
+  vi.stubEnv("OPERATOR_EMAILS", "vcr_guest@example.com,vcr_owner@example.com");
+  const report = await createVillageReport(h.db, h.ids.vcr_owner, { slug: "en", reason: "other" });
+  if (!report.ok) throw new Error(report.error);
+  const [village] = await h.db.select().from(villages).where(eq(villages.slug, "en"));
+  const snapshot = async () => ({
+    village: await h.db.select().from(villages).where(eq(villages.id, village.id)),
+    report: await h.db.select().from(reports).where(eq(reports.id, report.id)),
+    events: await h.db.select().from(villageEvents).where(eq(villageEvents.villageId, village.id)),
+    rates: await h.db.select().from(rateLimits).where(eq(rateLimits.key, `member:edit:${h.ids.vcr_guest}`)),
+  });
+  const before = await snapshot();
+  const edit = { intent: "edit", description: "An updated language village description" };
+  const resolve = { ...edit, resolveReportId: String(report.id) };
+  await withStaleSession(h, "vcr_guest", async () => {
+    for (const form of [edit, resolve]) {
+      expectModerationReauthentication(await post("vcr_guest", form, "en"), "/v/en");
+      expect(await snapshot()).toEqual(before);
+    }
+  });
+  await withStaleSession(h, "vcr_owner", async () => {
+    const slug = "reauth-owned-village";
+    const owner = h.ids.vcr_owner;
+    expect(await createVillage(h.db, owner, { slug, name: "Owned village", description: "Original description", kind: "open" })).toMatchObject({ ok: true });
+    expect(await post("vcr_owner", { ...edit, name: "Owned village" }, slug)).toMatchObject({ status: 302, location: `/v/${slug}?manage=1&notice=edit` });
+  });
+  expect(await post("vcr_guest", resolve, "en")).toMatchObject({ status: 302, location: "/v/en?manage=1&notice=edit" });
+  expect((await snapshot()).report[0]).toMatchObject({ status: "resolved" });
+});
 
 it("404s before authentication on the creation loader, action and parent when disabled", async () => {
   vi.stubEnv("VILLAGES", "");

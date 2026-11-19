@@ -233,6 +233,10 @@ try {
   await seedMembers(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
   // A charged failure with only input usage, in a separate budget from public translations.
   await relatedDb.insert(llmUsage).values({ engine: "claude", model: "claude-usage-fixture", purpose: "ask", inputTokens: 12, costUsdMicro: 12 });
+  const [reauthTarget] = await relatedDb.select({ id: profiles.userId }).from(profiles).where(eq(profiles.handle, "reauth_target"));
+  const reauthTopic = await createTopic(relatedDb, reauthTarget.id, { title: "Topic for moderation re-verification", body: "A post for the identity confirmation flow.", lang: "en" }, { now: new Date("2025-01-02T00:00:00Z") });
+  if (!reauthTopic.ok) throw new Error(reauthTopic.error);
+  fs.writeFileSync(path.join(path.dirname(process.env.PGLITE_DATA_DIR!), "reauth-topic.json"), JSON.stringify({ id: reauthTopic.id }));
   const { seedIntroductions } = await import("./seed-introductions");
   await seedIntroductions(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
   const { seedTranslationReportResults } = await import("./seed-translation-report-results");

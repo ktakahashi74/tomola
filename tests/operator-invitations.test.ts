@@ -14,6 +14,7 @@ import InvitesNew, { action, loader } from "~/routes/invites-new";
 import { m } from "~/paraglide/messages.js";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
+import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
 import { createVillage } from "~/lib/village-management.server";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -40,6 +41,18 @@ afterAll(() => { h.restore(); globalMail.__tomolaMailer = savedMailer; });
 const post = (form: Record<string, string | string[]>, as = "bulk_operator") => action(h.args(h.request("/invites/new", { as, form })));
 const pending = () => h.db.select().from(invitations).where(and(eq(invitations.createdBy, h.ids.bulk_operator), isNull(invitations.usedAt)));
 const allowance = async () => (await h.db.select().from(rateLimits).where(eq(rateLimits.key, `member:invitation:${h.ids.bulk_operator}`)))[0]?.count ?? 0;
+
+it("requires a recent sign-in before sending a batch of operator invitations", async () => {
+  const form = { email: "reauth_invite_a@example.com\nreauth_invite_b@example.com", sendEmail: "1", mailLocale: "en" };
+  await withStaleSession(h, "bulk_operator", async () => {
+    expectModerationReauthentication(await h.outcome(() => post(form)), "/invites/new");
+    expect(await pending()).toEqual([]);
+    expect(await allowance()).toBe(0);
+    expect(box.sent).toEqual([]);
+  });
+  expect(await post(form)).toMatchObject({ error: null, results: [{ status: "sent" }, { status: "sent" }] });
+  expect(box.sent).toHaveLength(2);
+});
 
 it("splits whitespace, commas and semicolons, normalizes case, and deduplicates", () => {
   expect(parseInvitationEmails([" A@EXAMPLE.COM\n b@example.com, a@example.com;\tc@example.com ", "B@example.com"]))

@@ -129,7 +129,7 @@ describe("/admin/glossary", () => {
     await setAge(CREDENTIAL_FRESH_MS + 60_000);
     try {
       expect(await load(as)).toMatchObject({ status: 200 });
-      expect(await post(as, form)).toMatchObject({ status: 303, location: "/login?reauth=1&next=%2Fadmin%2Fglossary" });
+      expect(await post(as, form)).toMatchObject({ status: 303, location: "/login?reauth=moderation&next=%2Fadmin%2Fglossary" });
       expect((await entries()).some(row => row.term === form.term)).toBe(false);
     } finally { await setAge(0); }
     expect(await post(as, form)).toMatchObject({ status: 302 });

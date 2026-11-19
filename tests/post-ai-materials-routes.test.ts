@@ -2,8 +2,9 @@ import { reportEvidence } from "~/lib/moderation-evidence.server";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
 import { createTopic } from "~/lib/entries.server";
-import { entries, postAiMaterialVersions, reports, profiles, roles } from "~/lib/db/schema";
+import { entries, postAiMaterials, postAiMaterialVersions, reports, profiles, rateLimits, roles } from "~/lib/db/schema";
 import { loader, action } from "~/routes/post-ai-materials";
 import { action as publish } from "~/routes/topic-new";
 import { moderatePostAiMaterial, POST_AI_HISTORY_PAGE_SIZE, readPostAiMaterial, writePostAiMaterial } from "~/lib/post-ai-materials.server";
@@ -23,6 +24,29 @@ async function topic() {
   return made.id;
 }
 const args = (id: number, as?: string, form?: Record<string, string>, view?: string) => h.args(h.request(`/t/${id}/ai-materials${view ? `/${view}` : ""}`, { as, form }), { id: String(id), ...(view ? { view } : {}) });
+
+it.each(["hide", "unhide"])("requires a recent sign-in to %s an AI supplement", async intent => {
+  const as = "supp_route_operator";
+  vi.stubEnv("OPERATOR_EMAILS", `${as}@example.com`);
+  const id = await topic();
+  await writePostAiMaterial(h.db, h.ids.supp_route_author, id, { body: "Supplement to review.", version: 0 });
+  if (intent === "unhide") {
+    const actor = { userId: h.ids[as], scope: { operator: true, langs: [] } };
+    expect(await moderatePostAiMaterial(h.db, actor, id, true, "Hide before review", 1)).toMatchObject({ ok: true });
+  }
+  const snapshot = async () => ({
+    material: await h.db.select().from(postAiMaterials).where(eq(postAiMaterials.topicId, id)),
+    history: await h.db.select().from(postAiMaterialVersions).where(eq(postAiMaterialVersions.topicId, id)).orderBy(postAiMaterialVersions.version),
+    rates: await h.db.select().from(rateLimits).where(eq(rateLimits.key, `member:edit:${h.ids[as]}`)),
+  });
+  const before = await snapshot();
+  const submit = () => h.outcome(() => action(args(id, as, { intent, version: String(before.material[0].version), note: "Reviewed supplement" })));
+  await withStaleSession(h, as, async () => {
+    expectModerationReauthentication(await submit(), `/t/${id}/ai-materials`);
+    expect(await snapshot()).toEqual(before);
+  });
+  expect(await submit()).toMatchObject({ status: 302, location: `/t/${id}/ai-materials` });
+});
 
 it("requires login and the author for writes, blocks CSRF and permits public reading and history", async () => {
   const id = await topic();

@@ -5,11 +5,11 @@ import { profiles } from "~/lib/db/schema";
 import { safeLocalPath } from "~/lib/display-lang.server";
 import { bindAuthToDatabase, getAuth, type Auth } from "./auth.server";
 import { collectSessionCookies } from "./session-cookies.server";
-import { reauthenticationPath } from "~/lib/reauth";
+import { reauthenticationPath, type Reauthentication } from "~/lib/reauth";
 
 export const CREDENTIAL_FRESH_MS = 24 * 3600_000;
-export function reauthenticationUrl(returnTo: string): string {
-  return reauthenticationPath(safeLocalPath(returnTo));
+export function reauthenticationUrl(returnTo: string, reauth?: Reauthentication): string {
+  return reauthenticationPath(safeLocalPath(returnTo), reauth);
 }
 
 // Whether a session was created (by a login) recently enough to add or confirm

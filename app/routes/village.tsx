@@ -27,7 +27,7 @@ import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { PersistentDetails } from "~/components/persistent-details";
-import { getReader, requireWriter } from "~/lib/auth/session.server";
+import { getReader, requirePrivilegedWriteSession, requireWriter } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, readingLanguageChoice, screenReadLangsFor, villageReaderFor } from "~/lib/display-lang.server";
 import { decideVillageLangOf, localizeVillage, localizeVillages } from "~/lib/village-translations.server";
 import { VillageTranslationNote, VILLAGE_ORIGINAL_PARAM } from "~/components/village-translation-note";
@@ -162,12 +162,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
   let result: VillageResult | undefined;
   if (intent === "edit") {
-    // An edit queues paid translations, so it is limited like the edit of a post.
-    await enforceMemberLimit(db, "edit", user.id);
     const raw = form.get("resolveReportId");
     const resolveReportId = typeof raw === "string" ? parseIdOrNull(raw) : undefined;
     if (resolveReportId === null) throw data("Bad request", { status: 400 });
-    result = await editVillage(db, user.id, params.slug.toLowerCase(), { name: form.get("name"), description: form.get("description"), sourceLang: form.get("sourceLang"), ...(resolveReportId !== undefined ? { resolveReportId } : {}) });
+    result = await editVillage(db, user.id, params.slug.toLowerCase(), { name: form.get("name"), description: form.get("description"), sourceLang: form.get("sourceLang"), ...(resolveReportId !== undefined ? { resolveReportId } : {}) }, async (tx, operatorEdit) => {
+      if (operatorEdit) await requirePrivilegedWriteSession(request);
+      // An edit queues paid translations, so it is limited like the edit of a post.
+      await enforceMemberLimit(tx, "edit", user.id);
+    });
   }
   else if (intent === "end") {
     if (form.get("confirm") !== "end") throw data("Bad request", { status: 400 });

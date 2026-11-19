@@ -98,7 +98,7 @@ export async function createVillage(db: Db, userId: string, input: { slug: unkno
   });
 }
 
-export async function editVillage(db: Db, userId: string, slug: string, input: { name: unknown; description: unknown; sourceLang?: unknown; resolveReportId?: number }): Promise<VillageResult> {
+export async function editVillage(db: Db, userId: string, slug: string, input: { name: unknown; description: unknown; sourceLang?: unknown; resolveReportId?: number }, beforeEdit?: (tx: Tx, operatorEdit: boolean) => Promise<void>): Promise<VillageResult> {
   if (!villagesEnabled()) return fail("disabled");
   const description = villageDescriptionText(input.description);
   if (description === null) return fail("invalid");
@@ -107,7 +107,8 @@ export async function editVillage(db: Db, userId: string, slug: string, input: {
     if (!canWrite(actor)) return fail("forbidden");
     const village = await lockedVillage(tx, slug);
     if (!village) return fail("not_found");
-    if (!await isOwner(tx, village.id, userId) && !(village.language && await isOperator(tx, userId))) return fail("forbidden");
+    const owner = await isOwner(tx, village.id, userId);
+    if (!owner && !(village.language && await isOperator(tx, userId))) return fail("forbidden");
     const name = village.language ? village.name : villageNameText(input.name);
     if (name === null) return fail("invalid");
     let resolveReports = false;
@@ -118,6 +119,7 @@ export async function editVillage(db: Db, userId: string, slug: string, input: {
       if (!source) return fail("not_found");
       resolveReports = true;
     }
+    await beforeEdit?.(tx, !owner || resolveReports);
     // The language of the texts: kept unless the author names another (a language that is closed now may stay); one that was never set is taken from the author, or from the text of a language village.
     let sourceLang = village.sourceLang;
     if (!blank(input.sourceLang) && input.sourceLang !== village.sourceLang) {

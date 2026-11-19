@@ -4,7 +4,7 @@ import { LongFormBody } from "~/components/long-form-body";
 import { data, Link, redirect } from "react-router";
 import type { Route } from "./+types/topic-edit";
 import { TopicEntryEditForm } from "~/components/topic-entry-edit-form";
-import { requireMember, requireWriter } from "~/lib/auth/session.server";
+import { requireMember, requirePrivilegedWriteSession, requireWriter } from "~/lib/auth/session.server";
 import { entryErrorMessage } from "~/components/entry-fields";
 import { editEntry, getEditableEntry } from "~/lib/entries.server";
 import { formString, readEntryForm } from "~/lib/entry-form.server";
@@ -74,12 +74,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     // This is also the entry point of the moderator's fix (fix_entry).
     assertSameOrigin(request);
     const { user, db } = await requireWriter(request);
-    await enforceMemberLimit(db, "edit", user.id);
     const id = parseId(params.id);
     const form = await request.formData();
     const { title, body, lang } = readEntryForm(form);
     const viewer = await getViewer(db, user);
     const found = await getEditableEntry(db, user.id, id, { kind: "topic", viewer });
+    if (found.ok && found.entry.mode === "moderator-fix") await requirePrivilegedWriteSession(request);
+    await enforceMemberLimit(db, "edit", user.id);
     if (!found.ok) failure(found.error);
     // Assigned moderators and operators may correct typos in locked questions (fix_entry).
     if (found.entry.mode === "moderator-fix") {

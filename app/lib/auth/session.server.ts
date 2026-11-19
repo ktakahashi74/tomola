@@ -8,6 +8,7 @@ import type { Profile } from "~/lib/profiles.server";
 import { ensureOperatorRow, getModScope, isModerator, type ModScope } from "~/lib/roles.server";
 import { getAuth } from "./auth.server";
 import { isCredentialSessionFresh, reauthenticationUrl } from "./credential-session.server";
+import { safeLocalPath } from "~/lib/display-lang.server";
 import { collectSessionCookies } from "./session-cookies.server";
 import { hitBrowserReadLimit, hitPublicReadLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { publicReading } from "~/lib/public-reading.server";
@@ -100,13 +101,22 @@ function documentUrl(request: Request): URL {
   return url;
 }
 
-async function requirePrivilegedWriteSession(request: Request): Promise<void> {
+type PrivilegedWriteReturn = { preserveFormAnchor?: boolean; fallbackPath?: string };
+
+export async function requirePrivilegedWriteSession(request: Request, options: PrivilegedWriteReturn = {}): Promise<void> {
   if (request.method === "GET" || request.method === "HEAD" || await getCredentialSessionFresh(request)) return;
   const target = documentUrl(request);
   // Some forms submit to another route, such as suspension from the roles page.
   const referrer = URL.parse(request.headers.get("referer") ?? "");
-  const back = referrer?.origin === target.origin ? referrer : target;
-  throw redirect(reauthenticationUrl(back.pathname + back.search), 303);
+  let back = referrer?.origin === target.origin ? referrer.pathname + referrer.search : options.fallbackPath ?? target.pathname + target.search;
+  // Referrers omit fragments. Use the form's local return path when it includes a fragment.
+  if (options.preserveFormAnchor) {
+    const form = await request.formData().catch(() => null);
+    const raw = form?.get("returnTo");
+    const fromForm = typeof raw === "string" ? safeLocalPath(raw) : "";
+    if (fromForm.includes("#")) back = fromForm;
+  }
+  throw redirect(reauthenticationUrl(back, "moderation"), 303);
 }
 
 // For operator-only screens and operations (addresses in OPERATOR_EMAILS; getModScope in roles.server.ts). Send logged-out users to login.
@@ -122,12 +132,12 @@ export async function requireOperator(request: Request): Promise<{ user: Session
 
 // For screens and moderation actions restricted to moderators (with assigned languages) or operators. Return 404 for other members to avoid revealing the screen.
 // scope is the assigned area (all languages for operators). As at write entry points, send suspended users to /suspended; they cannot take moderation actions while suspended.
-export async function requireModerator(request: Request): Promise<Member & { scope: ModScope }> {
+export async function requireModerator(request: Request, options?: PrivilegedWriteReturn): Promise<Member & { scope: ModScope }> {
   const member = await requireMember(request);
   const scope = await getMemberScope(request);
   if (!isModerator(scope)) throw data("Not found", { status: 404 });
   await requireWriter(request);
-  await requirePrivilegedWriteSession(request);
+  await requirePrivilegedWriteSession(request, options);
   return { ...member, scope };
 }
 

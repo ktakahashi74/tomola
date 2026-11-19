@@ -29,6 +29,7 @@ import { m } from "~/paraglide/messages.js";
 import { getLocale } from "~/paraglide/runtime.js";
 import { hasLogoutNotice } from "~/lib/auth/logout-notice.server";
 import { safeLocalPath } from "~/lib/display-lang.server";
+import { isReauthentication } from "~/lib/reauth";
 import { googleLoginConfig } from "~/lib/auth/google-config.server";
 import { googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { startGoogleSignIn } from "~/lib/auth/google-flow.server";
@@ -49,19 +50,20 @@ const reauthMessages = {
   tokens: m.reauth_for_tokens,
 };
 
-// The return page identifies the purpose of re-verification.
-function reauthPurpose(next: string): keyof typeof reauthMessages {
+// Account and AI connection flows still identify their purpose by the return page.
+function reauthPurpose(next: string): Exclude<keyof typeof reauthMessages, "moderation"> {
   if (next.includes("#settings-google")) return "google";
   const path = next.split(/[?#]/)[0];
   if (path === "/settings/tokens") return "tokens";
   if (path.startsWith("/mcp/")) return "mcp";
-  if (/^\/(?:admin|mod)(?:\/|$)/i.test(path)) return "moderation";
   return "passkey";
 }
 
 async function loaderImplementation({ request }: Route.LoaderArgs) {
-  const next = safeLocalPath(new URL(request.url).searchParams.get("next"));
-  const reauth = new URL(request.url).searchParams.get("reauth") === "1";
+  const url = new URL(request.url);
+  const next = safeLocalPath(url.searchParams.get("next"));
+  const mode = url.searchParams.get("reauth");
+  const reauth = isReauthentication(mode);
   const member = await getSessionUser(request);
   const db = await getDb();
   const codePending = await pendingLoginScreen(db, request);
@@ -70,7 +72,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const verifying = reauth && member && (!codePending || parseEmail(codePending.email) === parseEmail(member.email)) ? {
     email: member.email,
     handle: (await getProfile(db, member.id))?.handle ?? null,
-    purpose: reauthPurpose(next),
+    purpose: mode === "moderation" ? mode : reauthPurpose(next),
     // During an AI connection the check is for the account that is logged in; someone who wants another account can leave and return to the same request (the logout screen allows only /mcp/login).
     ...(next.startsWith("/mcp/consent?") ? { switchNext: `/mcp/login?${next.slice("/mcp/consent?".length)}` } : {}),
     hasPasskey: (await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, member.id)).limit(1)).length > 0,
@@ -78,11 +80,11 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   // The extra fields are present only when they apply, so an ordinary login screen carries nothing more than before.
   return {
     next, reauth, codePending, loggedOut: hasLogoutNotice(request),
-    ...(googleLoginConfig() && !reauth ? { google: { browser: googleBrowserFromRequest(request), error: new URL(request.url).searchParams.get("error") } } : {}),
+    ...(googleLoginConfig() && !reauth ? { google: { browser: googleBrowserFromRequest(request), error: url.searchParams.get("error") } } : {}),
     ...(verifying ? { verifying } : {}),
     ...(publicReading() ? { publicReading: true } : {}),
     ...(/^\/u\//.test(next) ? { membersOnlyTarget: true } : {}),
-    ...(new URL(request.url).searchParams.get("account-deleted") === "1" ? { accountDeleted: true } : {}),
+    ...(url.searchParams.get("account-deleted") === "1" ? { accountDeleted: true } : {}),
   };
 }
 
@@ -93,7 +95,7 @@ export async function action({ request }: Route.ActionArgs) {
   const remembered = intent === "login-resend" || intent === "login-code" || intent === "login-restart";
   const email = remembered ? rememberedLoginEmail(request)?.email : parseEmail(String(form.get("email") ?? ""));
   const member = await getSessionUser(request);
-  const reauth = form.get("reauth") === "1" || new URL(request.url).searchParams.get("reauth") === "1";
+  const reauth = isReauthentication(form.get("reauth")) || isReauthentication(new URL(request.url).searchParams.get("reauth"));
   if (!reauth && member && (!email || email === parseEmail(member.email))) {
     throw redirect(safeLocalPath(String(form.get("next") ?? "")));
   }
@@ -179,6 +181,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
     };
   }, [revalidator]);
   const verifying = "verifying" in loaderData ? loaderData.verifying : null;
+  const reauthValue = verifying?.purpose === "moderation" ? "moderation" : "1";
   const heading = verifying ? m.reauth_title() : loaderData.codePending ? m.login_code_heading() : m.login_title();
   return (
     <>
@@ -195,14 +198,14 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
       {loaderData.codePending ? <>
         <LoginRequestNotice status={screenAction?.status} />
         <p className="break-words">{m.login_sent({ email: loaderData.codePending.email })}</p>
-        <LoginCodeForm key={loaderData.codePending.revision} state={loaderData.codePending} resentNotice={screenAction?.status !== "later"} invalid={screenAction?.status === "code_invalid"} limited={screenAction && "limited" in screenAction ? screenAction.limited : undefined} hiddenFields={{ next: loaderData.next, ...(loaderData.reauth ? { reauth: "1" } : {}) }} />
+        <LoginCodeForm key={loaderData.codePending.revision} state={loaderData.codePending} resentNotice={screenAction?.status !== "later"} invalid={screenAction?.status === "code_invalid"} limited={screenAction && "limited" in screenAction ? screenAction.limited : undefined} hiddenFields={{ next: loaderData.next, ...(loaderData.reauth ? { reauth: reauthValue } : {}) }} />
         {screenAction?.status === "origin_mismatch" && <p role="alert" className="text-destructive">{m.auth_origin_mismatch()}</p>}
       </> : <>
       {verifying?.hasPasskey && <PasskeyLogin next={loaderData.next} or="after" />}
       {loaderData.google && <><GoogleLoginError error={loaderData.google.error} /><GoogleLogin browser={loaderData.google.browser} next={loaderData.next} /></>}
       <Form method="post" className="space-y-2">
           <input type="hidden" name="next" value={loaderData.next} />
-          {loaderData.reauth && <input type="hidden" name="reauth" value="1" />}
+          {loaderData.reauth && <input type="hidden" name="reauth" value={reauthValue} />}
           <Field className="min-w-0 w-auto"><FieldLabel className="block">
             {m.login_email()}
             <Input aria-invalid={screenAction?.status === "invalid" || screenAction?.status === "unregistered" || undefined} aria-describedby={screenAction?.status === "invalid" ? "login-email-error" : loginRequestNoticeShown(screenAction?.status) ? LOGIN_REQUEST_NOTICE_ID : undefined} name="email" type="email" autoComplete={verifying ? "email" : "username webauthn"} required {...(verifying ? { readOnly: true, defaultValue: verifying.email } : screenAction && "email" in screenAction ? { defaultValue: screenAction.email } : {})} className="block w-full" />

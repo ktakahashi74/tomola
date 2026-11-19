@@ -89,7 +89,7 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
 export async function action({ request }: Pick<Route.ActionArgs, "request">) {
   // Reject changes from cross-site POSTs (CSRF), checking before authentication or input parsing (csrf.server.ts convention).
   assertSameOrigin(request);
-  const { user, db, scope } = await requireModerator(request);
+  const { user, db, scope } = await requireModerator(request, { preserveFormAnchor: true });
   await enforceMemberLimit(db, "mod", user.id);
   const form = await request.formData();
   const intent = formString(form, "intent");

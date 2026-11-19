@@ -186,7 +186,12 @@ describe("requireOperator (the route gate) uses the roles", () => {
     try {
       expect(await h.outcome(() => loader(h.args(h.request(path, { as: "hana" }))))).toMatchObject({ status: 200 });
       const request = h.request("/admin/roles.data?q=taro&_routes=routes%2Fadmin-roles", { as: "hana", form, headers: { referer: "https://example.invalid/elsewhere" } });
-      expect(await h.outcome(() => action(h.args(request)))).toMatchObject({ status: 303, location: "/login?reauth=1&next=%2Fadmin%2Froles%3Fq%3Dtaro" });
+      expect(await h.outcome(() => action(h.args(request)))).toMatchObject({ status: 303, location: "/login?reauth=moderation&next=%2Fadmin%2Froles%3Fq%3Dtaro" });
+      const { action: moderate } = await import("~/routes/mod");
+      const anchor = "/t/12?page=2#c-34";
+      const send = (returnTo: string) => h.outcome(() => moderate(h.args(h.request("/mod.data", { as: "hana", form: { intent: "hide", entryId: "34", returnTo } }))));
+      expect(await send(anchor)).toMatchObject({ status: 303, location: `/login?reauth=moderation&next=${encodeURIComponent(anchor)}` });
+      expect(await send("/a/..//elsewhere.example/#c-34")).toMatchObject({ status: 303, location: "/login?reauth=moderation&next=%2Fmod" });
       expect(await moderatorLangs()).toEqual([]);
     } finally { await setAge(0); }
     expect(await h.outcome(() => action(h.args(h.request(path, { as: "hana", form }))))).toMatchObject({ status: 302, location: "/admin/roles?q=taro&saved=granted" });

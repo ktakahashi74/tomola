@@ -6,7 +6,7 @@ import { LocalTime } from "~/components/local-time";
 import { Button } from "~/components/ui/button";
 import { data, Form, useNavigation } from "react-router";
 import type { Route } from "./+types/invites-new";
-import { requireMember, requireWriter } from "~/lib/auth/session.server";
+import { requireMember, requirePrivilegedWriteSession, requireWriter } from "~/lib/auth/session.server";
 import { parseEmail } from "~/lib/email";
 import { INVITATION_TTL_DAYS, listInvitations, normalizeEmail, revokeInvitation } from "~/lib/invitations.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
@@ -54,6 +54,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
   await requireWriter(request);
   if (operator) {
+    await requirePrivilegedWriteSession(request);
     const note = invitationNoteText(form.get("note") ?? "");
     if (note === null) return { url: null, error: "invalid_note" as const };
     if (!emails.length) return { url: null, error: "invalid_email" as const };

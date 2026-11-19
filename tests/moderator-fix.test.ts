@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { createElement } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAppeal, decideAppeal, getAppealableAction, listOpenAppeals } from "~/lib/appeals.server";
-import { entries, entryRevisions, jobs, moderationActions, notifications, profiles, segments, stances } from "~/lib/db/schema";
+import { entries, entryRevisions, jobs, moderationActions, notifications, profiles, rateLimits, segments, stances } from "~/lib/db/schema";
 import { readDistributions } from "~/lib/distribution.server";
 import { createReply, createTopic, getEditableEntry, getThread, softDeleteEntry } from "~/lib/entries.server";
 import { EMBED_JOB } from "~/lib/embeddings.server";
@@ -15,6 +15,7 @@ import { TRANSLATE_JOB } from "~/lib/translations.server";
 import { renderInRouter } from "./helpers/render-in-router";
 import { createMarkdownExecutor, setMarkdownExecutorForTests, withMarkdownScope } from "~/lib/markdown-budget.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
 
 // Correcting a typo in a locked question (moderation action fix_entry): assigned moderators and operators only, with a required explanation. Covers revisions, notifications, public records, and appeals restoring the preceding version.
 const t = (minutes: number) => new Date(Date.UTC(2026, 9, 5, 0, minutes));
@@ -225,6 +226,24 @@ describe("the title of a fixed question", () => {
 });
 
 describe("the edit form of a fix", () => {
+  it("requires a recent sign-in before correcting another member's locked question", async () => {
+    const id = await lockedQuestion();
+    const path = `/t/${id}/edit`;
+    const { action } = await import("~/routes/topic-edit");
+    const rates = () => h.db.select().from(rateLimits).where(eq(rateLimits.key, `member:edit:${jamod}`));
+    const before = await row(id);
+    const rateBefore = await rates();
+    const form = { title: "訂正した題", body: before.body, note: "誤字を直した", sourceHash: await hashOf(id) };
+    const send = () => h.outcome(async () => action(await h.signedArgs(h.request(path, { as: "jamod", form }), { id: String(id) })));
+    await withStaleSession(h, "jamod", async () => {
+      expectModerationReauthentication(await send(), path);
+      expect(await row(id)).toEqual(before);
+      expect(await revisions(id)).toEqual([]);
+      expect(await actionsOf(id)).toEqual([]);
+      expect(await rates()).toEqual(rateBefore);
+    });
+    expect(await send()).toMatchObject({ status: 302, location: `/t/${id}` });
+  });
   const titleTag = (html: string) => html.match(/<input\b[^>]*\bname="title"[^>]*>/)?.[0] ?? "";
   const drawn = async (id: number, as: string) => {
     const mod = await import("~/routes/topic-edit");

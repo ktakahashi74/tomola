@@ -65,6 +65,14 @@ describe("login return destination", () => {
     expect(await loader(h.args(h.request("/login?next=%2Ft%2F1")))).not.toHaveProperty("membersOnlyTarget");
   });
 
+  it("takes the moderation purpose from the re-verification address", async () => {
+    const as = "returner";
+    const next = "/t/123?page=2#c-456";
+    expect(await loader(h.args(h.request(`/login?reauth=moderation&next=${encodeURIComponent(next)}`, { as })))).toMatchObject({ next, verifying: { purpose: "moderation" } });
+    expect(await loader(h.args(h.request("/login?reauth=moderation&next=%2F%2Fevil.example", { as })))).toMatchObject({ next: "/", verifying: { purpose: "moderation" } });
+    expect(await loader(h.args(h.request("/login?reauth=1&next=%2Fmod", { as })))).toMatchObject({ verifying: { purpose: "passkey" } });
+  });
+
   it.each(["//evil.example", "https://evil.example", "/\\evil.example", "/a/..//evil.example"])("rejects an unsafe destination %s", async (next) => {
     const path = `/login?next=${encodeURIComponent(next)}`;
     expect(await loader(h.args(h.request(path)))).toEqual({ next: "/", codePending: null, loggedOut: false, reauth: false });

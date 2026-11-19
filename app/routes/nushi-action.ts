@@ -2,7 +2,7 @@ import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
 import { data, redirect } from "react-router";
 import { eq } from "drizzle-orm";
 import type { Route } from "./+types/nushi-action";
-import { requireMember, requireWriter } from "~/lib/auth/session.server";
+import { requireMember, requirePrivilegedWriteSession, requireWriter } from "~/lib/auth/session.server";
 import { profiles } from "~/lib/db/schema";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { formString } from "~/lib/entry-form.server";
@@ -17,14 +17,20 @@ export async function action({ request }: Route.ActionArgs) {
   assertSameOrigin(request);
   if (request.method !== "POST") throw data("Method not allowed", { status: 405 });
   const form = await request.formData(), text = (key: string) => formString(form, key);
+  const intent = text("intent");
   const back = safeLocalPath(text("returnTo") || "/settings#settings-nushi");
-  if (text("intent") === "visitor-hide") throw redirect(back, { headers: { "Set-Cookie": `nushi_hidden=${text("hide") === "1" ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`, "Cache-Control": "private, no-store" } });
-  const member = text("intent") === "preferences" ? await requireMember(request) : await requireWriter(request);
+  if (intent === "visitor-hide") throw redirect(back, { headers: { "Set-Cookie": `nushi_hidden=${text("hide") === "1" ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`, "Cache-Control": "private, no-store" } });
+  const member = intent === "preferences" ? await requireMember(request) : await requireWriter(request);
   const { db, user } = member;
-  const rate = await hitMemberLimit(db, text("intent") === "report" ? "report" : "edit", user.id);
+  if (intent === "moderate") {
+    const viewer = await getViewer(db, user);
+    if (!viewer.scope.operator) throw data("Forbidden", { status: 403 });
+    await requirePrivilegedWriteSession(request, { fallbackPath: "/nushi/reports" });
+  }
+  const rate = await hitMemberLimit(db, intent === "report" ? "report" : "edit", user.id);
   if (!rate.allowed) throw data("Too many requests", { status: 429, headers: rateLimitHeaders(rate) });
   let ok = false;
-  switch (text("intent")) {
+  switch (intent) {
     case "refresh": ok = await requestNushiAgain(db, user.id, Number(text("answerId"))); break;
     case "preferences":
       await db.update(profiles).set({ hideNushi: text("hide") === "1", nushiCitationNotifications: text("citations") === "1" }).where(eq(profiles.userId, user.id));
@@ -36,11 +42,8 @@ export async function action({ request }: Route.ActionArgs) {
       if (result === "evidence_unavailable") throw redirect(`/nushi/${Number(text("answerId"))}?report=unavailable`, { headers: { "Cache-Control": "private, no-store" } });
       ok = result; break;
     }
-    case "moderate": {
-      const viewer = await getViewer(db, user);
-      if (!viewer.scope.operator) throw data("Forbidden", { status: 403 });
+    case "moderate":
       ok = await resolveNushiReport(db, user.id, Number(text("reportId")), text("hide") === "1", text("note")); break;
-    }
   }
   if (!ok) throw data("Not found or invalid request", { status: 400, headers: { "Cache-Control": "private, no-store" } });
   throw redirect(back, { headers: { "Cache-Control": "private, no-store" } });
