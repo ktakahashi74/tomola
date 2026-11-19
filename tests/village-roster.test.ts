@@ -147,7 +147,8 @@ it("shows only visible topic authors, once each, in latest-topic order without c
   expect(writers.every(row => Object.keys(row).sort().join(",") === "handle,name")).toBe(true);
   const guest = await load(); expect(guest.writers).toEqual(writers);
   const rendered = await html(guest);
-  expect(rendered).toContain(m.village_writers());
+  expect(rendered).toContain('role="list" aria-labelledby="village-writers-label"');
+  expect(rendered).toContain(`>${m.village_writers()}</span>`);
   expect(rendered).not.toContain('id="village-roster"');
   expect((await load("vr_reader")).writers).toEqual(writers);
 });

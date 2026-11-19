@@ -71,6 +71,11 @@ test("villages show public reading, placement, ordering and member join/leave", 
     await expect(page.getByRole("heading", { name: m.villages_joined_heading, exact: true })).toBeVisible();
     await page.locator("main").getByRole("link", { name: name("en"), exact: true }).click();
     await expect(page.locator("[data-village-header] summary").filter({ hasText: m.village_joined })).toBeVisible();
+    const writers = (view: typeof page) => view.locator("[data-village-header]").getByRole("list", { name: m.village_writers, exact: true });
+    const writer = writers(page).locator('a[href="/u/villages_member"]');
+    await expect(writer).toBeVisible();
+    await publicPage.goto("/v/en");
+    await expect(writers(publicPage).getByRole("listitem").filter({ hasText: await writer.innerText() })).toBeVisible();
     const owned = fixture.topics.map(topic => topic.id);
     for (const [order, expected] of [["created", [owned[2], owned[1], owned[0]]], ["activity", [owned[0], owned[2], owned[1]]], ["insightful", [owned[1], owned[2], owned[0]]]] as const) {
       expect((await allListIds(page, `/v/en?order=${order}`)).filter(id => owned.includes(id))).toEqual(expected);

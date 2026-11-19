@@ -238,6 +238,14 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
       {restDescription && <MoreInfo label={m.village_description_more()} name={villageName(village)}><span lang={descriptionLang} className="whitespace-pre-wrap">{restDescription}</span></MoreInfo>}
       {village.translation && <VillageTranslationNote info={village.translation} />}
       {membership && <p className="flex flex-wrap gap-x-4 gap-y-1 ui-meta text-muted-foreground">{management.canReadRoster ? <Link to="#village-roster" className="link-ui">{m.village_members({ count: membership.members })}</Link> : <span>{m.village_members({ count: membership.members })}</span>}</p>}
+      {loaderData.writers.length > 0 && <div className="ui-meta text-muted-foreground">
+        <span id="village-writers-label" className="me-2">{m.village_writers()}</span>{" "}
+        <span role="list" aria-labelledby="village-writers-label">
+          {loaderData.writers.map(writer => <span key={writer.handle} role="listitem" className="inline-block max-w-full pe-2 last:pe-0">
+            <AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} />{" "}
+          </span>)}
+        </span>
+      </div>}
     </>} />
     {!ended && membership && !membership.joined && village.kind === "open" && !village.language && <p className="ui-help">{m.village_join_visibility()}</p>}
     {actionData && "error" in actionData && <p role="alert">{villageError(String(actionData.error))}</p>}
@@ -246,7 +254,6 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       <OrderSwitch order={order} />
     </div>
-    {loaderData.writers.length > 0 && <section aria-label={m.village_writers()}><h2 className="heading-2">{m.village_writers()}</h2><ul className="flex flex-wrap gap-x-4 gap-y-2">{loaderData.writers.map(writer => <li key={writer.handle}><AuthorLink handle={writer.handle} name={writer.name} reader={loaderData.reader} /></li>)}</ul></section>}
     <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: !loaderData.unfiltered })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>
     {loaderData.nushiPage && <Link className="link-ui inline-block" to={`/v/${village.slug}/nushi`}>{m.village_nushi_title()}</Link>}
     {management.canReadRoster && <details id="village-roster" open={search.get("notice") === "remove-member" || management.rosterPage > 1 || new URLSearchParams(location.search).has("membersPage") || location.hash === "#village-roster"}><summary className="link-ui cursor-pointer">{m.village_roster()}</summary>
