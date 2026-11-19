@@ -10,11 +10,12 @@ export function toDistributionView(d: Distribution): DistributionView {
   return { questionId: d.questionId, total: d.total, counts: { agree: d.counts.agree, disagree: d.counts.disagree, neither: d.counts.neither }, langs: d.langs, asOf: d.asOf.toISOString() };
 }
 
-// /stance fetcher response: success, conflict with current stance/version, rate limit, or other error. distribution only when a stance is chosen.
+// /stance fetcher response: a saved choice, a conflict, a consent step, or a refusal. Include a distribution only when a stance is chosen.
 // at: the server time (ISO) at which the response was made; pickDistribution compares it with the as_of of a distribution the page loaded later.
 export type StanceResponse =
   | { ok: true; questionId: number; position: Position | null; version: number; distribution: DistributionView | null; at: string }
   | { ok: false; error: "conflict"; questionId: number; position: Position | null; version: number; distribution: DistributionView | null; at: string }
+  | { ok: false; error: "consent_required"; questionId: number; position: Position; consentHref: string }
   | { ok: false; error: "rate_limited" | "not_found" | "not_a_question" | "hidden" | "bad_request" };
 
 // Which distribution a stance panel shows: the one from the member's latest /stance response (`latest`), or the one the page loader handed over (`loaderDistribution`).

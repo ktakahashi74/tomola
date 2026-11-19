@@ -187,7 +187,9 @@ describe("resolving a report with a human translation", () => {
     const { db, topicId } = await setup();
     const created = await report(db, topicId);
     if (!created.ok || created.id === null) throw new Error("report failed");
-    const text = "A translated paragraph.\n\n".repeat(5541) + "TRANSLATION END";
+    // Keep the length coverage with a small Markdown tree.
+    const paragraph = "A translated sentence. ".repeat(2000).trimEnd();
+    const text = [paragraph, paragraph, paragraph, "TRANSLATION END"].join("\n\n");
     expect(text.length).toBeGreaterThan(133_000);
     expect(await resolveReportWithHumanTranslation(db, "op", created.id, text)).toEqual({ ok: true, entryId: topicId });
     const [saved] = await db.select().from(translations).where(and(eq(translations.entryId, topicId), eq(translations.kind, "human"), eq(translations.field, "body")));

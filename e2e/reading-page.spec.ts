@@ -1,7 +1,7 @@
 import { readTopicTranslation } from "./helpers";
 import fs from "node:fs";
 import path from "node:path";
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { captureScreenshot, useMember, formatMessage, messagePattern, clientHeaders, enMessages as en, state, waitForFormReady, escapeRegex } from "./helpers";
 import { breakpointEm } from "./reading-style";
@@ -100,11 +100,20 @@ test("long originals and translations stay readable at desktop and phone widths"
     let release!: () => void;
     const pause = new Promise<void>(resolve => { release = resolve; });
     const asset = /\/assets\/signed-form-controls-[^/]+\.js$/;
-    if (build) await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
+    const quotePath = `/t/${f.topicId}?lang=en&tr=${f.topicId}&reply_to=`;
+    // The preceding page can still start its idle import as we leave it.
+    const isQuoteControls = (request: Request) =>
+      asset.test(request.url()) && request.headers().referer === new URL(quotePath, request.url()).href;
+    const holdControls = async (route: Route) => {
+      if (isQuoteControls(route.request())) await pause;
+      await route.continue();
+    };
+    if (build) await page.route(asset, holdControls);
     let passage: string;
     let replyPassage: string;
     try {
-      await page.goto(`/t/${f.topicId}?lang=en&tr=${f.topicId}&reply_to=`, { waitUntil: build ? "commit" : "load" });
+      const requested = build ? page.waitForRequest(isQuoteControls) : undefined;
+      await page.goto(quotePath, { waitUntil: build ? "commit" : "load" });
       if (!build) await waitForFormReady(form);
       await textarea.fill("A draft to keep.");
       passage = await selectPassage(page, body, 75);
@@ -113,11 +122,17 @@ test("long originals and translations stay readable at desktop and phone widths"
       await expect(textarea).toBeFocused();
       await expect(form.locator('input[name="parentId"]')).toHaveValue("");
       replyPassage = await selectPassage(page, page.locator(`#c-${f.replyId} [data-quote-entry]`), 100);
-      if (build) await expect(form).not.toHaveAttribute("data-ready", "true");
+      if (requested) {
+        await requested;
+        await expect(form).not.toHaveAttribute("data-ready", "true");
+      }
       await page.getByRole("button", { name: en.quote_reply, exact: true }).click();
       if (build) await expect(textarea).toBeFocused();
-    } finally { release(); }
+    } finally {
+      release();
+    }
     await waitForFormReady(form);
+    if (build) await page.unroute(asset, holdControls);
     await expect(textarea).toHaveValue(new RegExp(`^A draft to keep\\.\\n\\n> ${escapeRegex(passage)}${source(f.topicId, "p")}\\n\\n\\n\\n> ${escapeRegex(replyPassage)}${source(f.replyId, "c")}\\n\\n$`));
     await expect(form.locator('input[name="parentId"]')).toHaveValue(String(f.replyId));
     await expect(form.getByText(formatMessage(en.reply_target_note, { handle: "kim" }), { exact: true })).toBeVisible();

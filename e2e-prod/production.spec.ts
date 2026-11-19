@@ -1,5 +1,5 @@
 import { enableSigningAuthenticator } from "../e2e/signing-helper";
-import { enMessages, formatMessage, messagePattern, openPostSettings, waitForFormReady } from "../e2e/helpers";
+import { enMessages, formatMessage, messagePattern, openPostSettings, waitForFormReady, waitForHydration } from "../e2e/helpers";
 import fs from "node:fs";
 import path from "node:path";
 import { request as playwrightRequest, type BrowserContext, type Page } from "@playwright/test";
@@ -284,17 +284,38 @@ test("a question, a reply marked as an objection, the objection panel, another w
   await expect(mika.locator("#replies").getByText("I object to the word '止める'.")).toBeVisible();
   const md = await mika.request.get(`${questionPath}.md`);
   expect(md.status()).toBe(200);
-  // One-click stances (fetcher), distribution summaries, questions-only list items, Markdown distributions and personal records work under CSP.
+  // A translation can refresh the topic while the first stance submission is in flight.
   await mika.goto(questionPath);
+  await waitForHydration(mika);
   const panel = mika.locator("#stance");
-  await panel.getByRole("button", { name: enMessages.replies_filter_agree, exact: true }).click();
+  const agree = panel.getByRole("button", { name: enMessages.replies_filter_agree, exact: true });
+  const stanceAction = "**/stance.data";
+  let releaseStance!: () => void;
+  const held = new Promise<void>(resolve => { releaseStance = resolve; });
+  await mika.route(stanceAction, async route => {
+    await held;
+    await route.continue();
+  }, { times: 1 });
+  try {
+    const submitted = mika.waitForRequest(stanceAction);
+    await agree.click();
+    await submitted;
+    await mika.evaluate(() => {
+      const router = (window as unknown as { __reactRouterDataRouter: { revalidate(): Promise<void> } }).__reactRouterDataRouter;
+      return router.revalidate();
+    });
+  } finally {
+    releaseStance();
+  }
   await expect(mika).toHaveURL(/\/settings\/stances\?.*#consent$/);
+  await expect(mika.locator('#consent input[name="position"]')).toHaveValue("agree");
   await mika.getByRole("checkbox", { name: enMessages.stance_consent_agree, exact: true }).check();
   await mika.getByRole("button", { name: enMessages.stance_consent_continue, exact: true }).click();
   // Agreeing returns to the stance section of the question it was opened from.
   await expect(mika).toHaveURL(url => url.pathname === questionPath && url.hash === "#stance");
-  await panel.getByRole("button", { name: enMessages.replies_filter_agree, exact: true }).click();
-  await expect(panel.getByRole("button", { name: enMessages.replies_filter_agree, exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(agree).toHaveAttribute("aria-pressed", "false");
+  await agree.click();
+  await expect(agree).toHaveAttribute("aria-pressed", "true");
   const answerLanguages = new RegExp(`^(?:${[
     messagePattern(enMessages.stance_langs, { langs: /\d+/ }).source,
   ].join("|")})$`);

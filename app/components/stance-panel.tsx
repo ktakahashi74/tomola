@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import { ActionPanel } from "~/components/ui/action-panel";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useNavigation, useSubmit } from "react-router";
 import { CountWithLanguages } from "~/components/count-with-languages";
 import { pickDistribution, type DistributionView, type StanceMessage, type StanceResponse } from "~/lib/stance-ui";
 import { POSITIONS, type Position } from "~/lib/stances";
@@ -43,7 +43,11 @@ const LABELS: Record<Position, () => string> = {
 
 export function StancePanel({ questionId, stance, distribution, peekHref, triggerEntryId, compact = false, message = null, resumeChoice = null, returnTo, canChoose }: StancePanelProps) {
   const fetcher = useFetcher<StanceResponse>({ key: `stance-${questionId}` });
-  const busy = fetcher.state !== "idle";
+  const submit = useSubmit();
+  const { state: navigationState } = useNavigation();
+  const data = fetcher.data;
+  const consent = data && !data.ok && data.error === "consent_required" ? data : null;
+  const busy = fetcher.state !== "idle" || (consent !== null && navigationState !== "idle");
   const group = useRef<HTMLDivElement>(null);
   const resume = !fetcher.data && resumeChoice !== stance.position ? resumeChoice : null;
   useEffect(() => {
@@ -64,7 +68,13 @@ export function StancePanel({ questionId, stance, distribution, peekHref, trigge
     if (withdrawing.current && fetcher.data?.ok && fetcher.data.position === null) group.current?.focus();
     withdrawing.current = false;
   }, [fetcher.state, fetcher.data]);
-  const data = fetcher.data;
+  const openedConsent = useRef<typeof consent>(null);
+  useEffect(() => {
+    if (!consent || openedConsent.current === consent) return;
+    openedConsent.current = consent;
+    if (navigationState !== "idle") return;
+    void submit({ questionId: String(consent.questionId), position: consent.position }, { method: "post", action: consent.consentHref });
+  }, [consent, navigationState, submit]);
   // Prefer this member's response when it includes this question at a version at least as new as the current one; otherwise use loader values.
   const latest = data && "version" in data && data.questionId === questionId && data.version >= stance.version ? data : null;
   const asked = fetcher.formData?.get("position");
@@ -81,7 +91,7 @@ export function StancePanel({ questionId, stance, distribution, peekHref, trigge
   }, [oneLine, version, fetcher.state]);
   const failure = data && !data.ok ? data.error : null;
   // Once this member has submitted, show that response only; a previous ?stance_msg= result is obsolete.
-  const notice = data ? (failure === "conflict" || failure === "rate_limited" ? failure : failure !== null ? "error" : null) : message;
+  const notice = data ? (failure === "conflict" || failure === "rate_limited" ? failure : failure !== null && failure !== "consent_required" ? "error" : null) : message;
 
   const form = (
     <fetcher.Form method="post" action="/stance" className="space-y-2" onSubmit={event => {

@@ -64,8 +64,8 @@ export async function action({ request }: Route.ActionArgs) {
   const { user, db } = await requireMember(request);
   const form = await request.formData();
   const intent = formString(form, "intent");
-  // /stance redirects its POST here with 307. This only prepares the consent
-  // form; no consent, stance, or resume cookie is written at this point.
+  // The stance panel posts its pending choice here, via 307 for a document
+  // submission. Preparing the form does not write consent, a stance or a cookie.
   if (intent === "" && pendingChoice(form)) return { pending: pendingChoice(form), error: null, questionId: 0 };
   if (intent === "consent" || intent === "revoke-consent") {
     if (intent === "consent" && formString(form, "agree") !== "1") return data({ error: "confirm_required" as const, questionId: 0 }, { status: 400 });

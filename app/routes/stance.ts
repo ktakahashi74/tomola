@@ -65,9 +65,14 @@ export async function action({ request }: Route.ActionArgs) {
       for (const key of ["stance_choice", "stance_q", "stance_msg"]) next.searchParams.delete(key);
       next.pathname = `/t/${questionId}`;
       next.hash = "stance";
-      // Preserve the POST body for the consent form, without putting the choice
-      // in a URL or issuing a completion cookie before consent succeeds.
-      throw redirect(`/settings/stances?${new URLSearchParams({ next: `${next.pathname}${next.search}${next.hash}` })}#consent`, 307);
+      const consentHref = `/settings/stances?${new URLSearchParams({ next: `${next.pathname}${next.search}${next.hash}` })}#consent`;
+      // The client starts the consent navigation explicitly. The router can
+      // drop a fetcher redirect if a background revalidation started later.
+      if (!navigating && position !== null) {
+        return data({ ok: false, error: "consent_required", questionId, position, consentHref } satisfies StanceResponse, { status: 409, headers: HEADERS });
+      }
+      // A document submission carries the choice in the POST body.
+      throw redirect(consentHref, 307);
     }
     if (res.error === "no_profile") throw data("Forbidden", { status: 403 });
     if (navigating) throw data("Not found", { status: 404 });
