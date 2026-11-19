@@ -33,7 +33,7 @@ it("permits Google form redirects only on login, invitation and settings screens
 it("omits COOP throughout authentication while retaining it on reading and settings responses", async () => {
   for (const path of ["/login?reauth=1", "/login/", "/LOGIN", "/log%69n", "/auth/confirm?token=fixture", "/api/auth/oauth2/authorize", "/mcp/login", "/mcp/consent.data", "/invite/fixture", "/onboarding", "/logout"]) {
     const response = await securityHeadersMiddleware({ request: new Request(`https://forum.example${path}`), context: new RouterContextProvider(), params: {} } as never,
-      (async () => new Response("auth")) as never) as Response;
+      (async () => new Response("auth"))) as Response;
     expect(response.headers.has("Cross-Origin-Opener-Policy"), path).toBe(false);
     const headers = new Headers();
     addSecurityHeaders(headers, { nonce: "n", production: true, pathname: new URL(`https://forum.example${path}`).pathname });
@@ -41,7 +41,7 @@ it("omits COOP throughout authentication while retaining it on reading and setti
   }
   for (const path of ["/", "/t/1", "/settings", "/login-other", "/mcp-other", "/invite-other"]) {
     const response = await securityHeadersMiddleware({ request: new Request(`https://forum.example${path}`), context: new RouterContextProvider(), params: {} } as never,
-      (async () => new Response("reading")) as never) as Response;
+      (async () => new Response("reading"))) as Response;
     expect(response.headers.get("Cross-Origin-Opener-Policy"), path).toBe("same-origin");
   }
 });
@@ -52,7 +52,7 @@ it("isolates the opener and prevents storage of private single-fetch data while 
     const call = async (path: string, cookie?: string) => securityHeadersMiddleware({
       request: new Request(`https://forum.example.org${path}`, { headers: cookie ? { cookie } : {} }),
       params: {}, context: new RouterContextProvider(),
-    } as never, (async () => new Response("data", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } })) as never) as Promise<Response>;
+    } as never, (async () => new Response("data", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } }))) as Promise<Response>;
     for (const path of ["/settings.data", "/notifications.data?_routes=routes/notifications", "/_.data?_routes=routes/member-layout"]) {
       const response = await call(path, "better-auth.session_token=present");
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
@@ -78,7 +78,7 @@ it("protects member root data on public documents while preserving guest and doc
           const response = await securityHeadersMiddleware({
             request: new Request(`https://forum.example.org${path}${selection}`, { headers: { cookie } }),
             params: {}, context: new RouterContextProvider(),
-          } as never, (async () => new Response("document", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } })) as never) as Response;
+          } as never, (async () => new Response("document", { headers: { "Content-Type": "text/x-script", "Cache-Control": "private" } }))) as Response;
           expect(response.headers.get("Cache-Control"), `${mode}: ${path}${selection}`).toBe(expected);
         }
       }

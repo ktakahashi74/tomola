@@ -15,6 +15,7 @@ import { setTestLocale } from "./stubs/paraglide-runtime";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { OperatorSettingsContext } from "~/lib/operator-context";
 import { testOperator } from "./helpers/operator";
+import { routeElement } from "./helpers/route-fixtures";
 
 // Keep wording restrictions separate from the messages used to check screen behavior.
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -92,7 +93,7 @@ describe("no agibook in anything a user or an AI reads", () => {
       for (const locale of ["en", "ja"] as const) {
         sources.homeRendered.push([`home:${locale}`, homeText(await drawHome(h, locale))]);
       }
-      sources.homeRendered.push(["home:activity:en", await drawHome(h, "en", "hana", undefined, "/?order=activity")]);
+      sources.homeRendered.push(["home:activity:en", await drawHome(h, "en", "hana", "/?order=activity")]);
       for (const { word, scopes } of forbiddenWording) {
         for (const scope of scopes) for (const [name, text] of sources[scope]) {
           const found = typeof word === "string" ? text.includes(word) : word.test(text);
@@ -149,7 +150,7 @@ describe("the disclosure of aggregated operator metrics", () => {
       await h.signIn("hana", { homeArea: "ja" });
       const route = await import("~/routes/settings-stances");
       const loaderData = await route.loader(h.args(h.request("/settings/stances", { as: "hana" })));
-      const routes = [{ path: "/", Component: () => createElement(route.default as never, { loaderData, actionData: undefined }) }];
+      const routes = [{ path: "/", Component: () => routeElement(route.default, { loaderData }) }];
       const handler = createStaticHandler(routes);
       const context = (await handler.query(new Request("http://localhost/"))) as StaticHandlerContext;
       const draw = () => renderToStaticMarkup(createElement(OperatorSettingsContext.Provider, { value: testOperator },

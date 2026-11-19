@@ -9,6 +9,7 @@ import { GuestHeader } from "~/components/guest-header";
 import { MemberHeader } from "~/components/member-header";
 import { SiteNavigation } from "~/components/site-navigation";
 import { NavigationDataContext } from "~/lib/navigation-data";
+import { memberNavigationData } from "./helpers/loader-fixtures";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { m } from "~/paraglide/messages.js";
 import { renderInRouter } from "./helpers/render-in-router";
@@ -26,12 +27,12 @@ it.each(["ja", "en", "fr"] as const)("renders the server's labels in public and 
   // Leave the message runtime on its ordinary locale to detect client-side
   // translation calls in place of the labels supplied by the root loader.
   const labels = shellLabels(locale);
-  const navigation = { reader: false, handle: "labels_reader", userId: "labels_reader", hasPasskey: true, passkeyPrompt: false, isOperator: false, isModerator: false, apiDrafts: 0, unreadNotifications: 0 };
+  const navigation = memberNavigationData({ handle: "labels_reader", userId: "labels_reader" });
   const places = { villages: [], followedUnread: false, villagesEnabled: true };
   const markup = await renderInRouter(() => createElement(NavigationDataContext.Provider, { value: places },
     createElement(TooltipProvider, {},
       createElement(GuestHeader),
-      createElement(MemberHeader, { data: navigation } as never),
+      createElement(MemberHeader, { data: navigation }),
       createElement(SiteNavigation, { children: null }),
       createElement(SiteFooter, { labels, sourceUrl: "https://example.com/source", member: true, privacyLabel: "privacy" }),
     )), "/", undefined, { labels });

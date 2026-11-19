@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createElement } from "react";
 import { and, eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
 import { profiles, villages, handleHolds, villageFollows, villageMembers, entries, translations } from "~/lib/db/schema";
@@ -22,6 +21,7 @@ import { chatAccess, acceptChatConsent, mutateChat } from "~/lib/village-chat.se
 import { createVillageReport, moderateVillage } from "~/lib/village-moderation.server";
 import { deleteAccount } from "~/lib/account-delete.server";
 import { requestVillageTranslations, planVillageTexts } from "~/lib/village-translations.server";
+import { routeElement } from "./helpers/route-fixtures";
 
 const input = { title: "An owned post", body: "The personal village fixture.", lang: "en" };
 const client = { key: "oauth:personal", id: "personal", name: "Fixture", uri: null, tokenId: null };
@@ -161,7 +161,7 @@ it("omits language-village names on member rows while keeping community and orga
     viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1,
     reading: readReadingRequest(request, "created"), personalReading: readReadingRequest(request, "created", 1, "vlist"),
   });
-  const html = await renderInRouter(() => createElement(MemberPage, { loaderData: content, actionData: undefined, params: {}, matches: [] } as never), "/u/pv_owner");
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...content, reported: false } }), "/u/pv_owner");
   expect(html).not.toContain('href="/v/en"');
   for (const place of places) {
     expect(html).toContain(`href="/v/${place.slug}"`);
@@ -270,7 +270,7 @@ it("gives the two member-page sections independent Load more links and keeps aut
   const first = await load(url);
   expect(first.personal?.topics).toHaveLength(READING_BATCH);
   expect(first.topics).toHaveLength(READING_BATCH);
-  const html = await renderInRouter(() => createElement(MemberPage, { loaderData: first, actionData: undefined, params: {}, matches: [] } as never), path);
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...first, reported: false } }), path);
   const links = [...html.matchAll(/<a\b[^>]*data-load-more="true"[^>]*href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll("&amp;", "&"), url));
   expect(links.map(link => link.hash)).toEqual(["#village", "#posts"]);
   const [villageLink, postsLink] = links;

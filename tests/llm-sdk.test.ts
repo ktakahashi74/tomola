@@ -436,7 +436,7 @@ describe("Gemini thinking setting (real client, fake fetch)", () => {
 
   it("does not walk down for the fixed level of the messages translation (thinkingLevel without a setting)", async () => {
     const { ai, calls } = fetching(() => rejected);
-    await expect(geminiComplete(ai as never, { model: "m", system: "s", user: "u", maxOutputTokens: 100, thinkingLevel: "LOW" })).rejects.toMatchObject({ status: 400 });
+    await expect(geminiComplete(ai, { model: "m", system: "s", user: "u", maxOutputTokens: 100, thinkingLevel: "LOW" })).rejects.toMatchObject({ status: 400 });
     expect(calls).toHaveLength(1);
     expect(level(calls[0].body)).toBe("LOW");
   });

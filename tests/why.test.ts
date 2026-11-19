@@ -9,6 +9,7 @@ import { SiteFooter } from "~/components/site-footer";
 import { isWhyLang, whyFor, WHY_LANGS } from "~/lib/why.server";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeMeta, routeElement } from "./helpers/route-fixtures";
 
 // The "why" page: the initiator's account, outside the principles. The tests check the shape and the routing, not the wording.
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -50,7 +51,7 @@ describe("/why", () => {
     expect(headers()).toMatchObject({ "X-Robots-Tag": "noindex" });
     for (const lang of ["ja", "en", "ar"]) {
       const loaderData = await callLoader(`/why?lang=${lang}`);
-      expect(meta({ loaderData } as never)).toEqual([
+      expect(routeMeta(meta, { loaderData })).toEqual([
         { title: whyFor(lang, "en").title },
         { name: "robots", content: "noindex" },
         { tagName: "link", rel: "alternate", type: "text/markdown", href: lang === "ja" ? "/why.md" : `/why.md?lang=${lang}` },
@@ -60,7 +61,7 @@ describe("/why", () => {
 
   it("reads right to left in Arabic, and names every language in its own script", async () => {
     const route = await import("~/routes/why");
-    const Component = () => createElement(route.default as never, { loaderData: useLoaderData() });
+    const Component = () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() });
     const routes = withShellLabels([{ path: "/why", Component, loader: route.loader as never }]);
     const handler = createStaticHandler(routes);
     const context = (await handler.query(new Request("http://localhost:5173/why?lang=ar"))) as StaticHandlerContext;
@@ -111,7 +112,7 @@ describe("the footer", () => {
 describe("the principles page", () => {
   it("links to the why page before the text", async () => {
     const route = await import("~/routes/principles");
-    const Component = () => createElement(route.default as never, { loaderData: useLoaderData() });
+    const Component = () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() });
     const routes = withShellLabels([{ path: "/principles", Component, loader: route.loader as never }]);
     const handler = createStaticHandler(routes);
     const context = (await handler.query(new Request("http://localhost:5173/principles"))) as StaticHandlerContext;

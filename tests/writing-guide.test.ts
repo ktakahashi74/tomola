@@ -16,6 +16,7 @@ import { MEDIA_LIMITS, MOTION_LIMITS } from "~/lib/media";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { withShellLabels } from "./helpers/render-in-router";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { vi.unstubAllEnvs(); setTestLocale("en"); });
@@ -150,7 +151,7 @@ describe("the short page for people", () => {
     vi.stubEnv("BETTER_AUTH_URL", BASE);
     setTestLocale(lang);
     const route = await import("~/routes/writing");
-    const routes = withShellLabels([{ path: "/writing", loader: route.loader, Component: () => createElement(route.default as never, { loaderData: useLoaderData() }) }]);
+    const routes = withShellLabels([{ path: "/writing", loader: route.loader, Component: () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() }) }]);
     const handler = createStaticHandler(routes);
     const context = await handler.query(new Request(`${BASE}/writing`)) as StaticHandlerContext;
     const html = renderToStaticMarkup(createElement(StaticRouterProvider, { router: createStaticRouter(routes, context), context, hydrate: false }));

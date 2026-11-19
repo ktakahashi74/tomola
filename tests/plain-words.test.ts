@@ -1,3 +1,4 @@
+import { notificationsData, topicData, topicEntry } from "./helpers/loader-fixtures";
 import { createElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
@@ -15,6 +16,7 @@ import { meta as topicMeta } from "~/routes/topic";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { messageMarkup } from "./helpers/message-markup";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 beforeEach(() => setTestMessages(jsonMessages()));
 vi.mock("~/lib/use-enabled-langs", () => ({ useEnabledLangs: () => ["ja", "en"] }));
@@ -33,7 +35,7 @@ it("keeps all writing help in one closed disclosure, outside the body label", as
   expect(html).toMatch(new RegExp(`<label[^>]*for="[^"]+"[^>]*>${messageMarkup(m.field_body())}</label>`));
 });
 it("shows the invitation note on the same login form for every recipient", async () => {
-  const html = await render(createElement(Login, { loaderData: { next: "/", codePending: null, loggedOut: false } } as never));
+  const html = await render(routeElement(Login, { loaderData: { next: "/", codePending: null, loggedOut: false, reauth: false } }));
   expect(html).toContain(messageMarkup(m.login_invitation_short()));
   expect(html.indexOf(messageMarkup(m.login_invitation_short()))).toBeGreaterThan(html.indexOf(messageMarkup(m.login_submit())));
 });
@@ -45,11 +47,14 @@ it("uses interface messages for all supported post languages", () => {
   }
 });
 it("gives unusable invitations a matching page and document title without an address", async () => {
-  const loaderData = { email: null, codePending: null };
-  const html = await render(createElement(Invite, { loaderData } as never));
+  const loaderData: Parameters<typeof Invite>[0]["loaderData"] = {
+    email: null, codePending: null, publicReading: false, trialRequired: false, reopenInvitation: false,
+    from: null, note: null, village: null,
+  };
+  const html = await render(routeElement(Invite, { loaderData }));
   expect(html).toContain(messageMarkup(m.invite_unusable_title()));
   expect(html).not.toContain(messageMarkup(m.invite_title()));
-  expect(inviteMeta({ loaderData } as never)).toEqual([{ title: m.invite_unusable_title() }]);
+  expect(routeMeta(inviteMeta, { loaderData })).toEqual([{ title: m.invite_unusable_title() }]);
 });
 it("reports a translation in one press, and offers the optional details only after a report", async () => {
   const first = await render(createElement(TranslationReportForm, { entryId: 1, kind: "reply", lang: "en" }));
@@ -63,7 +68,7 @@ it("reports a translation in one press, and offers the optional details only aft
 });
 it("shortens only titleless document titles, including supplementary Unicode characters", () => {
   const line = "🌿".repeat(70);
-  const meta = (title: string | null) => topicMeta({ loaderData: { topic: { id: 1, placeholder: null, title, headline: line, display: { shown: "original" } } }, location: { search: "" } } as never).flatMap(item => "title" in item ? [item.title] : [])[0];
+  const meta = (title: string | null) => routeMeta(topicMeta, { loaderData: topicData({ topic: topicEntry({ title, headline: line }) }), location: { search: "" } }).flatMap(item => "title" in item ? [item.title] : [])[0];
   expect(meta(null)).toBe("🌿".repeat(40) + "…");
   expect(meta(line)).toBe(line);
 });
@@ -79,7 +84,7 @@ it("consumes the logout flash on GET responses and retains it through the logout
   expect(untouched.headers.get("set-cookie")).toBeNull();
 });
 it("links empty notifications to email settings and omits the link for a populated page", async () => {
-  const html = await render(createElement(Notifications, { loaderData: { items: [], page: 1, hasNext: false } } as never));
+  const html = await render(routeElement(Notifications, { loaderData: notificationsData() }));
   expect(html).toContain(messageMarkup(m.notifications_empty()));
   expect(html).toContain('href="/settings#settings-email"');
   expect(html).toContain(messageMarkup(m.notifications_email_settings()));

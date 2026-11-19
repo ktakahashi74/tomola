@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { entries, villages } from "~/lib/db/schema";
@@ -19,6 +18,7 @@ import Village, { loader as villageLoader, action as villageAction } from "~/rou
 import VillageNushi, { loader as nushiLoader, action as nushiAction } from "~/routes/village-nushi";
 import { loader as personalLoader, action as personalAction } from "~/routes/personal-village-voice";
 import MemberPage, { loader as memberLoader } from "~/routes/member-page";
+import { routeElement } from "./helpers/route-fixtures";
 
 beforeEach(() => setTestMessages(jsonMessages()));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); setTestMessages(); });
@@ -33,7 +33,7 @@ it("links to Nushi after posts and Load more, before roster and management, with
   auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-owner", email: "owner@example.com" }, profile: await getProfile(f.db, "nushi-owner") });
   const render = async () => {
     const view = await villageLoader({ request: request("/v/nushi-test"), params: { slug: "nushi-test" } } as never);
-    return renderInRouter(() => createElement(Village, { loaderData: view } as never), "/v/nushi-test");
+    return renderInRouter(() => routeElement(Village, { loaderData: view }), "/v/nushi-test");
   };
   const unused = await render();
   expect(unused).not.toContain('id="nushi-voice"');
@@ -76,7 +76,7 @@ it("shows the default style to everyone, settings only to owners, and reports on
   for (const id of ["nushi-owner", "nushi-caller", undefined]) {
     auth.getReader.mockResolvedValue({ db: f.db, ...(id ? { user: { id, email: `${id}@example.com` }, profile: await getProfile(f.db, id) } : {}) });
     const view = await nushiLoader(args as never);
-    const html = await renderInRouter(() => createElement(VillageNushi, { loaderData: view } as never), "/v/nushi-test/nushi");
+    const html = await renderInRouter(() => routeElement(VillageNushi, { loaderData: view }), "/v/nushi-test/nushi");
     expect(html).toContain(renderToStaticMarkup(m.village_nushi_title()));
     expect(html).toContain(m.nushi_description());
     expect(html).toContain('href="/ai-use#nushi"');
@@ -87,11 +87,11 @@ it("shows the default style to everyone, settings only to owners, and reports on
   await setNushiVoice(f.db, "nushi-owner", f.village.id, "Brief.");
   auth.getReader.mockResolvedValue({ db: f.db, user: { id: "nushi-caller", email: "caller@example.com" } });
   const view = await nushiLoader(args as never);
-  const html = await renderInRouter(() => createElement(VillageNushi, { loaderData: view } as never));
+  const html = await renderInRouter(() => routeElement(VillageNushi, { loaderData: view }));
   expect(html).toContain('name="target" value="nushi_voice"');
   expect(html).not.toContain('value="information"');
   const listing = await villageLoader(args as never);
-  const listingHtml = await renderInRouter(() => createElement(Village, { loaderData: listing } as never));
+  const listingHtml = await renderInRouter(() => routeElement(Village, { loaderData: listing }));
   expect(listingHtml).not.toContain('value="nushi_voice"');
 });
 
@@ -175,7 +175,7 @@ it("links to the personal Nushi after posts and Load more, for the owner or read
     const view = await load(id);
     if (visible) expect(view).toHaveProperty("nushiVoiceHref", href);
     else expect(view).not.toHaveProperty("nushiVoiceHref");
-    const html = await renderInRouter(() => createElement(MemberPage, { loaderData: view } as never), "/u/znushi_owner");
+    const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: view }), "/u/znushi_owner");
     expect(html.includes(`href="${href}"`)).toBe(visible);
     if (visible) {
       expect(html).toContain(`<a class="link-ui inline-block" href="${href}"`);

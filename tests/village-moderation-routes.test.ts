@@ -1,8 +1,9 @@
+import { routeElement } from "./helpers/route-fixtures";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { profiles, reports, villageMembers, villages } from "~/lib/db/schema";
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
@@ -36,8 +37,8 @@ beforeAll(async () => {
 afterEach(() => { vi.unstubAllEnvs(); vi.stubEnv("VILLAGES", "1"); vi.stubEnv("PUBLIC_READING", "1"); });
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
 const post = (as?: string, headers?: Record<string, string>, slug = "reported-route") => h.outcome(() => villageAction(h.args(h.request(`/v/${slug}`, { as, form: { intent: "flag", reason: "spam", note: "Evidence" }, headers }), { slug })));
-function render(Component: unknown, path: string, loaderData: unknown) {
-  const router = createMemoryRouter([{ path, element: createElement(Component as never, { loaderData, actionData: undefined, params: {}, matches: [] } as never) }], { initialEntries: [path] });
+function render(element: ReactElement, path: string) {
+  const router = createMemoryRouter([{ path, element }], { initialEntries: [path] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 it("revalidates stale village forms after an error while preserving other moderation revalidation", () => {
@@ -95,26 +96,29 @@ it("renders former and current owners' appeal headings, before-values and revers
   if (!filed.ok) throw new Error(filed.error);
   // Remove the appellant's ownership after filing; the other owner remains.
   await h.db.delete(villageMembers).where(and(eq(villageMembers.villageId, village.id), eq(villageMembers.userId, h.ids.vr_owner)));
-  const load = (as: string) => appealLoader(h.args(h.request(`/appeal/${corrected.actionId}`, { as }), { actionId: String(corrected.actionId) }));
-  const former = render(Appeal, `/appeal/${corrected.actionId}`, await load("vr_owner"));
+  const load = async (as: string) => {
+    const loaded = await appealLoader(h.args(h.request(`/appeal/${corrected.actionId}`, { as }), { actionId: String(corrected.actionId) }));
+    return "data" in loaded ? loaded.data : loaded;
+  };
+  const former = render(routeElement(Appeal, { loaderData: await load("vr_owner") }), `/appeal/${corrected.actionId}`);
   expect(former).toContain(m.appeal_yours());
   expect(former).toContain(m.village_before_correction());
   expect(former).not.toContain(m.village_report_snapshot());
-  const shared = render(Appeal, `/appeal/${corrected.actionId}`, await load("vr_reporter"));
+  const shared = render(routeElement(Appeal, { loaderData: await load("vr_reporter") }), `/appeal/${corrected.actionId}`);
   expect(shared).toContain(m.village_appeal_shared());
   expect(shared).not.toContain(m.appeal_yours());
   await h.signIn("vr_independent", { homeArea: "en" });
   const decided = await decideAppeal(h.db, { id: h.ids.vr_independent, scope: actor.scope }, filed.id, { decision: "overturned", note: "Independent decision" });
   expect(decided).toMatchObject({ ok: true, reversed: true });
-  expect(render(Appeal, `/appeal/${corrected.actionId}`, await load("vr_owner"))).toContain(m.appeal_status_overturned());
-  const notices = render(Notifications, "/notifications", await notificationsLoader(h.args(h.request("/notifications", { as: "vr_reporter" }))));
+  expect(render(routeElement(Appeal, { loaderData: await load("vr_owner") }), `/appeal/${corrected.actionId}`)).toContain(m.appeal_status_overturned());
+  const notices = render(routeElement(Notifications, { loaderData: await notificationsLoader(h.args(h.request("/notifications", { as: "vr_reporter" }))) }), "/notifications");
   expect(notices).toContain(m.notification_moderation_unfix_village());
   expect(notices).not.toContain("Appeal #");
   expect(notices).not.toContain(m.notification_reason({ reason: reasonLabel("other") }));
   const reported = await createVillageReport(h.db, h.ids.vr_owner, { slug, reason: "other" });
   if (!reported.ok) throw new Error(reported.error);
   expect(await moderateWithCurrentVersion(h.db, actor, { reportId: reported.id, intent: "dismiss", reason: "other" })).toMatchObject({ ok: true });
-  const openLog = render(ModerationLog, "/moderation", await logLoader(h.args(h.request("/moderation", { as: "vr_reporter" }))));
+  const openLog = render(routeElement(ModerationLog, { loaderData: await logLoader(h.args(h.request("/moderation", { as: "vr_reporter" }))) }), "/moderation");
   const dismissedRow = openLog.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g)?.find(row => row.includes(m.log_action_dismiss_village_report()));
   expect(dismissedRow).toBeDefined();
   expect(dismissedRow).not.toContain("Before correction");
@@ -122,7 +126,7 @@ it("renders former and current owners' appeal headings, before-values and revers
   // Existing records stay readable after disabling the village pages.
   vi.stubEnv("VILLAGES", "");
   const loaded = await logLoader(h.args(h.request("/moderation", { as: "vr_reporter" })));
-  const html = render(ModerationLog, "/moderation", loaded);
+  const html = render(routeElement(ModerationLog, { loaderData: loaded }), "/moderation");
   expect(html).toContain("Before correction");
   expect(html).not.toContain('href="/v/appeal-view-route"');
 });

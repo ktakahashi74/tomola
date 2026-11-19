@@ -1,5 +1,4 @@
 import { m } from "~/paraglide/messages.js";
-import { createElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -13,6 +12,7 @@ import { createProfile } from "~/lib/profiles.server";
 import AuthConfirm, { action, loader } from "~/routes/auth-confirm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import en from "../messages/en.json";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -157,7 +157,7 @@ describe("confirm page", () => {
     const token = await h.issueLink("recovery@example.com");
     const result = await action(h.args(post(token, {}, { cookie: "" })));
     expect(result).toMatchObject({ data: { status: "invalid" }, init: { status: 400 } });
-    const html = await renderInRouter(() => createElement(AuthConfirm, { loaderData: { token, reason: "usable", minutes: 15 }, actionData: { status: "invalid", reason: "other-browser" }, params: {}, matches: [] } as never), "/auth/confirm");
+    const html = await renderInRouter(() => routeElement(AuthConfirm, { loaderData: { token, reason: "usable", minutes: 15 }, actionData: { status: "invalid", reason: "other-browser" } }), "/auth/confirm");
     expect(html).toContain('action="/login"');
     expect(html).toContain('name="email"');
     expect(html).not.toContain('name="next"');
@@ -281,8 +281,8 @@ describe("confirm page", () => {
       ["expired", en.confirm_expired_heading, m.confirm_expired({ minutes: 15 })],
       ["other-browser", en.confirm_unusable_heading, en.confirm_invalid_hint],
       ["unknown", en.confirm_unknown_heading, m.confirm_invalid({ minutes: 15 })],
-    ]) {
-      const html = await renderInRouter(() => createElement(AuthConfirm, { loaderData: { token: null, reason, minutes: 15 }, params: {}, matches: [] } as never), "/auth/confirm");
+    ] as const) {
+      const html = await renderInRouter(() => routeElement(AuthConfirm, { loaderData: { token: null, reason, minutes: 15 } }), "/auth/confirm");
       expect(html).toContain(heading);
       expect(html).toContain(body);
       expect(html).toContain('action="/login"');

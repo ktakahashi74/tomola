@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, isNull } from "drizzle-orm";
 import { invitations, jobs, profiles, rateLimits, suspendedEmailHashes, villages } from "~/lib/db/schema";
@@ -16,6 +15,7 @@ import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
 import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
 import { createVillage } from "~/lib/village-management.server";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -228,7 +228,7 @@ it("offers only enabled mail languages, rejects a disabled choice, and separates
   for (const operator of [true, false]) {
     const loaderData = await loader(h.args(h.request("/invites/new", { as: operator ? "bulk_operator" : "bulk_member" })));
     expect(loaderData.mailLanguages).toEqual(operator ? ["ja", "en"] : []);
-    const html = await renderInRouter(() => createElement(InvitesNew, { loaderData } as never), "/invites/new");
+    const html = await renderInRouter(() => routeElement(InvitesNew, { loaderData }), "/invites/new");
     expect(html.includes('name="sendEmail"')).toBe(operator);
     expect(/<textarea[^>]*name="email"/.test(html)).toBe(operator);
   }
@@ -237,7 +237,7 @@ it("offers only enabled mail languages, rejects a disabled choice, and separates
 it.each([1, 2])("shows message sharing only for a single result with a link, given %i results", async count => {
   const loaderData = await loader(h.args(h.request("/invites/new", { as: "bulk_operator" })));
   const actionData = await post({ email: Array.from({ length: count }, (_, i) => `bulk_manual_${i}@example.com`).join("\n") });
-  const html = await renderInRouter(() => createElement(InvitesNew, { loaderData, actionData } as never), "/invites/new");
+  const html = await renderInRouter(() => routeElement(InvitesNew, { loaderData, actionData: "data" in actionData ? actionData.data : actionData }), "/invites/new");
   expect(html.includes('id="invitation-message"')).toBe(count === 1);
   expect(html.includes(m.invites_copy_message())).toBe(count === 1);
   expect(box.sent).toEqual([]);

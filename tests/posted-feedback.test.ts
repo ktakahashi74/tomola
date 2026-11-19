@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { eq } from "drizzle-orm";
@@ -12,6 +12,7 @@ import { postedLocation, readPostedId } from "~/lib/posted-ui";
 import Home, { loader as homeLoader, meta as homeMeta } from "~/routes/home";
 import Topic, { loader as topicLoader, meta as topicMeta } from "~/routes/topic";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", () => ({ m: new Proxy({}, { get: (_, key) => () => String(key) }) }));
 let h: RouteHarness;
@@ -29,8 +30,8 @@ beforeAll(async () => {
   replyId = reply.id;
 });
 afterAll(() => h.restore());
-function render(Component: unknown, path: string, loaderData: unknown) {
-  const router = createMemoryRouter([{ path: new URL(path, "http://localhost").pathname, element: createElement(Component as never, { loaderData, actionData: undefined, params: {}, matches: [] } as never) }], { initialEntries: [path] });
+function render(element: ReactElement, path: string) {
+  const router = createMemoryRouter([{ path: new URL(path, "http://localhost").pathname, element }], { initialEntries: [path] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 const article = (html: string, id: string) => html.split(`<article id="${id}"`)[1]?.split("</article>")[0] ?? "";
@@ -85,7 +86,7 @@ describe("publication feedback", () => {
   it("shows feedback on the published topic/reply only and keeps Markdown/AI links clean", async () => {
     const homePath = `/?posted=${topicId}#p-${topicId}`;
     const home = await homeLoader(h.args(h.request(homePath, { as: "author" })));
-    expect(render(Home, homePath, home)).not.toContain("posted_topic");
+    expect(render(routeElement(Home, { loaderData: home }), homePath)).not.toContain("posted_topic");
     const topicPath = `/t/${topicId}?posted=${topicId}`;
     const topic = await topicLoader(h.args(h.request(topicPath, { as: "author" }), { id: String(topicId) }));
     // The notice after posting a topic is loaded apart from the page's script (it is drawn from a lazy module), so it is checked from the data the page carries and from the notice itself.
@@ -98,10 +99,10 @@ describe("publication feedback", () => {
     expect(notice).toContain("posted_first");
     expect(notice).toContain(`href="/t/${topicId}/edit"`);
     expect(JSON.stringify(home.aiOpen)).not.toContain("posted");
-    expect(JSON.stringify(homeMeta({ location: { search: `?posted=${topicId}` } } as never))).not.toContain("posted");
+    expect(JSON.stringify(routeMeta(homeMeta, { loaderData: home, location: { search: `?posted=${topicId}` } }))).not.toContain("posted");
     const replyPath = `/t/${topicId}?lang=en&posted=${replyId}#c-${replyId}`;
     const own = await topicLoader(h.args(h.request(replyPath, { as: "author" }), { id: String(topicId) }));
-    const html = render(Topic, replyPath, own);
+    const html = render(routeElement(Topic, { loaderData: own }), replyPath);
     // An existing follower gets the ordinary confirmation on their own posted reply.
     const postedIds = own.replies.filter(reply => "posted" in reply && reply.posted).map(reply => reply.id);
     expect(postedIds).toEqual([replyId]);
@@ -117,9 +118,9 @@ describe("publication feedback", () => {
     const line = renderToStaticMarkup(createElement(PostedLineContent, { kind: "reply-followed" }));
     expect(line).toContain("posted_reply_followed");
     expect(JSON.stringify(own.aiOpen)).not.toContain("posted");
-    expect(JSON.stringify(topicMeta({ loaderData: own, location: { search: `?lang=en&posted=${replyId}` } } as never))).not.toContain("posted");
+    expect(JSON.stringify(routeMeta(topicMeta, { loaderData: own, location: { search: `?lang=en&posted=${replyId}` } }))).not.toContain("posted");
     const other = await topicLoader(h.args(h.request(replyPath, { as: "reader" }), { id: String(topicId) }));
-    expect(render(Topic, replyPath, other)).not.toContain("posted_reply");
+    expect(render(routeElement(Topic, { loaderData: other }), replyPath)).not.toContain("posted_reply");
   });
 
   it.each(["reply", "draft"] as const)("carries only a newly created follow through %s publication", async kind => {

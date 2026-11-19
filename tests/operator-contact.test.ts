@@ -7,6 +7,7 @@ import { OperatorSettingsContext } from "~/lib/operator-context";
 import { testOperator } from "./helpers/operator";
 import { jsonMessages } from "./helpers/messages-json";
 import { renderInRouter } from "./helpers/render-in-router";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -19,7 +20,7 @@ it("keeps the configured contact on an early error even when root loader data is
 
 it("uses the privacy contact for a failed account deletion", async () => {
   const settings = { ...testOperator, privacyEmail: "privacy@community.example" };
-  const markup = await renderInRouter(() => createElement(DeleteAccount, { loaderData: { handle: "test", signPosts: false, completionKey: "fixture", villages: [] }, actionData: { error: "failed" } } as never), "/", undefined, { operator: settings });
+  const markup = await renderInRouter(() => routeElement(DeleteAccount, { loaderData: { handle: "test", signPosts: false, completionKey: "fixture", villages: [] }, actionData: { error: "failed" } }), "/", undefined, { operator: settings });
   expect(markup).toContain(settings.privacyEmail);
 });
 

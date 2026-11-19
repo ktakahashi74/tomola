@@ -1,3 +1,5 @@
+import { homeData } from "./helpers/loader-fixtures";
+import { routeMeta } from "./helpers/route-fixtures";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -17,8 +19,8 @@ vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/me
 // Shared previews (Open Graph) and RSS feeds: what they carry, and that nothing a reader who has not logged in may not read gets into any of them.
 let h: RouteHarness;
 const ids: Record<string, number> = {};
-const root = { id: "root", loaderData: { publicReading: true, siteOrigin: BASE } };
-type Tag = Record<string, string>;
+const root = { publicReading: true, siteOrigin: BASE };
+
 
 const feed = async (path: string, params: Record<string, string> = {}, opts: { as?: string } = {}) => {
   const { loader } = await import("~/routes/feed");
@@ -26,14 +28,17 @@ const feed = async (path: string, params: Record<string, string> = {}, opts: { a
   return { response, text: await response.text() };
 };
 const itemTitles = (xml: string) => [...xml.matchAll(/<item><title>([^<]*)<\/title>/g)].map(match => match[1]);
-const tagOf = (tags: Tag[], key: string) => tags.find(tag => tag.property === key || tag.name === key)?.content;
+const tagOf = (tags: Array<Record<string, unknown>>, key: string) => {
+  const content = tags.find(tag => tag.property === key || tag.name === key)?.content;
+  return typeof content === "string" ? content : undefined;
+};
 
 async function topicMeta(path: string, id: number, opts: { as?: string; headers?: Record<string, string> } = {}) {
   const { loader, meta } = await import("~/routes/topic");
   const request = h.request(path, opts);
-  const loaderData = await loader(h.args(request, { id: String(id) })) as never;
+  const loaderData = await loader(h.args(request, { id: String(id) }));
   const url = new URL(request.url);
-  return (meta as unknown as (args: unknown) => Tag[])({ loaderData, location: { pathname: url.pathname, search: url.search }, matches: [root] });
+  return routeMeta(meta, { loaderData, location: { pathname: url.pathname, search: url.search }, rootData: root });
 }
 
 async function mediaId(memberId: string, color: number): Promise<string> {
@@ -263,7 +268,8 @@ describe("the preview of a topic", () => {
     expect(tagOf(marked, "og:locale")).toBe("en_US");
     expect(tagOf(marked, "article:author")).toBe("Japanese Writer");
     expect(tagOf(marked, "og:url")).toBe(`${BASE}${path}?sl=en`);
-    expect(marked.find(tag => "title" in tag)?.title).toBe(original.find(tag => "title" in tag)?.title);
+    const titles = (tags: Array<Record<string, unknown>>) => tags.find(tag => tag.title !== undefined)?.title;
+    expect(titles(marked)).toBe(titles(original));
     const explicit = await topicMeta(`${path}?lang=ja&sl=en`, ids.japanese);
     expect(tagOf(explicit, "og:locale")).toBe("ja_JP");
     expect(tagOf(explicit, "og:url")).toBe(`${BASE}${path}?lang=ja`);
@@ -300,32 +306,32 @@ describe("the preview of a topic", () => {
     expect(tagOf(await topicMeta(`/t/${ids["in-pub"]}`, ids["in-pub"]), "og:title")).toBe("Topic in pub");
     vi.stubEnv("PUBLIC_READING", "");
     const { loader, meta } = await import("~/routes/topic");
-    const loaderData = await loader(h.args(h.request(`/t/${ids.essay}`, { as: "feed_author" }), { id: String(ids.essay) })) as never;
-    expect((loaderData as { share: unknown }).share).toBeNull();
-    const closedRoot = { id: "root", loaderData: { publicReading: false, siteOrigin: null } };
-    const tags = (meta as unknown as (args: unknown) => Tag[])({ loaderData, location: { pathname: `/t/${ids.essay}`, search: "" }, matches: [closedRoot] });
-    expect(tags.some(tag => tag.property?.startsWith("og:") || tag.name?.startsWith("twitter:"))).toBe(false);
+    const loaderData = await loader(h.args(h.request(`/t/${ids.essay}`, { as: "feed_author" }), { id: String(ids.essay) }));
+    expect(loaderData.share).toBeNull();
+    const closedRoot = { publicReading: false, siteOrigin: null };
+    const tags = routeMeta(meta, { loaderData, location: { pathname: `/t/${ids.essay}` }, rootData: closedRoot });
+    expect(tags.some(tag => ("property" in tag && tag.property?.startsWith("og:")) || ("name" in tag && tag.name?.startsWith("twitter:")))).toBe(false);
   });
 });
 
 describe("the preview of the home page and of a village", () => {
   it("previews the home page with the site's own introduction, and links its feed", async () => {
     const { meta } = await import("~/routes/home");
-    const tags = (meta as unknown as (args: unknown) => Tag[])({ location: { pathname: "/", search: "?lang=ja" }, matches: [root] });
+    const tags = routeMeta(meta, { loaderData: homeData(), location: { search: "?lang=ja" }, rootData: root });
     expect(tagOf(tags, "og:title")).toBe("tomola");
     expect(tagOf(tags, "og:type")).toBe("website");
     expect(tagOf(tags, "og:description")).toContain("tomola is a place to read essays");
     expect(tagOf(tags, "og:url")).toBe(`${BASE}/?lang=ja`);
     expect(tagOf(tags, "og:image")).toBe(`${BASE}/icons/share-default.png`);
     expect(tagOf(tags, "twitter:card")).toBe("summary");
-    expect(tags.find(tag => tag.rel === "alternate" && tag.type === "application/rss+xml")).toMatchObject({ href: `${BASE}/feed.xml?lang=ja` });
+    expect(tags.find(tag => "rel" in tag && tag.rel === "alternate" && "type" in tag && tag.type === "application/rss+xml")).toMatchObject({ href: `${BASE}/feed.xml?lang=ja` });
   });
 
   it("previews a village with its name and description in plain text, and links its feed unless it has ended", async () => {
     const { loader, meta } = await import("~/routes/village");
     const call = async (slug: string) => {
-      const loaderData = await loader(h.args(h.request(`/v/${slug}`), { slug })) as never;
-      return (meta as unknown as (args: unknown) => Tag[])({ loaderData, location: { pathname: `/v/${slug}`, search: "" }, matches: [root] });
+      const loaderData = await loader(h.args(h.request(`/v/${slug}`), { slug }));
+      return routeMeta(meta, { loaderData, location: { pathname: `/v/${slug}` }, rootData: root });
     };
     const open = await call("feed-open");
     expect(tagOf(open, "og:title")).toBe("Village open");
@@ -333,9 +339,9 @@ describe("the preview of the home page and of a village", () => {
     expect(tagOf(open, "og:url")).toBe(`${BASE}/v/feed-open`);
     expect(tagOf(open, "og:image")).toBe(`${BASE}/icons/share-default.png`);
     expect(tagOf(open, "twitter:card")).toBe("summary");
-    expect(open.find(tag => tag.rel === "alternate" && tag.type === "application/rss+xml")).toMatchObject({ href: `${BASE}/v/feed-open/feed.xml` });
+    expect(open.find(tag => "rel" in tag && tag.rel === "alternate" && "type" in tag && tag.type === "application/rss+xml")).toMatchObject({ href: `${BASE}/v/feed-open/feed.xml` });
     const ended = await call("feed-ended");
-    expect(ended.some(tag => tag.type === "application/rss+xml")).toBe(false);
+    expect(ended.some(tag => "type" in tag && tag.type === "application/rss+xml")).toBe(false);
     await expect(call("feed-closed")).rejects.toMatchObject({ init: { status: 404 } });
   });
 });

@@ -1,10 +1,10 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import TopicNew, { loader } from "~/routes/topic-new";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
 import { m } from "~/paraglide/messages.js";
 import { messageMarkup } from "./helpers/message-markup";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -15,7 +15,7 @@ const load = async (query: string) => (await loader(h.args(h.request(`/t/new?${q
 it("prefills only the body, leaves a share as an ordinary topic and displays the review notice", async () => {
   const loaded = await load("url=https%3A%2F%2Fexample.org%2Fa&title=Example");
   expect(loaded).toMatchObject({ prefill: { title: "", body: "[Example](https://example.org/a)\n\n" }, asksStance: false, sharePrefilled: true });
-  const html = await renderInRouter(() => createElement(TopicNew, { loaderData: loaded, params: {}, matches: [] } as never), "/t/new");
+  const html = await renderInRouter(() => routeElement(TopicNew, { loaderData: loaded }), "/t/new");
   expect(html).toContain(messageMarkup(m.share_prefill_notice()));
   expect(html).toContain("[Example](https://example.org/a)");
 });

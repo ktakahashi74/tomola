@@ -296,12 +296,12 @@ describe("a suspended member on every path", () => {
       ["draft (publish)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "publish" }],
       ["draft (delete)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "delete" }],
       ["draft (remove the link to the original question)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "remove_alt", body: "y" }],
-      ["vote", () => import("~/routes/vote") as never, "/vote", {}, { entryId: id, on: "1" }],
-      ["settings-tokens (create)", () => import("~/routes/settings-tokens") as never, "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
-      ["invites-new", () => import("~/routes/invites-new") as never, "/invites/new", {}, { email: "x@example.com" }],
-      ["mod (a suspended moderator cannot act)", () => import("~/routes/mod") as never, "/mod", {}, { intent: "hide", entryId: id, reason: "spam", note: "n" }],
-      ["mod-appeals (a suspended moderator cannot review)", () => import("~/routes/mod-appeals") as never, "/mod/appeals", {}, { appealId: "1", intent: "uphold", note: "n" }],
-      ["admin-translations (a suspended moderator cannot write a human fix)", () => import("~/routes/admin-translations") as never, "/admin/translations", {}, { reportId: "1", text: "x" }],
+      ["vote", () => import("~/routes/vote"), "/vote", {}, { entryId: id, on: "1" }],
+      ["settings-tokens (create)", () => import("~/routes/settings-tokens"), "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
+      ["invites-new", () => import("~/routes/invites-new"), "/invites/new", {}, { email: "x@example.com" }],
+      ["mod (a suspended moderator cannot act)", () => import("~/routes/mod"), "/mod", {}, { intent: "hide", entryId: id, reason: "spam", note: "n" }],
+      ["mod-appeals (a suspended moderator cannot review)", () => import("~/routes/mod-appeals"), "/mod/appeals", {}, { appealId: "1", intent: "uphold", note: "n" }],
+      ["admin-translations (a suspended moderator cannot write a human fix)", () => import("~/routes/admin-translations"), "/admin/translations", {}, { reportId: "1", text: "x" }],
     ];
     const count = async () => {
       const { votes, entries, drafts, apiTokens, invitations, translations } = await import("~/lib/db/schema");

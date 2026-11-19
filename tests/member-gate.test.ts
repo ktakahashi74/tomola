@@ -95,10 +95,10 @@ describe("every write path goes through the writer gate", () => {
       ["member-page (village follow)", () => import("~/routes/member-page") as never, "/u/hana", { handle: "hana" }, { intent: "follow" }],
       // Private reading uses requireMember: suspension limits publishing, not
       // saving readable posts or erasing one's own private saved records.
-      ["private saved reading", () => import("~/routes/save") as never, "/save", {}, { topicId: id, saved: "1" }],
-      ["private list watermark", () => import("~/routes/list-seen") as never, "/list-seen", {}, { scope: "/", seenAt: "2026-01-01T00:00:00.000Z" }],
+      ["private saved reading", () => import("~/routes/save"), "/save", {}, { topicId: id, saved: "1" }],
+      ["private list watermark", () => import("~/routes/list-seen"), "/list-seen", {}, { scope: "/", seenAt: "2026-01-01T00:00:00.000Z" }],
       ["topic-new (post, draft)", () => import("~/routes/topic-new") as never, "/t/new", {}, { title: "x", body: "y" }],
-      ["draft autosave", () => import("~/routes/draft-autosave") as never, "/drafts/autosave", {}, { body: "y" }],
+      ["draft autosave", () => import("~/routes/draft-autosave"), "/drafts/autosave", {}, { body: "y" }],
       ["topic (reply, draft, translation report)", () => import("~/routes/topic") as never, `/t/${id}`, { id }, { body: "y" }],
       ["topic (translation report)", () => import("~/routes/topic") as never, `/t/${id}`, { id }, { intent: "report", entryId: id, lang: "en", field: "body", note: "n" }],
       ["topic (report a post)", () => import("~/routes/topic") as never, `/t/${id}`, { id }, { intent: "flag", entryId: id, reason: "spam" }],
@@ -107,12 +107,12 @@ describe("every write path goes through the writer gate", () => {
       ["reply-edit", () => import("~/routes/reply-edit") as never, `/c/${id}/edit`, { id }, { body: "y" }],
       ["draft (save, publish, delete)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "save", body: "y" }],
       ["Nushi refresh", () => import("~/routes/nushi-action") as never, "/nushi/action", {}, { intent: "refresh", answerId: "1" }],
-      ["vote", () => import("~/routes/vote") as never, "/vote", {}, { entryId: id, on: "1" }],
-      ["stance (choose, change, withdraw)", () => import("~/routes/stance") as never, "/stance", {}, { questionId: id, position: "agree", version: "0" }],
-      ["settings-tokens (create)", () => import("~/routes/settings-tokens") as never, "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
-      ["invites-new", () => import("~/routes/invites-new") as never, "/invites/new", {}, { email: "x@example.com" }],
-      ["village address suggestion", () => import("~/routes/village-slug-suggest") as never, "/villages/suggest-slug", {}, { name: "京都" }],
-      ["village Nushi style and reports", () => import("~/routes/village-nushi") as never, "/v/garden/nushi", { slug: "garden" }, { intent: "nushi-voice", voice: "Brief." }],
+      ["vote", () => import("~/routes/vote"), "/vote", {}, { entryId: id, on: "1" }],
+      ["stance (choose, change, withdraw)", () => import("~/routes/stance"), "/stance", {}, { questionId: id, position: "agree", version: "0" }],
+      ["settings-tokens (create)", () => import("~/routes/settings-tokens"), "/settings/tokens", {}, { intent: "create", name: "n", kind: "read" }],
+      ["invites-new", () => import("~/routes/invites-new"), "/invites/new", {}, { email: "x@example.com" }],
+      ["village address suggestion", () => import("~/routes/village-slug-suggest"), "/villages/suggest-slug", {}, { name: "京都" }],
+      ["village Nushi style and reports", () => import("~/routes/village-nushi"), "/v/garden/nushi", { slug: "garden" }, { intent: "nushi-voice", voice: "Brief." }],
     ];
     for (const [name, load, p, params, form] of cases) {
       const mod = await load();

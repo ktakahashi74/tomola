@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { createElement } from "react";
 import { profiles, rateLimits, villages, villageTranslations } from "~/lib/db/schema";
 import { createTopic } from "~/lib/entries.server";
 import { villageName } from "~/lib/village-name";
@@ -15,6 +14,7 @@ import { setTestMessages } from "./stubs/paraglide-messages";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import en from "../messages/en.json";
 import ja from "../messages/ja.json";
+import { routeElement } from "./helpers/route-fixtures";
 
 let h: RouteHarness;
 let route: typeof import("~/routes/search");
@@ -140,7 +140,7 @@ describe("village results on the search screen", () => {
     expect(screen.villages.map(row => row.slug)).toEqual(["fieldwork", "description"]);
     expect(screen.members).toEqual([{ handle: "village_seeker", name: "Fieldwork reader" }]);
     expect(screen.hits.some(hit => hit.id === topicId)).toBe(true);
-    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData: screen }), "/search");
     const start = html.indexOf('<section aria-labelledby="search-villages-heading"');
     const end = html.indexOf("</section>", start);
     const section = html.slice(start, end);
@@ -151,7 +151,7 @@ describe("village results on the search screen", () => {
     expect(end).toBeLessThan(html.indexOf('aria-labelledby="search-members-heading"'));
     expect(end).toBeLessThan(html.indexOf('href="/search.md?'));
     const translated = dataOf(await load("Geometry"));
-    const translatedHtml = await renderInRouter(() => createElement(route.default, { loaderData: translated } as never), "/search");
+    const translatedHtml = await renderInRouter(() => routeElement(route.default, { loaderData: translated }), "/search");
     expect(translatedHtml).toContain("Geometry circle");
     expect(translatedHtml).toContain('title="数学の集い"');
   });
@@ -159,7 +159,7 @@ describe("village results on the search screen", () => {
   it("shows original names to readers of the source language while still matching translations", async () => {
     const screen = dataOf(await route.loader(h.args(h.request("/search?q=Geometry", { as: "original_reader" }))));
     expect(screen.villages).toMatchObject([{ slug: "translated", name: "数学の集い" }]);
-    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData: screen }), "/search");
     expect(html).toContain('href="/v/translated"');
     expect(html).toContain("数学の集い");
     expect(html).not.toContain("Geometry circle");
@@ -173,7 +173,7 @@ describe("village results on the search screen", () => {
       expect(dataOf(await load("Fieldwork", suffix)).villages).toEqual([]);
     }
     const screen = dataOf(await load("no-such-village"));
-    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData: screen }), "/search");
     expect(html).not.toContain("search-villages-heading");
   });
 

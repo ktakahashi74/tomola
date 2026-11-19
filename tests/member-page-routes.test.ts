@@ -1,5 +1,4 @@
-import { readingHref, type ReadingPage } from "~/lib/reading-page";
-import { createElement } from "react";
+import { readingHref } from "~/lib/reading-page";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { entries, handleHolds, profiles } from "~/lib/db/schema";
@@ -11,6 +10,7 @@ import TopicNew, { loader as newLoader, action as newAction } from "~/routes/top
 import { loader as topicLoader, action as topicAction } from "~/routes/topic";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -27,21 +27,18 @@ const must = <T extends { ok: boolean }>(result: T): Extract<T, { ok: true }> =>
   if (!result.ok) throw new Error(JSON.stringify(result));
   return result as Extract<T, { ok: true }>;
 };
-const unwrap = <T = Record<string, unknown>>(value: unknown): T => ((value as { data?: unknown })?.data ?? value) as T;
-type PageData = {
-  handle: string; own: boolean; page: number; hasNext: boolean; list: ReadingPage;
-  intro: null | { id: number; lang: string; title: string | null; headline: string | null; html: string; display: unknown };
-  topics: Array<{ id: number; lang: string; title: { text: string }; createdAtISO: string }>;
-};
+type PageData = Parameters<typeof MemberPage>[0]["loaderData"];
 const pagePath = (handle = "author_member") => `/u/${handle}`;
 const load = (as: string | undefined, handle = "author_member", suffix = "") =>
   h.outcome(async () => (await memberRoute.loader(h.args(h.request(`${pagePath(handle)}${suffix}`, { as }), { handle }))));
 const pageData = async (as = "reader_member", handle = "author_member", suffix = "") => {
-  const outcome = await load(as, handle, suffix);
+  let value: PageData | undefined;
+  const outcome = await h.outcome(async () => value = await memberRoute.loader(h.args(h.request(`${pagePath(handle)}${suffix}`, { as }), { handle })));
   expect(outcome.status).toBe(200);
-  return unwrap<PageData>(outcome.value);
+  expect.assert(value !== undefined);
+  return value;
 };
-const renderPage = (loaderData: PageData, path = pagePath()) => renderInRouter(() => createElement(MemberPage, { loaderData, actionData: undefined, params: {}, matches: [] } as never), path);
+const renderPage = (loaderData: PageData, path = pagePath()) => renderInRouter(() => routeElement(MemberPage, { loaderData }), path);
 const selected = async (handle = "signed_member") => (await h.db.select({ id: profiles.introEntryId }).from(profiles).where(eq(profiles.userId, h.ids[handle])))[0].id;
 const selectIntro = (id: number, intent: "intro-set" | "intro-unset", as = "signed_member", headers?: Record<string, string>) =>
   h.outcome(() => topicAction(h.args(h.request(`/t/${id}`, { as, form: { intent }, headers }), { id: String(id) })));
@@ -138,6 +135,7 @@ describe("member-page read boundaries", () => {
   it("loads 30 newest topics without moving a topic when it receives a reply", async () => {
     for (let index = 0; index < 29; index++) must(await createTopic(h.db, h.ids.author_member, { lang: "ja", title: `Paging ${index}`, body: "Paging body." }, { now: new Date(now.getTime() + index + 1) }));
     const first = await pageData();
+    expect.assert(first.list !== undefined);
     const second = await pageData("reader_member", "author_member", readingHref("", first.list, true));
     expect(first.topics).toHaveLength(30);
     expect(first.hasNext).toBe(true);
@@ -152,7 +150,7 @@ describe("introduction selection and posting routes", () => {
   it("defaults the new-topic introduction checkbox from ?intro=1 while question defaults take precedence", async () => {
     for (const [query, intro, question] of [["", false, false], ["?intro=1", true, false], ["?intro=1&asks_stance=1", false, true]] as const) {
       const loaderData = await newLoader(h.args(h.request(`/t/new${query}`, { as: "author_member" })));
-      const html = await renderInRouter(() => createElement(TopicNew, { loaderData, params: {}, matches: [] } as never), `/t/new${query}`);
+      const html = await renderInRouter(() => routeElement(TopicNew, { loaderData }), `/t/new${query}`);
       const checkbox = html.match(/<input\b[^>]*name="intro"[^>]*>/)?.[0];
       if (new URLSearchParams(query).get("intro") === "1") {
         expect(checkbox).toBeDefined();

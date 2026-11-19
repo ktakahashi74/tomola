@@ -8,6 +8,7 @@ import { reports } from "~/lib/db/schema";
 import { createReply, createTopic } from "~/lib/entries.server";
 import Topic, { action, loader } from "~/routes/topic";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", () => ({ m: new Proxy({}, { get: (_, key) => () => String(key) }) }));
 
@@ -33,8 +34,8 @@ afterAll(() => h.restore());
 const load = async () => (await loader(h.args(h.request(`/t/${topicId}?lang=en`, { as: "reader" }), { id: String(topicId) })));
 const post = (form: Record<string, string>) => h.outcome(() => action(h.args(h.request(`/t/${topicId}?lang=en`, { as: "reader", form }), { id: String(topicId) })));
 const form = () => ({ intent: "flag", entryId: String(replyId), reason: "spam" });
-function render(loaderData: Awaited<ReturnType<typeof loader>>, actionData?: unknown) {
-  const router = createMemoryRouter([{ path: "/t/:id", element: createElement(Topic, { loaderData, actionData, params: {}, matches: [] } as never) }], { initialEntries: [`/t/${topicId}?lang=en`] });
+function render(loaderData: Awaited<ReturnType<typeof loader>>, actionData?: Parameters<typeof Topic>[0]["actionData"]) {
+  const router = createMemoryRouter([{ path: "/t/:id", element: routeElement(Topic, { loaderData, actionData }) }], { initialEntries: [`/t/${topicId}?lang=en`] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 const article = (html: string, id: string) => html.split(`<article id="${id}"`)[1]?.split("</article>")[0] ?? "";
@@ -69,7 +70,7 @@ describe("report feedback belongs to the entry that was reported", () => {
     const result = await post({ intent: "report", entryId: String(otherReplyId), lang: "bad" });
     expect(result).toMatchObject({ status: 400, value: { data: { intent: "report", entryId: otherReplyId, reported: false } } });
     const loaded = await load();
-    const html = render(loaded, { intent: "report", entryId: otherReplyId, reported: false, error: "invalid_lang" });
+    const html = render(loaded, { intent: "report", entryId: otherReplyId, reported: false, error: "invalid_lang", lang: "bad", field: "body" });
     expect(article(html, `c-${otherReplyId}`)).toContain("report_error");
     expect(article(html, `c-${replyId}`)).not.toContain("report_error");
     expect(article(html, `p-${topicId}`)).toContain(`action="/t/${topicId}?lang=en#p-${topicId}"`);

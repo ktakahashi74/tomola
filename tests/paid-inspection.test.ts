@@ -24,7 +24,7 @@ it.each([
   const result = { text: "翻訳結果", model: engine.model, promptVersion: "fixture", inputTokens: 10, outputTokens: 2 };
   const saved = { paidTranslationCalls: { [translationCallKey(engine, req, "translate", role)]: { result, costUsdMicro: 20 } } };
   const save = vi.fn();
-  vi.spyOn(markdown, "markdownTask").mockResolvedValue({ flags: [], notes: [] } as never);
+  vi.spyOn(markdown, "markdownTask").mockResolvedValue({ flags: [], notes: [] });
   const out = await withPaidTranslationCalls(saved, save, () => translate(db, role, req, { now, env, engines: { primary: engine, secondary: engine, judge: null } }));
   expect(out).toMatchObject({ text: result.text, costUsdMicro: 20, inputTokens: 10 });
   expect(call).not.toHaveBeenCalled();

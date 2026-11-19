@@ -10,6 +10,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { messageMarkup } from "./helpers/message-markup";
 import { m } from "~/paraglide/messages.js";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -131,9 +132,9 @@ describe("mistakes: the words, what was typed and the opened options come back",
   it("retains question fields in the dedicated editor after a title error", async () => {
     const { default: TopicNew, loader } = await editor();
     const base = await loader(h.args(h.request("/t/new", { as: "hana" })));
-    const draw = (body: string) => renderInRouter(() => createElement(TopicNew as never, {
-      loaderData: base, actionData: { error: "invalid_title", values: { body, title: "", asksStance: true, lang: "en", intro: false } }, params: {}, matches: [],
-    } as never), "/t/new");
+    const draw = (body: string) => renderInRouter(() => routeElement(TopicNew, {
+      loaderData: base, actionData: { error: "invalid_title", values: { body, title: "", aiMaterial: "", asksStance: true, lang: "en", intro: false } }
+    }), "/t/new");
     const mistake = await draw("残る本文");
     expect(mistake).toContain("残る本文</textarea>");
     // A refused question keeps the checkbox selected.
@@ -153,15 +154,15 @@ describe("mistakes: the words, what was typed and the opened options come back",
 describe("reading works without JavaScript and writing has no AI field", () => {
   it("offers the introduction checkbox only at its entry point and preserves a refused introduction", async () => {
     const { default: TopicNew, loader } = await editor();
-    const draw = async (url: string, actionData?: unknown) => {
+    const draw = async (url: string, actionData?: Parameters<typeof TopicNew>[0]["actionData"]) => {
       const base = await loader(h.args(h.request(url, { as: "hana" })));
-      return renderInRouter(() => createElement(TopicNew as never, { loaderData: base, actionData, params: {}, matches: [] } as never), url);
+      return renderInRouter(() => routeElement(TopicNew, { loaderData: base, actionData }), url);
     };
     expect(await draw("/t/new")).not.toMatch(/<input[^>]*name="intro"/);
     expect(await draw("/t/new?intro=0")).not.toMatch(/<input[^>]*name="intro"/);
     const introduction = await draw("/t/new?intro=1");
     expect(introduction.match(/<input[^>]*name="intro"[^>]*>/)![0]).toContain('checked=""');
-    const refused = await draw("/t/new?intro=1", { error: "invalid_intro", values: { title: "", body: "Retained introduction", lang: "ja", asksStance: false, intro: true } });
+    const refused = await draw("/t/new?intro=1", { error: "invalid_intro", values: { title: "", body: "Retained introduction", aiMaterial: "", lang: "ja", asksStance: false, intro: true } });
     expect(refused.match(/<input[^>]*name="intro"[^>]*>/)![0]).toContain('checked=""');
     expect(refused).toContain("Retained introduction</textarea>");
   });
@@ -169,7 +170,7 @@ describe("reading works without JavaScript and writing has no AI field", () => {
   it("names the title field by its placeholder instead of a label and help text, and says the question part only for a question", async () => {
     const { default: TopicNew, loader } = await editor();
     const base = await loader(h.args(h.request("/t/new", { as: "hana" })));
-    const html = await renderInRouter(() => createElement(TopicNew as never, { loaderData: base, params: {}, matches: [] } as never), "/t/new");
+    const html = await renderInRouter(() => routeElement(TopicNew, { loaderData: base }), "/t/new");
     const field = html.match(/<input[^>]*name="title"[^>]*>/)![0];
     expect(field).toContain(`aria-label="${messageMarkup(m.field_title())}"`);
     expect(field).toContain(`placeholder="${messageMarkup(m.field_title())}"`);
@@ -186,7 +187,7 @@ describe("reading works without JavaScript and writing has no AI field", () => {
   it("uses a dedicated POST form without a home carryover or AI declaration field", async () => {
     const { default: TopicNew, loader } = await editor();
     const base = await loader(h.args(h.request("/t/new", { as: "hana" })));
-    const html = await renderInRouter(() => createElement(TopicNew as never, { loaderData: base, actionData: undefined, params: {}, matches: [] } as never), "/t/new");
+    const html = await renderInRouter(() => routeElement(TopicNew, { loaderData: base }), "/t/new");
     expect(html).toContain('action="/t/new"');
     expect(html).toContain('method="post"');
     expect(html).toMatch(/<textarea[^>]*required=""/);
@@ -205,15 +206,15 @@ describe("reading works without JavaScript and writing has no AI field", () => {
   it("has no composer for a member who is suspended: the screen leaves it out and a POST goes to /suspended", async () => {
     await h.db.update(profiles).set({ suspendedUntil: new Date(Date.now() + 86_400_000), suspendedReason: "spam" }).where(eq(profiles.userId, h.ids.sus));
     const { loader, default: Home } = await home();
-    const data = (await loader(await h.signedArgs(h.request("/", { as: "sus" })))) as unknown as Record<string, unknown>;
+    const data = await loader(await h.signedArgs(h.request("/", { as: "sus" })));
     expect(data).not.toHaveProperty("composer");
-    const html = await renderInRouter(() => createElement(Home as never, { loaderData: { ...data, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null }, actionData: undefined, params: {}, matches: [] } as never));
+    const html = await renderInRouter(() => routeElement(Home, { loaderData: { ...data, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null } }));
     expect(html).not.toContain('name="body"');
     const before = await topicCount();
     expect(await post("sus", { body: "停止中の投稿" })).toMatchObject({ status: 302, location: "/suspended" });
     expect(await topicCount()).toBe(before);
     // a suspended member still reads the home
-    expect((data as unknown as { topics: unknown[] }).topics.length).toBeGreaterThan(0);
+    expect(data.topics.length).toBeGreaterThan(0);
   });
 });
 
@@ -252,7 +253,7 @@ describe("the limits of posting from the screens", () => {
     expect((await post("slow", { body: "21番目（ホーム）" })).status).toBe(429);
     const viaNew = await send(newTopic, "/t/new", { title: "21番目（/t/new）", body: "本文" });
     expect(viaNew.status).toBe(429);
-    expect(errorOf(viaNew as never)).toMatchObject({ error: "rate_limited", values: { title: "21番目（/t/new）", body: "本文" } });
+    expect(errorOf(viaNew)).toMatchObject({ error: "rate_limited", values: { title: "21番目（/t/new）", body: "本文" } });
     const second = await createDraft(h.db, h.ids.slow, { kind: "topic", lang: "ja", title: "二つ目の下書き", body: "b" });
     if (!second.ok) throw new Error("draft failed");
     const refusedDraft = await send(draftRoute, `/drafts/${second.id}`, { intent: "publish", title: "二つ目の下書き", body: "b", lang: "ja" }, { id: String(second.id) });

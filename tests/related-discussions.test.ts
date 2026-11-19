@@ -17,6 +17,7 @@ import { loader as relatedMdLoader } from "~/routes/related-md";
 import { addMember } from "./helpers/db";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { parseBlocks } from "./helpers/md";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness, sequence = 0;
@@ -194,7 +195,7 @@ it("qualifies all four endpoints even with a stale index and excludes hidden row
           expect(result).toMatchObject({ rows: [], hasNext: false, pageCount: 1 });
           const screen = await topicLoader(h.args(h.request(`/t/${a}`, { as }), { id: String(a) }));
           expect(screen.related.rows).toEqual([]);
-          const router = createMemoryRouter([{ path: "/t/:id", element: createElement(Topic, { loaderData: screen, params: {}, matches: [] } as never) }], { initialEntries: [`/t/${a}`] });
+          const router = createMemoryRouter([{ path: "/t/:id", element: routeElement(Topic, { loaderData: screen }) }], { initialEntries: [`/t/${a}`] });
           expect(renderToStaticMarkup(createElement(RouterProvider, { router }))).not.toContain('id="related"');
           const twin = await relatedMdLoader(h.args(h.request(`/t/${a}/related.md`, { as }), { id: String(a) }));
           expect(twin.status).toBe(200);
@@ -230,7 +231,7 @@ it("uses the public reading gate on HTML and twins, preserves lang and places th
     }
   }
   const screen = await topicLoader(h.args(h.request(`/t/${a}?lang=ja`, { as: "related_reader" }), { id: String(a) }));
-  const router = createMemoryRouter([{ path: "/t/:id", element: createElement(Topic, { loaderData: screen, params: {}, matches: [] } as never) }], { initialEntries: [`/t/${a}?lang=ja`] });
+  const router = createMemoryRouter([{ path: "/t/:id", element: routeElement(Topic, { loaderData: screen }) }], { initialEntries: [`/t/${a}?lang=ja`] });
   const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
   expect(html.indexOf('id="related"')).toBeGreaterThan(html.indexOf('id="reply"'));
   expect(html.indexOf('id="reply"')).toBeGreaterThan(html.indexOf('id="replies"'));

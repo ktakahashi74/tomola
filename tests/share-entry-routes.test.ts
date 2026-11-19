@@ -1,9 +1,9 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createTopic } from "~/lib/entries.server";
 import { shareBookmarklet } from "~/lib/share-bookmarklet";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 let h: RouteHarness;
 beforeAll(async () => {
@@ -34,7 +34,7 @@ it("renders this site's bookmarklet as read-only text without a JavaScript link"
   const route = await import("~/routes/settings");
   const loaderData = await route.loader(h.args(h.request("/settings", { as: "share_route_reader" })));
   expect(loaderData.shareBookmarklet).toBe(shareBookmarklet("http://localhost:5173"));
-  const html = await renderInRouter(() => createElement(route.default, { loaderData } as never), "/settings");
+  const html = await renderInRouter(() => routeElement(route.default, { loaderData }), "/settings");
   expect(html).toMatch(/<textarea[^>]*readonly=""[^>]*>javascript:/i);
   expect(html).not.toMatch(/href="javascript:/i);
 });

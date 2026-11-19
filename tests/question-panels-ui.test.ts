@@ -9,6 +9,7 @@ import { m } from "~/paraglide/messages.js";
 import { escapeRegex, messageMarkup } from "./helpers/message-markup";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => setTestLocale("en"));
@@ -44,10 +45,10 @@ describe("empty and populated objection panels", () => {
     const chunk = <T extends { createdAt: Date; id: number }>(topics: T[], param: string) => ({
       topics, list: readingPage(topics, readReadingRequest(request, "created", 1, param, 50, "page"), row => ({ order: "created", keys: [row.createdAt.toISOString(), row.id] }), false),
     });
-    const html = await renderInRouter(() => createElement(TopicObjections, { loaderData: {
+    const html = await renderInRouter(() => routeElement(TopicObjections, { loaderData: {
       id: 12, title: { text: "Question", lang: "en" }, ...panel, hasNext: false, page: 1, langParam: null, reader: false,
       alternativesList: chunk(panel.alternatives, "list"), objectionsList: chunk(panel.objections, "vlist"),
-    } } as never), "/t/12/objections");
+    } }), "/t/12/objections");
     const hasItems = panel.alternatives.length > 0 || panel.objections.length > 0;
     expect(html).toContain(`>${messageMarkup(hasItems ? m.objections_neutrality() : m.objections_help())}</p>`);
     expect(html).not.toContain(`>${messageMarkup(hasItems ? m.objections_help() : m.objections_neutrality())}</p>`);

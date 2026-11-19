@@ -1,3 +1,4 @@
+import { areaData, homeData, latestData } from "./helpers/loader-fixtures";
 import { draftScreenForm } from "./helpers/draft-form";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +14,7 @@ import { createApiToken } from "~/lib/tokens.server";
 import { getModScope, getViewer, grantModerator } from "~/lib/roles.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { BASE, setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeMeta } from "./helpers/route-fixtures";
 
 // Questions, topics asking for stances: attributes, reading-side locks, reply tags, alternatives, and objections panels. Stance registration is covered separately.
 // setStance sets stance_locked_at on the first non-author stance; the author's own stance alone does not lock. Test locking by writing the column directly.
@@ -193,9 +195,17 @@ describe("the questions-only lists keep ?asks=1 in the Markdown links", () => {
   });
 
   it("puts asks=1 into the <link rel=alternate> of the lists, with a valid ?lang= only", async () => {
-    const href = async (route: "latest" | "home" | "area", search: string, loaderData?: unknown) => {
-      const mod = (await routes[route]()) as unknown as { meta: (a: never) => Array<{ rel?: string; href?: string }> };
-      return mod.meta({ location: { search }, loaderData } as never).find((x) => x.rel === "alternate")?.href;
+    const latest = await routes.latest();
+    const home = await routes.home();
+    const area = await routes.area();
+    const tags = {
+      latest: (search: string) => routeMeta(latest.meta, { loaderData: latestData(), location: { search } }),
+      home: (search: string) => routeMeta(home.meta, { loaderData: homeData(), location: { search } }),
+      area: (search: string) => routeMeta(area.meta, { loaderData: areaData({ lang: "ja" }), location: { search } }),
+    };
+    const href = (route: keyof typeof tags, search: string) => {
+      const alternate = tags[route](search).find(tag => "rel" in tag && tag.rel === "alternate");
+      return alternate && "href" in alternate ? alternate.href : undefined;
     };
     expect(await href("latest", "?asks=1")).toBe("/latest.md?asks=1");
     expect(await href("latest", "?lang=fr&asks=1&page=3")).toBe("/latest.md?lang=fr&asks=1&page=3");
@@ -205,7 +215,7 @@ describe("the questions-only lists keep ?asks=1 in the Markdown links", () => {
     expect(await href("home", "?order=activity&long=1")).toBe("/home.md?long=1&order=activity");
     expect(await href("home", "?order=nonsense&long=0")).toBe("/home.md");
     expect(await href("home", "")).toBe("/home.md");
-    expect(await href("area", "?asks=1", { lang: "ja" })).toBe("/a/ja.md?asks=1");
+    expect(await href("area", "?asks=1")).toBe("/a/ja.md?asks=1");
   });
 
   it("the Markdown list that the link points at is the filtered one, and its next link keeps asks=1", async () => {

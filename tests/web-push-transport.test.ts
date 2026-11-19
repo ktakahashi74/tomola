@@ -52,7 +52,7 @@ it("never connects when any DNS answer is internal and never propagates upstream
   const post = vi.fn();
   const send = createPushSender({ resolve: (async () => [{ address: "8.8.8.8", family: 4 }, { address: "127.0.0.1", family: 4 }]) as never, post });
   expect(await send(subscription(), "test", { ttl: 1, topic: "opaque" })).toEqual({ kind: "operator" }); expect(post).not.toHaveBeenCalled();
-  const fail = createPushSender({ resolve: (async () => { throw new Error("endpoint-and-key-secret"); }) as never });
+  const fail = createPushSender({ resolve: (async () => { throw new Error("endpoint-and-key-secret"); }) });
   expect(JSON.stringify(await fail(subscription(), "test", { ttl: 1, topic: "opaque" }))).not.toContain("secret");
   vi.stubEnv("VAPID_PRIVATE_KEY", "invalid"); expect(await fail(subscription(), "test", { ttl: 1, topic: "opaque" })).toEqual({ kind: "operator" });
 });

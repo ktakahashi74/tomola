@@ -1,5 +1,6 @@
+import { routeElement } from "./helpers/route-fixtures";
 import { eq } from "drizzle-orm";
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -45,8 +46,8 @@ afterAll(() => {
   else process.env.OPERATOR_EMAILS = operatorEmails;
 });
 const loadTopic = async (as: string) => (await topicLoader(h.args(h.request(`/t/${topicId}`, { as }), { id: String(topicId) })));
-function render(Component: unknown, path: string, loaderData: unknown) {
-  const router = createMemoryRouter([{ path, element: createElement(Component as never, { loaderData, actionData: undefined, params: {}, matches: [] } as never) }], { initialEntries: [path] });
+function render(element: ReactElement, path: string) {
+  const router = createMemoryRouter([{ path, element }], { initialEntries: [path] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
@@ -60,19 +61,19 @@ describe("affected authors can move between moderation notifications, posts and 
   it("gives only the author the hidden action's reason and appeal id", async () => {
     const loaded = await loadTopic("author");
     expect(loaded.replies.find((r) => r.id === replyId)).toMatchObject({ hiddenAction: { id: hideId, reason: "harassment" } });
-    const html = render(Topic, `/t/${topicId}`, loaded);
+    const html = render(routeElement(Topic, { loaderData: loaded }), `/t/${topicId}`);
     expect(html).toContain(`href="/appeal/${hideId}"`);
     expect(html).toContain("notification_reason");
     for (const name of ["moriko", "opal", "reader"]) {
       const other = await loadTopic(name);
       expect(JSON.stringify(other)).not.toContain(`"hiddenAction":{"id":${hideId}`);
-      expect(render(Topic, `/t/${topicId}`, other)).not.toContain(`href="/appeal/${hideId}"`);
+      expect(render(routeElement(Topic, { loaderData: other }), `/t/${topicId}`)).not.toContain(`href="/appeal/${hideId}"`);
     }
   });
 
   it("links the appeal back to the hidden reply and notifications", async () => {
     const loaded = await appealLoader(h.args(h.request(`/appeal/${hideId}`, { as: "author" }), { actionId: String(hideId) }));
-    const html = render(Appeal, `/appeal/${hideId}`, loaded);
+    const html = render(routeElement(Appeal, { loaderData: "data" in loaded ? loaded.data : loaded }), `/appeal/${hideId}`);
     expect(html).toContain(`href="/t/${topicId}#c-${replyId}"`);
     expect(html).toContain('href="/notifications"');
   });

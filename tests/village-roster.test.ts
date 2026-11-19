@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
@@ -16,6 +15,7 @@ import { loader as memberPage } from "~/routes/member-page";
 import { handleMcpRequest, handlePublicMcpRequest } from "~/lib/mcp/server.server";
 import { villageWriters } from "~/lib/village-writers.server";
 import { m } from "~/paraglide/messages.js";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -31,7 +31,7 @@ beforeAll(async () => {
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
 const load = (as?: string, suffix = "", slug = "roster-fixture") => loader(h.args(h.request(`/v/${slug}${suffix}`, { as }), { slug }));
 const post = (as: string, form: Record<string, string>, slug = "roster-fixture") => h.outcome(() => action(h.args(h.request(`/v/${slug}`, { as, form }), { slug })));
-const html = (page: Awaited<ReturnType<typeof load>>, path = "/v/roster-fixture") => renderInRouter(() => createElement(Village, { loaderData: page } as never), path);
+const html = (page: Awaited<ReturnType<typeof load>>, path = "/v/roster-fixture") => renderInRouter(() => routeElement(Village, { loaderData: page }), path);
 
 it("shows a bounded named roster to nonjoining members, with no management controls or removal permission", async () => {
   const page = await load("vr_reader");
@@ -74,7 +74,7 @@ it("omits roster identities from anonymous HTML/data and every Markdown/text pat
     expect(response.status).toBe(200);
     expect(await response.text()).not.toMatch(/vr_rosteronly|Roster Sentinel|roster:/);
     let next = false;
-    const twin = await villageMdMiddleware({ request, params: { slug: `roster-fixture.${extension}` } } as never, async () => { next = true; return new Response(); });
+    const twin = await villageMdMiddleware({ request, params: { slug: `roster-fixture.${extension}` } }, async () => { next = true; return new Response(); });
     expect(next).toBe(false); expect(await twin.text()).not.toContain("vr_rosteronly");
   }
   const response = await handlePublicMcpRequest(new Request("http://localhost:5173/mcp/public", {
@@ -159,7 +159,7 @@ it("uses the village membership count in chat, linking only non-language audienc
     const members = await h.db.select().from(villageMembers).where(eq(villageMembers.villageId, village.id));
     if ("data" in page) throw new Error("Chat fixture is unavailable");
     expect(page.readers).toBe(members.length);
-    const rendered = await renderInRouter(() => createElement(VillageChat, { loaderData: page } as never));
+    const rendered = await renderInRouter(() => routeElement(VillageChat, { loaderData: page }));
     expect(rendered).toContain(m.village_chat_readers({ count: members.length }));
     expect(rendered.includes(`#village-roster`)).toBe(slug !== "en");
   }

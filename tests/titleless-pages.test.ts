@@ -26,6 +26,7 @@ import { m } from "~/paraglide/messages.js";
 import { getMd, parseBlocks, parseThreadBlocks } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeMeta } from "./helpers/route-fixtures";
 
 // The ordinary tests replace the messages by empty strings; these ones read the real texts (what a reader sees).
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -76,38 +77,45 @@ const load = async (route: string, path: string, as: string, params: Record<stri
 };
 
 describe("the thread page of a topic without a title", () => {
-  type Loaded = { topic: { title: string | null; headline: string | null; display: EntryDisplay } };
-  const metaTitle = async (loaderData: unknown, search = "") => {
-    const mod = (await import("~/routes/topic")) as unknown as { meta: (a: never) => Array<{ title?: string }> };
-    return mod.meta({ loaderData, location: { search } } as never).find((x) => x.title !== undefined)?.title;
+  const loadTopic = async (id: number, path: string, as: string) => {
+    const { loader } = await import("~/routes/topic");
+    const loaded = await loader(h.args(h.request(path, { as }), { id: String(id) }));
+    const { topic } = loaded;
+    expect.assert(topic.placeholder === null);
+    return { ...loaded, topic };
+  };
+  const metaTitle = async (loaderData: Parameters<typeof import("~/routes/topic")["meta"]>[0]["loaderData"]) => {
+    const { meta } = await import("~/routes/topic");
+    return routeMeta(meta, { loaderData }).find((x) => "title" in x && x.title !== undefined)?.title;
   };
 
   it("gives the heading and the browser title the beginning of the body (the translation for a reader who reads one)", async () => {
-    const ja = (await load("topic", `/t/${bare}`, "hana", { id: String(bare) })) as Loaded;
+    const ja = await loadTopic(bare, `/t/${bare}`, "hana");
     expect(ja.topic).toMatchObject({ title: null, headline: FIRST_LINE });
     expect(await metaTitle(ja)).toBe(FIRST_LINE);
 
-    const en = (await load("topic", `/t/${bare}`, "john", { id: String(bare) })) as Loaded;
+    const en = await loadTopic(bare, `/t/${bare}`, "john");
     expect(en.topic.display.shown).toBe("translation");
     expect(en.topic.display.translation?.headline).toBe(`[en] ${FIRST_LINE}`);
     expect(await metaTitle(en)).toBe(`[en] ${FIRST_LINE}`);
     // The original is shown when asked for: the line is the beginning of the original.
-    const orig = (await load("topic", `/t/${bare}?orig=${bare}`, "john", { id: String(bare) })) as Loaded;
+    const orig = await loadTopic(bare, `/t/${bare}?orig=${bare}`, "john");
     expect(orig.topic.display.shown).toBe("original");
     expect(await metaTitle(orig)).toBe(FIRST_LINE);
   });
 
   it("keeps the title for a topic that has one, and the site name when the page is not loaded", async () => {
-    const ja = (await load("topic", `/t/${titled}`, "hana", { id: String(titled) })) as Loaded;
+    const ja = await loadTopic(titled, `/t/${titled}`, "hana");
     expect(ja.topic).toMatchObject({ title: "題のある話題", headline: null });
     expect(await metaTitle(ja)).toBe("題のある話題");
-    const en = (await load("topic", `/t/${titled}`, "john", { id: String(titled) })) as Loaded;
+    const en = await loadTopic(titled, `/t/${titled}`, "john");
     expect(await metaTitle(en)).toBe("[en] 題のある話題");
-    expect(await metaTitle(undefined)).toBe(m.site_name());
+    // Exercise the metadata fallback before any loader data exists.
+    expect(await metaTitle(undefined as never)).toBe(m.site_name());
   });
 
   it("has no line when the body has no text at all (the browser title is the site name; the heading says so, see TranslatedEntry below)", async () => {
-    const data = (await load("topic", `/t/${imageOnly}`, "hana", { id: String(imageOnly) })) as Loaded;
+    const data = await loadTopic(imageOnly, `/t/${imageOnly}`, "hana");
     expect(data.topic).toMatchObject({ title: null, headline: "" });
     expect(await metaTitle(data)).toBe(m.site_name());
   });
@@ -115,7 +123,7 @@ describe("the thread page of a topic without a title", () => {
   it("takes a body of zero width and direction control characters for no text too (the words of the site, not an empty or odd heading)", async () => {
     const invisible = await createTopic(h.db, hana, { lang: "ja", body: "\u200b\u202e\u200d\u2066" });
     if (!invisible.ok) throw new Error("topic failed");
-    const data = (await load("topic", `/t/${invisible.id}`, "hana", { id: String(invisible.id) })) as Loaded;
+    const data = await loadTopic(invisible.id, `/t/${invisible.id}`, "hana");
     expect(data.topic).toMatchObject({ title: null, headline: "" });
     expect(await metaTitle(data)).toBe(m.site_name());
   });

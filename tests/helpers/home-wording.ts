@@ -1,8 +1,8 @@
-import { createElement } from "react";
 import { createTopic } from "~/lib/entries.server";
 import { renderInRouter } from "./render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./route-harness";
 import { setTestLocale } from "../stubs/paraglide-runtime";
+import { routeElement } from "./route-fixtures";
 
 export async function setupHomeWording() {
   const h = await setupRouteHarness();
@@ -18,11 +18,11 @@ export async function setupHomeWording() {
   return h;
 }
 
-export async function drawHome(h: RouteHarness, locale: "en" | "ja", as = "hana", actionData?: unknown, url = "/") {
+export async function drawHome(h: RouteHarness, locale: "en" | "ja", as = "hana", url = "/") {
   setTestLocale(locale);
   const { default: Home, loader } = await import("~/routes/home");
-  const data = (await loader(h.args(h.request(url, { as })))) as unknown as Record<string, unknown>;
-  return renderInRouter(() => createElement(Home as never, { loaderData: { ...data, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null }, actionData, params: {}, matches: [] } as never), url);
+  const data = (await loader(h.args(h.request(url, { as }))));
+  return renderInRouter(() => routeElement(Home, { loaderData: { ...data, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null } }), url);
 }
 
 export const homeText = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");

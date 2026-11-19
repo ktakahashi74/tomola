@@ -1,6 +1,5 @@
 import { NUSHI_PROMPT_VERSION } from "~/lib/nushi-config.server";
 import { CHAT_NUSHI_PROMPT_VERSION } from "~/lib/chat-nushi-config.server";
-import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AiUse, { headers, loader, meta } from "~/routes/ai-use";
 import { loader as markdownLoader } from "~/routes/ai-use-md";
@@ -15,6 +14,7 @@ import { testOperator } from "./helpers/operator";
 import { renderInRouter } from "./helpers/render-in-router";
 import { parseBlocks } from "./helpers/md";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); setTestLocale("en"); });
@@ -30,7 +30,7 @@ const secrets = {
 const settings = (): AiUseSettings => structuredClone(testOperator.aiUse);
 const row = (page: ReturnType<typeof aiUsePage>, purpose: string) => page.rows.find(value => value.purpose === purpose)!;
 const md = (path = "/ai-use.md", method = "GET") => markdownLoader({ request: new Request(`http://localhost${path}`, { method }) } as never);
-const render = (page: ReturnType<typeof aiUsePage>) => renderInRouter(() => createElement(AiUse, { loaderData: page } as never), "/ai-use");
+const render = (page: ReturnType<typeof aiUsePage>) => renderInRouter(() => routeElement(AiUse, { loaderData: page }), "/ai-use");
 
 describe("public AI use", () => {
   it("uses actual configured models and settings without making a provider call", () => {
@@ -216,7 +216,7 @@ describe("public AI use", () => {
     setTestLocale("ja");
     const page = loader();
     expect(headers()).toMatchObject({ "X-Robots-Tag": "noindex" });
-    expect(meta({ loaderData: page } as never)).toContainEqual({ tagName: "link", rel: "alternate", type: "text/markdown", href: "/ai-use.md?lang=ja" });
+    expect(routeMeta(meta, { loaderData: page })).toContainEqual({ tagName: "link", rel: "alternate", type: "text/markdown", href: "/ai-use.md?lang=ja" });
     expect(parseBlocks(await (await md("/ai-use.md?lang=ja")).text())[0].fm.lang).toBe("ja");
   });
 });

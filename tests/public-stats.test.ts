@@ -22,6 +22,7 @@ import { setTestLocale } from "./stubs/paraglide-runtime";
 import { renderInRouter } from "./helpers/render-in-router";
 import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -66,7 +67,7 @@ describe("public statistics disclosure", () => {
     expect(snapshot.replies[0]).toMatchObject({ numerator: null, people: null, rate: null });
     expect(snapshot.reports[0]).toMatchObject({ count: null, correction: { numerator: null, denominator: null, rate: null } });
     expect(snapshot.active[0].count).toBeNull();
-    const html = await renderInRouter(() => createElement(Stats, { loaderData: snapshot } as never), "/stats");
+    const html = await renderInRouter(() => routeElement(Stats, { loaderData: snapshot }), "/stats");
     const markdown = publicStatsMarkdown(snapshot);
     for (const output of [html, markdown]) {
       expect(output).toContain(m.stats_small());
@@ -83,7 +84,7 @@ describe("public statistics disclosure", () => {
     const snapshot = sample();
     snapshot.evaluation = { finishedAt: "2026-10-30T12:30:00Z", setVersion: "fixture", translator: { provider: "gemini", model: "fixture" },
       judge: { provider: "gemini", model: "fixture" }, sameProvider: true, configurationChanged: false, pairs: [], categories: [] };
-    const html = await renderInRouter(() => createElement(Stats, { loaderData: snapshot } as never), "/stats");
+    const html = await renderInRouter(() => routeElement(Stats, { loaderData: snapshot }), "/stats");
     const visibleTimes = [...html.matchAll(/<time\b[^>]*>(.*?)<\/time>/gs)].map(match => match[1]);
     expect(visibleTimes).toHaveLength(4);
     expect(visibleTimes.every(text => !/\d{4}-\d{2}-\d{2}T/.test(text))).toBe(true);
@@ -222,7 +223,7 @@ it("selects a real completed evaluation beyond thirty newer fake runs without ch
   expect(await evaluationHistory(db)).toEqual(operatorBefore);
   const snapshot = await collectPublicStats(db, now);
   expect(snapshot.evaluation?.pairs[0]).toMatchObject({ total: 1, preserved: 0, severe: 1, rate: 0 });
-  const html = await renderInRouter(() => createElement(Stats, { loaderData: snapshot } as never), "/stats");
+  const html = await renderInRouter(() => routeElement(Stats, { loaderData: snapshot }), "/stats");
   for (const output of [JSON.stringify(snapshot), html, publicStatsMarkdown(snapshot)]) {
     expect(output).toContain("fixture-translator");
     for (const forbidden of ["PRIVATE_", "costUsd", "123456789", "fake-", "authorId", "entryId", "crossAreaDirectionMatrix", "stanceDistanceByAreaPair", "questionLangComposition"]) expect(output).not.toContain(forbidden);

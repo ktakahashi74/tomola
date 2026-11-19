@@ -438,7 +438,7 @@ describe("judgeDivergence (budget gating and ledger)", () => {
     const db = await createTestDb();
     const { client } = claudeWith([
       {
-        content: [{ type: "text", text: '{"divergences":[{"sentence":1,"severity":"medium","note":"differs"}]}', citations: null }] as never,
+        content: [{ type: "text", text: '{"divergences":[{"sentence":1,"severity":"medium","note":"differs"}]}', citations: null }],
         usage: { input_tokens: 2000, output_tokens: 500 } as never,
       },
     ]);

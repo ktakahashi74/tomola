@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { parse } from "yaml";
@@ -11,6 +10,7 @@ import { parseBlocks } from "./helpers/md";
 import { messageMarkup } from "./helpers/message-markup";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -35,7 +35,7 @@ const mdIds = (blocks: Awaited<ReturnType<typeof markdown>>) => {
 const render = async (as: string, query = "") => {
   const { default: Following } = await import("~/routes/following");
   const data = await screen(as, query);
-  return renderInRouter(() => createElement(Following, { loaderData: data } as never), `/following${query}`);
+  return renderInRouter(() => routeElement(Following, { loaderData: data }), `/following${query}`);
 };
 async function topic(title: string, reader: string, asksStance = false) {
   const result = await createTopic(h.db, h.ids.writer, { title, body: "Followed post fixture.", lang: "en", asksStance });

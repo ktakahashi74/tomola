@@ -1,6 +1,5 @@
 import { seedRateLimit } from "./helpers/fixtures";
 import en from "../messages/en.json";
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createAppAuth } from "~/lib/auth/auth.server";
 import { settleMagicLinkMail } from "~/lib/auth/magic-link.server";
@@ -15,6 +14,7 @@ import { action as confirm } from "~/routes/auth-confirm";
 import { addMember } from "./helpers/db";
 import { renderInRouter } from "./helpers/render-in-router";
 import { BASE, setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -42,13 +42,13 @@ it("uses both cookies for state B, shows the submitted address, and keeps code a
     expect(headersOf(response).getSetCookie().filter(c => /tomola.login-(code|email)=/.test(c))).toHaveLength(2);
     const state = await screen(cookie);
     expect(state).toMatchObject({ codePending: { email, invalid: false, limited: null }, next: "/settings" });
-    const html = await renderInRouter(() => createElement(Login, { loaderData: state, actionData: undefined, params: {}, matches: [] } as never));
+    const html = await renderInRouter(() => routeElement(Login, { loaderData: state }));
     expect(html).toContain("Enter the code");
     expect(html).toContain(email);
     expect(html).toContain("autofocus");
     expect(html).not.toContain('name="email"');
     expect(html).not.toContain("Log in with a passkey");
-    expect(meta({ loaderData: state } as never)).toEqual([{ title: "Enter the code" }]);
+    expect(routeMeta(meta, { loaderData: state })).toEqual([{ title: "Enter the code" }]);
     await settleMagicLinkMail();
     if (email === "flow-member@example.com") {
       const mail = box.sent.at(-1)!;
@@ -110,11 +110,13 @@ it("persists code and address limits without writing rows during loader reads, f
     let cookie = cookieOf(await send(email));
     for (let round = 0; round < 4; round++) {
       const initialScreen = await screen(cookie);
-      let rejection: unknown;
+      let rejection: Awaited<ReturnType<typeof codePost>> | undefined;
       for (let n = 0; n < 5; n++) rejection = await codePost(cookie, "bad");
       const expected = round === 3 ? "address" : "code";
       // Error actions do not automatically revalidate loaders in the browser.
-      const html = await renderInRouter(() => createElement(Login, { loaderData: initialScreen, actionData: (rejection as { data: unknown }).data, params: {}, matches: [] } as never));
+      expect.assert(rejection && "data" in rejection);
+      const actionData = rejection.data;
+      const html = await renderInRouter(() => routeElement(Login, { loaderData: initialScreen, actionData }));
       expect(html).not.toContain('name="code"');
       expect(html).toContain(expected === "address" ? "codes cannot be used for a while" : "this code no longer works");
       const rows = await h.db.select().from(verification);
@@ -218,7 +220,7 @@ it("puts the 'later' notice right after the heading, drops the earlier 'sent aga
   const resent = cookieOf(await send("", first, "login-resend"));
   const state = await screen(resent);
   expect(state).toMatchObject({ codePending: { email, resent: true } });
-  const render = (loaderData: unknown, actionData: unknown) => renderInRouter(() => createElement(Login, { loaderData, actionData, params: {}, matches: [] } as never));
+  const render = (loaderData: Parameters<typeof Login>[0]["loaderData"], actionData: Parameters<typeof Login>[0]["actionData"]) => renderInRouter(() => routeElement(Login, { loaderData, actionData }));
   // Fragments come from the message table, so the test does not pin the wording; login_sent carries a placeholder, so only the text before it is used.
   const resentText = en.login_resent;
   const laterText = en.login_try_later;

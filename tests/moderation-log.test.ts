@@ -3,6 +3,7 @@ import { createReply, createTopic } from "~/lib/entries.server";
 import { createReport, hideEntry, listPublicLog, suspendMember, unhideEntry, dismissReports } from "~/lib/moderation.server";
 import { grantModerator } from "~/lib/roles.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 // Public moderation records expose only type, reason, language, and date.
 // No actor, reporter, note, affected member, post ID, or link.
@@ -63,7 +64,7 @@ describe("the public moderation log", () => {
     const { loader } = await import("~/routes/moderation");
     const res = await h.outcome(async () => (await loader(h.args(h.request("/moderation", { as: "hana" })))));
     expect(res.status).toBe(200);
-    const data = res.value as { entries: Array<Record<string, unknown>> };
+    const data = res.value as Awaited<ReturnType<typeof loader>>;
     for (const e of data.entries) expect(Object.keys(e).sort()).toEqual(["action", "date", "lang", "reason"]);
     const json = JSON.stringify(data);
     for (const secret of ["SECRET-", "REPORTER-NOTE", "moriko", "reporterx", "zoe", "hana", "TOPIC-TITLE", "BODY-", h.ids.moriko, h.ids.reporterx, h.ids.zoe, h.ids.hana]) {
@@ -74,7 +75,7 @@ describe("the public moderation log", () => {
     const { createElement } = await import("react");
     const { createMemoryRouter, RouterProvider } = await import("react-router");
     const Page = (await import("~/routes/moderation")).default;
-    const router = createMemoryRouter([{ path: "/moderation", element: createElement(Page, { loaderData: data, actionData: undefined, params: {}, matches: [] } as never) }], { initialEntries: ["/moderation"] });
+    const router = createMemoryRouter([{ path: "/moderation", element: routeElement(Page, { loaderData: data }) }], { initialEntries: ["/moderation"] });
     const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
     expect(html).toContain("2026-10-04");
     for (const secret of ["SECRET-", "REPORTER-NOTE", "moriko", "reporterx", "hana", "TOPIC-TITLE", "BODY-", `/t/${ja}`, `#p-${ja}`]) expect(html, secret).not.toContain(secret);

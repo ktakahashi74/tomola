@@ -8,8 +8,8 @@ import { DRAFT_RATE_LIMIT, hitRateLimit, hitMemberLimit, MEMBER_RATE_LIMITS } fr
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { attachSigningProof, signingCredential } from "./helpers/signing";
 import { createApiToken } from "~/lib/tokens.server";
-import { createElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
+import { routeElement } from "./helpers/route-fixtures";
 
 let h: RouteHarness;
 beforeAll(async () => { h = await setupRouteHarness(); for (const handle of ["drafter", "other", "limited", "stopped", "signed"]) await h.signIn(handle); });
@@ -153,7 +153,7 @@ it("renders submitted title, body, language and the old version after a native s
     const result = await edit(h.args(h.request(path, { as: "drafter", form: fields }), { id: String(first.id) }));
     expect(result).toMatchObject({ init: { status: 409 }, data: { saved: false, values: { title: fields.title, body: fields.body, lang: "en", asksStance: true, version: "1" }, latest: { draft: { version: 2, body: "Latest stored body" } } } });
     const loaderData = await load(h.args(h.request(path, { as: "drafter" }), { id: String(first.id) }));
-    const html = await renderInRouter(() => createElement(DraftPage, { loaderData, actionData: result.data, params: { id: String(first.id) }, matches: [] } as never), path);
+    const html = await renderInRouter(() => routeElement(DraftPage, { loaderData, actionData: result.data, params: { id: String(first.id) } }), path);
     expect(html).toContain('value="Unsaved title"');
     expect(html).toContain('>Unsaved &lt;note&gt;</textarea>');
     expect(html).toMatch(/name="lang"[^>]*value="en"/);

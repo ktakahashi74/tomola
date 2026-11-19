@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createElement } from "react";
 import { profiles, rateLimits, villages } from "~/lib/db/schema";
 import { deleteAccount } from "~/lib/account-delete.server";
 import { searchMembers } from "~/lib/member-search.server";
@@ -10,6 +9,7 @@ import { addMember } from "./helpers/db";
 import { getMd } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 let h: RouteHarness;
 let route: typeof import("~/routes/search");
@@ -102,7 +102,7 @@ describe("member results on the search screen", () => {
   it("renders selected display names and handles above post results, with no avatars", async () => {
     const screen = dataOf(await load("川さ"));
     expect(screen.members).toEqual([{ handle: "native_name", name: "Sakura Ogawa" }]);
-    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData: screen }), "/search");
     const memberSection = html.slice(html.indexOf('<section aria-labelledby="search-members-heading"'), html.indexOf("</section>") + 10);
     expect(memberSection).toContain('href="/u/native_name"');
     expect(memberSection).toContain("Sakura Ogawa");
@@ -120,7 +120,7 @@ describe("member results on the search screen", () => {
       expect(dataOf(await load("rank", suffix))).toMatchObject({ state: "results", members: [] });
     }
     const screen = dataOf(await load("never-matches-a-member"));
-    const html = await renderInRouter(() => createElement(route.default, { loaderData: screen } as never), "/search");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData: screen }), "/search");
     expect(html).not.toContain("search-members-heading");
   });
 

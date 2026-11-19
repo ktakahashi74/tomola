@@ -1,4 +1,8 @@
-import { createElement } from "react";
+import { routeElement } from "./helpers/route-fixtures";
+import type { Route as TopicNewRoute } from "../app/routes/+types/topic-new";
+import { m } from "~/paraglide/messages.js";
+import { POST_AI_MATERIAL_CHARS } from "~/lib/post-ai-materials";
+import { loaderFixture } from "./helpers/loader-fixtures";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drafts, entries } from "~/lib/db/schema";
@@ -249,10 +253,18 @@ describe("the new topic and reply forms with pasted frontmatter", () => {
 
 describe("the new topic form drawn again after a refusal (no JavaScript)", () => {
   // The form uses <Form>, so it is drawn inside a static router.
-  async function render(actionData: unknown, loaderData: Record<string, unknown> = {}): Promise<string> {
+  type Props = TopicNewRoute.ComponentProps;
+  const formData = loaderFixture<Props["loaderData"]>(() => ({
+    ownerId: "fixture", connectDraftLabel: m.connect_draft_link(),
+    aiMaterialLabels: { add: m.ai_material_add(), title: m.ai_material_title(), help: m.ai_material_input_help({ count: POST_AI_MATERIAL_CHARS }), error: m.ai_material_error() },
+    defaultLang: "ja", prefill: null, asksStance: false, alt: null, altNotFound: false, draftIds: [],
+    signPosts: false, formKey: "plain", initialValues: { title: undefined, body: undefined },
+    draftStart: { startTitle: "", startBody: "" }, draftScope: "topic-new", responseField: { name: "responseTo", value: "" },
+    responsePlaceHint: null, newDraftAction: "/t/new?newdraft=1", showIntro: false, sharePrefilled: false, intro: false,
+  }));
+  async function render(actionData?: Props["actionData"], loaderData?: Parameters<typeof formData>[0]): Promise<string> {
     const { default: TopicNew } = await import("~/routes/topic-new");
-    const props = { loaderData: { aiMaterialLabels: { add: "ai_material_add", title: "ai_material_title", help: "ai_material_input_help", error: "ai_material_error" }, defaultLang: "ja", prefill: null, asksStance: false, alt: null, altNotFound: false, draftIds: [], ...loaderData }, actionData, params: {}, matches: [] };
-    return renderInRouter(() => createElement(TopicNew as never, props as never), "/t/new");
+    return renderInRouter(() => routeElement(TopicNew, { loaderData: formData(loaderData), actionData }), "/t/new");
   }
   // The tag of the input with this name (the attributes are in no fixed order).
   const inputTag = (html: string, name: string) => html.match(new RegExp(`<input\\b[^>]*\\bname="${name}"[^>]*>`))?.[0] ?? "";
@@ -261,7 +273,7 @@ describe("the new topic form drawn again after a refusal (no JavaScript)", () =>
   const refused = { error: "invalid_title", values: { aiMaterial: "", title: "", body: "Kept body.", asksStance: true, lang: "en" } };
 
   it("keeps the checked box, the chosen language, the title and the body; the form has no AI level to keep", async () => {
-    const html = await render(refused);
+    const html = await render({ ...refused, values: { ...refused.values, intro: false } });
     expect(checkedKind(html)).toContain('value="1"');
     expect(html).toMatch(/<input[^>]*name="lang"[^>]*value="en"/);
     // The values handed back carry no ai_assistance, and the form has no such field.
@@ -271,14 +283,15 @@ describe("the new topic form drawn again after a refusal (no JavaScript)", () =>
     expect(html).toContain(">Kept body.</textarea>");
     // A question needs its title: the field is required again.
     expect(inputTag(html, "title")).toContain('required=""');
-    const typed = await render({ error: "invalid_title", values: { ...refused.values, title: "Too long".repeat(30), asksStance: false } });
+    const typed = await render({ error: "invalid_title", values: { ...refused.values, title: "Too long".repeat(30), asksStance: false, intro: false } });
     expect(inputTag(typed, "title")).toContain(`value="${"Too long".repeat(30)}"`);
     expect(inputTag(typed, "title")).not.toContain("required");
     expect(checkedKind(typed)).not.toContain('value="1"');
   });
 
   it("starts from the defaults without a refusal: the box as the loader says, the language on automatic", async () => {
-    for (const html of [await render(undefined), await render({ error: "frontmatter_invalid" })]) {
+    // Also cover an error response arriving without any retained form values.
+    for (const html of [await render(undefined), await render({ error: "frontmatter_invalid" } as never)]) {
       expect(inputTag(html, "asksStance")).toContain('type="checkbox"');
       expect(checkedKind(html)).toBe("");
       expect(html).toMatch(/<input[^>]*name="lang"[^>]*value=""/);

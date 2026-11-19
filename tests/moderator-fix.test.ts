@@ -1,6 +1,5 @@
 import { markdownFixture, SLOW_MARKDOWN } from "./helpers/markdown-fixture";
 import { and, asc, eq } from "drizzle-orm";
-import { createElement } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAppeal, decideAppeal, getAppealableAction, listOpenAppeals } from "~/lib/appeals.server";
 import { entries, entryRevisions, jobs, moderationActions, notifications, profiles, rateLimits, segments, stances } from "~/lib/db/schema";
@@ -16,6 +15,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { createMarkdownExecutor, setMarkdownExecutorForTests, withMarkdownScope } from "~/lib/markdown-budget.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { expectModerationReauthentication, withStaleSession } from "./helpers/reauth";
+import { routeElement } from "./helpers/route-fixtures";
 
 // Correcting a typo in a locked question (moderation action fix_entry): assigned moderators and operators only, with a required explanation. Covers revisions, notifications, public records, and appeals restoring the preceding version.
 const t = (minutes: number) => new Date(Date.UTC(2026, 9, 5, 0, minutes));
@@ -248,7 +248,7 @@ describe("the edit form of a fix", () => {
   const drawn = async (id: number, as: string) => {
     const mod = await import("~/routes/topic-edit");
     const loaderData = await mod.loader(await h.signedArgs(h.request(`/t/${id}/edit`, { as }), { id: String(id) }));
-    return { loaderData, html: await renderInRouter(() => createElement(mod.default as never, { loaderData, actionData: undefined, params: {}, matches: [] } as never), `/t/${id}/edit`) };
+    return { loaderData, html: await renderInRouter(() => routeElement(mod.default, { loaderData }), `/t/${id}/edit`) };
   };
 
   it("names the actual personal destination when a moderator corrects another member's question", async () => {

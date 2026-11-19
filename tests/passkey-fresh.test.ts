@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { CREDENTIAL_FRESH_MS, isCredentialSessionFresh } from "~/lib/auth/credential-session.server";
@@ -11,6 +10,7 @@ import { loader as settingsLoader } from "~/routes/settings";
 import { action as enrollAction } from "~/routes/passkeys";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -29,7 +29,7 @@ it("tells the layout and settings loaders whether the session is fresh, and send
   const renderPrompt = async () => {
     const data = await memberLoader(h.args(h.request("/", { as: "pf_member" })));
     if (data.reader) throw new Error("Expected a member");
-    const html = await renderInRouter(() => createElement(MemberLayout, { loaderData: data, params: {}, matches: [] } as never), "/", homeHandle);
+    const html = await renderInRouter(() => routeElement(MemberLayout, { loaderData: data }), "/", homeHandle);
     return { data, html };
   };
   const reauth = `href="/login?reauth=1&amp;next=%2F%3Fpasskey%3Dcontinue"`;

@@ -11,6 +11,7 @@ import { mediaUploadGuide } from "~/lib/api/media-guide.server";
 import { REPLY_MORE_SYMBOL } from "~/lib/reply-more";
 import { m } from "~/paraglide/messages.js";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeElement } from "./helpers/route-fixtures";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), db: vi.fn(), connections: vi.fn() }));
 vi.mock("~/lib/auth/session.server", () => ({ getSessionUser: mocks.session }));
@@ -24,7 +25,7 @@ const args = (path: string) => ({ request: new Request(`${BASE}${path}`), params
 const render = async (lang: "en" | "ja" = "en") => {
   setTestLocale(lang);
   const route = await import("~/routes/connect");
-  const routes = withShellLabels([{ path: "/connect", loader: route.loader as never, Component: () => createElement(route.default as never, { loaderData: useLoaderData() }) }]);
+  const routes = withShellLabels([{ path: "/connect", loader: route.loader as never, Component: () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() }) }]);
   const handler = createStaticHandler(routes);
   const context = await handler.query(new Request(`${BASE}/connect`)) as StaticHandlerContext;
   return renderToStaticMarkup(createElement(StaticRouterProvider, { router: createStaticRouter(routes, context), context, hydrate: false }));

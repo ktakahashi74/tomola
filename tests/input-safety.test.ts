@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { m } from "~/paraglide/messages.js";
 import { ensureLanguageVillages } from "~/lib/villages.server";
@@ -10,6 +9,7 @@ import { createDraft } from "~/lib/drafts.server";
 import { draftScreenForm } from "./helpers/draft-form";
 import { MEMBER_RATE_LIMITS, hitRateLimit } from "~/lib/rate-limit.server";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -107,7 +107,7 @@ it("shows a personal destination to an unjoined member without removing the fiel
     const { loader, default: TopicNew } = await import("~/routes/topic-new");
     const loaderData = await loader(h.args(h.request("/t/new", { as: "safety_outsider" })));
     expect(loaderData.posting?.choices).toMatchObject([{ kind: "personal", slug: "@safety_outsider" }]);
-    const html = await renderInRouter(() => createElement(TopicNew, { loaderData, actionData: undefined, params: {}, matches: [] } as never), "/t/new");
+    const html = await renderInRouter(() => routeElement(TopicNew, { loaderData }), "/t/new");
     expect(html).not.toContain(m.village_required());
     expect(html).toContain('name="village"');
     expect(html).toContain('name="body"');

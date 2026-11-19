@@ -1,3 +1,4 @@
+import { memberNavigationData } from "./helpers/loader-fixtures";
 import { createElement } from "react";
 import { expect, it, vi } from "vitest";
 import { SiteNavigation } from "~/components/site-navigation";
@@ -10,12 +11,14 @@ import { sideNavigationPath } from "~/lib/navigation";
 import { renderInRouter } from "./helpers/render-in-router";
 import { m } from "~/paraglide/messages.js";
 import { NavigationDataContext } from "~/lib/navigation-data";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/lib/use-villages", () => ({ useVillages: () => true }));
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
-const joined = { slug: "side-unit", name: "Side unit village", chatAvailable: true, kind: "open", language: null };
-const data = { reader: false, userId: "side-unit", handle: "side_unit", hasPasskey: true, passkeyPrompt: false, isOperator: false, isModerator: false, apiDrafts: 0, unreadNotifications: 0, followedUnread: false, villages: [{ ...joined, unread: 102 }] };
-const render = (path: string, loaderData: unknown = data) => renderInRouter(() => createElement(MemberLayout, { loaderData } as never), path);
+const joined = { slug: "side-unit", name: "Side unit village", chatAvailable: true, kind: "open" as const, language: null };
+const data = memberNavigationData({ userId: "side-unit", handle: "side_unit" });
+const open = memberNavigationData({ ...data, villages: [{ ...joined, unread: 102 }], followedVillages: [] });
+const render = (path: string, loaderData: Parameters<typeof MemberLayout>[0]["loaderData"] = open) => renderInRouter(() => routeElement(MemberLayout, { loaderData }), path);
 
 it.each(["/", "/a/en", "/a/zh-Hant", "/villages", "/v/side-unit", "/v/side-unit/chat", "/u/side_unit", "/u/side_unit/", "/u/chat", "/following", "/notifications", "/following/"])("allows the browsing surface at %s", path => {
   expect(sideNavigationPath(path)).toBe(true);
@@ -31,7 +34,7 @@ it("renders navigation from layout data before JavaScript: a village row shows a
   expect(html).toMatch(/<a(?=[^>]*href="\/v\/side-unit\/chat")(?![^>]*aria-current)[^>]*><span[^>]*bg-unread/);
   expect(html).not.toContain("99+");
   expect(await render("/")).toContain("site-navigation-header-links");
-  const mentioned = await render("/", { ...data, villages: [{ ...joined, unread: 102, mentions: 120 }] });
+  const mentioned = await render("/", { ...data, villages: [{ ...joined, unread: 102, mentions: 120 }], followedVillages: [] });
   expect(mentioned.match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0]).toContain("99+");
   const following = await render("/following/");
   const side = following.match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
@@ -51,19 +54,19 @@ it.each(["/u/side_unit", "/u/side_unit/", "/u/side_other"])("keeps the places co
   }
 });
 it("shows only the village name when nothing is new, and omits the chat mark when chat is unavailable", async () => {
-  const quiet = (await render("/", { ...data, villages: [{ ...joined, unread: 0 }] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
+  const quiet = (await render("/", { ...data, villages: [{ ...joined, unread: 0 }], followedVillages: [] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(quiet).toContain('href="/v/side-unit"');
   expect(quiet).not.toContain('href="/v/side-unit/chat"');
   expect(quiet).not.toContain(m.village_chat_title());
   const { chatAvailable, ...closed } = joined;
-  const side = (await render("/", { ...data, villages: [closed] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
+  const side = (await render("/", { ...data, villages: [closed], followedVillages: [] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(side).toBeDefined();
   expect(side).toContain('href="/v/side-unit"');
   expect(side).not.toContain('href="/v/side-unit/chat"');
 });
 it("keeps the ordinary header without a sidebar for guests, closed villages and article routes", async () => {
-  const { villages, ...closed } = data;
-  for (const [path, navigation] of [["/", { reader: true }], ["/", closed], ["/u/side_unit", { reader: true }], ["/u/side_unit", closed], ["/u/side_unit/history", data], ["/t/1", data], ["/t/new", data], ["/settings", data]] as const) {
+  const closed = data;
+  for (const [path, navigation] of [["/", { reader: true }], ["/", closed], ["/u/side_unit", { reader: true }], ["/u/side_unit", closed], ["/u/side_unit/history", open], ["/t/1", open], ["/t/new", open], ["/settings", open]] as const) {
     const html = await render(path, navigation);
     expect(html).not.toContain("data-site-navigation");
     expect(html).not.toContain("site-navigation-header-links");
@@ -73,20 +76,20 @@ it("keeps the ordinary header without a sidebar for guests, closed villages and 
 it("links a village's name to its posts on every screen, and its chat mark to the chat only where chat is available and something is new", async () => {
   const villages = [{ ...joined, unread: 2 }, { ...joined, slug: "no-consent", chatAvailable: false, unread: 2 }];
   for (const path of ["/v/side-unit/chat", "/"]) {
-    const side = (await render(path, { ...data, villages })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
+    const side = (await render(path, { ...data, villages, followedVillages: [] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
     expect(side).toMatch(/<a(?=[^>]*href="\/v\/side-unit")[^>]*>(?:(?!<\/a>)[\s\S])*?Side unit village(?:<\/span>)?<\/a>/);
     expect(side).toContain('href="/v/side-unit/chat"');
     expect(side).toContain('href="/v/no-consent"');
     expect(side).not.toContain('href="/v/no-consent/chat"');
   }
-  const chat = (await render("/v/side-unit/chat", { ...data, villages })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
+  const chat = (await render("/v/side-unit/chat", { ...data, villages, followedVillages: [] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(chat).toMatch(/<a(?=[^>]*href="\/v\/side-unit")(?=[^>]*aria-current="true")[^>]*>(?:(?!<\/a>)[\s\S])*?Side unit village(?:<\/span>)?<\/a>/);
   expect(chat).toMatch(/<a(?=[^>]*href="\/v\/side-unit\/chat")(?![^>]*aria-current)[^>]*>/);
-  const posts = (await render("/v/side-unit", { ...data, villages })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
+  const posts = (await render("/v/side-unit", { ...data, villages, followedVillages: [] })).match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(posts).toMatch(/<a(?=[^>]*href="\/v\/side-unit")(?=[^>]*aria-current="page")[^>]*>(?:(?!<\/a>)[\s\S])*?Side unit village(?:<\/span>)?<\/a>/);
 });
 it("marks a village-related destination as current rather than the current page", async () => {
-  const html = await render("/v/side-unit/chat", { ...data, villages: [{ ...joined, chatAvailable: false }] });
+  const html = await render("/v/side-unit/chat", { ...data, villages: [{ ...joined, chatAvailable: false }], followedVillages: [] });
   const side = html.match(/<nav data-site-navigation[^>]*>[\s\S]*?<\/nav>/)?.[0];
   expect(side).toMatch(/<a(?=[^>]*href="\/v\/side-unit")(?=[^>]*aria-current="true")[^>]*>/);
 });

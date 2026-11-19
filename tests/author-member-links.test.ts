@@ -1,3 +1,4 @@
+import { notificationItem, notificationsData, replyEntry, searchData, topicData, topicEntry } from "./helpers/loader-fixtures";
 import { createElement } from "react";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { setTestMessages } from "./stubs/paraglide-messages";
@@ -6,13 +7,13 @@ import { TopicList } from "~/components/topic-list";
 import { ReasonsPanel, type ReasonView } from "~/components/reasons-panel";
 import { ObjectionsPanel } from "~/components/objections-panel";
 import type { TopicItem } from "~/lib/topic-list.server";
-import type { SearchHit } from "~/lib/search.server";
 import type { EntryDisplay } from "~/lib/entry-display.server";
 import { readingVersions } from "~/lib/reading.server";
 import Topic from "~/routes/topic";
 import Search from "~/routes/search";
 import Notifications from "~/routes/notifications";
 import { renderInRouter } from "./helpers/render-in-router";
+import { routeElement } from "./helpers/route-fixtures";
 
 beforeEach(() => setTestMessages(new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
     get: (_, key) => (params?: Record<string, unknown>) => key === "notification_mention"
@@ -34,24 +35,16 @@ const reason = (id: number, authorHandle: string): ReasonView => ({
   reactions: { insightful, mine: false },
   excerpt: { text: "A reason", lang: "ja", truncated: false, translation: null, pending: false },
 });
-const entry = (id: number, authorHandle: string, display = original) => ({
-  id, authorHandle, lang: "ja", placeholder: null, html: "<p>Body</p>", createdAt, editedAt: null,
-  stanceTag: null, canEdit: false, own: false, posted: false, hidden: false, hiddenAction: null,
-  reported: false, canModerate: false, display, reactions: { insightful, mine: false }, reviewHref: null,
-});
-const thread = (display = original) => ({
-  aiMaterialLinks: [],
-  nushi: { entries: {}, controls: "", reply: "", pending: [] },
-  topic: { ...entry(1, "current_topic", display), title: "A topic", headline: null },
-  replies: [entry(2, "current_reply", display)],
-  question: { asksStance: false, isAlt: false, origin: null, locked: false, canFix: false, stance: null, reasons: null, objections: null },
-  defaultLang: "ja", page: 1, hasNextPage: false, operator: false, stanceTag: null, writeTag: null,
-  langParam: "en", translating: [], readingLanguage: { current: "en", enabled: ["ja", "en"], usual: "en" }, loadedAt: createdAt.toISOString(), follow: null, signPosts: false,
-  related: { rows: [], omitted: false, hasNext: false, pageCount: 1 },
-  aiOpen: { mdUrl: "http://localhost/t/1.md", mdPath: "/t/1.md" },
-});
-const hit = (id: number, authorHandle: string | null): SearchHit => ({
-  id, authorHandle, createdAt, kind: "topic", threadId: id, lang: "ja", distance: 0, href: `/t/${id}?lang=en`,
+const thread = (display = original) => {
+  const topic = topicEntry({ authorHandle: "current_topic", display });
+  const reply = replyEntry({ id: 2, authorHandle: "current_reply", display });
+  return {
+    ...topicData({ replies: [reply] }),
+    topic,
+  };
+};
+const hit = (id: number, authorHandle: string | null): ReturnType<typeof searchData>["hits"][number] => ({
+  id, authorHandle, createdAt, kind: "topic", matchKind: "semantic", threadId: id, lang: "ja", distance: 0, href: `/t/${id}?lang=en`,
   title: { text: "A topic", lang: "en", translation: null, pending: false, fromBody: false },
   excerpt: { text: "Body", lang: "ja", translation: null, pending: false },
 });
@@ -102,7 +95,7 @@ describe("author names open the member page", () => {
       translation: { lang: "en", kind: "primary", engine: "fake", model: "fake", fallback: false, stale: false, html: "<p>Translated</p>", title: null, headline: null, older: null, reportNotice: null },
     };
     for (const display of [original, translated]) {
-      const html = await renderInRouter(() => createElement(Topic, { loaderData: thread(display), actionData: undefined, params: {}, matches: [] } as never), "/t/1?lang=en");
+      const html = await renderInRouter(() => routeElement(Topic, { loaderData: thread(display) }), "/t/1?lang=en");
       expect(memberLinks(html)).toEqual([link("current_topic"), link("current_topic"), link("current_reply")]);
     }
   });
@@ -113,7 +106,7 @@ describe("author names open the member page", () => {
       const source = loaderData.topic.html;
       const topic = { ...loaderData.topic, authorName: name, avatarUrl: "/avatar/fixture", canEdit: true,
         reading: readingVersions(source, "ja", original) };
-      const html = await renderInRouter(() => createElement(Topic, { loaderData: { ...loaderData, topic }, actionData: undefined, params: {}, matches: [] } as never), "/t/1?lang=en");
+      const html = await renderInRouter(() => routeElement(Topic, { loaderData: { ...loaderData, topic } }), "/t/1?lang=en");
       const header = html.slice(html.indexOf('data-reading-byline'), html.indexOf('data-reading-body'));
       const signature = html.slice(html.indexOf('data-article-signature'), html.indexOf('data-article-end'));
       expect(header).toContain("@current_topic");
@@ -128,15 +121,15 @@ describe("author names open the member page", () => {
   });
 
   it("keeps withheld topic and reply author names out of links", async () => {
-    const loaderData = { ...thread(), topic: { id: 1, placeholder: "hidden" }, replies: [{ id: 2, placeholder: "deleted" }] };
-    const html = await renderInRouter(() => createElement(Topic, { loaderData, actionData: undefined, params: {}, matches: [] } as never), "/t/1");
+    const loaderData = topicData({ topic: { id: 1, placeholder: "hidden" }, replies: [{ id: 2, placeholder: "deleted" }] });
+    const html = await renderInRouter(() => routeElement(Topic, { loaderData }), "/t/1");
     expect(memberLinks(html)).toEqual([]);
     expect(html).not.toContain("current_topic");
     expect(html).not.toContain("current_reply");
   });
 
   it("links search authors while retaining results without an author profile", async () => {
-    const html = await renderInRouter(() => createElement(Search, { loaderData: { state: "results", q: "body", hits: [hit(1, "search_writer"), hit(2, null)], members: [], villages: [], retryMinutes: 0 }, params: {}, matches: [] } as never), "/search?q=body&lang=en");
+    const html = await renderInRouter(() => routeElement(Search, { loaderData: searchData({ q: "body", hits: [hit(1, "search_writer"), hit(2, null)] }) }), "/search?q=body&lang=en");
     expect(memberLinks(html)).toEqual([link("search_writer")]);
     expect(html).toContain('href="/t/2?lang=en"');
     expect(html).not.toContain("@null");
@@ -159,12 +152,11 @@ describe("author names open the member page", () => {
   });
 
   it("keeps the entire notification sentence as one notification-opening link", async () => {
-    const html = await renderInRouter(() => createElement(Notifications, {
-      loaderData: {
-        page: 1, hasNext: false,
-        items: [{ id: 1, kind: "mention", actorHandle: "notification_writer", topicTitle: "A topic", unavailable: false, href: "/t/1#c-2", read: true, createdAt: createdAt.toISOString(), actionId: null }],
-      }, params: {}, matches: [],
-    } as never), "/notifications");
+    const html = await renderInRouter(() => routeElement(Notifications, {
+      loaderData: notificationsData({
+        items: [notificationItem({ actorHandle: "notification_writer", topicTitle: "A topic", href: "/t/1#c-2" })],
+      })
+    }), "/notifications");
     expect(memberLinks(html)).toEqual([]);
     expect(html).toMatch(/<a\b[^>]*href="\/notifications\/1\/open"[^>]*>@notification_writer mentioned you in &quot;A topic&quot;\.<\/a>/);
   });

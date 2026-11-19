@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { messageMarkup } from "./helpers/message-markup";
 import { m } from "~/paraglide/messages.js";
@@ -16,6 +15,7 @@ import { action as login } from "~/routes/login";
 import { action as confirm, loader as confirmPage } from "~/routes/auth-confirm";
 import { addMember } from "./helpers/db";
 import { BASE, setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -36,7 +36,7 @@ it("explains member-page destinations only on the matching login screen", async 
   for (const next of ["/u/aiko", "/", "/t/42"]) {
     const path = `/login?next=${encodeURIComponent(next)}`;
     const loaderData = await route.loader(h.args(h.request(path)));
-    const html = await renderInRouter(() => createElement(route.default, { loaderData } as never), path);
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData }), path);
     expect(html.includes(messageMarkup(m.login_members_only()))).toBe(next.startsWith("/u/"));
     expect(html).toMatch(/autocomplete="username webauthn"/i);
     expect(html).toContain(messageMarkup(m.login_invitation_short()));

@@ -9,6 +9,7 @@ import { PRINCIPLES_LANGS } from "~/lib/principles-languages";
 import { parsePrinciples, principlesFor, principlesOpening, principlesStatus } from "~/lib/principles.server";
 import { expectedPrinciplesStatus, readPrinciplesSource } from "./helpers/principles-source";
 import { withShellLabels } from "./helpers/render-in-router";
+import { routeElement } from "./helpers/route-fixtures";
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -19,8 +20,8 @@ afterEach(() => {
 const callMd = async (path: string) => (await (await import("~/routes/principles-md")).loader({ request: new Request(`http://localhost:5173${path}`), params: {}, context: {} } as never)) as Response;
 async function renderPage(path: string) {
   const route = await import("~/routes/principles");
-  const Component = () => createElement(route.default as never, { loaderData: useLoaderData() });
-  const routes = withShellLabels([{ id: "principles", path: "/principles", Component, loader: route.loader as never }]);
+  const Component = () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() });
+  const routes = withShellLabels([{ id: "principles", path: "/principles", Component, loader: route.loader }]);
   const context = (await createStaticHandler(routes).query(new Request(`http://localhost:5173${path}`))) as StaticHandlerContext;
   const html = renderToStaticMarkup(createElement(StaticRouterProvider, { router: createStaticRouter(routes, context), context, hydrate: false }));
   return { html, data: context.loaderData.principles };

@@ -141,9 +141,9 @@ describe("requests without valid credentials, per IP", () => {
 
 describe("member pages: /notifications, /mod, /mod/appeals", () => {
   const cases: Array<[string, string, string, () => Promise<{ loader: (a: never) => unknown; action: (a: never) => unknown }>, "hana" | "moriko"]> = [
-    ["notifications", "notifications", "/notifications", () => import("~/routes/notifications") as never, "hana"],
-    ["mod", "mod", "/mod", () => import("~/routes/mod") as never, "moriko"],
-    ["mod-appeals", "mod-appeals", "/mod/appeals", () => import("~/routes/mod-appeals") as never, "moriko"],
+    ["notifications", "notifications", "/notifications", () => import("~/routes/notifications"), "hana"],
+    ["mod", "mod", "/mod", () => import("~/routes/mod"), "moriko"],
+    ["mod-appeals", "mod-appeals", "/mod/appeals", () => import("~/routes/mod-appeals"), "moriko"],
   ];
   for (const [name, action, path, load, as] of cases) {
     it(`${path}: 600 an hour per member, then 429 (loader and action), other members are not affected`, async () => {
@@ -168,9 +168,9 @@ describe("member pages: /notifications, /mod, /mod/appeals", () => {
 
 describe("login and authentication submissions, per IP (opening the pages is not counted)", () => {
   const pages: Array<[string, () => Promise<{ loader: (a: never) => unknown; action: (a: never) => unknown }>, string, Record<string, string>, Record<string, string>]> = [
-    ["/login", () => import("~/routes/login") as never, "/login", {}, { email: "a@example.com" }],
-    ["/invite/<token>", () => import("~/routes/invite") as never, "/invite/abc", { token: "abc" }, {}],
-    ["/auth/confirm", () => import("~/routes/auth-confirm") as never, "/auth/confirm?token=abcdefghijkl", {}, { token: "abcdefghijkl" }],
+    ["/login", () => import("~/routes/login"), "/login", {}, { email: "a@example.com" }],
+    ["/invite/<token>", () => import("~/routes/invite"), "/invite/abc", { token: "abc" }, {}],
+    ["/auth/confirm", () => import("~/routes/auth-confirm"), "/auth/confirm?token=abcdefghijkl", {}, { token: "abcdefghijkl" }],
   ];
   for (const [label, load, path, params, form] of pages) {
     it(`${label}: a GET writes nothing and is never limited; a POST is counted, 300 per 15 minutes per IP, then 429; another IP is not affected`, async () => {

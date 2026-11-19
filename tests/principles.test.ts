@@ -17,6 +17,7 @@ import { setTestLocale } from "./stubs/paraglide-runtime";
 import { expectedPrinciplesStatus, readPrinciplesSource } from "./helpers/principles-source";
 import { m } from "~/paraglide/messages.js";
 import { messageMarkup } from "./helpers/message-markup";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 // The public principles page reads its canonical editions directly from the app.
 // Real messages verify the navigation and links independently of the edition text.
@@ -36,8 +37,8 @@ const callMd = async (path: string, init?: RequestInit) => (await (await import(
 // The page, rendered with its own route and loader in a static router (no root layout, no session).
 async function renderPage(path: string): Promise<string> {
   const route = await import("~/routes/principles");
-  const Component = () => createElement(route.default as never, { loaderData: useLoaderData() });
-  const routes = withShellLabels([{ path: "/principles", Component, loader: route.loader as never }]);
+  const Component = () => routeElement(route.default, { loaderData: useLoaderData<typeof route.loader>() });
+  const routes = withShellLabels([{ path: "/principles", Component, loader: route.loader }]);
   const handler = createStaticHandler(routes);
   const context = (await handler.query(new Request(`http://localhost:5173${path}`))) as StaticHandlerContext;
   // hydrate: false leaves out the router's own hydration script, so that the page itself can be checked for scripts.
@@ -288,7 +289,7 @@ describe("the page is not indexable", () => {
   it("the HTML has the X-Robots-Tag header and a robots meta, and the alternate link points at the twin of the text on the page", async () => {
     const route = await import("~/routes/principles");
     expect(route.headers()).toEqual({ "X-Robots-Tag": "noindex" });
-    const meta = async (path: string) => route.meta({ loaderData: await callLoader(path) } as never) as Array<Record<string, unknown>>;
+    const meta = async (path: string) => routeMeta(route.meta, { loaderData: await callLoader(path) }) as Array<Record<string, unknown>>;
     for (const path of ["/principles?lang=ja", "/principles?lang=en", "/principles?lang=fr"]) {
       const tags = await meta(path);
       expect(tags, path).toContainEqual({ name: "robots", content: "noindex" });

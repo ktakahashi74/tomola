@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { entries, profiles, translations } from "~/lib/db/schema";
@@ -15,6 +14,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { quietLogger } from "./helpers/logger";
 import { messageMarkup } from "./helpers/message-markup";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { setTestLocale("en"); vi.unstubAllEnvs(); });
@@ -43,7 +43,7 @@ describe("reply language in screen and email notifications", () => {
           await h.db.insert(translations).values({ entryId: reply.id, field: "body", lang: "en", kind: "primary", engine: "fake", sourceHash: source.sourceHash, mentionRevision: source.mentionRevision, text: "Translated excerpt" });
           setTestLocale(locale);
           const data = await loader(h.args(h.request("/notifications", { as: "cross_recipient" })));
-          const html = await renderInRouter(() => createElement(Notifications, { loaderData: data } as never));
+          const html = await renderInRouter(() => routeElement(Notifications, { loaderData: data }));
           const cross = homeArea !== "ja";
           const params = { handle: "cross_actor", title: "Topic", language: localizedLanguageLabel("ja", locale) };
           const expected = kind === "reply_to_topic"
@@ -65,7 +65,7 @@ describe("reply language in screen and email notifications", () => {
           await h.db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, reply.id));
           const hidden = await loader(h.args(h.request("/notifications", { as: "cross_recipient" })));
           expect(hidden.items[0]).toMatchObject({ entryLang: null, unavailable: true });
-          expect(await renderInRouter(() => createElement(Notifications, { loaderData: hidden } as never))).toContain(m.notification_reply_unavailable({}, { locale }));
+          expect(await renderInRouter(() => routeElement(Notifications, { loaderData: hidden }))).toContain(m.notification_reply_unavailable({}, { locale }));
         } finally { h.restore(); }
       });
     }

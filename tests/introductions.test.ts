@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { m } from "~/paraglide/messages.js";
@@ -14,6 +13,7 @@ import * as memberRoute from "~/routes/member-page";
 import { addMember, createTestDb } from "./helpers/db";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -104,7 +104,7 @@ it.each(["", "1"])("uses the same membership gate and cache middleware as member
 it("shows the empty list and writing prompt only until the reader has a visible introduction", async () => {
   const render = async () => {
     const loaded = await route.loader(h.args(h.request("/introductions", { as: "intro_route_reader" })));
-    return renderInRouter(() => createElement(Introductions, { loaderData: loaded } as never), "/introductions");
+    return renderInRouter(() => routeElement(Introductions, { loaderData: loaded }), "/introductions");
   };
   const empty = await render();
   expect(empty).toContain(m.introductions_empty());

@@ -1,6 +1,5 @@
 import { quietLogger as quiet } from "./helpers/logger";
 import { eq } from "drizzle-orm";
-import { createElement } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { drafts, entries, profiles, translations } from "~/lib/db/schema";
 import { createReply, createTopic, softDeleteEntry } from "~/lib/entries.server";
@@ -19,6 +18,7 @@ import { setVote } from "~/lib/votes.server";
 import { getMd, parseBlocks } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 // List order, filters, row metadata, visibility, pagination and Markdown parity.
 const at = (minutes: number) => new Date(Date.UTC(2030, 0, 1, 0, minutes));
@@ -28,16 +28,6 @@ let h: RouteHarness;
 const ids: Record<string, number> = {};
 
 type Card = TopicItem;
-type HomeData = {
-  layout: "unified";
-  order: "created" | "activity" | "insightful";
-  filter: "all" | "asks" | "long";
-  topics: Card[];
-  page: number;
-  hasNext: boolean;
-  langParam: string | null;
-};
-
 async function make(who: string, lang: string, title: string | null, body: string, minutes: number, extra: Record<string, unknown> = {}): Promise<number> {
   const res = await createTopic(h.db, h.ids[who], { lang, ...(title === null ? {} : { title }), body, ...extra }, { now: at(minutes) });
   if (!res.ok) throw new Error(`topic failed: ${res.error}`);
@@ -46,11 +36,11 @@ async function make(who: string, lang: string, title: string | null, body: strin
 
 const loadHome = async (as: string, path = "/") => {
   const { loader } = await import("~/routes/home");
-  return (await loader(h.args(h.request(path, { as })))) as unknown as HomeData;
+  return (await loader(h.args(h.request(path, { as }))));
 };
 const loadArea = async (as: string, lang: string, path: string) => {
   const { loader } = await import("~/routes/area");
-  return (await loader(h.args(h.request(path, { as }), { lang }))) as unknown as { topics: Card[]; hasNext: boolean; order: string; filter: string };
+  return (await loader(h.args(h.request(path, { as }), { lang })));
 };
 const idsOf = (topics: Card[]) => topics.map((c) => c.id);
 const translateAll = async () => {
@@ -143,7 +133,7 @@ describe("the order and the filters of the stream", () => {
     expect(idsOf(p2.topics).some((id) => idsOf(p1.topics).includes(id))).toBe(false);
     // the screen: the order switch, the filter and the pagination links
     const { default: Home } = await import("~/routes/home");
-    const html = await renderInRouter(() => createElement(Home as never, { loaderData: { ...p1, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null, filter: "long", order: "activity" }, actionData: undefined, params: {}, matches: [] } as never), "/?order=activity&long=1&lang=en");
+    const html = await renderInRouter(() => routeElement(Home, { loaderData: { ...p1, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null, filter: "long", order: "activity" } }), "/?order=activity&long=1&lang=en");
     // (the interface texts are empty in the unit tests; the words are checked in the browser tests)
     expect(html).toMatch(/href="\/\?order=activity&amp;long=1&amp;lang=en&amp;list_after=[A-Za-z0-9_-]+"/);
     // the order switch: the current one is marked, and the link to the default order drops ?order=
@@ -168,7 +158,7 @@ describe("the data and rendering of a row", () => {
   const draw = async (who: string, path = "/") => {
     const { default: Home } = await import("~/routes/home");
     const data = await loadHome(who, path);
-    return renderInRouter(() => createElement(Home as never, { loaderData: data, actionData: undefined, params: {}, matches: [] } as never), path);
+    return renderInRouter(() => routeElement(Home, { loaderData: data }), path);
   };
 
   it("uses the readable title or its translation, with a pending mark when no translation exists", async () => {
@@ -349,9 +339,9 @@ describe("home page", () => {
   });
   afterAll(() => h.restore());
 
-  const draw = async (data: unknown, path = "/") => {
+  const draw = async (data: Awaited<ReturnType<typeof loadHome>>, path = "/") => {
     const { default: Home } = await import("~/routes/home");
-    return renderInRouter(() => createElement(Home as never, { loaderData: { ...(data as object), aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null }, actionData: undefined, params: {}, matches: [] } as never), path);
+    return renderInRouter(() => routeElement(Home, { loaderData: { ...data, aiOpen: { mdUrl: "http://x/home.md", mdPath: "/home.md" }, stanceMessage: null } }), path);
   };
 
   it("ignores HOME_LAYOUT=split at startup and renders one stream", async () => {
@@ -373,7 +363,7 @@ describe("home page", () => {
     expect(html).toContain(`<li id="q-${ids.l1}"`);
     const layout = await import("~/routes/member-layout");
     const navigation = await layout.loader(h.args(h.request("/", { as: "hana" })));
-    const header = await renderInRouter(() => createElement(layout.default as never, { loaderData: navigation, params: {}, matches: [] } as never));
+    const header = await renderInRouter(() => routeElement(layout.default, { loaderData: navigation }));
     expect(header).not.toContain('href="/latest"');
   });
 
@@ -399,7 +389,7 @@ describe("home page", () => {
     expect(await loadArea("hana", "ja", "/a/ja?order=activity")).toMatchObject({ order: "activity" });
     expect((await loadArea("hana", "ja", "/a/ja?long=1")).filter).toBe("long");
     const { default: Area } = await import("~/routes/area");
-    const html = await renderInRouter(() => createElement(Area as never, { loaderData: { ...area, lang: "ja", langParam: null, page: 1, aiOpen: { mdUrl: "http://x/a/ja.md", mdPath: "/a/ja.md" }, stanceMessage: null }, params: {}, matches: [] } as never), "/a/ja");
+    const html = await renderInRouter(() => routeElement(Area, { loaderData: { ...area, lang: "ja", langParam: null, page: 1, aiOpen: { mdUrl: "http://x/a/ja.md", mdPath: "/a/ja.md" }, stanceMessage: null } }), "/a/ja");
     expect(html).toContain(`<li id="q-${ids.l1}"`);
     expect(html).not.toContain('name="body"');
     expect(html).toMatch(/<a lang="ja" aria-current="page" [^>]*href="\/a\/ja"/);

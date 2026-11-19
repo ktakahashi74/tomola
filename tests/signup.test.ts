@@ -1,3 +1,4 @@
+import { onboardingData, settingsData } from "./helpers/loader-fixtures";
 import { operatorCopy } from "~/lib/operator-settings";
 import { testOperator } from "./helpers/operator";
 import { messageText } from "~/lib/i18n/messages";
@@ -18,6 +19,7 @@ import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness } from "./helpers/route-harness";
 import { m } from "~/paraglide/messages.js";
 import { messageMarkup } from "./helpers/message-markup";
+import { routeElement } from "./helpers/route-fixtures";
 
 // Signup eligibility, consent and language settings; the post language is chosen per post.
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -295,15 +297,15 @@ describe("/onboarding", () => {
   });
 
   // the screen, rendered on the server with the real messages
-  async function render(path: "onboarding" | "settings", enabled: readonly Lang[], props: Record<string, unknown>, locale: "ja" | "en") {
+  async function render(enabled: readonly Lang[], props: Parameters<typeof onboardingData>[0], locale: "ja" | "en") {
     setTestLocale(locale);
-    const mod = path === "onboarding" ? await import("~/routes/onboarding") : await import("~/routes/settings");
-    return renderInRouter(() => createElement(mod.default as never, { loaderData: { opening: {}, existing: false, countries: [], trialRequired: false, notices: { privacy: false, terms: false }, ...props }, actionData: undefined, params: {}, matches: [] } as never), "/", undefined, { enabledLangs: enabled });
+    const mod = await import("~/routes/onboarding");
+    return renderInRouter(() => routeElement(mod.default, { loaderData: onboardingData(props) }), "/", undefined, { enabledLangs: enabled });
   }
 
   it("shows identity and language choices in both trial publication states and retains the purpose and privacy wording", async () => {
     for (const locale of ["ja", "en"] as const) for (const trialRequired of [false, true]) {
-      const html = await render("onboarding", ["ja", "en"], { defaultMainLang: "ja", trialRequired, notices: { privacy: trialRequired, terms: trialRequired } }, locale);
+      const html = await render(["ja", "en"], { defaultMainLang: "ja", trialRequired, notices: { privacy: trialRequired, terms: trialRequired } }, locale);
       // Eligibility and agreement appear only when both documents are published.
       expect(html.match(/<input[^>]*name="handle"/g)).toHaveLength(1);
       expect(html.match(/<input[^>]*name="homeArea"/g)).toHaveLength(1);
@@ -322,7 +324,7 @@ describe("/onboarding", () => {
       expect(html).not.toMatch(/匿名|anonymi/i);
       expect(html).toContain(messageMarkup(m.onboarding_home_area()));
     }
-    const ja = await render("onboarding", ["ja", "en"], { defaultMainLang: "other" }, "ja");
+    const ja = await render(["ja", "en"], { defaultMainLang: "other" }, "ja");
     expect(ja).toContain(messageMarkup(operatorCopy(testOperator, "ja").stanceDisclosure));
     expect(ja).toContain(messageMarkup(m.onboarding_purposes({ aiRecipient: operatorCopy(testOperator, "ja").aiRecipient })));
     expect(ja).not.toContain("研究に使うことがあります");
@@ -330,7 +332,7 @@ describe("/onboarding", () => {
     // the disclosure sits above the submit button
     const disclosure = messageMarkup(operatorCopy(testOperator, "ja").stanceDisclosure);
     expect(ja.indexOf(disclosure)).toBeLessThan(ja.indexOf('type="submit"', ja.indexOf(disclosure)));
-    const en = await render("onboarding", ["ja", "en"], { defaultMainLang: "en" }, "en");
+    const en = await render(["ja", "en"], { defaultMainLang: "en" }, "en");
     expect(en).toContain(messageMarkup(operatorCopy(testOperator, "en").stanceDisclosure));
     expect(en).toContain(messageMarkup(m.onboarding_purposes({ aiRecipient: operatorCopy(testOperator, "en").aiRecipient })));
     expect(en).not.toContain("may be used for research");
@@ -352,11 +354,11 @@ describe("/onboarding", () => {
       reviewHelp: "Confirm this community's current conditions.",
     });
     const route = await import("~/routes/onboarding");
-    for (const error of ["adult_required", "trial_consent_required"]) {
-      const html = await renderInRouter(() => createElement(route.default as never, {
-        loaderData: { opening: {}, existing: true, countries: [], trialRequired: true, notices: { privacy: true, terms: true } },
+    for (const error of ["adult_required", "trial_consent_required"] as const) {
+      const html = await renderInRouter(() => routeElement(route.default, {
+        loaderData: onboardingData({ existing: true, trialRequired: true, notices: { privacy: true, terms: true } }),
         actionData: { error },
-      } as never), "/onboarding", undefined, { operator: settings });
+      }), "/onboarding", undefined, { operator: settings });
       for (const field of ["aiRecipient", "stanceDisclosure", "trainingPolicy", "termsLabel", "countryHelp", "agreementLabel", "reviewTitle", "reviewHelp"] as const) expect(html, field).toContain(messageMarkup(settings.copy.en[field]!));
       expect(html).toContain(messageMarkup(error === "adult_required" ? "This community requires age 23 or older." : settings.copy.en.agreementError!));
       expect(html).not.toContain("{age}");
@@ -367,7 +369,7 @@ describe("/onboarding", () => {
 
   it("keeps the original language explanation in a closed disclosure below the short guidance", async () => {
     for (const locale of ["ja", "en"] as const) {
-      const html = await render("onboarding", ["ja", "en"], { defaultMainLang: "en" }, locale);
+      const html = await render(["ja", "en"], { defaultMainLang: "en" }, locale);
       const details = html.match(/<details\b[^>]*>[\s\S]*?<\/details>/)![0];
       expect(details).not.toMatch(/<details[^>]*\bopen/);
       expect(details).toContain(messageMarkup(m.onboarding_language_details()));
@@ -378,7 +380,7 @@ describe("/onboarding", () => {
   });
 
   it("shows an enabled language only: with ja,en,fr the choices are Japanese, English, French and Other", async () => {
-    const html = await render("onboarding", ["ja", "en", "fr"], { defaultMainLang: "en" }, "en");
+    const html = await render(["ja", "en", "fr"], { defaultMainLang: "en" }, "en");
     const select = selectField(html, "homeArea");
     expect(optionLabels(select)).toEqual([LANG_LABELS.ja, LANG_LABELS.en, LANG_LABELS.fr, messageMarkup(m.area_other())]);
     expect(html).not.toContain('value="de"');
@@ -386,20 +388,11 @@ describe("/onboarding", () => {
 });
 
 describe("/settings wording and choices", () => {
-  const settingsProps = (over: Record<string, unknown> = {}) => ({
-    homeArea: "ja",
-    displayLang: null,
-    readLangs: ["ja"],
-    nextAreaChange: null,
-    saved: null,
-    emailPref: "daily",
-    passkeys: [],
-    ...over,
-  });
-  async function render(enabled: readonly Lang[], props: Record<string, unknown>, locale: "ja" | "en") {
+  const settingsProps = (over: Parameters<typeof settingsData>[0] = {}) => settingsData({ emailPref: "daily", ...over });
+  async function render(enabled: readonly Lang[], props: ReturnType<typeof settingsData>, locale: "ja" | "en") {
     setTestLocale(locale);
     const mod = await import("~/routes/settings");
-    return renderInRouter(() => createElement(mod.default as never, { loaderData: { existing: false, countries: [], trialRequired: false, notices: { privacy: false, terms: false }, ...props }, actionData: undefined, params: {}, matches: [] } as never), "/", undefined, { enabledLangs: enabled });
+    return renderInRouter(() => routeElement(mod.default, { loaderData: props }), "/", undefined, { enabledLangs: enabled });
   }
 
   it("says main language, not language area; has no writable-languages field; offers the enabled languages for display, reading and the main language", async () => {

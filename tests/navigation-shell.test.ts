@@ -7,17 +7,18 @@ import { VillageTarget } from "~/components/village-target";
 import { m } from "~/paraglide/messages.js";
 import { renderInRouter } from "./helpers/render-in-router";
 import { NavigationDataContext } from "~/lib/navigation-data";
+import { memberNavigationData } from "./helpers/loader-fixtures";
 vi.mock("~/lib/use-villages", () => ({ useVillages: () => true }));
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 const village = { slug: "shell-joined", name: "Joined shell village", kind: "invite_public", language: null, description: "" };
-const navigation = { reader: false, handle: "shell_reader", userId: "shell_reader", hasPasskey: true, passkeyPrompt: false, isOperator: false, isModerator: false, apiDrafts: 0, unreadNotifications: 0, chatUnreadTotal: 3, villages: [{ ...village, unread: 3, chatAvailable: true }] };
-const places = (data: typeof navigation) => ({ villages: data.villages as never, followedUnread: false, villagesEnabled: true });
-const member = (path: string, data = navigation, followedUnread = false) => renderInRouter(() => createElement(NavigationDataContext.Provider, { value: { ...places(data), followedUnread } }, createElement(TooltipProvider, {}, createElement(MemberHeader, { data } as never))), path);
+const navigation = memberNavigationData({ handle: "shell_reader", userId: "shell_reader", chatUnreadTotal: 3, villages: [{ ...village, unread: 3, chatAvailable: true }], followedVillages: [] });
+const places = (data: typeof navigation) => ({ villages: "villages" in data ? data.villages : [], followedUnread: false, villagesEnabled: true });
+const member = (path: string, data = navigation, followedUnread = false) => renderInRouter(() => createElement(NavigationDataContext.Provider, { value: { ...places(data), followedUnread } }, createElement(TooltipProvider, {}, createElement(MemberHeader, { data }))), path);
 const drawer = (html: string) => html.match(/<details[^>]*data-navigation-drawer[\s\S]*?<\/details>/)?.[0] ?? "";
 
 it("names the graphic home links from the shell labels and hides their artwork", async () => {
   const labels = { ...(await import("~/lib/shell-labels.server")).shellLabels(), site_name: "Localized site name" };
-  for (const header of [() => createElement(GuestHeader), () => createElement(TooltipProvider, {}, createElement(MemberHeader, { data: navigation } as never))]) {
+  for (const header of [() => createElement(GuestHeader), () => createElement(TooltipProvider, {}, createElement(MemberHeader, { data: navigation }))]) {
     const html = await renderInRouter(header, "/why", undefined, { labels });
     const logo = html.match(/<a(?=[^>]*href="\/")(?=[^>]*class="logo")[^>]*>[\s\S]*?<\/a>/)?.[0];
     expect(logo).toBeDefined();
@@ -63,26 +64,26 @@ it("leaves the drawer out of the header on a chat screen, where the chat's own h
 });
 
 it("tells chat news by a dot and a mention by a number, in one mark that opens the chat, and shows no mark when nothing is new", async () => {
-  const quiet = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 0, mentions: 0 }] } as never));
+  const quiet = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 0, mentions: 0 }] }));
   expect(quiet).toContain('href="/v/shell-joined"');
   expect(quiet).not.toContain('href="/v/shell-joined/chat"');
-  const news = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 5, mentions: 0 }] } as never));
+  const news = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 5, mentions: 0 }] }));
   expect(news).toMatch(/<a(?=[^>]*href="\/v\/shell-joined\/chat")[^>]*><span[^>]*bg-unread/);
   expect(news).not.toContain(">5<");
-  const mentioned = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 5, mentions: 2 }] } as never));
+  const mentioned = drawer(await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 5, mentions: 2 }] }));
   expect(mentioned).toMatch(/<a(?=[^>]*href="\/v\/shell-joined\/chat")[^>]*><span[^>]*role="img"[^>]*>(<span[^>]*>2<\/span>)/);
 });
 
 it("omits chat entrances when the joined-village data has no chat counts", async () => {
-  const html = drawer(await member("/", { ...navigation, villages: [village], chatUnreadTotal: undefined } as never));
+  const html = drawer(await member("/", { ...navigation, villages: [village], chatUnreadTotal: undefined }));
   expect(html).toContain('href="/v/shell-joined"');
   expect(html).not.toContain('href="/v/shell-joined/chat"');
 });
 
 it("puts a dot on the drawer's mark and on Following when there is something new, and shows no village total", async () => {
-  const plain = await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 0 }] } as never);
+  const plain = await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 0 }] });
   expect(drawer(plain).split("</summary>")[0]).not.toContain("bg-unread");
-  const news = await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 4 }] } as never);
+  const news = await member("/", { ...navigation, villages: [{ ...village, chatAvailable: true, unread: 4 }] });
   expect(drawer(news).split("</summary>")[0]).toContain("bg-unread");
   const followed = await member("/", navigation, true);
   const followedLink = drawer(followed).match(/<a(?=[^>]*href="\/following")[^>]*>[\s\S]*?<\/a>/)?.[0];
@@ -99,7 +100,7 @@ it("uses the ordinary writing destination outside a joined village", async () =>
 });
 
 it("labels a selected destination with its actual village type", async () => {
-  const html = await renderInRouter(() => createElement(VillageTarget, { posting: { choices: [village], selected: village.slug, explicit: true, changed: false, error: null } } as never));
+  const html = await renderInRouter(() => createElement(VillageTarget, { posting: { choices: [village], selected: village.slug, explicit: true, changed: false, error: null, ownHandle: null } }));
   expect(html).toContain(m.village_invite_public());
 });
 

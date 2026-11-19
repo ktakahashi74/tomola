@@ -12,6 +12,7 @@ import { acceptChatConsent, chatPage, chatChanges, mutateChat } from "~/lib/vill
 import { handlePublicMcpRequest } from "~/lib/mcp/server.server";
 import { setupRouteHarness, BASE, type RouteHarness } from "./helpers/route-harness";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeMeta } from "./helpers/route-fixtures";
 
 let h: RouteHarness, topicId: number, replyId: number;
 beforeAll(async () => {
@@ -88,10 +89,11 @@ it("uses the feed language and page language for RSS and shared previews", async
     setTestLocale(locale);
     expect((await loadFeedItems(h.db, { kind: "all" }, locale))[0].creator).toBe(locale === "ja" ? "光の書き手" : "Light Writer");
     const route = await import("~/routes/topic");
-    const loaded = await route.loader(h.args(h.request(`/t/${topicId}?lang=${locale}`), { id: String(topicId) })) as any;
+    const loaded = await route.loader(h.args(h.request(`/t/${topicId}?lang=${locale}`), { id: String(topicId) }));
+    expect.assert(loaded.share !== null);
     const author = loaded.share.lang === "ja" ? "光の書き手" : "Light Writer";
     expect(loaded.share.author).toBe(author);
-    const tags = route.meta({ loaderData: loaded, location: { pathname: `/t/${topicId}`, search: `?lang=${locale}` }, matches: [{ id: "root", loaderData: { publicReading: true, siteOrigin: BASE } }] } as never) as any[];
+    const tags = routeMeta(route.meta, { loaderData: loaded, location: { pathname: `/t/${topicId}`, search: `?lang=${locale}` }, rootData: { publicReading: true, siteOrigin: BASE } });
     expect(tags).toContainEqual({ property: "article:author", content: author });
   }
   vi.unstubAllEnvs();
@@ -107,11 +109,12 @@ it("aligns the shared author with a translated preview even when the interface l
     { entryId: topicId, field: "body", lang: "en", kind: "primary", text: "English preview text.", engine: "fake", model: "fake", sourceHash: topic.sourceHash },
   ]);
   const route = await import("~/routes/topic");
-  const loaded = await route.loader(h.args(h.request(`/t/${topicId}?lang=en&tr=${topicId}`), { id: String(topicId) })) as any;
+  const loaded = await route.loader(h.args(h.request(`/t/${topicId}?lang=en&tr=${topicId}`), { id: String(topicId) }));
   expect(loaded.share).toMatchObject({ lang: "en", author: "Light Writer", description: "English preview text." });
-  const tags = route.meta({ loaderData: loaded, location: { pathname: `/t/${topicId}`, search: "?lang=en" }, matches: [{ id: "root", loaderData: { publicReading: true, siteOrigin: BASE } }] } as never) as any[];
+  const tags = routeMeta(route.meta, { loaderData: loaded, location: { pathname: `/t/${topicId}`, search: "?lang=en" }, rootData: { publicReading: true, siteOrigin: BASE } });
   expect(tags).toContainEqual({ property: "article:author", content: "Light Writer" });
-  expect(tags.find(tag => tag.property === "og:locale")?.content).toMatch(/^en(?:_|$)/);
+  const localeTag = tags.find(tag => "property" in tag && tag.property === "og:locale");
+  expect(localeTag && "content" in localeTag ? localeTag.content : undefined).toMatch(/^en(?:_|$)/);
   vi.unstubAllEnvs();
 });
 

@@ -45,7 +45,7 @@ describe("the engines", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const failing = { models: { generateContent: vi.fn(async () => Promise.reject(new Error(REAL_429))) } };
-      const engine = createGeminiEngine({ client: failing as never });
+      const engine = createGeminiEngine({ client: failing });
       await expect(engine.translate({ text: "x", from: "ja", to: "en" })).rejects.toThrow(/free_tier/);
       await expect(engine.translate({ text: "y", from: "ja", to: "en" })).rejects.toThrow(/free_tier/);
       expect(spy.mock.calls.filter((c) => String(c[0]).includes("looks like a free-tier key"))).toHaveLength(1);
@@ -58,7 +58,7 @@ describe("the engines", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const failing = { models: { embedContent: vi.fn(async () => Promise.reject(new Error(REAL_429))) } };
-      const engine = createGeminiEmbeddingEngine({ client: failing as never });
+      const engine = createGeminiEmbeddingEngine({ client: failing });
       await expect(engine.embed({ text: "x", task: "query" })).rejects.toThrow(/free_tier/);
       expect(spy.mock.calls.filter((c) => String(c[0]).includes("looks like a free-tier key"))).toHaveLength(1);
     } finally {
@@ -70,7 +70,7 @@ describe("the engines", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const failing = { models: { generateContent: vi.fn(async () => Promise.reject(new Error("503 UNAVAILABLE"))) } };
-      await expect(createGeminiEngine({ client: failing as never }).translate({ text: "x", from: "ja", to: "en" })).rejects.toThrow(/503/);
+      await expect(createGeminiEngine({ client: failing }).translate({ text: "x", from: "ja", to: "en" })).rejects.toThrow(/503/);
       expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();

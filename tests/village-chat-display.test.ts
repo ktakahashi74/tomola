@@ -1,17 +1,18 @@
-import { createElement } from "react";
+import { CHAT_CONSENT_VERSION } from "~/lib/village-chat-consent";
+import { chatConsentData, chatData } from "./helpers/loader-fixtures";
 import { expect, it, vi } from "vitest";
 import { renderInRouter } from "./helpers/render-in-router";
 import VillageChat from "~/routes/village-chat";
 import type { ActiveChatMessage } from "~/lib/village-chat";
 import { m } from "~/paraglide/messages.js";
-import { CHAT_CONSENT_VERSION } from "~/lib/village-chat-consent";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeElement } from "./helpers/route-fixtures";
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
 it.each(["en", "ja"] as const)("shows the current consent as separate disclosures in %s", async locale => {
   setTestLocale(locale);
   try {
-    const html = await render("", false, { consentRequired: true, consentVersion: CHAT_CONSENT_VERSION, previousConsentVersion: null, privacyAvailable: false });
+    const html = await renderInRouter(() => routeElement(VillageChat, { loaderData: chatConsentData() }), "/v/display-chat/chat");
     expect(html).toContain(m.village_chat_consent_title());
     expect(html).toMatch(/<details(?![^>]*\bopen)[^>]*>/);
     expect(html).not.toContain('id="chat-consent-changes"');
@@ -28,10 +29,10 @@ it.each(["en", "ja"] as const)("shows the current consent as separate disclosure
 });
 
 const original = "Original chat text";
-async function render(errorCode: string, historical = false, overrides: Record<string, unknown> = {}) {
+async function render(errorCode: string, historical = false, overrides: Parameters<typeof chatData>[0] = {}) {
   const message: ActiveChatMessage = { id: "a".repeat(32), author: "display_writer", own: false, lang: "ja", parts: [{ type: "text", text: original }], createdSeq: 1, changedSeq: 1, createdAt: "2026-10-15T00:00:00Z", edited: false, deleted: false, hidden: false, translation: { text: null, lang: "en", state: "failed", errorCode } };
-  const loaderData = { readers: 2, village: { slug: "display-chat", name: "Display chat" }, messages: [message], seq: 2, ended: false, historical, hasNewer: true, readSeq: 0, consentRequired: false, linkLang: null, before: null, unreadCounts: {}, report: null, reported: null, now: Date.parse("2026-10-16T00:00:00Z"), window: "", latest: false, unreadAfter: 0, ...overrides };
-  return renderInRouter(() => createElement(VillageChat, { loaderData } as never), "/v/display-chat/chat");
+  const loaderData = chatData({ messages: [message], historical, ...overrides });
+  return renderInRouter(() => routeElement(VillageChat, { loaderData }), "/v/display-chat/chat");
 }
 it.each(["untranslated_script", "untranslated_similar"])("renders %s as source text without a failure notice", async reason => {
   const html = await render(reason);

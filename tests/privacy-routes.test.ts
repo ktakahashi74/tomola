@@ -1,3 +1,4 @@
+import { onboardingData } from "./helpers/loader-fixtures";
 import { expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { shellLabels } from "~/lib/shell-labels.server";
@@ -6,6 +7,7 @@ import { testOperator } from "./helpers/operator";
 import { renderInRouter } from "./helpers/render-in-router";
 import { addMember, createTestDb } from "./helpers/db";
 import type { MailMessage } from "~/lib/mail/mail.server";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 const args = (url: string) => ({ request: new Request(`http://localhost${url}`), params: {}, context: {} }) as never;
@@ -14,12 +16,16 @@ it("serves the configured notices in HTML and Markdown, with matching footer and
   expect(noticesAvailable()).toEqual({ privacy: true, terms: true });
   expect(trialParticipationRequired()).toBe(true);
   for (const kind of ["privacy", "terms"] as const) {
-    const page = kind === "privacy" ? await import("~/routes/privacy") : await import("~/routes/terms");
+    const privacy = await import("~/routes/privacy");
+    const terms = await import("~/routes/terms");
+    const page = kind === "privacy" ? privacy : terms;
     const md = kind === "privacy" ? await import("~/routes/privacy-md") : await import("~/routes/terms-md");
     const loaded = await page.loader(args(`/${kind}?lang=en`));
     expect(loaded).toMatchObject({ lang: "en", fallback: false });
     expect(await md.loader(args(`/${kind}.md?lang=en`)).text()).toContain(loaded.markdown);
-    const html = await renderInRouter(() => createElement(page.default as never, { loaderData: loaded } as never));
+    const html = kind === "privacy"
+      ? await renderInRouter(() => routeElement(privacy.default, { loaderData: loaded }))
+      : await renderInRouter(() => routeElement(terms.default, { loaderData: loaded }));
     expect(html).toContain('id="s1"');
   }
   const { SiteFooter } = await import("~/components/site-footer");
@@ -28,7 +34,7 @@ it("serves the configured notices in HTML and Markdown, with matching footer and
   expect(footer).toContain('href="/privacy#s1"');
   expect(footer).toContain(testOperator.name.en);
   const onboarding = await import("~/routes/onboarding");
-  const html = await renderInRouter(() => createElement(onboarding.default, { loaderData: { existing: false, countries: [], defaultMainLang: "en", opening: {}, notices: noticesAvailable(), trialRequired: true } } as never));
+  const html = await renderInRouter(() => routeElement(onboarding.default, { loaderData: onboardingData({ defaultMainLang: "en", notices: noticesAvailable(), trialRequired: true }) }));
   for (const href of ["/privacy", "/terms"]) expect(html).toContain(`href="${href}"`);
   expect(html).toContain(testOperator.participation.copy.en.eligibilitySummary);
   expect(html).toContain('name="trialAgree"');

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { createElement } from "react";
 import { entries, notifications } from "~/lib/db/schema";
 import { setFollow } from "~/lib/follows.server";
 import { followedThreadHrefs } from "~/lib/reply-locations.server";
@@ -11,6 +10,7 @@ import { loader as openLink } from "~/routes/notification-open";
 import { countUnreadNotifications } from "~/lib/notifications.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 let h: RouteHarness, topic: number, notice: number;
 beforeAll(async () => {
   h = await setupRouteHarness(); await h.signIn("notice_reader"); await h.signIn("notice_author");
@@ -33,7 +33,7 @@ it("keeps cross-site bulk marking from changing read state", async () => {
 });
 it("renders an ordinary link that can open independently of scripts or form submission", async () => {
   const loaderData = await loader(h.args(h.request("/notifications", { as: "notice_reader" })));
-  const html = await renderInRouter(() => createElement(Notifications, { loaderData } as never), "/notifications");
+  const html = await renderInRouter(() => routeElement(Notifications, { loaderData }), "/notifications");
   expect(html).toMatch(new RegExp(`<a[^>]*href="/notifications/${notice}/open"`));
   expect(html).not.toContain('role="link"');
 });

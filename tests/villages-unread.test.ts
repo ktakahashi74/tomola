@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { villageMembers, villages } from "~/lib/db/schema";
@@ -9,6 +8,7 @@ import { loader as villagePage } from "~/routes/village";
 import { consentChatMembers } from "./helpers/chat-consent";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
 beforeAll(async () => {
@@ -34,7 +34,7 @@ it("shows each joined village's unread count in its accessible link name and hid
   const counts = vi.spyOn(chat, "chatUnreadCounts");
   const value = await load("directory_reader");
   expect(counts).toHaveBeenCalledOnce();
-  const html = await renderInRouter(() => createElement(Villages, { loaderData: value } as never), "/villages");
+  const html = await renderInRouter(() => routeElement(Villages, { loaderData: value }), "/villages");
   // Chat news is a dot on the chat entrance (not a number, and not on the village's name); a quiet village keeps a lighter entrance; no consent, no entrance.
   expect(html).toMatch(/<a[^>]*aria-label="Unread village · Chat · unread"[^>]*href="\/v\/directory-unread\/chat"/);
   expect(html).toMatch(/<a[^>]*aria-label="Quiet village · Chat"[^>]*href="\/v\/directory-quiet\/chat"/);
@@ -48,7 +48,7 @@ it("keeps closed-chat directory data unchanged without asking for unread counts"
   const value = await load("directory_reader");
   expect(counts).not.toHaveBeenCalled();
   expect(Object.keys(value).sort()).toEqual(["invites", "member", "villages"]);
-  const html = await renderInRouter(() => createElement(Villages, { loaderData: value } as never), "/villages");
+  const html = await renderInRouter(() => routeElement(Villages, { loaderData: value }), "/villages");
   expect(html).not.toContain('/chat"');
 });
 
@@ -58,7 +58,7 @@ it("never asks for or exposes member unread counts to public readers", async () 
   const value = await load();
   expect(counts).not.toHaveBeenCalled();
   expect(Object.keys(value).sort()).toEqual(["invites", "member", "villages"]);
-  const html = await renderInRouter(() => createElement(Villages, { loaderData: value } as never), "/villages");
+  const html = await renderInRouter(() => routeElement(Villages, { loaderData: value }), "/villages");
   expect(html).not.toContain('id="joined-villages"');
   expect(html).not.toContain('/chat"');
 });

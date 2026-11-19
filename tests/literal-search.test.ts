@@ -1,6 +1,5 @@
 import { ApiError } from "@google/genai";
 import { eq, inArray, sql } from "drizzle-orm";
-import { createElement } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "~/lib/db/client.server";
 import { EMBEDDING_DIM, entries, entryEmbeddings, llmUsage, profiles, rateLimits, translations, translationRevisions, villages } from "~/lib/db/schema";
@@ -16,6 +15,7 @@ import { getMd, parseBlocks } from "./helpers/md";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
 import { parse } from "yaml";
+import { routeElement } from "./helpers/route-fixtures";
 
 const opts: Pick<SearchOptions, "readLangs" | "displayLang" | "limit"> = { readLangs: [], displayLang: "en" };
 const engine = createFakeEmbeddingEngine();
@@ -260,7 +260,7 @@ describe("authenticated HTML and Markdown entries", () => {
       const path = `/search?q=translated-route-needle${override}`;
       const screen = await loader(h.args(h.request(path, { as: "literal_reader" })));
       expect(screen).toMatchObject({ state: "results", literalOnly: true, hits: override ? [{ id: row.id }] : [] });
-      const html = await renderInRouter(() => createElement(Search, { loaderData: screen } as never), path);
+      const html = await renderInRouter(() => routeElement(Search, { loaderData: "data" in screen ? screen.data : screen }), path);
       const href = html.match(/href="(\/search\.md\?[^"]*)"/)?.[1].replaceAll("&amp;", "&");
       expect(href).toBeDefined();
       expect(new URL(href!, "http://localhost").searchParams.get("lang")).toBe(override ? "en" : null);

@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createAppAuth, getAuth } from "~/lib/auth/auth.server";
 import { getSessionUser } from "~/lib/auth/session.server";
@@ -18,6 +17,7 @@ import { handle as homeHandle } from "~/routes/home";
 import { handle as settingsHandle } from "~/routes/settings";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -122,7 +122,7 @@ it.each([["/", homeHandle], ["/settings", settingsHandle]] as const)("includes t
   const request = h.request(path, { as: "polish" });
   const data = await memberLoader(h.args(request));
   if (data.reader) throw new Error("Expected a member");
-  const render = (loaderData: typeof data) => renderInRouter(() => createElement(MemberLayout, { loaderData, params: {}, matches: [] } as never), path, handle);
+  const render = (loaderData: typeof data) => renderInRouter(() => routeElement(MemberLayout, { loaderData }), path, handle);
   const html = await render(data);
   expect(html.indexOf(messageMarkup(m.passkey_prompt()))).toBeGreaterThan(-1);
   expect(html.indexOf(messageMarkup(m.passkey_prompt()))).toBeLessThan(html.indexOf("<header"));

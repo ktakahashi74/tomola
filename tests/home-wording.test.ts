@@ -15,7 +15,7 @@ afterEach(() => {
   setTestLocale("en");
   vi.unstubAllEnvs();
 });
-const drawHome = (locale: "en" | "ja", as = "hana", actionData?: unknown) => renderHome(h, locale, as, actionData);
+const drawHome = (locale: "en" | "ja", as = "hana") => renderHome(h, locale, as);
 
 describe("the stream home in English and in Japanese", () => {
   it("says the order, the switch, the filters, the row counts in English", async () => {
@@ -62,7 +62,7 @@ it.each(["en", "ja"] as const)("names a collapsed filter for screen readers only
 it("puts no folded ordering rule in the order row", async () => {
   for (const locale of ["en", "ja"] as const) {
     for (const order of ["created", "activity", "insightful"] as const) {
-      const html = await renderHome(h, locale, "hana", undefined, `/?order=${order}`);
+      const html = await renderHome(h, locale, "hana", `/?order=${order}`);
       expect(html).not.toMatch(/class="[^"]*\bmore-info\b/);
       expect(html).not.toContain('href="/principles#rules"');
     }

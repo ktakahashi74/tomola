@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { followingData } from "./helpers/loader-fixtures";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 import { m } from "~/paraglide/messages.js";
@@ -7,10 +7,10 @@ import { createReply, createTopic } from "~/lib/entries.server";
 import { setFollow } from "~/lib/follows.server";
 import { setVillageFollow } from "~/lib/village-follows.server";
 import { TOPICS_PER_PAGE } from "~/lib/pagination";
-import type { TopicItem } from "~/lib/topic-list.server";
 import { parseBlocks } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -38,7 +38,7 @@ afterAll(() => h.restore());
 
 const load = async (page: number, as = "ben", query = "&all=1") => {
   const { loader } = await import("~/routes/following");
-  return await loader(h.args(h.request(`/following?page=${page}${query}`, { as }))) as unknown as { topics: TopicItem[]; hasNext: boolean; aiOpen: { mdPath: string } };
+  return await loader(h.args(h.request(`/following?page=${page}${query}`, { as })));
 };
 
 it("uses shared rows with no card actions and keeps follow lists private", async () => {
@@ -48,7 +48,7 @@ it("uses shared rows with no card actions and keeps follow lists private", async
   expect(row).not.toHaveProperty("body");
   expect(row).not.toHaveProperty("followState");
   const { default: Following } = await import("~/routes/following");
-  const html = await renderInRouter(() => createElement(Following as never, { loaderData: data, actionData: undefined, params: {}, matches: [] } as never), "/following");
+  const html = await renderInRouter(() => routeElement(Following, { loaderData: data }), "/following");
   expect(html).toContain(`<li id="q-${longId}"`);
   expect(html).not.toMatch(/action="\/(?:follow|vote)"|<article|ATOMTAIL/);
   expect((await load(1, "cara")).topics).toEqual([]);
@@ -77,9 +77,9 @@ it("ignores unsupported order and long filters in both twins and carries only th
       expect(String(footer.fm.next)).not.toMatch(/order=|long=/);
     }
   }
-  const metadata = meta({ location: { search: "?order=created&long=1&asks=1&lang=ja&page=2" } } as never);
+  const metadata = routeMeta(meta, { loaderData: followingData(), location: { search: "?order=created&long=1&asks=1&lang=ja&page=2" } });
   expect(metadata).toContainEqual(expect.objectContaining({ rel: "alternate", href: "/following.md?lang=ja&asks=1&page=2" }));
-  const all = meta({ location: { search: "?all=1&asks=1&lang=en&page=2" } } as never);
+  const all = routeMeta(meta, { loaderData: followingData(), location: { search: "?all=1&asks=1&lang=en&page=2" } });
   expect(all).toContainEqual(expect.objectContaining({ rel: "alternate", href: "/following.md?lang=en&asks=1&all=1&page=2" }));
 });
 
@@ -103,7 +103,7 @@ it("shows the new-reply indicator next to the total in a following row", async (
   const row = data.topics.find(t => t.id === remarkId)!;
   expect(row.newReplies).toMatchObject({ count: 1, href: expect.stringMatching(new RegExp(`^/t/${remarkId}#c-`)) });
   const { default: Following } = await import("~/routes/following");
-  const html = await renderInRouter(() => createElement(Following as never, { loaderData: data, actionData: undefined, params: {}, matches: [] } as never), "/following");
+  const html = await renderInRouter(() => routeElement(Following, { loaderData: data }), "/following");
   const block = html.split(`<li id="q-${remarkId}"`)[1]?.split("</li>")[0] ?? "";
   expect(block).toContain(`href="${row.newReplies!.href}"`);
   const total = messageMarkup(m.home_replies({ count: row.replyCount }));
@@ -121,7 +121,7 @@ it("ignores old village-page values in the screen, alternate and AI twin", async
     const { meta } = await import("~/routes/following");
     for (const value of ["1", "2", "bad", "-1"]) {
       const query = `?all=1&vpage=${value}`;
-      const alternate = meta({ location: { search: query } } as never).find(tag => "rel" in tag && tag.rel === "alternate") as { href: string };
+      const alternate = routeMeta(meta, { loaderData: followingData(), location: { search: query } }).find(tag => "rel" in tag && tag.rel === "alternate") as { href: string };
       const screen = await load(1, "ben", `&all=1&vpage=${value}`);
       expect(screen).not.toHaveProperty("followedVillages");
       expect(screen.topics.map(t => t.id)).toEqual((await load(1)).topics.map(t => t.id));

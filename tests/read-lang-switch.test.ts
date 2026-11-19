@@ -12,6 +12,7 @@ import { getMd } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { loadRouteElement } from "./helpers/route-fixtures";
 
 afterEach(() => { vi.unstubAllEnvs(); setTestLocale("en"); });
 
@@ -180,15 +181,18 @@ describe("screen overrides without changes to machine reads or preferences", () 
     vi.stubEnv("PUBLIC_READING", "1");
     vi.stubEnv("VILLAGES", "1");
     await (await import("~/lib/villages.server")).ensureLanguageVillages(h.db);
+    const home = await import("~/routes/home");
+    const area = await import("~/routes/area");
+    const village = await import("~/routes/village");
     const pages = [
-      { mod: await import("~/routes/home"), path: "/", params: {} },
-      { mod: await import("~/routes/area"), path: "/a/ja", params: { lang: "ja" } },
-      { mod: await import("~/routes/village"), path: "/v/ja", params: { slug: "ja" } },
+      { path: "/", load: (request: Request) => loadRouteElement(home.default, () => home.loader(h.args(request))) },
+      { path: "/a/ja", load: (request: Request) => loadRouteElement(area.default, () => area.loader(h.args(request, { lang: "ja" }))) },
+      { path: "/v/ja", load: (request: Request) => loadRouteElement(village.default, () => village.loader(h.args(request, { slug: "ja" }))) },
     ];
-    for (const { mod, path, params } of pages) {
+    for (const { path, load } of pages) {
       for (const as of [undefined, "reading_reader"]) {
-        const loaderData = await mod.loader(h.args(h.request(`${path}?lang=fr`, { as }), params as Record<string, string>));
-        const html = await renderInRouter(() => createElement(mod.default as never, { loaderData } as never), path);
+        const { loaderData, element } = await load(h.request(`${path}?lang=fr`, { as }));
+        const html = await renderInRouter(() => element, path);
         expect(html.includes("reading-lang-menu"), `${as ?? "guest"}: ${path}`).toBe(false);
         expect(loaderData).toMatchObject({ readingLanguage: { current: "fr" }, langParam: "fr" });
       }

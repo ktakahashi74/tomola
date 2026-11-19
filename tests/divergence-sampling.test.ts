@@ -1,5 +1,4 @@
 import { quietLogger as quiet } from "./helpers/logger";
-import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -18,6 +17,7 @@ import { requeueTranslations } from "~/lib/translations-requeue.server";
 import { DIVERGENCE_JOB, divergenceDedupeKey } from "~/lib/translations.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
+import { routeElement } from "./helpers/route-fixtures";
 
 // Production startup also checks the review counts of the UI strings that the build embeds (a test worktree has none): hand it a clean ja/en.
 const CLEAN_COUNTS = { ja: { unverified: 0, unverifiedPublic: 0, missing: 0, stale: 0 }, en: { unverified: 0, unverifiedPublic: 0, missing: 0, stale: 0 } };
@@ -232,7 +232,7 @@ describe("the observation page states", () => {
     expect(res.status).toBe(200);
     return { mod, data: res.value as Parameters<typeof mod.default>[0]["loaderData"] };
   };
-  const html = (mod: typeof import("~/routes/admin-observation"), data: unknown) => renderToStaticMarkup(createElement(mod.default as never, { loaderData: data, actionData: undefined, params: {}, matches: [] } as never));
+  const html = (mod: typeof import("~/routes/admin-observation"), data: Parameters<typeof mod.default>[0]["loaderData"]) => renderToStaticMarkup(routeElement(mod.default, { loaderData: data }));
 
   it("says plainly when detection is off, when the rate is 0, and when it is on with a rate; the figures are compared / all", async () => {
     process.env.TRANSLATION_PRIMARY = "fake";
@@ -252,7 +252,7 @@ describe("the observation page states", () => {
     process.env.DIVERGENCE_SAMPLE_RATE = "0.25";
     const on = await load();
     expect(on.data).toMatchObject({ divergenceEnabled: true, divergenceSampleRate: 0.25 });
-    const withPairs = { ...on.data, divergence: [{ from: "ja", to: "en", eligible: 12, measured: 3, records: 1, tone: 1, severity: { low: 1, medium: 0, high: 0 }, sameVendor: { measured: 0, records: 0, tone: 0, severity: { low: 0, medium: 0, high: 0 } } }] };
+    const withPairs: typeof on.data = { ...on.data, divergence: [{ from: "ja", to: "en", eligible: 12, measured: 3, records: 1, tone: 1, severity: { low: 1, medium: 0, high: 0 }, sameVendor: { measured: 0, records: 0, tone: 0, severity: { low: 0, medium: 0, high: 0 } } }] };
     const markup = html(on.mod, withPairs);
     expect(markup).toContain("3 / 12");
     expect(markup).toContain('role="status"');

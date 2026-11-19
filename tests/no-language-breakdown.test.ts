@@ -136,7 +136,7 @@ describe("a question's stances, by every route a member can read", () => {
 
   it("the page and the lists give the totals and the number of languages, and no breakdown by language, to a member, a moderator and an operator", async () => {
     for (const as of VIEWERS) {
-      const page = await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}?peek=1`, { as }), { id: String(q) }) as never);
+      const page = await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}?peek=1`, { as }), { id: String(q) }));
       expect(findBreakdowns(asJson(JSON.stringify(page))), `${as}: topic page`).toEqual([]);
       const dist = (page as unknown as { question: { stance: { distribution: { total: number; counts: Record<string, number>; langs: number } } } }).question.stance.distribution;
       expect(dist, as).toMatchObject({ total: 10, counts: { agree: 5, disagree: 3, neither: 2 }, langs: 4 });
@@ -208,7 +208,7 @@ describe("Insightful, by every route a member can read", () => {
   it("the page (the post, the replies and the reasons panel) and the lists give the total and the number of languages only", async () => {
     type Reactions = { insightful: { total: number; langs: number }; mine: boolean };
     for (const as of VIEWERS) {
-      const page = (await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}`, { as }), { id: String(q) }) as never)) as unknown as {
+      const page = (await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}`, { as }), { id: String(q) }))) as unknown as {
         topic: { reactions: Reactions };
         replies: Array<{ reactions: Reactions }>;
         question: { reasons: Record<string, Array<{ reactions: Reactions }>> };
@@ -252,7 +252,7 @@ describe("Insightful, by every route a member can read", () => {
   });
 
   it("the reasons panel data names no writer's home area (the language of a reply is the language of its text)", async () => {
-    const page = await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}`, { as: "watcher" }), { id: String(q) }) as never);
+    const page = await (await import("~/routes/topic")).loader(h.args(h.request(`/t/${q}`, { as: "watcher" }), { id: String(q) }));
     const reasons = JSON.stringify((page as unknown as { question: { reasons: unknown } }).question.reasons);
     expect(reasons).toContain("vi1");
     expect(reasons).toContain('"lang":"vi"');
@@ -356,7 +356,7 @@ describe("Insightful: the same totals and the same number of languages from a di
       const out: Record<string, string> = {};
       const id = question.id;
       for (const as of READERS) {
-        const page = await (await import("~/routes/topic")).loader(w.args(w.request(`/t/${id}`, { as }), { id: String(id) }) as never);
+        const page = await (await import("~/routes/topic")).loader(w.args(w.request(`/t/${id}`, { as }), { id: String(id) }));
         // Account UUIDs differ between worlds; independently verify the account binding before normalizing that identity.
         expect(page.ownerId).toBe(w.ids[as]);
         out[`${as} loader /t/${id}`] = withoutClock(JSON.stringify({ ...page, ownerId: as }));

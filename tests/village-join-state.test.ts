@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { renderInRouter } from "./helpers/render-in-router";
@@ -8,6 +7,7 @@ import { createVillage, endVillage } from "~/lib/village-management.server";
 import { setVillageFollow } from "~/lib/village-follows.server";
 import { villageMembers } from "~/lib/db/schema";
 import { m } from "~/paraglide/messages.js";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -26,7 +26,7 @@ beforeAll(async () => {
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
 const load = (as?: string, slug = "join-open") => loader(h.args(h.request(`/v/${slug}`, { as }), { slug }));
 const post = (as: string, intent: string, slug = "join-open") => h.outcome(() => action(h.args(h.request(`/v/${slug}`, { as, form: { intent } }), { slug })));
-const html = async (page: Awaited<ReturnType<typeof load>>) => (await renderInRouter(() => createElement(Village, { loaderData: page } as never), `/v/${page.village.slug}`)).replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
+const html = async (page: Awaited<ReturnType<typeof load>>) => (await renderInRouter(() => routeElement(Village, { loaderData: page }), `/v/${page.village.slug}`)).replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
 const head = (rendered: string) => rendered.split("</header>")[0];
 
 it.each(["zjoin_owner", "zjoin_guidance", undefined])("keeps Nushi guidance off the village page for %s", async as => {

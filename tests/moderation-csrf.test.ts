@@ -35,13 +35,13 @@ describe("the new actions refuse a foreign origin", () => {
   const foreign = { origin: "https://evil.example" };
   it("for /mod, /mod/appeals, /admin/roles, /appeal, /notifications and /t/:id/edit, and change nothing", async () => {
     const cases: Array<[string, () => Promise<{ action: (a: never) => unknown }>, string, string, Record<string, string>, Record<string, string>]> = [
-      ["mod", () => import("~/routes/mod") as never, "/mod", "rina", { intent: "unhide", entryId: String(topicId), reason: "other" }, {}],
-      ["mod-appeals", () => import("~/routes/mod-appeals") as never, "/mod/appeals", "rina", { appealId: "1", intent: "uphold", note: "x" }, {}],
-      ["admin-roles", () => import("~/routes/admin-roles") as never, "/admin/roles", "opal", { intent: "grant", userId: "x", lang: "ja" }, {}],
-      ["appeal", () => import("~/routes/appeal") as never, `/appeal/${actionId}`, "hana", { text: "unfair" }, { actionId: String(actionId) }],
-      ["notifications", () => import("~/routes/notifications") as never, "/notifications", "hana", { intent: "read-all" }, {}],
+      ["mod", () => import("~/routes/mod"), "/mod", "rina", { intent: "unhide", entryId: String(topicId), reason: "other" }, {}],
+      ["mod-appeals", () => import("~/routes/mod-appeals"), "/mod/appeals", "rina", { appealId: "1", intent: "uphold", note: "x" }, {}],
+      ["admin-roles", () => import("~/routes/admin-roles"), "/admin/roles", "opal", { intent: "grant", userId: "x", lang: "ja" }, {}],
+      ["appeal", () => import("~/routes/appeal"), `/appeal/${actionId}`, "hana", { text: "unfair" }, { actionId: String(actionId) }],
+      ["notifications", () => import("~/routes/notifications"), "/notifications", "hana", { intent: "read-all" }, {}],
       // topic-edit is the entry point of the author's edit and of the moderator's fix (fix_entry)
-      ["topic-edit", () => import("~/routes/topic-edit") as never, `/t/${topicId}/edit`, "hana", { title: "changed", body: "changed" }, { id: String(topicId) }],
+      ["topic-edit", () => import("~/routes/topic-edit"), `/t/${topicId}/edit`, "hana", { title: "changed", body: "changed" }, { id: String(topicId) }],
     ];
     for (const [name, load, path, as, form, params] of cases) {
       const mod = await load();

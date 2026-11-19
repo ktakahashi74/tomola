@@ -1,9 +1,9 @@
 import { hitIpLimit } from "~/lib/rate-limit.server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { createElement } from "react";
+import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createStaticHandler, createStaticRouter, StaticRouterProvider, type StaticHandlerContext } from "react-router";
+import { createStaticHandler, createStaticRouter, StaticRouterProvider, type Location, type StaticHandlerContext } from "react-router";
 import { createTopic, createReply, softDeleteEntry } from "~/lib/entries.server";
 import { entries, rateLimits } from "~/lib/db/schema";
 import { createTranslationHandlers } from "~/lib/jobs/translation-jobs.server";
@@ -20,6 +20,7 @@ import { m } from "~/paraglide/messages.js";
 import { escapeRegex, messageMarkup } from "./helpers/message-markup";
 import { parseBlocks } from "./helpers/md";
 import { renderInRouter, withShellLabels } from "./helpers/render-in-router";
+import { loadRouteElement, routeMeta, routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -48,14 +49,40 @@ beforeAll(async () => {
 });
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); setTestLocale("en"); });
 
+function page<LoaderData, ActionData, Params extends object, Matches extends readonly unknown[], MetaMatches extends readonly unknown[], Tags>(
+  mod: {
+    default: ComponentType<{ loaderData: LoaderData; actionData?: ActionData; params: Params; matches: Matches }>;
+    loader: (args: never) => Promise<NoInfer<LoaderData>>;
+    meta: (args: { loaderData: NoInfer<LoaderData>; params: Params; matches: MetaMatches; location: Location }) => Tags;
+    headers: () => unknown;
+    action?: (args: never) => unknown;
+  },
+  path: string,
+  params: Record<string, string> = {},
+) {
+  const load = (request: Request) => mod.loader(h.args(request, params));
+  return {
+    mod, path, params,
+    render: (request: Request) => loadRouteElement(mod.default, () => load(request)),
+    async read(request: Request) {
+      let tags: Tags | undefined;
+      const outcome = await h.outcome(async () => {
+        const loaderData = await load(request);
+        tags = routeMeta(mod.meta, { loaderData, rootData: { publicReading: true } });
+        return loaderData;
+      });
+      return { outcome, tags };
+    },
+  };
+}
 async function pages() {
   return [
-    { mod: await import("~/routes/home"), path: "/", params: {} },
-    { mod: await import("~/routes/topic"), path: `/t/${ids.question}`, params: { id: String(ids.question) } },
-    { mod: await import("~/routes/area"), path: "/a/ja", params: { lang: "ja" } },
-    { mod: await import("~/routes/latest"), path: "/latest", params: {} },
-    { mod: await import("~/routes/topic-objections"), path: `/t/${ids.question}/objections`, params: { id: String(ids.question) } },
-  ].map(page => ({ ...page, params: page.params as Record<string, string> }));
+    page(await import("~/routes/home"), "/"),
+    page(await import("~/routes/topic"), `/t/${ids.question}`, { id: String(ids.question) }),
+    page(await import("~/routes/area"), "/a/ja", { lang: "ja" }),
+    page(await import("~/routes/latest"), "/latest"),
+    page(await import("~/routes/topic-objections"), `/t/${ids.question}/objections`, { id: String(ids.question) }),
+  ];
 }
 
 describe("public reading configuration and browser boundaries", () => {
@@ -87,15 +114,15 @@ describe("public reading configuration and browser boundaries", () => {
 
   it("opens exactly the reading pages and emits no member ids or stance state", async () => {
     vi.stubEnv("PUBLIC_READING", "1");
-    for (const { mod, path, params } of await pages()) {
-      const outcome = await h.outcome(async () => (await mod.loader(h.args(h.request(`${path}?lang=en&peek=${ids.question}&review=${ids.reason}&posted=${ids.question}&write=agree&stance_msg=conflict`), params))));
+    for (const { mod, path, read } of await pages()) {
+      const { outcome, tags } = await read(h.request(`${path}?lang=en&peek=${ids.question}&review=${ids.reason}&posted=${ids.question}&write=agree&stance_msg=conflict`));
       expect(outcome.status, path).toBe(200);
       const text = JSON.stringify(outcome.value);
       expect(text).toContain("writer");
       for (const userId of Object.values(h.ids)) expect(text, path).not.toContain(userId);
       expect(text).not.toMatch(/"distribution"|"position"|"version"|"triggerEntryId"|"state"/);
       expect(mod.headers()).toMatchObject({ "Cache-Control": "private", "X-Robots-Tag": "noindex" });
-      expect(mod.meta({ loaderData: outcome.value, location: { search: "" }, matches: [{ id: "root", loaderData: { publicReading: true } }] } as never)).toContainEqual({ name: "robots", content: "noindex" });
+      expect(tags).toContainEqual({ name: "robots", content: "noindex" });
     }
     const home = await import("~/routes/home");
     const loaded = await home.loader(h.args(h.request("/?lang=en")));
@@ -123,11 +150,11 @@ describe("public reading configuration and browser boundaries", () => {
   it("renders reader HTML without write controls, member links or stance data", async () => {
     vi.stubEnv("PUBLIC_READING", "1");
     const layout = await import("~/routes/member-layout");
-    for (const { mod, path, params } of await pages()) {
+    for (const { path, render } of await pages()) {
       const request = h.request(`${path}?lang=en&peek=1`);
-      const loaderData = await mod.loader(h.args(request, params));
+      const { element } = await render(request);
       const headerData = await layout.loader(h.args(request));
-      const routes = withShellLabels([{ path: "/", element: createElement(layout.default, { loaderData: headerData } as never), children: [{ ...(path === "/" ? { index: true as const } : { path: path.slice(1) }), element: createElement(mod.default as never, { loaderData } as never) }] }]);
+      const routes = withShellLabels([{ path: "/", element: routeElement(layout.default, { loaderData: headerData }), children: [{ ...(path === "/" ? { index: true as const } : { path: path.slice(1) }), element }] }]);
       const context = await createStaticHandler(routes).query(request) as StaticHandlerContext;
       const router = createStaticRouter(routes, context);
       const html = renderToStaticMarkup(createElement(StaticRouterProvider, { router, context, hydrate: false }));
@@ -158,12 +185,12 @@ describe("public reading configuration and browser boundaries", () => {
       const path = `/t/${ids.question}${query}`;
       const loaderData = await topic.loader(h.args(h.request(path), { id: String(ids.question) }));
       expect(loaderData.replyCount).toBe(count);
-      const html = await renderInRouter(() => createElement(topic.default, { loaderData } as never), path);
+      const html = await renderInRouter(() => routeElement(topic.default, { loaderData }), path);
       const section = html.match(/<section id="replies"[^>]*>([\s\S]*?)<\/section>/)![1];
       expect(section).toMatch(new RegExp(`^<h2[^>]*>${escapeRegex(messageMarkup(m.home_replies({ count })))}</h2>`));
     }
     const loaderData = await topic.loader(h.args(h.request(`/t/${ids.topic}`), { id: String(ids.topic) }));
-    const empty = await renderInRouter(() => createElement(topic.default, { loaderData } as never), `/t/${ids.topic}`);
+    const empty = await renderInRouter(() => routeElement(topic.default, { loaderData }), `/t/${ids.topic}`);
     expect(empty.match(/<section id="replies"[^>]*>([\s\S]*?)<\/section>/)![1]).not.toContain("<h2");
   });
 
@@ -172,7 +199,7 @@ describe("public reading configuration and browser boundaries", () => {
     const layout = await import("~/routes/member-layout");
     for (const as of [null, "reader"]) {
       const loaderData = await layout.loader(h.args(h.request("/", as ? { as } : {})));
-      const html = await renderInRouter(() => createElement(layout.default, { loaderData } as never));
+      const html = await renderInRouter(() => routeElement(layout.default, { loaderData }));
       const header = html.match(/<header[^>]*>([\s\S]*?)<\/header>/)![1];
       for (const path of ["/why", "/principles"]) {
         if (as) expect(header).not.toContain(`href="${path}"`);
@@ -186,7 +213,7 @@ describe("public reading configuration and browser boundaries", () => {
     const topic = await import("~/routes/topic");
     const path = `/t/${ids.hidden}`;
     const loaderData = await topic.loader(h.args(h.request(path), { id: String(ids.hidden) }));
-    const html = await renderInRouter(() => createElement(topic.default, { loaderData } as never), path);
+    const html = await renderInRouter(() => routeElement(topic.default, { loaderData }), path);
     const reply = html.match(/<section id="reply"[^>]*>([\s\S]*?)<\/section>/)![1];
     expect(reply).toContain(messageMarkup(m.reply_closed_hidden()));
     expect(reply).not.toContain(messageMarkup(m.public_reading_reply()));
@@ -218,8 +245,9 @@ describe("public reading configuration and browser boundaries", () => {
   it("keeps POSTs and incomplete registrations authenticated", async () => {
     vi.stubEnv("PUBLIC_READING", "1");
     for (const { mod, path, params } of (await pages()).slice(0, 2)) {
-      if (!("action" in mod)) throw new Error("missing action");
-      const response = await h.outcome(() => mod.action(h.args(h.request(path, { form: { body: "write" } }), params)));
+      const { action } = mod;
+      if (!action) throw new Error("missing action");
+      const response = await h.outcome(() => action(h.args(h.request(path, { form: { body: "write" } }), params)));
       expect(response).toMatchObject(path === "/" ? { status: 405 } : { status: 302, location: "/login" });
       expect(await h.outcome(async () => (await mod.loader(h.args(h.request(path, { as: "pending" }), params))))).toMatchObject({ status: 302, location: "/onboarding" });
     }

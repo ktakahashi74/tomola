@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initializeSiteMarkdown } from "~/lib/markdown-startup.server";
 import { NAME_LANGS, isNameLang, nameFor } from "~/lib/name.server";
@@ -7,6 +6,7 @@ import { whyFor } from "~/lib/why.server";
 import { readNameSource } from "./helpers/name-source";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setTestLocale } from "./stubs/paraglide-runtime";
+import { routeElement, routeMeta } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 beforeAll(() => initializeSiteMarkdown());
@@ -85,13 +85,13 @@ describe("the separate name page", () => {
   it("keeps the public document layout, language links, RTL direction and Markdown alternate", async () => {
     const route = await import("~/routes/name");
     const loaderData = await htmlLoader("/name?lang=ar");
-    const html = await renderInRouter(() => createElement(route.default, { loaderData } as never), "/name?lang=ar");
+    const html = await renderInRouter(() => routeElement(route.default, { loaderData }), "/name?lang=ar");
     expect(html).toContain('<article lang="ar" dir="rtl"');
     expect(html).toContain('href="/name?lang=ja"');
     expect(html).toContain('href="/name?lang=en"');
     expect(html).not.toContain(">undefined<");
     expect(route.headers()).toMatchObject({ "X-Robots-Tag": "noindex" });
-    const meta = route.meta({ loaderData } as never);
+    const meta = routeMeta(route.meta, { loaderData });
     expect(meta).toContainEqual({ title: readNameSource("ar").title });
     expect(meta).toContainEqual({ name: "robots", content: "noindex" });
     expect(meta).toContainEqual({ tagName: "link", rel: "alternate", type: "text/markdown", href: "/name.md?lang=ar" });

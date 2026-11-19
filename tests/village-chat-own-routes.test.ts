@@ -1,7 +1,8 @@
+import { routeElement } from "./helpers/route-fixtures";
 import { consentChatMembers } from "./helpers/chat-consent";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { createElement } from "react";
+import type { ReactElement } from "react";
 import { renderInRouter } from "./helpers/render-in-router";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { chatMessages, chatSequences, entries, profiles, villageMembers, villages } from "~/lib/db/schema";
@@ -29,8 +30,8 @@ beforeAll(async () => {
 });
 afterAll(() => h.restore()); afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 const args = (as?: string, form?: Record<string, string>, headers?: Record<string, string>) => h.args(h.request("/settings/chat", { as, form, headers }));
-function render(Component: unknown, path: string, loaderData: unknown) {
-  return renderInRouter(() => createElement(Component as never, { loaderData, actionData: undefined, params: {}, matches: [] } as never), path);
+function render(element: ReactElement, path: string) {
+  return renderInRouter(() => element, path);
 }
 it("closes both new route methods and the parent before authentication or queries", async () => {
   for (const [v, c] of [["1", ""], ["", "1"], ["", ""]]) {
@@ -47,12 +48,12 @@ it("preserves closed settings response and text, adding the own-message entry on
   vi.stubEnv("VILLAGES", "1");
   const before = await settings(h.args(h.request("/settings", { as: "co_author" })));
   expect(before).not.toHaveProperty("chatOwn");
-  const beforeHtml = await render(Settings, "/settings", before);
+  const beforeHtml = await render(routeElement(Settings, { loaderData: before }), "/settings");
   expect(beforeHtml).toContain(m.settings_export_help().replaceAll("'", "&#x27;")); expect(beforeHtml).not.toContain('href="/settings/chat"');
   enabled();
   const open = await settings(h.args(h.request("/settings", { as: "co_author" })));
   expect(open).toEqual({ ...before, chatOwn: true });
-  const html = await render(Settings, "/settings", open);
+  const html = await render(routeElement(Settings, { loaderData: open }), "/settings");
   expect(html).toContain(m.settings_export_chat_help()); expect(html).toContain('href="/settings/chat"');
 });
 it("uses member and same-origin gates, permits suspended deletion and forbids a foreign anchor", async () => {
@@ -80,7 +81,7 @@ it("renders only the author's text, with no external-resource interpretation", a
   await mutateChat(h.db, h.ids.co_author, "own-route", "send", { body: ownText });
   await mutateChat(h.db, h.ids.co_reader, "own-route", "send", { body: "Other author's render text" });
   const loaded = await loader(args("co_author"));
-  const html = await render(OwnChat, "/settings/chat", loaded);
+  const html = await render(routeElement(OwnChat, { loaderData: loaded }), "/settings/chat");
   expect(html).toContain(m.village_chat_own_retention({ days: CHAT_REPORT_RETAIN_DAYS }));
   expect(html).toContain(ownText.replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
   expect(html).not.toContain("Other author&#x27;s render text"); expect(html).not.toContain("Suspended own text");

@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { invitationNoteTranslations, invitations, jobs, llmUsage, profiles, retentionHold } from "~/lib/db/schema";
@@ -19,6 +18,7 @@ import { LlmError } from "~/lib/llm/errors.server";
 import { m } from "~/paraglide/messages.js";
 import { addMember, createTestDb } from "./helpers/db";
 import { auditRetentionTransactions, expectBoundedTransactions } from "./helpers/retention";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 let h: RouteHarness;
@@ -94,7 +94,7 @@ it.each(["https://example.com/essay", "🙂", note])("shows unchanged translatio
     expect(await readInvitationNote(h.db, row.id, "en", original)).toEqual({ text, from: row.noteLang, lang: row.noteLang, available: false, translated: false, pending: false, unavailable: false });
   }
   const loaderData = await loader(h.args(h.request(`/invite/${token}`), { token }));
-  const html = await renderInRouter(() => createElement(Invite, { loaderData } as never), `/invite/${token}`);
+  const html = await renderInRouter(() => routeElement(Invite, { loaderData }), `/invite/${token}`);
   expect(html).not.toContain(m.show_original());
   expect(html).not.toContain(m.label_no_translation());
   vi.stubEnv("LLM_MONTHLY_BUDGET_USD", "0");
@@ -131,7 +131,7 @@ it("renders attribution, the machine mark and original link, with URLs and marku
   const { invitation: row, token } = await make("論考を読んでほしい。 [link](https://example.com) <b>原文</b>");
   await readInvitationNote(h.db, row.id, "en"); await run();
   const loaderData = await loader(h.args(h.request(`/invite/${token}`), { token }));
-  const html = await renderInRouter(() => createElement(Invite, { loaderData } as never), `/invite/${token}`);
+  const html = await renderInRouter(() => routeElement(Invite, { loaderData }), `/invite/${token}`);
   expect(html).toContain("invite_note_sender");
   expect(html).toContain(m.show_original());
   expect(html).toContain("&lt;b&gt;");

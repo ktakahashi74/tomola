@@ -1,3 +1,4 @@
+import { chatConsentData } from "./helpers/loader-fixtures";
 import { createElement } from "react";
 import { UNSAFE_ErrorResponseImpl as ErrorResponseImpl } from "react-router";
 import { expect, it, vi } from "vitest";
@@ -7,7 +8,7 @@ import { chatSearchExcerpt } from "~/lib/village-chat-search.server";
 import VillageChat, { ErrorBoundary } from "~/routes/village-chat";
 import ChatSearch from "~/routes/village-chat-search";
 import { m } from "~/paraglide/messages.js";
-import { CHAT_CONSENT_VERSION } from "~/lib/village-chat-consent";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 
@@ -34,15 +35,17 @@ it("bounds Unicode excerpts around the database match without splitting surrogat
 });
 
 it("hides the search entrance until consent and displays unavailable destinations without chat content", async () => {
-  const consent = await renderInRouter(() => createElement(VillageChat, { loaderData: {
-    village: { slug: "safe-chat", name: "Safe chat" }, readers: 1, consentRequired: true, consentVersion: CHAT_CONSENT_VERSION, previousConsentVersion: null, privacyAvailable: false,
-  } } as never), "/v/safe-chat/chat");
+  const consent = await renderInRouter(() => routeElement(VillageChat, { loaderData: chatConsentData({ village: { slug: "safe-chat", name: "Safe chat", kind: "open", description: "", language: null, iconUrl: "" }, readers: 1 }) }), "/v/safe-chat/chat");
   expect(consent).not.toContain("/chat/search");
-  const unavailable = await renderInRouter(() => createElement(ErrorBoundary, { error: new ErrorResponseImpl(404, "Not found", { error: "chat_message_unavailable" }), params: { slug: "safe-chat" } } as never), "/v/safe-chat/chat");
+  const unavailable = await renderInRouter(() => createElement(ErrorBoundary, { error: new ErrorResponseImpl(404, "Not found", { error: "chat_message_unavailable" }), params: { slug: "safe-chat" } }), "/v/safe-chat/chat");
   expect(unavailable).toContain(m.chat_search_message_unavailable()); expect(unavailable).not.toContain('role="log"');
   expect(unavailable).toContain('href="/v/safe-chat/chat"'); expect(unavailable).toContain(m.chat_search_back());
-  for (const props of [{ loaderData: { unavailable: true } }, { loaderData: { unavailable: false, slug: "safe-chat" }, actionData: { error: "not_found" } }]) {
-    const denied = await renderInRouter(() => createElement(ChatSearch, { ...props, params: { slug: "safe-chat" } } as never), "/v/safe-chat/chat/search");
+  const cases = [
+    { loaderData: { unavailable: true } },
+    { loaderData: { unavailable: false, slug: "safe-chat", name: "Safe chat", linkLang: null }, actionData: { error: "not_found" } },
+  ] satisfies Array<Pick<Parameters<typeof ChatSearch>[0], "loaderData" | "actionData">>;
+  for (const props of cases) {
+    const denied = await renderInRouter(() => routeElement(ChatSearch, { ...props, params: { slug: "safe-chat" } }), "/v/safe-chat/chat/search");
     expect(denied).toContain(m.chat_search_message_unavailable()); expect(denied).not.toContain('role="search"');
     expect(denied).toContain('href="/v/safe-chat/chat"'); expect(denied).toContain(m.chat_search_back());
   }

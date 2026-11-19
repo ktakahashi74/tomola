@@ -13,6 +13,7 @@ import { renderInRouter } from "./helpers/render-in-router";
 import { parseBlocks } from "./helpers/md";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { m } from "~/paraglide/messages.js";
+import { routeElement } from "./helpers/route-fixtures";
 
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
 afterEach(() => { vi.unstubAllEnvs(); setTestLocale("en"); });
@@ -44,7 +45,7 @@ describe("public language availability", () => {
     vi.stubEnv("ENABLED_LANGS", "ja,en,ko");
     vi.stubEnv("PREVIEW_LANGS", "ko");
     const page = loader();
-    const html = await renderInRouter(() => createElement(Languages, { loaderData: page } as never), "/languages");
+    const html = await renderInRouter(() => routeElement(Languages, { loaderData: page }), "/languages");
     const names = new Intl.DisplayNames([locale], { type: "language", languageDisplay: "standard" });
     const japaneseScriptNames = { "zh-Hans": m.language_name_zh_hans(), "zh-Hant": m.language_name_zh_hant() };
     for (const group of page.groups) {
@@ -70,7 +71,7 @@ describe("public language availability", () => {
     vi.stubEnv("ENABLED_LANGS", LANGS.join(","));
     vi.stubEnv("PREVIEW_LANGS", "");
     const page = loader();
-    const html = await renderInRouter(() => createElement(Languages, { loaderData: page } as never), "/languages");
+    const html = await renderInRouter(() => routeElement(Languages, { loaderData: page }), "/languages");
     expect(html).not.toContain('id="languages-preview"');
     expect(html).not.toContain('id="languages-supported"');
     const response = md();
