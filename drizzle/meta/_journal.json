@@ -848,6 +848,13 @@
       "when": 1795009407250,
       "tag": "0120_api_media_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1795056024854,
+      "tag": "0121_motion_size",
+      "breakpoints": true
     }
   ]
 }

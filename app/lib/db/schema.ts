@@ -100,7 +100,8 @@ export const media = pgTable("media", {
   check("media_id_check", sql`${t.id} ~ '^[a-f0-9]{64}$'`),
   check("media_mime_check", sql`${t.mime} = 'image/webp'`),
   check("media_dimensions_check", sql`${t.width} BETWEEN 1 AND 2000 AND ${t.height} BETWEEN 1 AND 2000`),
-  check("media_size_check", sql`${t.byteSize} BETWEEN 1 AND 2097152`),
+  // Stills up to 2 MiB; motion versions up to 4 MiB (MEDIA_LIMITS and MOTION_LIMITS).
+  check("media_size_check", sql`${t.byteSize} BETWEEN 1 AND (CASE WHEN ${t.animated} THEN 4194304 ELSE 2097152 END)`),
   check("media_content_check", sql`(${t.deletedAt} IS NULL AND ${t.bytes} IS NOT NULL AND octet_length(${t.bytes}) = ${t.byteSize}) OR (${t.deletedAt} IS NOT NULL AND ${t.bytes} IS NULL)`),
 ]);
 

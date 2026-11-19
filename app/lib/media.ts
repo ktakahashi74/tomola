@@ -33,7 +33,8 @@ export const MOTION_LIMITS = {
   frames: 600,
   durationMs: 60_000,
   pixels: 240_000_000,
-  storedBytes: 2 * 1024 * 1024,
+  // A motion version may be larger than a still: an author's own GIF of a long figure animation fits.
+  storedBytes: 4 * 1024 * 1024,
   processingMs: 60_000,
   addressBytes: 4 * 1024 * 1024 * 1024,
   dataBytes: 1024 * 1024 * 1024,

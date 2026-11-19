@@ -131,10 +131,20 @@ it("serializes motion work, bounds waiting and leaves static slots available", a
 });
 
 it("enforces stored motion bytes independently of input bytes", async () => {
-  const bytes = await sharp(randomBytes(800 * 800 * 3 * 5), { raw: { width: 800, height: 4000, channels: 3, pageHeight: 800 } }).webp({ lossless: true, delay: [100, 100, 100, 100, 100], loop: 0 }).toBuffer();
+  // Noise stays near its input size when rewritten: 10 frames of 1000 × 1000 come out well above the stored limit.
+  const bytes = await sharp(randomBytes(1000 * 1000 * 3 * 10), { raw: { width: 1000, height: 10_000, channels: 3, pageHeight: 1000 } }).webp({ quality: 90, delay: Array(10).fill(100), loop: 0 }).toBuffer();
   expect(bytes.length).toBeLessThan(MEDIA_LIMITS.inputBytes);
+  expect(bytes.length).toBeGreaterThan(MOTION_LIMITS.storedBytes);
   await expect(rewriteMedia(bytes)).rejects.toMatchObject({ code: "too_large" });
 }, 60_000);
+
+it("lets the database hold a motion version above the still limit, up to its own limit", async () => {
+  const row = (n: number, size: number, animated: boolean) => ({ id: (0xabc000 + n).toString(16).padStart(64, "0"), uploadedBy: "motion-author", bytes: Buffer.alloc(size, n), mime: "image/webp", width: 1, height: 1, byteSize: size, animated, frames: animated ? 2 : 1 });
+  await db.insert(media).values(row(1, MEDIA_LIMITS.storedBytes + 1, true));
+  await expect(db.insert(media).values(row(2, MEDIA_LIMITS.storedBytes + 1, false))).rejects.toThrow();
+  await expect(db.insert(media).values(row(3, MOTION_LIMITS.storedBytes + 1, true))).rejects.toThrow();
+  await db.delete(media).where(eq(media.id, row(1, 1, true).id));
+});
 
 it("fits the longest edge without enlarging and keeps all frames", async () => {
   const input = await motionImage("gif", 3, 2400, 200);

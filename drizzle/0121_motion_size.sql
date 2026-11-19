@@ -1,0 +1,2 @@
+ALTER TABLE "media" DROP CONSTRAINT "media_size_check";--> statement-breakpoint
+ALTER TABLE "media" ADD CONSTRAINT "media_size_check" CHECK ("media"."byte_size" BETWEEN 1 AND (CASE WHEN "media"."animated" THEN 4194304 ELSE 2097152 END));
