@@ -116,6 +116,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
   await page.getByRole("button", { name: en.submit_post, exact: true }).click();
   await expect(page).toHaveURL(/\/t\/\d+/);
   const topic = new URL(page.url()).pathname;
+  await expect(page.getByLabel(en.nushi_hide, { exact: true })).toHaveCount(0);
   const callerContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.219") });
   const guestContext = await browser.newContext({ baseURL: state().baseURL, ignoreHTTPSErrors: true, serviceWorkers: "block", extraHTTPHeaders: clientHeaders("192.0.2.220") });
   try {
@@ -196,6 +197,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     expect(response?.headers()["cache-control"]).toBe("private, no-store");
     expect((await guest.request.get(`${topic}.data?lang=en`)).headers()["cache-control"]).toBe("private, no-store");
     await expect(guest.locator("[data-nushi-answer]")).toHaveCount(1);
+    await expect(guest.getByLabel(en.nushi_hide, { exact: true })).toHaveCount(0);
     await expectAnswerLayout(guest.locator("[data-nushi-answer]"), false);
     await guest.goto(`/nushi/${answerId}?lang=en`);
     await expectAnswerLayout(guest.locator("[data-nushi-answer]"), false);
@@ -204,10 +206,18 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     expect(await markdown.text()).toContain("author_kind: ai");
     const json = await guest.request.get(`/nushi/${answerId}.json?lang=en`);
     expect((await json.json()).authorKind).toBe("ai");
-    await guest.getByLabel(en.nushi_hide, { exact: true }).check();
-    await guest.locator('form:has(input[value="visitor-hide"])').getByRole("button").click();
-    await expect(guest.locator("[data-nushi-hidden]")).toHaveCount(1);
+    const hideAnswers = caller.getByLabel(en.nushi_hide, { exact: true });
+    await hideAnswers.check();
+    await caller.locator('form:has(input[value="preferences"])').getByRole("button").click();
+    await expect(caller.locator("[data-nushi-hidden]")).toHaveCount(1);
+    await expect(hideAnswers).toHaveCount(0);
+    await guest.reload();
+    await expect(guest.locator("[data-nushi-answer]")).toHaveCount(1);
+    await caller.goto(`/nushi/${answerId}?lang=en`);
+    await caller.getByRole("button", { name: en.notification_open, exact: true }).click();
+    await caller.goto(`${topic}?lang=en`);
     await expect(caller.locator("[data-nushi-answer]")).toHaveCount(1);
+    await expect(hideAnswers).toBeVisible();
     await page.goto(`${topic}?lang=en`);
     await page.getByLabel(en.nushi_disable_topic, { exact: true }).check();
     await page.locator('form:has(input[value="topic"])').getByRole("button").click();
@@ -215,6 +225,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
     await caller.reload();
     await expect(caller.locator("[data-nushi-answer]")).toHaveCount(0);
     await expect(caller.locator("[data-nushi-hidden]")).toHaveCount(1);
+    await expect(hideAnswers).toHaveCount(0);
     const withdrawn = await guest.request.get(`/nushi/${answerId}.json?lang=en`);
     const data = await withdrawn.json(); expect(data.hidden).toBe(true); expect(data).not.toHaveProperty("answer");
   } finally { await callerContext.close(); await guestContext.close(); }

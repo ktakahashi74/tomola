@@ -15,8 +15,9 @@ export default function NushiThreadEntry({ entryId, view, member, nushiParentId,
   </div>;
 }
 export function NushiThreadControls({ view, threadId, member, back }: { view: NushiView; threadId: number; member: boolean; back: string }) {
+  const canHide = member && !view.hide && view.answers.some(answer => !answer.hidden);
   return <>
-    {view.setting !== null && <form method="post" action="/nushi/action" className="ui-help"><input type="hidden" name="intent" value="topic" /><input type="hidden" name="threadId" value={threadId} /><input type="hidden" name="returnTo" value={back} /><label><input type="checkbox" name="disabled" value="1" defaultChecked={view.setting} /> {m.nushi_disable_topic()}</label> <Button variant="outline" type="submit">{m.settings_email_save()}</Button></form>}
-    {view.answers.length > 0 && <form method="post" action="/nushi/action" className="ui-help"><input type="hidden" name="intent" value={member ? "preferences" : "visitor-hide"} /><input type="hidden" name="returnTo" value={back} /><input type="hidden" name="citations" value={view.citations ? "1" : "0"} /><label><input type="checkbox" name="hide" value="1" defaultChecked={view.hide} /> {m.nushi_hide()}</label> <Button variant="outline" type="submit">{m.settings_email_save()}</Button></form>}
+    {view.setting !== null && <form method="post" action="/nushi/action" className="ui-help"><input type="hidden" name="intent" value="topic" /><input type="hidden" name="threadId" value={threadId} /><input type="hidden" name="returnTo" value={back} /><label><input type="checkbox" name="disabled" value="1" defaultChecked={view.setting} /> {m.nushi_disable_topic()}</label> <Button variant="outline" type="submit">{m.save()}</Button></form>}
+    {canHide && <form method="post" action="/nushi/action" className="ui-help"><input type="hidden" name="intent" value="preferences" /><input type="hidden" name="returnTo" value={back} /><input type="hidden" name="citations" value={view.citations ? "1" : "0"} /><label><input type="checkbox" name="hide" value="1" /> {m.nushi_hide()}</label> <Button variant="outline" type="submit">{m.save()}</Button></form>}
   </>;
 }

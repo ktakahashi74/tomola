@@ -21,6 +21,7 @@
   "settings_share_android": "On Android, after you add tomola to your home screen, tomola appears as a destination in other apps' Share menu.",
   "settings_share_bookmarklet": "On a computer, save the text below as the URL of a bookmark. When you press that bookmark on a page you are reading, the posting screen opens with that page's title and URL filled in. If you select some text first, the selection is added as a quote.",
   "site_name": "tomola",
+  "save": "Save",
   "nav_new_topic": "Write a post",
   "nav_invite": "Invite",
   "nav_logout": "Log out",

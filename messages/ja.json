@@ -21,6 +21,7 @@
   "settings_share_android": "Android では、tomola をホーム画面に追加すると、ほかのアプリの「共有」の行き先に tomola が出ます。",
   "settings_share_bookmarklet": "パソコンでは、下の文字列を、ブックマークの URL として登録してください。読んでいるページでそのブックマークを押すと、そのページの題名と URL が入った投稿の画面が開きます。文字を選んでから押すと、選んだ文も引用として入ります。",
   "site_name": "tomola",
+  "save": "保存",
   "nav_new_topic": "投稿する",
   "nav_invite": "招待",
   "nav_logout": "ログアウト",
