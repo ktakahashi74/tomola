@@ -89,6 +89,10 @@ async function poll(current: Batch) {
   if (pageAddress() !== current.page) { stop(current); return; }
 
   if (document.visibilityState === "visible") {
+    if (current.until === Number.POSITIVE_INFINITY) {
+      current.until = Date.now() + BODY_TRANSLATION_WAIT_MS;
+      current.deadline = setTimeout(() => finish(current), BODY_TRANSLATION_WAIT_MS);
+    }
     const ids = [...current.listeners.keys()];
     const fresh = ids.filter(id => !current.requested.has(id));
     try {
@@ -126,9 +130,10 @@ function join(entryId: number, listener: Listener): () => void {
   const page = pageAddress();
   if (batch?.page !== page) {
     if (batch) stop(batch);
-    const current: Batch = { page, listeners: new Map(), requested: new Set(), controller: new AbortController(), until: Date.now() + BODY_TRANSLATION_WAIT_MS, round: 0 };
+    // The wait starts with the first request, made only while the page is visible:
+    // a page opened in a background tab has not asked for anything yet.
+    const current: Batch = { page, listeners: new Map(), requested: new Set(), controller: new AbortController(), until: Number.POSITIVE_INFINITY, round: 0 };
     current.timer = setTimeout(() => { void poll(current); }, 0);
-    current.deadline = setTimeout(() => finish(current), BODY_TRANSLATION_WAIT_MS);
     batch = current;
   }
   const current = batch;
@@ -164,7 +169,8 @@ export default function BodyTranslationWait({ entryId, original }: { entryId: nu
           <span aria-hidden="true" className="me-2 inline-block size-2 rounded-full bg-current motion-safe:animate-pulse" />
           {m.translation_article_working({ target: languageLabel(original.target) })}
         </p>
-        <p>{m.translation_article_original({ source: languageLabel(original.source, original.sourceCode) })}{original.long && <> {m.translation_article_long()}</>}</p>
+        <p>{m.translation_article_original({ source: languageLabel(original.source, original.sourceCode) })}</p>
+        {original.long && <p>{m.translation_article_long()}</p>}
       </>}
     </div>
   );

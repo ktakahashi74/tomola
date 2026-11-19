@@ -1696,7 +1696,7 @@
   "translation_working_accessible": "この投稿の訳を作っています。",
   "translation_arrived": "この投稿の訳を表示しました。",
   "translation_article_working": "{target}に翻訳しています。",
-  "translation_article_original": "現在は原文（{source}）を表示しています。翻訳が完了すると、このページで訳文に切り替わります。",
+  "translation_article_original": "現在は原文（{source}）を表示しています。翻訳が完了すると、このページで訳に切り替わります。",
   "translation_article_long": "数分かかることがあります。",
   "translation_article_arrived": "訳に切り替えました。",
   "village_personal": "自分のビレッジ",
