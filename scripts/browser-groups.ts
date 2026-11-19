@@ -8,6 +8,9 @@ export const BROWSER_FILE_SECONDS: Readonly<Record<string, number>> = JSON.parse
 );
 
 export const DEFAULT_BROWSER_GROUPS = 4;
+const BROWSER_GROUP_PORT_STEP = 5_000;
+// Linux's default ephemeral port range starts here.
+const LINUX_EPHEMERAL_PORT_START = 32_768;
 
 export function browserGroupCount(value: string | number = DEFAULT_BROWSER_GROUPS): number {
   if (!/^[3-6]$/.test(String(value))) throw new Error("E2E_GROUPS must be between 3 and 6 (including public reading)");
@@ -48,8 +51,11 @@ export function browserPorts(base: string | number = "5199", count = DEFAULT_BRO
   if (!/^\d+$/.test(String(base))) throw new Error("E2E_PORT must be a port number");
   const first = Number(base);
   const groups = [...privateBrowserGroups(count), "public"];
-  if (!Number.isSafeInteger(first) || first < 1024 || first + (groups.length - 1) * 10_000 + 2 > 65535) throw new Error("E2E_PORT leaves no room for the browser groups and local services");
-  return Object.fromEntries(groups.map((group, index) => [group, String(first + index * 10_000)]));
+  const lastServicePort = first + (groups.length - 1) * BROWSER_GROUP_PORT_STEP + 2;
+  if (!Number.isSafeInteger(first) || first < 1024 || lastServicePort >= LINUX_EPHEMERAL_PORT_START) {
+    throw new Error(`E2E_PORT must be at least 1024 and leave room for all browser groups and local services below ${LINUX_EPHEMERAL_PORT_START}`);
+  }
+  return Object.fromEntries(groups.map((group, index) => [group, String(first + index * BROWSER_GROUP_PORT_STEP)]));
 }
 
 export function browserFilePatterns(root: string, group: string, count = DEFAULT_BROWSER_GROUPS) {

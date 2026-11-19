@@ -179,12 +179,18 @@ test("one environment switch preserves separate serial private and public build 
   }
 });
 
-test("parallel browsers use three independent ports and one worker in every group", (t) => {
+test("parallel browser groups use disjoint service ports and one worker each", (t) => {
   const root = fixture(t);
   for (const mode of ["integration", "release"]) {
     const groups = planChecks([mode], root, { ...pgEnv, E2E_PORT: "5311", E2E_GROUPS: "3" }).steps.find(step => step.parallel?.some(child => child.group)).parallel;
-    assert.deepEqual(groups.map(group => group.env.E2E_PORT), ["5311", "15311", "25311"]);
+    assert.equal(groups[0].env.E2E_PORT, "5311");
     assert.deepEqual(groups.map(group => group.env.E2E_BROWSER_GROUP), ["a", "b", "public"]);
+    const ports = groups.flatMap(({ env }) => {
+      const port = Number(env.E2E_PORT);
+      assert.ok(Number.isInteger(port));
+      return [port, port + 1, port + 2];
+    });
+    assert.equal(new Set(ports).size, ports.length);
     for (const group of groups) assert.deepEqual(group.args.slice(-1), ["--workers=1"]);
   }
 });

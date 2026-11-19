@@ -92,9 +92,19 @@ it("balances a deterministic partition by workload rather than file order", () =
   expect(partitionBrowserFiles([...files].reverse(), weights, 3)).toEqual(normal);
   expect(Math.abs(normal.totals.a - normal.totals.b)).toBeLessThanOrEqual(5);
 });
-it("allocates disjoint ports and rejects input that cannot fit all groups", () => {
-  expect(browserPorts("5311", 3)).toEqual({ a: "5311", b: "15311", public: "25311" });
+it("uses the requested first port and rejects invalid input", () => {
+  expect(browserPorts("5311", 3).a).toBe("5311");
   for (const base of ["0", "1023", "65535", "5e3", "5311suffix", "5311.5"]) expect(() => browserPorts(base)).toThrow();
+});
+
+it("rejects a base that puts the last local service in the Linux ephemeral range", () => {
+  const ephemeralStart = 32_768;
+  const base = 5311;
+  const count = 6;
+  const lastServicePort = Number(browserPorts(base, count).public) + 2;
+  const lastValidBase = base + ephemeralStart - 1 - lastServicePort;
+  expect(Number(browserPorts(lastValidBase, count).public) + 2).toBe(ephemeralStart - 1);
+  expect(() => browserPorts(lastValidBase + 1, count)).toThrow();
 });
 
 for (const count of [3, 4, 5, 6]) it(`covers every private file once with ${count} groups and reserves disjoint services`, () => {
@@ -105,8 +115,6 @@ for (const count of [3, 4, 5, 6]) it(`covers every private file once with ${coun
   expect(new Set(files).size).toBe(files.length);
   const ports = Object.values(browserPorts(5446, count)).flatMap(port => [Number(port), Number(port) + 1, Number(port) + 2]);
   expect(new Set(ports).size).toBe(count * 3);
-  expect(() => browserPorts(65534 - (count - 1) * 10_000, count)).toThrow();
-  expect(Object.values(browserPorts(65533 - (count - 1) * 10_000, count)).at(-1)).toBe("65533");
 });
 it("rejects malformed group counts and unknown private groups", () => {
   for (const value of ["", "2", "7", "3.5", "3extra"]) expect(() => browserGroupCount(value)).toThrow();
