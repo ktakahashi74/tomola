@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { entries, notifications, profiles } from "~/lib/db/schema";
 import { replyLocationAt } from "~/lib/entries.server";
-import { pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
+import { rankedThreadReplies, replyPageAt } from "~/lib/thread-page.server";
 import { canSeeHidden, type Viewer } from "~/lib/roles.server";
 import type { Lang } from "~/lib/languages";
 import { notificationColumns } from "~/lib/village-chat-notifications.server";
@@ -13,17 +13,11 @@ import { notificationColumns } from "~/lib/village-chat-notifications.server";
 // still occupy positions in the thread. One query covers every topic on a page.
 export async function loadLatestReplyLocations(db: Db, threadIds: readonly number[]): Promise<Map<number, { id: number; page: number }>> {
   if (threadIds.length === 0) return new Map();
-  const ranked = db.select({
-    id: entries.id,
-    threadId: entries.threadId,
-    deletedAt: entries.deletedAt,
-    hiddenAt: entries.hiddenAt,
-    position: sql<number>`row_number() over (partition by ${entries.threadId} order by ${entries.createdAt}, ${entries.id})`.as("position"),
-  }).from(entries).where(and(eq(entries.kind, "reply"), inArray(entries.threadId, [...threadIds]))).as("ranked");
+  const ranked = rankedThreadReplies(db, inArray(entries.threadId, [...threadIds]));
   const rows = await db.selectDistinctOn([ranked.threadId], { id: ranked.id, threadId: ranked.threadId, position: ranked.position })
     .from(ranked).where(and(isNull(ranked.deletedAt), isNull(ranked.hiddenAt)))
     .orderBy(ranked.threadId, desc(ranked.position));
-  return new Map(rows.map(row => [row.threadId!, { id: row.id, page: pageCount(Number(row.position), REPLIES_PER_PAGE) }]));
+  return new Map(rows.map(row => [row.threadId!, { id: row.id, page: replyPageAt(row.position) }]));
 }
 
 export type ReplyTarget = { state: "visible"; href: string; authorHandle: string } | { state: "deleted" | "unavailable" };
@@ -32,17 +26,13 @@ export type ReplyTarget = { state: "visible"; href: string; authorHandle: string
 // Only a readable target gets a location and public handle; withheld targets expose neither.
 export async function loadReplyLocations(db: Db, threadIds: number[], ids: number[], opts: { viewer?: Viewer; lang?: string | null } = {}): Promise<Map<number, ReplyTarget>> {
   if (!threadIds.length || !ids.length) return new Map();
-  const ranked = db.select({
-    id: entries.id, threadId: entries.threadId, authorId: entries.authorId, lang: entries.lang,
-    deletedAt: entries.deletedAt, hiddenAt: entries.hiddenAt,
-    position: sql<number>`row_number() over (partition by ${entries.threadId} order by ${entries.createdAt}, ${entries.id})`.as("position"),
-  }).from(entries).where(and(eq(entries.kind, "reply"), inArray(entries.threadId, threadIds))).as("ranked");
+  const ranked = rankedThreadReplies(db, inArray(entries.threadId, threadIds));
   const rows = await db.select({ id: ranked.id, threadId: ranked.threadId, authorId: ranked.authorId, lang: ranked.lang, deletedAt: ranked.deletedAt, hiddenAt: ranked.hiddenAt, position: ranked.position, authorHandle: retainedAuthorColumn(ranked.authorId) }).from(ranked).leftJoin(profiles, eq(profiles.userId, ranked.authorId)).where(inArray(ranked.id, ids));
   return new Map(rows.map(row => [row.id, row.deletedAt
     ? { state: "deleted" }
     : row.hiddenAt && !canSeeHidden(opts.viewer, row)
       ? { state: "unavailable" }
-      : { state: "visible", authorHandle: row.authorHandle ?? "?", href: replyLocationAt(row.threadId!, row.id, pageCount(Number(row.position), REPLIES_PER_PAGE), { lang: opts.lang }) }]));
+      : { state: "visible", authorHandle: row.authorHandle ?? "?", href: replyLocationAt(row.threadId!, row.id, replyPageAt(row.position), { lang: opts.lang }) }]));
 }
 
 type FollowedRow = { id: number; threadId: number | null; entryId: number | null; firstEntryId: number | null };

@@ -11,7 +11,7 @@ import { syncMediaReferences } from "~/lib/media-references.server";
 import { decorateMotionHtml, motionImages } from "./motion-display.server";
 import { activeEntryRender, prepareEntryRender, renderEntryForWrite, type PreparedEntryRender } from "./entry-render-preparation.server";
 import { withMarkdownScope, withMarkdownRead, MarkdownBudgetError } from "./markdown-budget.server";
-import { and, count, desc, eq, inArray, isNotNull, isNull, lte, max, notInArray, or, sql, lt, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, max, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { activePublicPostVillageCondition, activeSharedVillageCondition, lockVillageProfile, villageForTopic } from "~/lib/villages.server";
 import { z } from "zod";
@@ -28,7 +28,7 @@ import { publicTopicPlace, rootTopic, rootTopicOn, undeletedTopic } from "~/lib/
 import { cursorTime, readingCondition } from "~/lib/reading-page.server";
 import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { afterPageBoundary } from "~/lib/page-boundary.server";
-import { entryVisibility, readThreadReplyPage, type EntryVisibility } from "~/lib/thread-page.server";
+import { entryVisibility, readThreadReplyPage, replyPagesOf, type EntryVisibility } from "~/lib/thread-page.server";
 import {
   checkBodyBudget,
   renderEntryOrPlain,
@@ -1032,27 +1032,9 @@ export async function getEntryViews(db: Db, ids: readonly number[], viewer?: Vie
   return out;
 }
 
-// Find the reply's pagination page in createdAt/id order. Return 1 if not found.
-// Deleted replies retain positions and count toward each group of 100. UI and Markdown pagination match.
+// A missing reply falls back to the first page.
 export async function replyPage(db: Db, threadId: number, replyId: number, pageSize: number = REPLIES_PER_PAGE): Promise<number> {
-  const [target] = await db
-    .select({ createdAt: entries.createdAt })
-    .from(entries)
-    .where(
-      and(eq(entries.id, replyId), eq(entries.threadId, threadId), eq(entries.kind, "reply")),
-    );
-  if (!target) return 1;
-  const [before] = await db
-    .select({ n: count() })
-    .from(entries)
-    .where(
-      and(
-        eq(entries.threadId, threadId),
-        eq(entries.kind, "reply"),
-        or(lt(entries.createdAt, target.createdAt), and(eq(entries.createdAt, target.createdAt), lte(entries.id, replyId))),
-      ),
-    );
-  return pageCount(Number(before.n), pageSize);
+  return (await replyPagesOf(db, [{ threadId, id: replyId }], { limit: pageSize })).get(replyId) ?? 1;
 }
 
 // Reply position in the thread: page and reply anchor. Used as the destination after reply creation/editing.

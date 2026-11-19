@@ -1,7 +1,7 @@
 import { loadDisplayNames, displayNameFields } from "../display-names.server";
 import { authorLabel } from "../deleted-member";
 import type { Db } from "~/lib/db/client.server";
-import { replyPagesOf } from "~/lib/reply-pages.server";
+import { replyPagesOf } from "~/lib/thread-page.server";
 import { literalExcerpt, type CombinedFound } from "~/lib/combined-search.server";
 import { joinBlocks, mdBlock, yamlList, type FmValue } from "~/lib/md/frontmatter.server";
 import { TRANSLATION_STATUS } from "~/lib/md/translations.server";

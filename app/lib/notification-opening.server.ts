@@ -1,4 +1,4 @@
-import { replyPagesOf } from "~/lib/reply-pages.server";
+import { replyPagesOf } from "~/lib/thread-page.server";
 import { replyLocationAt } from "~/lib/entries.server";
 import type { Db } from "~/lib/db/client.server";
 import { replyLocation } from "~/lib/entries.server";

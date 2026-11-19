@@ -8,11 +8,11 @@ import { isStale, wantsTranslation, type ShownKind } from "~/lib/display";
 import { loadPickedTranslations } from "~/lib/entry-display.server";
 import { getEntryViews, replyLocationAt, type EntryView } from "~/lib/entries.server";
 import type { Lang, SourceLang } from "~/lib/languages";
-import { replyPagesOf } from "~/lib/objections.server";
 import { markdownToPlainText, MAX_SOURCE_CHARS, plainExcerpt } from "~/lib/plain-text.server";
 import { pickReasons, reasonsSeed, seededRandom, type ReasonCandidate, type ReasonPick } from "~/lib/reasons";
 import type { Viewer } from "~/lib/roles.server";
 import { isPosition, POSITIONS, type Position } from "~/lib/stances";
+import { replyPagesOf } from "~/lib/thread-page.server";
 
 // The reasons panel of a question: the database side. The selection itself is pure (reasons.ts); this file reads the candidates and the picked replies.
 
@@ -92,7 +92,10 @@ export async function loadReasonsPanel(db: Db, questionId: number, opts: { viewe
     }
   }
   const ids = POSITIONS.flatMap((p: Position) => pick[p]);
-  const [views, pages] = await Promise.all([getEntryViews(db, ids, opts.viewer), replyPagesOf(db, questionId, ids)]);
+  const [views, pages] = await Promise.all([
+    getEntryViews(db, ids, opts.viewer),
+    replyPagesOf(db, ids.map(id => ({ id, threadId: questionId }))),
+  ]);
   const locations = new Map<number, string>();
   for (const id of ids) locations.set(id, replyLocationAt(questionId, id, pages.get(id) ?? 1, { lang: opts.lang ?? null }));
   return { pick, views, locations };

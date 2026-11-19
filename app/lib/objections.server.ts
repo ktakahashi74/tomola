@@ -1,7 +1,7 @@
 import { cursorTime, readingCondition } from "~/lib/reading-page.server";
 import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { loadDisplayNames, selectDisplayName } from "./display-names.server";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { retainedAuthorColumn } from "./deleted-member.server";
 import type { Db } from "~/lib/db/client.server";
 import { entries, profiles } from "~/lib/db/schema";
@@ -9,7 +9,7 @@ import { wantsTranslation } from "~/lib/display";
 import { loadPickedTranslations, loadTitleDisplays, type TitleDisplay } from "~/lib/entry-display.server";
 import { replyLocationAt } from "~/lib/entries.server";
 import type { Lang } from "~/lib/languages";
-import { pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
+import { rankedThreadReplies, replyPageAt, replyPagesOf } from "~/lib/thread-page.server";
 import { plainExcerpt } from "~/lib/plain-text.server";
 import { OBJECTION_PANEL_LIMIT } from "~/lib/stances";
 import { publicTopicPlace } from "~/lib/visibility.server";
@@ -106,15 +106,6 @@ async function toAltItems(db: Db, rows: readonly Row[], opts: Langs): Promise<Al
   }));
 }
 
-// Reply thread pages for ids in one query: rank thread replies by createdAt/id with a window function, then divide into pages of 100,
-// counting deleted replies like entries.server.ts replyPage. Calling replyLocation per reply would add one query each.
-export async function replyPagesOf(db: Db, threadId: number, ids: readonly number[]): Promise<Map<number, number>> {
-  if (ids.length === 0) return new Map();
-  const ranked = rankedReplies(db, threadId);
-  const rows = await db.select({ id: ranked.id, position: ranked.position }).from(ranked).where(inArray(ranked.id, [...ids]));
-  return new Map(rows.map((r) => [r.id, pageCount(Number(r.position), REPLIES_PER_PAGE)]));
-}
-
 async function toObjectionItems(db: Db, rows: readonly Row[], opts: Langs): Promise<ObjectionItem[]> {
   const names = await loadDisplayNames(db, rows.map(row => row.authorHandle));
   const picked = await loadPickedTranslations(
@@ -123,9 +114,7 @@ async function toObjectionItems(db: Db, rows: readonly Row[], opts: Langs): Prom
     opts.displayLang,
     ["body"],
   );
-  // Reply locations in one query per thread; every listed reply belongs to this question's thread.
-  const threadIds = [...new Set(rows.map((r) => r.threadId as number))];
-  const pages = new Map<number, Map<number, number>>(await Promise.all(threadIds.map(async (threadId) => [threadId, await replyPagesOf(db, threadId, rows.filter((r) => r.threadId === threadId).map((r) => r.id))] as const)));
+  const pages = await replyPagesOf(db, rows.map(r => ({ id: r.id, threadId: r.threadId! })));
   return (await Promise.all(rows.map(async (r) => {
     // Display-language translated excerpts when available, following list-title rules: use originals if their language is readable.
     const translated = wantsTranslation(r.lang, opts.readLangs, opts.displayLang) ? (picked.get(r.id)?.body ?? null) : null;
@@ -138,7 +127,7 @@ async function toObjectionItems(db: Db, rows: readonly Row[], opts: Langs): Prom
       authorHandle: r.authorHandle ?? "?",
       authorName: selectDisplayName(names.get(r.authorHandle ?? "")),
       createdAt: r.createdAt,
-      location: replyLocationAt(threadId, r.id, pages.get(threadId)?.get(r.id) ?? 1),
+      location: replyLocationAt(threadId, r.id, pages.get(r.id) ?? 1),
     };
   })));
 }
@@ -190,35 +179,17 @@ export async function listAlternativeRefs(db: Db, questionId: number): Promise<A
   return rows.map((r) => ({ id: r.id, title: r.title ?? "", lang: r.lang as Lang, authorHandle: r.authorHandle ?? "?" }));
 }
 
-// Thread replies, including deleted/hidden, ranked position by createdAt/id. Outer filtering does not alter positions assigned by the window function before filtering.
-function rankedReplies(db: Db, threadId: number) {
-  return db
-    .select({
-      id: entries.id,
-      authorId: entries.authorId,
-      stanceTag: entries.stanceTag,
-      deletedAt: entries.deletedAt,
-      hiddenAt: entries.hiddenAt,
-      createdAt: entries.createdAt,
-      position: sql<number>`row_number() over (order by ${entries.createdAt}, ${entries.id})`.as("position"),
-    })
-    .from(entries)
-    .where(and(eq(entries.threadId, threadId), eq(entries.kind, "reply")))
-    .as("ranked");
-}
-
 export type ObjectionRef = { id: number; authorHandle: string; page: number };
-// Every undeleted, unhidden objection-marked reply, newest first. page locates the reply in thread pages of 100 creation-ordered replies,
-// including deleted ones, identical for HTML/twin. Same calculation as entries.server.ts replyPage, batched into one window-function query.
+// Every undeleted, unhidden objection, newest first, with its unfiltered thread page.
 export async function listObjectionRefs(db: Db, questionId: number): Promise<ObjectionRef[]> {
-  const ranked = rankedReplies(db, questionId);
+  const ranked = rankedThreadReplies(db, eq(entries.threadId, questionId));
   const rows = await db
     .select({ id: ranked.id, position: ranked.position, authorHandle: retainedAuthorColumn(ranked.authorId) })
     .from(ranked)
     .leftJoin(profiles, eq(profiles.userId, ranked.authorId))
     .where(and(eq(ranked.stanceTag, "objection"), isNull(ranked.deletedAt), isNull(ranked.hiddenAt)))
     .orderBy(desc(ranked.createdAt), desc(ranked.id));
-  return rows.map((r) => ({ id: r.id, authorHandle: r.authorHandle ?? "?", page: pageCount(Number(r.position), REPLIES_PER_PAGE) }));
+  return rows.map((r) => ({ id: r.id, authorHandle: r.authorHandle ?? "?", page: replyPageAt(r.position) }));
 }
 
 // Original question shown on an alternative's page, title for linking. Null if missing, non-question, deleted or hidden: show only 「元の問いは読めません」.

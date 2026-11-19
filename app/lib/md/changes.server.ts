@@ -1,14 +1,14 @@
 import { loadDisplayNames, displayNameFields } from "../display-names.server";
 import { retainedAuthorColumn } from "../deleted-member.server";
 import { authorLabel } from "../deleted-member";
-import { and, asc, eq, gte, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { entries, profiles } from "~/lib/db/schema";
 import { joinBlocks, mdBlock, yamlList, type FmValue } from "~/lib/md/frontmatter.server";
 import { mdUrl, siteUrl, threadCanonical, twinPreamble } from "~/lib/md/urls.server";
 import { versionOf } from "~/lib/md/thread.server";
-import { pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
+import { rankedThreadReplies, replyPageAt } from "~/lib/thread-page.server";
 
 // Change feed (/changes.md?since=<ISO timestamp> or ?cursor=<timestamp>_<id>): posts created/edited/deleted since the boundary, without body; title/id/URL only.
 // - Change time is the latest creation, edit, deletion, moderation-state change (hide/show, operator deletion/restore), or non-title/body metadata change (meta_changed_at: reply mark,
@@ -90,7 +90,7 @@ export async function loadChanges(db: Db, opts: { since: Date | null; cursor?: C
   const filters: SQL[] = [];
   if (since) filters.push(gte(entries.changedAt, since));
   if (cursor) filters.push(sql`(${entries.changedAt}, ${entries.id}) > (${cursor.at.toISOString()}::timestamptz, ${cursor.id})`);
-  const rows = await db
+  const recent = db.$with("recent_changes").as(db
     .select({
       id: entries.id,
       kind: entries.kind,
@@ -104,17 +104,20 @@ export async function loadChanges(db: Db, opts: { since: Date | null; cursor?: C
       hiddenAt: entries.hiddenAt,
       sourceHash: entries.sourceHash,
       changedAt: entries.changedAt,
-      // Thread Markdown pages contain 100 replies. Change links target the page containing the reply.
-      position: sql<number | null>`case when ${entries.kind} = 'reply' then (select count(*) from entries as sibling where sibling.thread_id = ${entries.threadId} and sibling.kind = 'reply' and (sibling.created_at < ${entries.createdAt} or (sibling.created_at = ${entries.createdAt} and sibling.id <= ${entries.id})))::int end`,
     })
     .from(entries)
     .innerJoin(topic, eq(topic.id, sql`coalesce(${entries.threadId}, ${entries.id})`))
     .leftJoin(profiles, eq(profiles.userId, entries.authorId))
     .where(and(...filters, or(isNull(topic.deletedAt), eq(entries.id, topic.id))))
     .orderBy(asc(entries.changedAt), asc(entries.id))
-    .limit(CHANGES_LIMIT + 1);
+    .limit(CHANGES_LIMIT + 1));
+  // Rank only threads represented in the bounded change batch, in the same snapshot.
+  const ranked = rankedThreadReplies(db, inArray(entries.threadId,
+    db.select({ threadId: recent.threadId }).from(recent).where(eq(recent.kind, "reply"))));
+  const rows = await db.with(recent).select().from(recent)
+    .leftJoin(ranked, eq(ranked.id, recent.id)).orderBy(asc(recent.changedAt), asc(recent.id));
   const hasMore = rows.length > CHANGES_LIMIT;
-  const changes = rows.slice(0, CHANGES_LIMIT).map((r): Change => {
+  const changes = rows.slice(0, CHANGES_LIMIT).map(({ recent_changes: r, ranked_thread_replies: reply }): Change => {
     // Deleted posts always return deleted regardless of event-window membership, without title/author/version. Even if changed_at advances beyond deletion through metadata,
     // never return edited with content. Same rule for hidden posts.
     const kind: ChangeKind = r.deletedAt !== null ? "deleted" : r.hiddenAt !== null ? "hidden" : inWindow(r.createdAt, r.id) ? "created" : "edited";
@@ -128,7 +131,7 @@ export async function loadChanges(db: Db, opts: { since: Date | null; cursor?: C
       handle: r.handle,
       changedAt: r.changedAt,
       sourceHash: r.sourceHash,
-      position: r.position === null ? null : Number(r.position),
+      position: reply?.position ?? null,
     };
   });
   return { changes, hasMore };
@@ -147,7 +150,7 @@ export async function buildChangesMarkdown(db: Db, opts: { since: Date | null; c
       id: `${c.entryKind === "topic" ? "p" : "c"}-${c.id}`,
       thread: `p-${c.threadId}`,
       changed_at: isoMs(c.changedAt),
-      md: mdUrl(`/t/${c.threadId}.md`, { k: opts.k, lang: null, page: c.position === null ? 1 : pageCount(c.position, REPLIES_PER_PAGE) }),
+      md: mdUrl(`/t/${c.threadId}.md`, { k: opts.k, lang: null, page: replyPageAt(c.position) }),
       canonical: threadCanonical(c.threadId),
     };
     // Deleted/hidden posts omit title/author as well as body.

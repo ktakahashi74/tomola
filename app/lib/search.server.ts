@@ -1,7 +1,7 @@
 import { loadDisplayNames, selectDisplayName } from "./display-names.server";
 import { publicTopicPlace } from "~/lib/visibility.server";
 import { retainedAuthorColumn } from "./deleted-member.server";
-import { replyPagesOf } from "~/lib/reply-pages.server";
+import { replyPagesOf } from "~/lib/thread-page.server";
 import { and, eq, isNull, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
