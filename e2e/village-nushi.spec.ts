@@ -49,6 +49,7 @@ test("village owners manage Nushi below the village header", async ({ page }) =>
   await expect(page.locator('a[href*="ask=nushi"]')).toHaveCount(0);
   await management.locator(":scope > summary").click();
   await expect(form.locator('input[name="enabled"]')).toBeVisible();
+  await expect(form.getByRole("button", { name: en.save, exact: true })).toBeVisible();
   await expect(form.locator("p")).toHaveText(en.nushi_stop_help);
 });
 
@@ -107,8 +108,9 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
   await useMember(page, "znushi_flow_owner@example.com", "/settings?lang=en#settings-nushi");
   await waitForClientRoute(page);
   const settings = page.locator("#settings-nushi");
+  await expect(settings.locator('form:has(input[value="preferences"])').getByRole("button", { name: en.save, exact: true })).toBeVisible();
   await settings.getByLabel(en.nushi_enable, { exact: true }).check();
-  await settings.locator('form:has(input[name="villageId"])').getByRole("button").click();
+  await settings.locator('form:has(input[name="villageId"])').getByRole("button", { name: en.save, exact: true }).click();
   await expect(settings.getByLabel(en.nushi_enable, { exact: true })).toBeChecked();
   await page.goto("/t/new?lang=en");
   await waitForClientRoute(page);

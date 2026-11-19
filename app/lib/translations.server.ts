@@ -267,17 +267,18 @@ export function matchGlossary(
     });
 }
 
-// Use the interface spelling for site terms in member posts and chat.
+// Use the interface spelling as a default for site terms in member posts and chat.
 const siteTerms = [{ name: (locale: Lang) => m.nushi_name({}, { locale }), note: "tomola's name for its AI discussion participant" }];
 export function matchMemberGlossary(rows: GlossaryRow[], text: string, from: SourceLang, to: Lang) {
+  const glossaryHints = matchGlossary(rows, text);
+  const glossarySpellings = new Set(glossaryHints.map(hint => hint.term.toLowerCase()));
   const sourceLocales = from === "other" ? ["ja", "en"] as const : [from];
   const siteHints = siteTerms.flatMap(({ name, note }) =>
     [...new Set(sourceLocales.map(name))]
-      .filter(term => termAppearsIn(term, text))
+      .filter(term => !glossarySpellings.has(term.toLowerCase()) && termAppearsIn(term, text))
       .map(term => ({ term, candidates: [name(to)], note })),
   );
-  const siteSpellings = new Set(siteHints.map(hint => hint.term.toLowerCase()));
-  return [...siteHints, ...matchGlossary(rows, text).filter(hint => !siteSpellings.has(hint.term.toLowerCase()))];
+  return [...siteHints, ...glossaryHints];
 }
 
 // Glossary read by translation jobs for the source/target language pair. Exclude deleted_at entries from translation.

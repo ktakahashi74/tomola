@@ -68,11 +68,22 @@ test('disclosure scans commit bodies and branch names in manual checks and befor
   assert.equal(check('--commits', 'missing..HEAD').status, 1);
 
   const newRef = '0'.repeat(tip.length);
+  const unavailableTip = 'f'.repeat(tip.length);
   git('update-ref', 'refs/remotes/origin/main', start);
   assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${newRef}`).status, 1);
   assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${start}`).status, 1);
+  const untrackedUpdate = prePush(`refs/heads/topic ${tip} refs/heads/topic ${unavailableTip}`);
+  assert.equal(untrackedUpdate.status, 1);
+  assert.match(untrackedUpdate.stderr, new RegExp(`commit ${tip}: private-host`));
+
+  git('commit', '--allow-empty', '-m', 'Polish the guide');
+  const cleanTip = git('rev-parse', 'HEAD');
+  assert.equal(prePush(`refs/heads/topic ${cleanTip} refs/heads/topic ${tip}`).status, 0);
   git('update-ref', 'refs/remotes/origin/topic', tip);
   assert.equal(prePush(`refs/heads/topic ${tip} refs/heads/topic ${newRef}`).status, 0);
+  assert.equal(prePush(`refs/heads/topic ${cleanTip} refs/heads/topic ${start}`).status, 0);
+  const updateAfterRemoteAdvanced = prePush(`refs/heads/topic ${cleanTip} refs/heads/topic ${unavailableTip}`);
+  assert.equal(updateAfterRemoteAdvanced.status, 0, updateAfterRemoteAdvanced.stderr);
   assert.equal(prePush(`(delete) ${newRef} refs/heads/${privateHost} ${tip}`).status, 0);
   const destination = prePush(`refs/heads/topic ${tip} refs/heads/${privateHost} ${newRef}`);
   assert.equal(destination.status, 1);

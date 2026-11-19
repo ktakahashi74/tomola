@@ -137,7 +137,7 @@ const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params 
     // Saved state and changing AI replies must stay current in documents and client-router data requests.
     headers.set("Cache-Control", "private, no-store");
   } else {
-    // The visitor's hide preference can show the control even on topics without AI requests.
+    // The private response has no freshness lifetime, so a new request picks up the current hide preference.
     headers.append("Vary", "Cookie");
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -373,10 +373,11 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     await countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) });
   }
   const nushi = topic.visibility === "visible" ? await threadNushi(db, topic.id, [topic.id, ...replies.map(reply => reply.id)], displayLang) : { answers: [], requests: [] };
-  const nushiPreference = await nushiPreferences(db, user?.id, request);
-  const nushiTopic = nushiEnabled() ? await nushiTopicDisabled(db, topic.id) : false;
+  const nushiOn = nushiEnabled();
+  const nushiPreference = nushiOn ? await nushiPreferences(db, user?.id, request) : { hide: false, citations: true };
+  const nushiTopic = nushiOn && user?.id === topic.authorId ? await nushiTopicDisabled(db, topic.id) : null;
   const canWriteReply = !!user && !!profile && topic.visibility === "visible" && (await getWriter(db, user.id, { profile })).ok;
-  const nushiView = { ...nushi, hide: nushiPreference.hide, citations: nushiPreference.citations, setting: !!user && topic.authorId === user.id && nushiEnabled() ? nushiTopic : null };
+  const nushiView = { ...nushi, ...nushiPreference, setting: nushiTopic };
   const nushiReplyId = Number(url.searchParams.get("nushi_reply"));
   const nushiReply = nushiReplyId > 0 && Number.isSafeInteger(nushiReplyId) ? await readNushiAnswer(db, nushiReplyId) : null;
   return {

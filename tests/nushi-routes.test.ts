@@ -130,17 +130,27 @@ it("lists pending moderation reports for operators and records hiding in the pub
   expect(log.entries).toContainEqual(expect.objectContaining({ action: "hide", reason: "other", nushiAnswerId: answerId }));
   expect(JSON.stringify(log)).not.toContain("Hidden after source review");
 });
-it("lets visitors clear their hide preference on a topic without Nushi answers", async () => {
+it("lets readers clear hide preferences on topics without answers while Nushi is enabled", async () => {
   const { loader } = await import("~/routes/topic");
   const topic = await createTopic(h.db, h.ids.znushi_route_owner, { body: "A topic with no Nushi answers.", lang: "en" });
   if (!topic.ok) throw new Error("Missing topic fixture");
   const path = `/t/${topic.id}?lang=en`;
   const params = { id: String(topic.id) };
-  const hidden = await loader(h.args(h.request(path, { headers: { cookie: "nushi_hidden=1" } }), params));
-  expect(hidden.nushi.controls).toContain('value="visitor-hide"');
-  expect(hidden.nushi.controls).toContain('checked=""');
-  const visible = await loader(h.args(h.request(path, { headers: { cookie: "nushi_hidden=0" } }), params));
-  expect(visible.nushi.controls).toBe("");
+  const as = "znushi_route_reader";
+  expect((await h.outcome(() => action(h.args(h.request("/nushi/action", { as, form: { intent: "preferences", hide: "1" } }))))).status).toBe(302);
+  const controls = async (options: Parameters<typeof h.request>[1]) => (await loader(h.args(h.request(path, options), params))).nushi.controls;
+  const visitor = { headers: { cookie: "nushi_hidden=1" } };
+  for (const [options, intent] of [[visitor, "visitor-hide"], [{ as }, "preferences"]] as const) {
+    const hidden = await controls(options);
+    expect(hidden).toContain(`value="${intent}"`);
+    expect(hidden).toContain('checked=""');
+  }
+  expect(await controls({ headers: { cookie: "nushi_hidden=0" } })).toBe("");
+  vi.stubEnv("VILLAGE_NUSHI", "");
+  try {
+    expect(await controls(visitor)).toBe("");
+    expect(await controls({ as })).toBe("");
+  } finally { vi.stubEnv("VILLAGE_NUSHI", "1"); }
 });
 
 it.each(["", ".data"])("keeps member state and AI requests fresh and varies ordinary topic reads by cookie on %s", async (suffix) => {

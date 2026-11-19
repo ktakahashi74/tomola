@@ -72,8 +72,12 @@ function pushFindings(root, remote, updates) {
     for (const [ref, label] of [[localRef, 'push source branch'], [remoteRef, 'push destination branch']]) {
       if (ref.startsWith('refs/heads/')) findings.push(...disclosureFindings(label, ref.slice('refs/heads/'.length)));
     }
-    if (/^0+$/.test(remoteOid)) findings.push(...commitFindings(root, localOid, remote));
-    else findings.push(...commitFindings(root, `${remoteOid}..${localOid}`));
+    // The destination may have advanced since the last fetch.
+    const hasRemoteCommit = !/^0+$/.test(remoteOid) && spawnSync('git', ['cat-file', '-e', `${remoteOid}^{commit}`], {
+      cwd: root, env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
+    }).status === 0;
+    const revision = hasRemoteCommit ? `${remoteOid}..${localOid}` : localOid;
+    findings.push(...commitFindings(root, revision, remote));
   }
   return findings;
 }

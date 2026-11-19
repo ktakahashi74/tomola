@@ -83,10 +83,15 @@ describe("a change to the glossary does not enqueue a job and does not touch the
 });
 
 describe("the new content works from the next translation on", () => {
-  it("passes the localized site term for topics, titles, and replies even when a glossary entry disagrees", async () => {
+  it.each([
+    ["the localized site term when the glossary has no entry", null],
+    ["the operator's glossary entry when the term matches", "OP"],
+  ])("passes %s for topics, titles, and replies", async (_label, operatorCandidate) => {
     const { db } = await setup();
     const term = m.nushi_name({}, { locale: "ja" });
-    expect(await createGlossaryEntry(db, op, { term, lang: "ja", targetLang: "th", candidates: "OP" })).toMatchObject({ ok: true });
+    if (operatorCandidate) {
+      expect(await createGlossaryEntry(db, op, { term, lang: "ja", targetLang: "th", candidates: operatorCandidate })).toMatchObject({ ok: true });
+    }
     const title = `${term}の題`, body = `${term}についての投稿です。`, reply = `${term}はどう思う？`;
     const topic = await createTopic(db, "u1", { lang: "ja", title, body });
     if (!topic.ok) throw new Error("topic failed");
@@ -95,7 +100,7 @@ describe("the new content works from the next translation on", () => {
     await runJobs(db, llmWith(recording(seen)), t(3));
     for (const text of [title, body, reply]) {
       expect(thaiHint(seen, text)?.filter(hint => hint.term === term)).toMatchObject([
-        { term, candidates: [m.nushi_name({}, { locale: "th" })] },
+        { term, candidates: [operatorCandidate ?? m.nushi_name({}, { locale: "th" })] },
       ]);
     }
   });
