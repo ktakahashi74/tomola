@@ -68,7 +68,7 @@
 .site-navigation-header-links { display: contents; }
 /* The side column sits in the left margin beside the centred site frame. The one boundary below decides both the column and the header links it replaces.
    Keep this boundary aligned with the .reading-toc-sidebar media query below. */
-@media (min-width: 64em) {
+@media (min-width: 68em) {
   /* When the centred margin is too narrow, push the body right of the column (start 1rem + width 11rem + 1rem gap). */
   body:has(.site-navigation) { margin-inline: max(13rem, calc((100% - var(--site-width)) / 2)) auto; }
   .site-navigation {
@@ -176,7 +176,7 @@ main:focus {
   /* Running text in the reading voice: Latin, Cyrillic and other scripts without a size of their own, and Japanese, Chinese and Korean. */
   --reading-latin-size: 1.125rem;
   --reading-cjk-size: 1.0625rem;
-  --reading-cjk-measure: calc(39 * var(--reading-cjk-size));
+  --reading-cjk-measure: calc(45 * var(--reading-cjk-size));
   --site-gutter: 1rem;
   --site-width: calc(var(--reading-cjk-measure) + 2 * var(--site-gutter));
   --reading-toc-gap: 4rem;
@@ -481,11 +481,11 @@ body:has(.reading-topic) {
 .reading-topic:has(.public-reading-end) #replies > h2 {
   border-block-start: 0;
 }
-/* 39 × 1.0625rem text + 4rem gap + 14rem contents + two 1rem gutters = 61.4375rem.
-   This fits within 64em: 983px <= 1024px at a 16px browser default,
-   and 1228.75px <= 1280px at 20px. Keep this boundary aligned with the
+/* 45 × 1.0625rem text + 4rem gap + 14rem contents + two 1rem gutters = 67.8125rem.
+   This fits within 68em: 1085px <= 1088px at a 16px browser default,
+   and 1356.25px <= 1360px at 20px. Keep this boundary aligned with the
    .site-navigation media query above; CSS variables cannot appear in media queries. */
-@media (min-width: 64em) {
+@media (min-width: 68em) {
   .reading-mobile-fallback { display: none; }
   body:has(.reading-toc-sidebar) {
     margin-inline: calc((100% - var(--reading-layout-width)) / 2) auto;
@@ -593,11 +593,11 @@ body:has(.reading-topic) {
   }
 }
 
-/* A centered 43.4375rem site frame leaves room for a 4rem gap and 14rem rail
-   on either side at 79.4375rem (43.4375 + 2 × (4 + 14)). 82em keeps the earlier boundary:
-   1312px at a 16px browser default, or 1640px at 20px. CSS variables cannot
+/* A centered 49.8125rem site frame leaves room for a 4rem gap and 14rem rail
+   on either side at 85.8125rem (49.8125 + 2 × (4 + 14)), so the boundary is 86em:
+   1376px at a 16px browser default, or 1720px at 20px. CSS variables cannot
    appear in media queries. Below this boundary the frame and rail stay centered together. */
-@media (min-width: 82em) {
+@media (min-width: 86em) {
   body:has(.reading-toc-sidebar),
   body:has(.reading-toc-sidebar):has(.reading-column > article[dir="rtl"], .reading-column > article > .longread:dir(rtl), .reading-column > article > .reading-article-content > .longread:dir(rtl)) {
     margin-inline: auto;
@@ -790,7 +790,7 @@ a.topic-title[data-remark] {
   }
 }
 .member-header .site-navigation-header-links { display: block; }
-@media (min-width: 64em) {
+@media (min-width: 68em) {
   .member-header .site-navigation-header-links { display: none; }
 }
 .site-header .locale-trigger {
