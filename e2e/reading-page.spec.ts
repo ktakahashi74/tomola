@@ -91,21 +91,33 @@ test("long originals and translations stay readable at desktop and phone widths"
       if (process.env.E2E_EVIDENCE_DIR) await captureScreenshot(page, { path: path.join(process.env.E2E_EVIDENCE_DIR, `${width}-english-original.png`) }, "e2e-reading-page");
     }
 
-    await page.goto(`/t/${f.topicId}?lang=en&tr=${f.topicId}&reply_to=`);
     const form = page.locator("#reply form");
-    await waitForFormReady(form);
     const textarea = form.locator('textarea[name="body"]');
-    await textarea.fill("A draft to keep.");
     const body = page.locator(`#p-${f.topicId} [data-reading-body]`);
-    const passage = await selectPassage(page, body, 75);
-    await page.getByRole("button", { name: en.quote_reply, exact: true }).click();
     // A quotation says where it comes from: a last line linking to the post (or reply) it was taken from.
     const source = (id: number, kind: "p" | "c") => `\\n>\\n> — \\[[^\\]\\n]+\\]\\(/t/${f.topicId}#${kind}-${id}\\)`;
-    await expect(textarea).toHaveValue(new RegExp(`^A draft to keep\\.\\n\\n> ${escapeRegex(passage)}${source(f.topicId, "p")}\\n\\n$`));
-    await expect(textarea).toBeFocused();
-    await expect(form.locator('input[name="parentId"]')).toHaveValue("");
-    const replyPassage = await selectPassage(page, page.locator(`#c-${f.replyId} [data-quote-entry]`), 100);
-    await page.getByRole("button", { name: en.quote_reply, exact: true }).click();
+    const build = process.env.E2E_SERVER === "build";
+    let release!: () => void;
+    const pause = new Promise<void>(resolve => { release = resolve; });
+    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    if (build) await page.route(asset, async route => { await pause; await route.continue(); }, { times: 1 });
+    let passage: string;
+    let replyPassage: string;
+    try {
+      await page.goto(`/t/${f.topicId}?lang=en&tr=${f.topicId}&reply_to=`, { waitUntil: build ? "commit" : "load" });
+      if (!build) await waitForFormReady(form);
+      await textarea.fill("A draft to keep.");
+      passage = await selectPassage(page, body, 75);
+      await page.getByRole("button", { name: en.quote_reply, exact: true }).click();
+      await expect(textarea).toHaveValue(new RegExp(`^A draft to keep\\.\\n\\n> ${escapeRegex(passage)}${source(f.topicId, "p")}\\n\\n$`));
+      await expect(textarea).toBeFocused();
+      await expect(form.locator('input[name="parentId"]')).toHaveValue("");
+      replyPassage = await selectPassage(page, page.locator(`#c-${f.replyId} [data-quote-entry]`), 100);
+      if (build) await expect(form).not.toHaveAttribute("data-ready", "true");
+      await page.getByRole("button", { name: en.quote_reply, exact: true }).click();
+      if (build) await expect(textarea).toBeFocused();
+    } finally { release(); }
+    await waitForFormReady(form);
     await expect(textarea).toHaveValue(new RegExp(`^A draft to keep\\.\\n\\n> ${escapeRegex(passage)}${source(f.topicId, "p")}\\n\\n\\n\\n> ${escapeRegex(replyPassage)}${source(f.replyId, "c")}\\n\\n$`));
     await expect(form.locator('input[name="parentId"]')).toHaveValue(String(f.replyId));
     await expect(form.getByText(formatMessage(en.reply_target_note, { handle: "kim" }), { exact: true })).toBeVisible();

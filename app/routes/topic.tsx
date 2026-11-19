@@ -95,7 +95,7 @@ import { AuthorLink } from "~/components/author-link";
 import { deleteTopicEntry, flagTopicEntry, postTopicReply, reportTopicTranslation, saveReplyDraft, setTopicIntroduction, unsetTopicIntroduction } from "~/lib/topic-actions.server";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { loadReplyLocations } from "~/lib/reply-locations.server";
-import { lazy, memo, Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { lazy, memo, startTransition, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { readingVersions } from "~/lib/reading.server";
 import type { ReplyReadView } from "~/lib/seen-replies";
 import { listRelatedDiscussions } from "~/lib/related-discussions.server";
@@ -127,9 +127,18 @@ const ModerationPanel = memo(function ModerationPanel({ className, ...props }: C
 // time or interaction to hydrate it.
 let startReplyFormLoad: () => void;
 const replyFormReady = new Promise<void>(resolve => { startReplyFormLoad = () => resolve(); });
-const LazyTopicReplyForm = lazy(() => replyFormReady.then(() => import("~/components/topic-reply-form")));
+const LazyTopicReplyForm = lazy(() => replyFormReady
+  .then(() => import("~/components/topic-reply-form"))
+  // A failed import leaves the server's native form in place for submission.
+  .catch(() => new Promise<never>(() => {})));
 const ServerTopicReplyForm = import.meta.env.SSR ? (await import("~/components/topic-reply-form")).default : null;
 const TopicReplyForm = ServerTopicReplyForm ?? LazyTopicReplyForm;
+
+function LoadClientReplyForm() {
+  // On client navigation the fallback mounts without a server form to show.
+  useEffect(() => { startReplyFormLoad(); }, []);
+  return null;
+}
 
 const topicCacheMiddleware: Route.MiddlewareFunction = async ({ request, params }, next) => {
   const response = await next();
@@ -655,17 +664,37 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   useEffect(() => hasReplyForm ? afterPageIdle(startReplyFormLoad) : undefined, [hasReplyForm]);
   // The translation that the topic's "wrong translation" button is about (TranslatedEntry reports it, since the reader can switch to the original); the button is drawn in the end of the article, outside the entry.
   const [topicReported, setTopicReported] = useState(() => topic.placeholder === null ? initialReportedTranslation(topic.display) : null);
+  const reportTopicTranslationChange = useCallback((reported: typeof topicReported) => {
+    if (reported === topicReported) return;
+    if (hasReplyForm) startReplyFormLoad();
+    startTransition(() => setTopicReported(reported));
+  }, [hasReplyForm, topicReported]);
+  const settleTranslations = (langs: Lang[]) => {
+    if (hasReplyForm) startReplyFormLoad();
+    startTransition(() => setSettled(previous => ({
+      id: topic.id,
+      langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])],
+    })));
+  };
   const postedReply = replies.find(reply => reply.placeholder === null && reply.posted)?.id;
   const previousPostedReply = useRef(postedReply);
   useEffect(() => {
-    if (postedReply !== undefined && postedReply !== previousPostedReply.current) setReplyRound(round => round + 1);
+    if (postedReply !== undefined && postedReply !== previousPostedReply.current) {
+      if (hasReplyForm) startReplyFormLoad();
+      startTransition(() => setReplyRound(round => round + 1));
+    }
     if (postedReply !== undefined) previousPostedReply.current = postedReply;
-  }, [postedReply]);
+  }, [hasReplyForm, postedReply]);
   const replyFailed = actionData?.intent === "reply" && Boolean(actionData.error);
   // A real navigation replaces the target, including clearing it on the same URL.
   // Refused replies and fetcher revalidation preserve the target chosen by quoting.
+  const resetReplyTarget = useEffectEvent(() => {
+    if (replyFailed || replyTarget === loaderData.replyTarget) return;
+    if (hasReplyForm) startReplyFormLoad();
+    startTransition(() => setReplyTarget(loaderData.replyTarget));
+  });
   useEffect(() => {
-    if (!replyFailed) setReplyTarget(loaderData.replyTarget);
+    resetReplyTarget();
   }, [loaderData.replyTarget?.id, loaderData.replyTarget?.href, loaderData.replyTarget?.handle, location.key, replyFailed]);
   useDropNoticeParams(loaderData.edited !== null || (topic.placeholder === null && topic.posted) || replies.some(r => r.placeholder === null && r.posted));
   const replyInput = actionData?.intent === "reply" && "input" in actionData ? actionData.input as { body: string; lang: string } : undefined;
@@ -677,7 +706,10 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
     : replies, [replies, replyById, loaderData.replyBranches]);
   const selectQuotedReply = useEffectEvent((id: number) => {
     const reply = replies.find(r => r.id === id && r.placeholder === null && !r.hidden);
-    if (reply && reply.placeholder === null) setReplyTarget({ id, href: `${location.pathname}${location.search}#c-${id}`, handle: reply.authorHandle });
+    if (reply && reply.placeholder === null) {
+      if (hasReplyForm) startReplyFormLoad();
+      startTransition(() => setReplyTarget({ id, href: `${location.pathname}${location.search}#c-${id}`, handle: reply.authorHandle }));
+    }
   });
   const replyReadKey = displayedReplies.map(r => `${r.id}:${r.placeholder}:${r.placeholder === null && !r.hidden && !r.own}`).join(",");
   const markDisplayedReplies = useEffectEvent((mark: typeof import("~/lib/reply-read-marker").markNewReplies) => mark(topic.id, displayedReplies, readView));
@@ -859,7 +891,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
             {topic.posted && loaderData.postedNotice && <PostedTopicNotice topicId={topic.id} lang={topic.lang} langCode={topic.langCode} place={loaderData.village ? postingVillageName(loaderData.village, topic.authorHandle) : undefined} firstPost={loaderData.postedNotice.first} initial={loaderData.postedNotice.langs} sourceStatus={loaderData.postedNotice.sourceStatus} materialWarning={loaderData.postedNotice.materialWarning} editHref={`/t/${topic.id}/edit`} />}
             {loaderData.edited === topic.id && topic.own && <PostedLine kind="edited" />}
             {topic.hidden && <HiddenMark action={topic.hiddenAction} />}
-            {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={langs => setSettled(previous => ({ id: topic.id, langs: [...new Set([...(previous.id === topic.id ? previous.langs : []), ...langs])] }))} /></Suspense>}
+            {translating.length > 0 && <Suspense fallback={null}><TranslationWatch topicId={topic.id} onSettled={settleTranslations} /></Suspense>}
             <div className="reading-article-content space-y-2">
             <TranslatedEntry
               key={displayKey(topic.id, topic.display)}
@@ -931,7 +963,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                 </div>
                 </>
               )}
-              onReportedChange={setTopicReported}
+              onReportedChange={reportTopicTranslationChange}
               footer={() => <p className="article-signature" data-article-signature="">
                 <AuthorLink handle={topic.authorHandle} name={topic.authorName} latin={topic.authorNameLatin} reader={loaderData.reader} byline handleClassName="article-author-handle" />
               </p>}
@@ -1020,7 +1052,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {(topic.placeholder !== null || topic.hidden) && <p className="ui-help text-muted-foreground">{m.reply_closed_hidden()}</p>}
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
         {canReply && loaderData.ownerId && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<LoadClientReplyForm />}>
             <TopicReplyForm key={`${loaderData.ownerId}:${topic.id}:${replyRound}`} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
               nushiAvailable={loaderData.nushiAvailable}
               owner={loaderData.ownerId} threadId={topic.id} keeper={{ scope: `reply:${topic.id}:${replyTarget?.id ?? ""}`, family: `reply:${topic.id}:`, startBody: "" }}

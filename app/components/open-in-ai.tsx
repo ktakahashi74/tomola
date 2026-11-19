@@ -9,6 +9,7 @@ import {
 } from "~/lib/open-in-ai";
 import { Button } from "~/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+import { QuietBoundary } from "~/components/quiet-boundary";
 import { m } from "~/paraglide/messages.js";
 import { useAiOpenReturn } from "~/components/use-ai-open-return";
 import type { SourceLang } from "~/lib/languages";
@@ -37,17 +38,12 @@ export function OpenInAi({ mdUrl, mdPath, reader = false, showNoScript = true, s
   useEffect(() => {
     if (mounted && !reader) return afterPageIdle(() => { void loadDetails().catch(() => {}); });
   }, [mounted, reader]);
+  const markdownLink = <a href={mdPath} className="text-sm underline">{m.open_in_ai_noscript()}</a>;
   // Show no button while JavaScript is unavailable (server rendering and before hydration). For browsing without JavaScript, <noscript> supplies
   // an ordinary Markdown-twin link without a token, readable with the browser session.
   if (!mounted) {
     if (!showNoScript) return null;
-    return (
-      <noscript>
-        <a href={mdPath} className="text-sm underline">
-          {m.open_in_ai_noscript()}
-        </a>
-      </noscript>
-    );
+    return <noscript>{markdownLink}</noscript>;
   }
 
   async function open(choice: AiChoice) {
@@ -101,7 +97,7 @@ export function OpenInAi({ mdUrl, mdPath, reader = false, showNoScript = true, s
     else showDialog();
   }
 
-  return (
+  const controls = (
     <div className="relative inline-flex max-w-full flex-wrap items-center gap-1 text-sm">
       <Button ref={trigger} type="button" variant="outline" title={m.open_in_ai_help()} onClick={click}>
         {m.open_in_ai()}
@@ -126,4 +122,5 @@ export function OpenInAi({ mdUrl, mdPath, reader = false, showNoScript = true, s
       </Suspense>}
     </div>
   );
+  return <QuietBoundary fallback={markdownLink}>{controls}</QuietBoundary>;
 }

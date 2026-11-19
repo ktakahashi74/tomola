@@ -171,6 +171,28 @@ test("text typed in the reply field goes with the member to another reply target
   await expect(body(page, "#reply")).toHaveValue("Typed for the first reply");
   await page.getByRole("button", { name: en.local_draft_discard, exact: true }).click();
   expect(await kept(page)).toEqual([]);
+  if (process.env.E2E_SERVER === "build") {
+    const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+    let fail!: () => void;
+    const pause = new Promise<void>(resolve => { fail = resolve; });
+    await page.route(asset, async route => { await pause; await route.abort(); });
+    const nativeReply = "Written before the reply editor failed to load";
+    const failed = page.waitForEvent("requestfailed", request => asset.test(request.url()));
+    try {
+      const requested = page.waitForRequest(asset);
+      await page.goto(thread, { waitUntil: "commit" });
+      await requested;
+      await body(page, "#reply").fill(nativeReply);
+    } finally { fail(); }
+    await failed;
+    await waitForClientRoute(page);
+    await expect(form).not.toHaveAttribute("data-ready", "true");
+    await expect(body(page, "#reply")).toHaveValue(nativeReply);
+    const sent = page.waitForRequest(request => request.method() === "POST" && request.isNavigationRequest() && new URL(request.url()).pathname === thread);
+    await form.getByRole("button", { name: en.submit_reply, exact: true }).click();
+    await sent;
+    await expect(page.locator("#replies").getByText(nativeReply, { exact: true })).toBeVisible();
+  }
 });
 
 

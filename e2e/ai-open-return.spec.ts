@@ -210,5 +210,18 @@ test("checks pause while hidden, stop at expiry, reset on menu use, and skip fai
     await page.clock.fastForward(AI_OPEN_CHECK_DELAY_MS + AI_OPEN_CHECK_INTERVAL_MS);
     expect(checked.length).toBe(after);
     await expect(page.getByText(recovery, { exact: true })).toHaveCount(0);
+    if (process.env.E2E_SERVER === "build") {
+      await page.route(/\/assets\/open-in-ai-details-[^/]+\.js$/, route => route.fulfill({ status: 404 }));
+      for (const name of [en.open_in_ai_menu, en.open_in_ai]) {
+        await page.goto(`/t/${fixture().topicId}?lang=en`);
+        await page.evaluate(key => localStorage.removeItem(key), AI_CHOICE_STORAGE_KEY);
+        await entrance.getByRole("button", { name, exact: true }).click();
+        const markdown = entrance.getByRole("link", { name: en.open_in_ai_noscript, exact: true });
+        await expect(markdown).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        await markdown.click();
+        await expect(page).toHaveURL(url => url.pathname === `/t/${fixture().topicId}.md`);
+      }
+    }
   } finally { await close(); }
 });

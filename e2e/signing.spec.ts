@@ -128,6 +128,24 @@ test("opted-in writes and both preference changes use real UV assertions; unsign
     await expect(page.getByRole("heading", { level: 1, name: "Signed topic", exact: true })).toBeVisible();
     await expect(page.getByText("My signed reply", { exact: true })).toBeVisible();
     await expect(page.locator('[data-member-menu-trigger][title="@signer"]').first()).toBeVisible();
+    if (process.env.E2E_SERVER === "build") {
+      const asset = /\/assets\/topic-reply-form-[^/]+\.js$/;
+      await page.route(asset, route => route.abort());
+      const failed = page.waitForEvent("requestfailed", request => asset.test(request.url()));
+      await page.goto(topicPath);
+      await failed;
+      const reply = page.locator("#reply form");
+      const textarea = reply.getByLabel(enMessages.field_body);
+      const unsigned = "Reply kept after a failed editor load";
+      await textarea.fill(unsigned);
+      const refused = page.waitForResponse(response => response.request().method() === "POST" && response.request().isNavigationRequest() && new URL(response.url()).pathname === topicPath);
+      await reply.getByRole("button", { name: enMessages.submit_reply, exact: true }).click();
+      expect((await refused).status()).toBe(403);
+      await expect(reply.getByText(enMessages.signing_failed, { exact: true })).toBeVisible();
+      await expect(textarea).toHaveValue(unsigned);
+      await expect(page.locator("#replies").getByText(unsigned, { exact: true })).toHaveCount(0);
+      await page.unroute(asset);
+    }
 
     const registrationBypass = await context.request.get("/api/auth/passkey/generate-register-options");
     expect(registrationBypass.status()).toBe(404);
