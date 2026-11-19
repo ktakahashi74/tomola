@@ -522,7 +522,7 @@ describe("source scan", () => {
     const allowed = new Map([
       ["app/lib/md/history.server.ts", "compares missing and present titles only in sentence diffs"],
       ["app/routes/entry-history.tsx", "compares missing and present titles only in sentence diffs"],
-      ["app/components/signed-form.tsx", "renders missing titles as blank in the approval comparison only"],
+      ["app/components/signed-form-controls.tsx", "renders missing titles as blank in the approval comparison only"],
       // The questions (alternative framings) always have a title, so the two files that read them only to make the types fit are allowed.
       ["app/lib/objections.server.ts", "reads questions, which always have a title"],
       ["app/lib/md/manifest.server.ts", "reads questions, which always have a title"],
