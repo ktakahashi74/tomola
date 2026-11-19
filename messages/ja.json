@@ -1506,6 +1506,7 @@
   "reauth_for_passkey": "パスキーを追加する前に、{who} さんご本人か確認します。",
   "reauth_for_tokens": "API トークンを作る前に、{who} さんご本人か確認します。",
   "reauth_for_mcp": "AI アプリをあなたのアカウントでつなぐ前に、{who} さんご本人か確認します。",
+  "reauth_for_moderation": "この操作を行うには、{who} さんご本人か確認します。元の画面に戻ったら、必要な項目を入力し直して、もう一度送信してください。",
   "reauth_submit": "確認メールを送る",
   "welcome_label": "ようこそ",
   "welcome_joined": "@{handle} として参加しました。この記事に返信できます。",

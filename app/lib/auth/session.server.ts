@@ -7,7 +7,7 @@ import { getActiveMember, getWriter } from "~/lib/members.server";
 import type { Profile } from "~/lib/profiles.server";
 import { ensureOperatorRow, getModScope, isModerator, type ModScope } from "~/lib/roles.server";
 import { getAuth } from "./auth.server";
-import { isCredentialSessionFresh } from "./credential-session.server";
+import { isCredentialSessionFresh, reauthenticationUrl } from "./credential-session.server";
 import { collectSessionCookies } from "./session-cookies.server";
 import { hitBrowserReadLimit, hitPublicReadLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { publicReading } from "~/lib/public-reading.server";
@@ -33,10 +33,7 @@ async function getSessionUserImplementation(request: Request): Promise<SessionUs
 export async function requireUser(request: Request): Promise<SessionUser> {
   const user = await getSessionUser(request);
   if (!user) {
-    const url = new URL(request.url);
-    // RR single-fetch keeps its transport URL in loader requests; return to the document, excluding route-selection metadata.
-    url.pathname = url.pathname.endsWith("/_.data") ? url.pathname.replace(/_\.data$/, "") : url.pathname.replace(/\.data$/, "");
-    if (url.searchParams.has("_routes")) url.searchParams.delete("_routes");
+    const url = documentUrl(request);
     const preserve = (request.method === "GET" || request.method === "HEAD") && url.pathname !== "/";
     throw redirect(preserve ? readerLoginHref(url.pathname, url.search) : "/login");
   }
@@ -62,9 +59,7 @@ async function requireMemberImplementation(request: Request): Promise<Member> {
   const profile = await getSessionProfile(request);
   if (!profile) throw redirect("/onboarding");
   if (request.method === "GET" && trialParticipationRequired() && needsTrialConsent(profile)) {
-    const url = new URL(request.url);
-    url.pathname = url.pathname.endsWith("/_.data") ? url.pathname.replace(/_\.data$/, "") : url.pathname.replace(/\.data$/, "");
-    url.searchParams.delete("_routes");
+    const url = documentUrl(request);
     // Keep account controls, personal deletion and appeals reachable before agreement.
     const selfService = /^\/(?:settings(?:\/|$)|appeal\/|notifications(?:\/|$)|following$|suspended$|invites\/new$|mcp\/consent$|u\/|t\/[1-9]\d*$|v\/[^/]+\/chat$)/.test(url.pathname)
       || /^\/[tc]\/[1-9]\d*\/history(?:\/(?:current|[1-9]\d*))?$/.test(url.pathname);
@@ -97,6 +92,23 @@ async function requireWriterImplementation(request: Request): Promise<Member> {
   return member;
 }
 
+function documentUrl(request: Request): URL {
+  const url = new URL(request.url);
+  // React Router single-fetch requests can carry a transport suffix and route selector.
+  url.pathname = url.pathname.replace(/\/_\.data$/, "/").replace(/\.data$/, "");
+  if (url.searchParams.has("_routes")) url.searchParams.delete("_routes");
+  return url;
+}
+
+async function requirePrivilegedWriteSession(request: Request): Promise<void> {
+  if (request.method === "GET" || request.method === "HEAD" || await getCredentialSessionFresh(request)) return;
+  const target = documentUrl(request);
+  // Some forms submit to another route, such as suspension from the roles page.
+  const referrer = URL.parse(request.headers.get("referer") ?? "");
+  const back = referrer?.origin === target.origin ? referrer : target;
+  throw redirect(reauthenticationUrl(back.pathname + back.search), 303);
+}
+
 // For operator-only screens and operations (addresses in OPERATOR_EMAILS; getModScope in roles.server.ts). Send logged-out users to login.
 // Return 404 for non-operator members, including suspended members, to avoid revealing the screen. Suspended operators go to /suspended, as at other write entry points
 // (operators cannot be suspended through the UI, but a suspended member could later be added to OPERATOR_EMAILS).
@@ -104,6 +116,7 @@ export async function requireOperator(request: Request): Promise<{ user: Session
   const member = await requireMember(request);
   if (!(await getMemberScope(request)).operator) throw data("Not found", { status: 404 });
   await requireWriter(request);
+  await requirePrivilegedWriteSession(request);
   return member;
 }
 
@@ -114,6 +127,7 @@ export async function requireModerator(request: Request): Promise<Member & { sco
   const scope = await getMemberScope(request);
   if (!isModerator(scope)) throw data("Not found", { status: 404 });
   await requireWriter(request);
+  await requirePrivilegedWriteSession(request);
   return { ...member, scope };
 }
 
@@ -138,7 +152,7 @@ export const getSessionProfile = perRequest(async request => {
   const user = await getSessionUser(request);
   return user ? getActiveMember(await getDb(), user.id) : null;
 });
-// Whether this request's session is recent enough to add a credential (CREDENTIAL_FRESH_MS).
+// Whether this request's session was created within CREDENTIAL_FRESH_MS.
 export async function getCredentialSessionFresh(request: Request): Promise<boolean> {
   return (await getSessionUser(request)) !== null && isCredentialSessionFresh(sessionCreatedAt.get(request));
 }

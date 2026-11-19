@@ -1507,6 +1507,7 @@
   "reauth_for_passkey": "e4daa73a62455428",
   "reauth_for_tokens": "01452abbd1069d49",
   "reauth_for_mcp": "3a3d7826008cd41c",
+  "reauth_for_moderation": "b34530fb5d047351",
   "reauth_submit": "a23f03974ed7b2d8",
   "welcome_label": "ca4f9dcf204e2037",
   "welcome_joined": "cfc90dd6f64145da",

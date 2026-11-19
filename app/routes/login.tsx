@@ -41,12 +41,21 @@ export function headers({ actionHeaders }: Route.HeadersArgs) {
 
 // Login/authentication POSTs: 300 per IP per 15 minutes (AUTH_PAGE_IP_LIMIT; 429 on excess). Do not count GET page views; they write no DB rows.
 // Magic-link sending has separate per-email and per-IP limits.
-// What a re-verification is for, told from the page it returns to (the screens that ask for it all send the member back to themselves).
-function reauthPurpose(next: string): "tokens" | "mcp" | "passkey" | "google" {
+const reauthMessages = {
+  google: m.google_reauth_for,
+  mcp: m.reauth_for_mcp,
+  moderation: m.reauth_for_moderation,
+  passkey: m.reauth_for_passkey,
+  tokens: m.reauth_for_tokens,
+};
+
+// The return page identifies the purpose of re-verification.
+function reauthPurpose(next: string): keyof typeof reauthMessages {
   if (next.includes("#settings-google")) return "google";
   const path = next.split(/[?#]/)[0];
   if (path === "/settings/tokens") return "tokens";
   if (path.startsWith("/mcp/")) return "mcp";
+  if (/^\/(?:admin|mod)(?:\/|$)/i.test(path)) return "moderation";
   return "passkey";
 }
 
@@ -179,7 +188,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
       {loaderData.loggedOut && <p role="status">{m.logged_out()}</p>}
       {!verifying && ("membersOnlyTarget" in loaderData) && !loaderData.codePending && <MembersOnlyNotice />}
       <h1 className="text-2xl font-bold">{heading}</h1>
-      {verifying && <p>{(verifying.purpose === "tokens" ? m.reauth_for_tokens : verifying.purpose === "mcp" ? m.reauth_for_mcp : verifying.purpose === "google" ? m.google_reauth_for : m.reauth_for_passkey)({ who: verifying.handle ? `@${verifying.handle}` : verifying.email })}</p>}
+      {verifying && <p>{reauthMessages[verifying.purpose]({ who: verifying.handle ? `@${verifying.handle}` : verifying.email })}</p>}
       {!verifying && !loaderData.codePending && <p>{m.entry_intro()}</p>}
       <IosStandaloneLoginNote />
       {!loaderData.codePending && screenAction?.status === "code_invalid" && <p role="alert" className="text-destructive">{m.login_code_invalid()}</p>}

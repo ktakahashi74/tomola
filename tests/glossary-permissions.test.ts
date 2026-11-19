@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { glossaryEntries, glossaryRevisions, profiles } from "~/lib/db/schema";
+import { glossaryEntries, glossaryRevisions, profiles, session } from "~/lib/db/schema";
+import { CREDENTIAL_FRESH_MS } from "~/lib/auth/credential-session.server";
 import { createTopic } from "~/lib/entries.server";
 import { canEditGlossary, createGlossaryEntry, deleteGlossaryEntry, listGlossary, listGlossaryRevisions, updateGlossaryEntry, type GlossaryActor } from "~/lib/glossary.server";
 import { grantModerator, revokeModerator, type ModScope } from "~/lib/roles.server";
@@ -121,6 +122,22 @@ describe("the functions check the permission of every write against the saved ro
 });
 
 describe("/admin/glossary", () => {
+  it("a stale language moderator can read the glossary but must sign in again before editing it", async () => {
+    const as = "jamod";
+    const setAge = (age: number) => h.db.update(session).set({ createdAt: new Date(Date.now() - age) }).where(eq(session.userId, ids[as]));
+    const form = { intent: "create", term: "revision", lang: "en", targetLang: "ja", candidates: "改訂" };
+    await setAge(CREDENTIAL_FRESH_MS + 60_000);
+    try {
+      expect(await load(as)).toMatchObject({ status: 200 });
+      expect(await post(as, form)).toMatchObject({ status: 303, location: "/login?reauth=1&next=%2Fadmin%2Fglossary" });
+      expect((await entries()).some(row => row.term === form.term)).toBe(false);
+    } finally { await setAge(0); }
+    expect(await post(as, form)).toMatchObject({ status: 302 });
+    const [added] = await h.db.select().from(glossaryEntries).where(eq(glossaryEntries.term, form.term));
+    expect(added).toMatchObject({ lang: "en", targetLang: "ja" });
+    await post(as, { intent: "delete", id: String(added.id) });
+  });
+
   it("is hidden (404) from members who are neither operators nor moderators, for the page and for the form", async () => {
     const before = await snapshot();
     expect(await load("plain")).toMatchObject({ status: 404 });

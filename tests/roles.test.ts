@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { roles, user } from "~/lib/db/schema";
+import { roles, session, user } from "~/lib/db/schema";
+import { CREDENTIAL_FRESH_MS } from "~/lib/auth/credential-session.server";
 import { ensureOperatorRow, getModScope, grantModerator, inScope, isModerator, listModerators, NO_SCOPE, revokeModerator, searchMembers, syncOperatorRoles } from "~/lib/roles.server";
 import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
@@ -172,6 +173,25 @@ describe("requireOperator (the route gate) uses the roles", () => {
     expect(revoke).toMatchObject({ status: 302 });
     expect((await getModScope(h.db, { id: h.ids.taro, email: "taro@example.com" }, {})).langs).toEqual([]);
     expect(await h.outcome(() => action(h.args(h.request("/admin/roles", { as: "hana", form: { intent: "grant", userId: h.ids.taro, lang: "xx" } }))))).toMatchObject({ status: 400 });
+  });
+
+  it("a stale operator can read roles but must sign in again before granting a role", async () => {
+    const { loader, action } = await import("~/routes/admin-roles");
+    process.env.OPERATOR_EMAILS = "hana@example.com";
+    const setAge = (age: number) => h.db.update(session).set({ createdAt: new Date(Date.now() - age) }).where(eq(session.userId, h.ids.hana));
+    const path = "/admin/roles?q=taro";
+    const form = { intent: "grant", userId: h.ids.taro, lang: "fr", q: "taro" };
+    const moderatorLangs = async () => (await getModScope(h.db, { id: h.ids.taro, email: "taro@example.com" })).langs;
+    await setAge(CREDENTIAL_FRESH_MS + 60_000);
+    try {
+      expect(await h.outcome(() => loader(h.args(h.request(path, { as: "hana" }))))).toMatchObject({ status: 200 });
+      const request = h.request("/admin/roles.data?q=taro&_routes=routes%2Fadmin-roles", { as: "hana", form, headers: { referer: "https://example.invalid/elsewhere" } });
+      expect(await h.outcome(() => action(h.args(request)))).toMatchObject({ status: 303, location: "/login?reauth=1&next=%2Fadmin%2Froles%3Fq%3Dtaro" });
+      expect(await moderatorLangs()).toEqual([]);
+    } finally { await setAge(0); }
+    expect(await h.outcome(() => action(h.args(h.request(path, { as: "hana", form }))))).toMatchObject({ status: 302, location: "/admin/roles?q=taro&saved=granted" });
+    expect(await moderatorLangs()).toEqual(["fr"]);
+    await revokeModerator(h.db, h.ids.taro, "fr");
   });
 
   it("an address taken out of OPERATOR_EMAILS stops being an operator at once", async () => {

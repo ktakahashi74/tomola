@@ -262,6 +262,8 @@ The private saved list at `/saved` orders topics by save time. Saving is neither
 | Open in AI link | Publicly readable resources use a credential-free URL with a non-authorizing `o` marker. Protected resources use member-issued, resource-scoped five-minute `oai2` credentials |
 | Operation and moderation | Role and language responsibilities checked; moderation and appeal records retained |
 
+Browser submissions handled by `requireOperator` or `requireModerator` require a session created within the last 24 hours. Page loads use the existing role checks. When asked to confirm their identity, the member can use a passkey or email code, then return to the page and submit again.
+
 API tokens are displayed in plaintext only when issued; the database stores their hashes. Credentials in read URLs are not propagated into returned links. Member responses prevent shared caching, and access logs redact credential-bearing URL components.
 
 Six-digit email codes and confirmation links work only in the requesting browser, expire after fifteen minutes and share a single use. MCP OAuth checks consent and revocation on each request. Dynamic client registration (DCR), including unauthenticated registration, is currently always enabled, with no operator on/off setting. Registration does not replace member authentication or permission consent.

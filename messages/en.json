@@ -2256,6 +2256,7 @@
   "reauth_for_passkey": "Before adding a passkey, we confirm that you are {who}.",
   "reauth_for_tokens": "Before creating an API token, we confirm that you are {who}.",
   "reauth_for_mcp": "Before connecting the AI app to your account, confirm that you are {who}.",
+  "reauth_for_moderation": "To continue with this operation, confirm that you are {who}. After you return, re-enter any details and submit again.",
   "reauth_submit": "Send a confirmation email",
   "welcome_label": "Welcome",
   "welcome_joined": "You joined as @{handle}. You can reply to this post.",
