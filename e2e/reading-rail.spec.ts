@@ -329,7 +329,7 @@ test("reading frames center on wide screens and share space with contents on nar
       await waitForClientRoute(page);
       await expect(page.locator(".reading-toc")).toHaveCount(0);
       const expected = await cssLengths(page, "body", ["--site-width", "--site-gutter", "--reading-layout-width"]);
-      for (const width of name === "home" ? [1024, 1366, 1680] : [breakpoint, centeredBreakpoint - 1, centeredBreakpoint, 1366]) {
+      for (const width of name === "home" ? [breakpoint, 1366, 1680] : [breakpoint, centeredBreakpoint - 1, centeredBreakpoint, 1366]) {
         await page.setViewportSize({ width, height: 900 });
         const frame = (await page.locator("body").boundingBox())!;
         const viewport = await page.evaluate(() => document.documentElement.clientWidth);
