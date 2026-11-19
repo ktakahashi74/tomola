@@ -68,7 +68,7 @@ export async function enqueueImmediateEmails(
 ): Promise<number> {
   if (created.length === 0) return 0;
   await enqueuePush(db, created.filter(item => item.kind !== "chat_nushi_cited"), opts.now);
-  // Result notices describe the outcome and use available topic titles; they do not need new excerpt translations.
+  // Translation-report results use available topic titles. Nushi citation notices carry no excerpts to translate.
   await enqueueNotificationTranslations(db, created.filter(item => item.kind !== "translation_report_result" && item.kind !== "nushi_cited" && item.kind !== "chat_nushi_cited" && !isInAppOnlyKind(item.kind)).map(item => item.id));
   const runAt = new Date((opts.now ?? new Date()).getTime() + notificationEmailDelaySeconds() * 1000);
   const prefOf = new Map<string, EmailPref>();

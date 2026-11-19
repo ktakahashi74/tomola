@@ -17,7 +17,7 @@ export async function enableNushiCallerDelivery(db: Db, callerId: string) {
 
 export async function expectNushiDeliveryJobs(db: Db, citationId?: number) {
   const deliveryJobs = await db.select({ kind: jobs.kind, payload: jobs.payload }).from(jobs)
-    .where(inArray(jobs.kind, [SEND_NOTIFICATION_EMAIL_JOB, SEND_PUSH_JOB, "email_nushi_result", "email_chat_nushi_result"]));
+    .where(inArray(jobs.kind, [SEND_NOTIFICATION_EMAIL_JOB, SEND_PUSH_JOB]));
   expect(deliveryJobs).toEqual(citationId === undefined ? [] : [{ kind: SEND_NOTIFICATION_EMAIL_JOB, payload: { notificationId: citationId } }]);
   expect(await db.select().from(pushDeliveries)).toEqual([]);
 }

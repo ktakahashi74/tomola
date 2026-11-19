@@ -17,15 +17,15 @@ import { villageChatEnabled } from "../app/lib/village-chat-enabled.server";
 
 export async function seedVillages(db: Db, dir: string) {
   if (!villagesEnabled()) return;
-  const chatNushiMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
-  const chatNushiId = (handle: string) => chatNushiMembers.find(member => member.handle === handle)!.id;
+  const nushiMembers = await db.select({ id: profiles.userId, handle: profiles.handle }).from(profiles);
+  const nushiMemberId = (handle: string) => nushiMembers.find(member => member.handle === handle)!.id;
   const [chatNushiVillage] = await db.insert(villages).values({ slug: "chat-nushi-browser", kind: "open", name: "Chat AI browser village" }).returning();
-  await db.insert(villageMembers).values(["zcn_flow_owner", "zcn_flow_caller", "zcn_flow_reader"].map(handle => ({ villageId: chatNushiVillage.id, userId: chatNushiId(handle), role: handle.endsWith("owner") ? "owner" : "member" })));
-  const chatNushiSource = await createTopic(db, chatNushiId("zcn_flow_owner"), { title: "Orchard evidence", body: "The orchard needs public review. Some growers disagree about the planting date.", lang: "en", village: chatNushiVillage.slug });
+  await db.insert(villageMembers).values(["zcn_flow_owner", "zcn_flow_caller", "zcn_flow_reader"].map(handle => ({ villageId: chatNushiVillage.id, userId: nushiMemberId(handle), role: handle.endsWith("owner") ? "owner" : "member" })));
+  const chatNushiSource = await createTopic(db, nushiMemberId("zcn_flow_owner"), { title: "Orchard evidence", body: "The orchard needs public review. Some growers disagree about the planting date.", lang: "en", village: chatNushiVillage.slug });
   if (!chatNushiSource.ok) throw new Error(chatNushiSource.error);
-  await db.insert(chatMessages).values(Array.from({ length: 35 }, (_, index) => ({ villageId: chatNushiVillage.id, authorId: chatNushiId("zcn_flow_owner"), lang: "en", body: `Chat AI history ${index + 1}\nA quiet reading fixture.\nAnother line for a stable reading position.`, createdSeq: index + 1, changedSeq: index + 1 })));
+  await db.insert(chatMessages).values(Array.from({ length: 35 }, (_, index) => ({ villageId: chatNushiVillage.id, authorId: nushiMemberId("zcn_flow_owner"), lang: "en", body: `Chat AI history ${index + 1}\nA quiet reading fixture.\nAnother line for a stable reading position.`, createdSeq: index + 1, changedSeq: index + 1 })));
   await db.insert(chatSequences).values({ villageId: chatNushiVillage.id, seq: 35 });
-  const expiredCaller = chatNushiId("zcn_flow_reader");
+  const expiredCaller = nushiMemberId("znushi_expired_caller");
   const [expiredVillage] = await db.insert(villages).values({ slug: "nushi-expired-browser", kind: "open", name: "Nushi expiry browser village" }).returning();
   await db.insert(villageMembers).values({ villageId: expiredVillage.id, userId: expiredCaller, role: "owner" });
   const expiredCall = await createTopic(db, expiredCaller, { body: "@nushi orchard status", lang: "en", village: expiredVillage.slug });

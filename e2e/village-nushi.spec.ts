@@ -257,7 +257,7 @@ test("Nushi calls produce sourced public AI replies with independent reader and 
 
 test("a failed posting call remains visible in its topic", async ({ page }) => {
   const id = fs.readFileSync(path.join(state().dir, "expired-nushi-topic.txt"), "utf8");
-  await useMember(page, "zcn_flow_reader@example.com", `/t/${id}?lang=en`);
+  await useMember(page, "znushi_expired_caller@example.com", `/t/${id}?lang=en`);
   const status = page.locator("[data-nushi-status]");
   await expect(status).toContainText(en.nushi_failure_expired, { timeout: 20_000 });
   await expect(page.locator("[data-nushi-answer]")).toHaveCount(0);
