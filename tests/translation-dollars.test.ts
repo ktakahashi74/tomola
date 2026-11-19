@@ -96,18 +96,11 @@ it("keeps source math unchanged and still hides changed formulas", async () => {
   expect(isUsablePrimary({ sourceHash: "h", flags: changed.flags }, "h")).toBe(false);
 });
 
-it("keeps supported inline symbols and escapes currency in a translation of prose", async () => {
-  const text = "At $5 to $10 per run, use $N$ trials.";
-  const result = await translateChecked(engineReturning(text), { text: "1回5〜10ドルで、N回試す。", from: "ja", to: "en" });
-  expect(result).toMatchObject({ text: "At \\$5 to \\$10 per run, use $N$ trials.", flags: [], attempts: 1 });
-  expect(await renderMarkdown(result.text)).toContain("katex");
-});
-
-it.each(["Use $M$ trials.", "Use $N+1$ trials.", "Use $2+3$ trials.", "Trials:\n\n$$\nN\n$$"])(
-  "still checks math introduced into prose before storage: %s",
+it.each(["It costs $5 ($10 for members).", "It costs US$5 or US$10.", "It costs $5 and HK$10.", 'Prices: "$5" and "$10".', "It costs $5, or $ 10 with tax."])(
+  "keeps currency in a translation of a source without math as text: %s",
   async text => {
-    const result = await translateChecked(engineReturning(text), { text: "N回試す。", from: "ja", to: "en" });
-    expect(result).toMatchObject({ flags: ["quality_mismatch"], attempts: 2 });
+    const result = await translateChecked(engineReturning(text), { text: "料金は1回5ドル（会員は10ドル）。", from: "ja", to: "en" });
+    expect(result).toMatchObject({ flags: [], attempts: 1 });
   },
 );
 

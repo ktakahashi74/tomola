@@ -78,8 +78,8 @@ type MdNode = {
   children?: MdNode[];
 };
 
-// In translations of sources without math, escape literal dollars while
-// preserving code and keeping formulas available for the structure check.
+// A translation must not introduce math when the source contains none. Escape
+// literal dollars before inspection and storage, preserving every code span.
 export function normalizeTranslationDollars(source: string, translated: string): string {
   if (!translated.includes("$")) return translated;
   const math = countStructure(source);
@@ -111,26 +111,6 @@ export function normalizeTranslationDollars(source: string, translated: string):
   // Mask dollars at the same offsets so accidental math cannot swallow inline
   // code that occurs between two amounts. Code syntax itself stays unchanged.
   walk(markdown.parse(translated.replace(/\$/g, "x")) as unknown as MdNode);
-  const masked: string[] = [];
-  let cursor = 0;
-  for (const { start, end } of spans) {
-    masked.push(translated.slice(cursor, start), translated.slice(start, end).replace(/\$/g, "x"));
-    cursor = end;
-  }
-  masked.push(translated.slice(cursor));
-  const mathDollars = new Set<number>();
-  const collectMath = (node: MdNode) => {
-    if (node.type === "math" || node.type === "inlineMath") {
-      const start = node.position?.start.offset, end = node.position?.end.offset;
-      if (start === undefined || end === undefined) return;
-      const raw = translated.slice(start, end);
-      // In a price pair such as "$5 to $10" or "$5–$10", the nominal
-      // closing delimiter starts the second amount.
-      if (node.type === "inlineMath" && /^\$\d/.test(raw) && /[\s\p{Pd},/](?:\\\\)*\$$/u.test(raw) && /\d/.test(translated[end] ?? "")) return;
-      for (let i = start; i < end; i++) if (translated[i] === "$") mathDollars.add(i);
-    } else node.children?.forEach(collectMath);
-  };
-  collectMath(markdown.parse(masked.join("")) as unknown as MdNode);
   const out: string[] = [];
   let nextSpan = 0, backslashes = 0;
   for (let i = 0; i < translated.length; i++) {
@@ -141,7 +121,7 @@ export function normalizeTranslationDollars(source: string, translated: string):
       continue;
     }
     const char = translated[i];
-    if (char === "$" && backslashes % 2 === 0 && !mathDollars.has(i)) out.push("\\");
+    if (char === "$" && backslashes % 2 === 0) out.push("\\");
     out.push(char);
     backslashes = char === "\\" ? backslashes + 1 : 0;
   }
