@@ -125,14 +125,29 @@ test("a translated title row opens the thread, where originals and translations 
 
 test("a reader taps 'This translation has a problem' once, and another reader then sees a small notice on that translation", async () => {
   await somchai.goto(topicPath);
+  await waitForClientRoute(somchai);
   const article = topicArticle(somchai);
+  const titleReport = article.getByRole("button", { name: enMessages.report_title_button, exact: true });
   // One press reports the translation of the body. The title is a report of its own, and the choice of the part opens only when both are reported.
   await expect(article.getByRole("combobox")).toHaveCount(0);
-  await article.getByRole("button", { name: enMessages.report_button, exact: true }).click();
-  await expect(somchai.getByText(enMessages.report_thanks)).toBeVisible();
-  await expect(article.getByRole("combobox")).toHaveCount(0);
-  await article.getByRole("button", { name: enMessages.report_title_button, exact: true }).click();
+  const revalidation = (url: URL) => url.pathname === `${topicPath}.data`;
+  let release!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  await somchai.route(revalidation, async route => {
+    if (route.request().method() === "GET") await hold;
+    await route.continue();
+  });
+  try {
+    await article.getByRole("button", { name: enMessages.report_button, exact: true }).click();
+    await expect(somchai.getByText(enMessages.report_thanks)).toBeVisible();
+    await expect(article.getByRole("combobox")).toHaveCount(0);
+    // The success message can appear while the body report is still revalidating.
+    await expect(titleReport).toBeDisabled();
+  } finally { release(); }
+  await expect(titleReport).toBeEnabled();
+  await titleReport.click();
   await expect(article.getByRole("button", { name: enMessages.report_reported, exact: true })).toHaveCount(2);
+  await somchai.unroute(revalidation);
   const field = article.locator('form:has(input[name="intent"][value="report-details"]) input[name="field"]');
   await article.getByRole("combobox").click();
   const choices = somchai.getByRole("listbox");

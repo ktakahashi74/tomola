@@ -209,9 +209,23 @@ test("shows a posted reply inside a long branch and excludes one's own reply fro
   await body.fill(written);
   await openAiText();
   await expect(aiText).toHaveValue(written);
+  await reply.getByRole("button", { name: messages.ai_write_button, exact: true }).click();
+  await expect(aiText).toBeHidden();
+  const publication = await page.evaluateHandle(text => ({ hasAiCopy: new Promise<boolean>(resolve => {
+    const replies = document.querySelector("#replies")!;
+    const observer = new MutationObserver(() => {
+      if (![...replies.querySelectorAll("article p")].some(paragraph => paragraph.textContent === text)) return;
+      observer.disconnect();
+      const copies = document.querySelectorAll<HTMLTextAreaElement>('#reply textarea:not([name="body"])');
+      resolve([...copies].some(field => field.value === text));
+    });
+    observer.observe(replies, { childList: true, subtree: true });
+  }) }), written);
   await page.getByRole("button", { name: messages.submit_reply, exact: true }).click();
   const published = page.locator("#replies article p").and(page.getByText(written, { exact: true }));
   await expect(published).toBeVisible();
+  expect(await publication.evaluate(first => first.hasAiCopy)).toBe(false);
+  await publication.dispose();
   const id = Number(new URL(page.url()).hash.slice(3));
   expect(new URL(page.url()).searchParams.get("posted")).toBe(String(id));
   await visibleTarget(page, id);

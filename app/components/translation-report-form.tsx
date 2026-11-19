@@ -62,7 +62,7 @@ export function TranslationReportForm({ entryId, lang, kind, hasTitle = true, re
       {parts.map(each => {
         const pending = reporting.state !== "idle" && sending === each;
         // A plain button: the name and value must be in the page's own HTML, so that the title button reports the title without a script too.
-        return <Fragment key={each}><button type="submit" name="field" value={each} disabled={isReported(each)} aria-busy={pending || undefined} aria-disabled={pending || undefined} aria-describedby={isReported(each) && reportedParts.length > 1 ? `${partNoteId}-${each}` : undefined} data-pending={pending ? "" : undefined}
+        return <Fragment key={each}><button type="submit" name="field" value={each} disabled={isReported(each)} aria-busy={pending || undefined} aria-disabled={busy || undefined} aria-describedby={isReported(each) && reportedParts.length > 1 ? `${partNoteId}-${each}` : undefined} data-pending={busy ? "" : undefined}
           className={cn(buttonVariants({ variant: "ghost" }), "touch-action h-auto px-1 ui-meta text-muted-foreground data-pending:pointer-events-none data-pending:opacity-50")}>
           {isReported(each) ? m.report_reported() : each === "body" ? m.report_button() : m.report_title_button()}
         </button>
@@ -85,7 +85,7 @@ export function TranslationReportForm({ entryId, lang, kind, hasTitle = true, re
         </Field> : <input type="hidden" name="field" value={part} />}
         <FieldLabel className="w-full flex-col items-start">{m.report_excerpt()}<Textarea name="excerpt" rows={2} maxLength={1000} lang={lang} value={details[part]?.excerpt ?? stored(part)?.excerpt ?? ""} onChange={event => change("excerpt", event.target.value)} /></FieldLabel>
         <FieldLabel className="w-full flex-col items-start">{m.report_note()}<Textarea name="note" rows={3} maxLength={2000} value={details[part]?.note ?? stored(part)?.note ?? ""} onChange={event => change("note", event.target.value)} /></FieldLabel>
-        {reportId && <Button variant="outline" type="submit" pending={amending.state !== "idle"}>{m.save_changes()}</Button>}
+        {reportId && <Button variant="outline" type="submit" pending={amending.state !== "idle"} aria-disabled={busy || undefined} className="aria-disabled:opacity-50">{m.save_changes()}</Button>}
       </amending.Form>
     </ActionPanel>}
     {shownResult && <p role={shownResult.error ? "alert" : "status"} className={`basis-full ${shownResult.error ? "text-destructive" : "text-success"}`}>{shownResult.error === "rate_limited" ? m.error_rate_limited() : shownResult.error ? m.report_error() : m.report_thanks()}</p>}

@@ -643,8 +643,6 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const [settled, setSettled] = useState<{ id: number; langs: Lang[] }>({ id: topic.placeholder === null ? topic.id : 0, langs: [] });
   const translating = loaderData.translating.filter(lang => !(settled.id === topic.id && settled.langs.includes(lang)));
   const quoteRoot = useRef<HTMLElement>(null);
-  const [replyRound, setReplyRound] = useState(0);
-  const replyFormKey = `${loaderData.ownerId}:${topic.id}:${replyRound}`;
   // The translation that the topic's "wrong translation" button is about (TranslatedEntry reports it, since the reader can switch to the original); the button is drawn in the end of the article, outside the entry.
   const [topicReported, setTopicReported] = useState(() => topic.placeholder === null ? initialReportedTranslation(topic.display) : null);
   const reportTopicTranslationChange = useCallback((reported: typeof topicReported) => {
@@ -658,13 +656,12 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
     })));
   };
   const postedReply = replies.find(reply => reply.placeholder === null && reply.posted)?.id;
-  const previousPostedReply = useRef(postedReply);
+  const [clearedReply, setClearedReply] = useState(postedReply);
+  const replyAccepted = postedReply !== undefined && postedReply !== clearedReply;
+  const replyFormKey = `${loaderData.ownerId}:${topic.id}:${clearedReply ?? ""}`;
   useEffect(() => {
-    if (postedReply !== undefined && postedReply !== previousPostedReply.current) {
-      startTransition(() => setReplyRound(round => round + 1));
-    }
-    if (postedReply !== undefined) previousPostedReply.current = postedReply;
-  }, [postedReply]);
+    if (replyAccepted) startTransition(() => setClearedReply(postedReply));
+  }, [postedReply, replyAccepted]);
   const replyFailed = actionData?.intent === "reply" && Boolean(actionData.error);
   // A real navigation replaces the target, including clearing it on the same URL.
   // Refused replies and fetcher revalidation preserve the target chosen by quoting.
@@ -1026,6 +1023,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {/* Hidden topics cannot receive replies; the server rejects them too. */}
         {(topic.placeholder !== null || topic.hidden) && <p className="ui-help text-muted-foreground">{m.reply_closed_hidden()}</p>}
         {/* Clear only after the member publishes a reply; revalidation preserves the editor. */}
+        {/* Drop the AI copy when the published reply first renders, ahead of the form reset. */}
         {canReply && loaderData.ownerId && (
           <TopicReplyForm key={replyFormKey} signatureRequired={loaderData.signPosts} respondWithPost={loaderData.respondWithPost}
             nushiAvailable={loaderData.nushiAvailable}
@@ -1043,7 +1041,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                   (a client-side navigation) chooses the mark; the text typed so far is kept. */}
               {question.asksStance && <StanceTagChips error={actionData?.intent === "reply" ? actionData.error ?? undefined : undefined} errorId="reply-error" key={writeTag ?? "none"} defaultValue={writeTag} />}
             </>}
-            aiTools={{ ownerId: loaderData.ownerId, connectDraftLabel: loaderData.connectDraftLabel, kind: "reply", threadId: topic.id }}
+            aiTools={replyAccepted ? undefined : { ownerId: loaderData.ownerId, connectDraftLabel: loaderData.connectDraftLabel, kind: "reply", threadId: topic.id }}
           >
             {renderNushi(loaderData.nushi.reply)}
             {loaderData.replyToTopic && !replyTarget && <input type="hidden" name="parentId" value="" />}
