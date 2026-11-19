@@ -4,7 +4,7 @@ import { isEnabledLang } from "./enabled-langs.server";
 import { readNushiAnswer } from "./nushi.server";
 import { resolveEngines } from "./llm/config.server";
 import { translateChecked } from "./llm/translate.server";
-import { meteredCall, translationEstimate } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import { HIDDEN_PRIMARY_FLAGS } from "./llm/flags";
 import { BudgetPausedError } from "./llm/errors.server";
 import type { SourceLang } from "./languages";
@@ -21,6 +21,7 @@ export function createNushiTranslationHandlers(): JobHandlers {
     if (saved) return;
     const clock = ctx.clock ?? (() => new Date()), engine = resolveEngines().primary;
     if (!engine) return;
+    const metered = meteredEngine(ctx.db, { purpose: "ask_village", clock, signal: ctx.signal }).translation(engine);
     try {
       const readings: string[] = [];
       // Translate only generated summaries. Human quotations and destinations
@@ -28,12 +29,7 @@ export function createNushiTranslationHandlers(): JobHandlers {
       for (const reading of value.answer.readings) {
         const current = await readNushiAnswer(ctx.db, id);
         if (!current || current.hidden) return;
-        const out = await translateChecked({ ...engine, async translate(req) {
-          const { result } = await meteredCall(ctx.db, { engine: engine.id, model: engine.model, purpose: "ask_village", role: "ask",
-            estimateMicro: translationEstimate(engine.id, engine.model, req), now: clock(), clock, signal: ctx.signal },
-          () => engine.translate({ ...req, signal: ctx.signal }), result => ({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }));
-          return result;
-        } }, { text: reading.text, from: value.originalLang as SourceLang, to: lang, signal: ctx.signal });
+        const out = await translateChecked(metered, { text: reading.text, from: value.originalLang as SourceLang, to: lang, signal: ctx.signal });
         if (out.flags.some(flag => HIDDEN_PRIMARY_FLAGS.includes(flag)) || out.text.length > 2400) return;
         readings.push(out.text);
       }

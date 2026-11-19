@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "./db/client.server";
 import { villages } from "./db/schema";
 import type { CompleteRequest } from "./llm/completion.server";
-import { completionEstimate, meteredCall } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import { LlmError } from "./llm/errors.server";
 import type { LlmEnv } from "./llm/types";
 import { hitMemberLimit } from "./rate-limit.server";
@@ -61,11 +61,7 @@ export async function suggestVillageSlug(db: Db, userId: string, value: unknown,
     if (villageNameNeedsAiSlug(name)) {
       const completer = options.completer ?? resolveVillageSlugCompleter(env);
       const prompt = { ...villageSlugPrompt(name), signal };
-      const { result } = await meteredCall(db, {
-        engine: completer.engine, model: completer.model, purpose: "village_slug_suggest", role: "secondary",
-        estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env),
-        now: new Date(), clock: () => new Date(), env, signal,
-      }, () => completer.complete(prompt), result => result);
+      const { result } = await meteredEngine(db, { purpose: "village_slug_suggest", env }).complete(completer, prompt);
       slug = checkedAiSlug(result.text);
     } else slug = villageSlugFromName(name);
     return slug === null ? null : await availableSlug(db, slug, signal);

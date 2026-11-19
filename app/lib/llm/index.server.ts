@@ -1,10 +1,11 @@
-import { hasPaidTranslationCall, paidTranslationCall, translationCallKey } from "../jobs/paid-translation.server";
+import { hasPaidTranslationCall, translationCallKey } from "../jobs/paid-translation.server";
 import { currentJobSignal } from "../jobs/signal.server";
-import { embeddingEstimate, judgeEstimate, meteredCall, translationEstimate } from "./metering.server";
+import { meteredEngine } from "./metering.server";
 import type { Db } from "~/lib/db/client.server";
 import { resolveChatEngine, resolveEmbeddingEngine, resolveEngines, type EngineSet } from "./config.server";
-import { BudgetPausedError, LlmError } from "./errors.server";
-import { budgetResumeAt, getBudgetState, getChatBudgetStatus, type BudgetState, type UsagePurpose } from "./usage.server";
+import { LlmError } from "./errors.server";
+import { assertBudget, getBudgetState, getChatBudgetStatus } from "./usage.server";
+import { budgetAllows } from "./usage-policy";
 import { CHAT_PROMPT_VERSION, decodeChatEntities } from "./prompt.server";
 import { villageChatEnabled } from "../village-chat-enabled.server";
 import { translateChecked, type CheckedTranslation } from "./translate.server";
@@ -53,43 +54,19 @@ export async function translateChat(db: Db, req: TranslationRequest & { chat: { 
   if (!villageChatEnabled(opts.env)) throw new LlmError("unavailable", "Village chat is disabled");
   const now = opts.now ?? new Date();
   const engine = opts.chatEngine ?? opts.engines?.chat ?? resolveChatEngine(opts.env);
-  if (!hasPaidTranslationCall(translationCallKey(engine, req, "chat", "chat")) && (await getChatBudgetStatus(db, now, opts.env)).state === "stopped") throw new BudgetPausedError("stopped", budgetResumeAt(now), "chat");
+  if (!hasPaidTranslationCall(translationCallKey(engine, req, "chat", "chat"))) {
+    assertBudget((await getChatBudgetStatus(db, now, opts.env)).state, "chat", now);
+  }
   await opts.beforeTranslate?.();
-  const spent: Spent = { costUsdMicro: 0 };
-  const metered = meteredEngine(db, engine, spent, opts, "chat", "chat");
+  let costUsdMicro = 0;
+  const metered = meteredEngine(db, { ...opts, purpose: "chat", now: opts.clock ?? opts.now }).translation(engine, {
+    reusePaidResult: true, addCost: cost => { costUsdMicro += cost; },
+  });
   const result = await translateChecked({ ...metered, async translate(request) {
     const translated = await metered.translate(request);
     return { ...translated, text: decodeChatEntities(translated.text, request.text), promptVersion: CHAT_PROMPT_VERSION };
   } }, req);
-  return { ...result, engine: engine.id, costUsdMicro: spent.costUsdMicro };
-}
-
-// Disabled roles by state: degraded disables secondary, judge and retry (primary and embeddings continue, since embeddings are cheap and needed for search); stopped disables all.
-function assertBudget(state: BudgetState, role: Role, now: Date): void {
-  if (state === "stopped" || (state === "degraded" && role !== "primary" && role !== "embed")) {
-    throw new BudgetPausedError(state, budgetResumeAt(now), role);
-  }
-}
-
-type Spent = { costUsdMicro: number };
-
-// Wrap an engine to record every call, including failed but charged responses, in the ledger.
-function meteredEngine(db: Db, engine: TranslationEngine, spent: Spent, opts: LlmOptions, purpose: UsagePurpose = "translate", role: Role | "chat" = "primary"): TranslationEngine {
-  return {
-    id: engine.id,
-    model: engine.model,
-    async translate(req) {
-      const signal = opts.signal ?? req.signal ?? currentJobSignal();
-      signal?.throwIfAborted();
-      const { result, costUsdMicro } = await paidTranslationCall(translationCallKey(engine, req, purpose, role), () => meteredCall(db, {
-        engine: engine.id, model: engine.model, purpose, role,
-        estimateMicro: translationEstimate(engine.id, engine.model, req, opts.env),
-        now: opts.clock?.() ?? opts.now ?? new Date(), clock: () => usageTime(opts) ?? new Date(), env: opts.env, signal,
-      }, () => engine.translate({ ...req, signal }), result => result));
-      spent.costUsdMicro += costUsdMicro;
-      return result;
-    },
-  };
+  return { ...result, engine: engine.id, costUsdMicro };
 }
 
 export type TranslationOutcome = CheckedTranslation & {
@@ -108,14 +85,17 @@ export async function translate(db: Db, role: TranslationRole, req: TranslationR
   const now = opts.now ?? new Date();
   const engines = opts.engines ?? resolveEngines(opts.env);
   const engine = role === "primary" ? engines.primary : role === "secondary" ? engines.secondary : (engines.retry ?? null);
-  if (!engine || !hasPaidTranslationCall(translationCallKey(engine, req, role === "retry" ? "retry" : "translate", role))) {
-    assertBudget(await getBudgetState(db, now, opts.env), role, now);
+  const purpose = role === "retry" ? "retry" : "translate";
+  if (!engine || !hasPaidTranslationCall(translationCallKey(engine, req, purpose, role))) {
+    assertBudget(await getBudgetState(db, now, opts.env), purpose, now, role);
   }
   if (!engine) throw new LlmError("unavailable", `No ${role} translation engine is configured`);
-  const spent: Spent = { costUsdMicro: 0 };
-  // Report-triggered retranslation uses ledger purpose retry, separating it from ordinary translation in monthly cost breakdowns.
-  const result = await translateChecked(meteredEngine(db, engine, spent, opts, role === "retry" ? "retry" : "translate", role), { ...req, postTranslation: true });
-  return { ...result, engine: engine.id, costUsdMicro: spent.costUsdMicro };
+  let costUsdMicro = 0;
+  const metered = meteredEngine(db, { ...opts, purpose, role, now: opts.clock ?? opts.now }).translation(engine, {
+    reusePaidResult: true, addCost: cost => { costUsdMicro += cost; },
+  });
+  const result = await translateChecked(metered, { ...req, postTranslation: true });
+  return { ...result, engine: engine.id, costUsdMicro };
 }
 
 export type JudgeOutcome = JudgeResult & { engine: EngineId; costUsdMicro: number };
@@ -127,11 +107,9 @@ export async function judgeDivergence(db: Db, req: JudgeRequest, opts: LlmOption
   const judge: DivergenceJudge | null = engines.judge;
   if (!judge) throw new LlmError("unavailable", "No divergence judge is configured");
   const signal = opts.signal ?? req.signal ?? currentJobSignal();
-  const { result, costUsdMicro } = await meteredCall(db, {
-    engine: judge.id, model: judge.model, purpose: "judge", role: "judge",
-    estimateMicro: judgeEstimate(judge.id, judge.model, req, opts.env),
-    now: opts.clock?.() ?? now, clock: () => usageTime(opts) ?? new Date(), env: opts.env, signal,
-  }, () => judge.judge({ ...req, signal }), result => result);
+  const { result, costUsdMicro } = await meteredEngine(db, {
+    purpose: "judge", now: opts.clock ?? now, clock: () => usageTime(opts) ?? new Date(), env: opts.env, signal,
+  }).judge(judge, req);
   return { ...result, engine: judge.id, costUsdMicro };
 }
 
@@ -157,7 +135,7 @@ const warnedRetryUnusable = new Set<string>();
 // Degradation disables the secondary, including fallback, under the budget rules.
 export async function isSecondaryAvailable(db: Db, opts: LlmOptions = {}): Promise<boolean> {
   const now = opts.now ?? new Date();
-  if ((await getBudgetState(db, now, opts.env)) !== "normal") return false;
+  if (!budgetAllows(await getBudgetState(db, now, opts.env), "translate", "secondary")) return false;
   try {
     return (opts.engines ?? resolveEngines(opts.env)).secondary !== null;
   } catch {
@@ -169,7 +147,8 @@ export async function isSecondaryAvailable(db: Db, opts: LlmOptions = {}): Promi
 // Whether secondary and judge are configured and the budget is not degraded; translation jobs use this to decide whether to enqueue measure_divergence.
 export async function isDivergenceAvailable(db: Db, opts: LlmOptions = {}): Promise<boolean> {
   const now = opts.now ?? new Date();
-  if ((await getBudgetState(db, now, opts.env)) !== "normal") return false;
+  const state = await getBudgetState(db, now, opts.env);
+  if (!budgetAllows(state, "translate", "secondary") || !budgetAllows(state, "judge")) return false;
   const engines = opts.engines ?? resolveEngines(opts.env);
   return engines.secondary !== null && engines.judge !== null;
 }
@@ -200,15 +179,11 @@ export async function embed(db: Db, req: EmbedRequest, opts: LlmOptions = {}): P
   assertBudget(await getBudgetState(db, now, opts.env), "embed", now);
   const engine = opts.embeddingEngine ?? resolveEmbeddingEngine(opts.env);
   const signal = opts.signal ?? req.signal ?? currentJobSignal();
-  const { result, costUsdMicro } = await meteredCall(db, {
-    engine: engine.id, model: engine.model, purpose: "embed", role: "embed",
-    estimateMicro: embeddingEstimate(engine.id, engine.model, req, opts.env),
-    now: opts.clock?.() ?? now, clock: () => usageTime(opts) ?? new Date(), env: opts.env, signal,
-  }, async () => {
-    const result = await engine.embed({ ...req, signal });
+  const { result, costUsdMicro } = await meteredEngine(db, {
+    purpose: "embed", now: opts.clock ?? now, clock: () => usageTime(opts) ?? new Date(), env: opts.env, signal,
+  }).embed(engine, req, result => {
     // Charged but unusable responses still settle their reservation.
     if (!isUsableEmbedding(result.vector)) throw new LlmError("invalid_output", "the embedding is all zeros or has a value that is not finite", { inputTokens: result.inputTokens, outputTokens: 0 });
-    return result;
-  }, result => ({ inputTokens: result.inputTokens, outputTokens: 0 }));
+  });
   return { ...result, engine: engine.id, costUsdMicro };
 }

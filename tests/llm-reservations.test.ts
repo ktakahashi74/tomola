@@ -1,15 +1,35 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { sql } from "drizzle-orm";
+import type { Db } from "~/lib/db/client.server";
 import { llmUsage, jobs } from "~/lib/db/schema";
 import { getBudgetStatus, getMonthlyBreakdown, getMonthlyCostMicro, releaseReservation, reserveUsage, settleReservation } from "~/lib/llm/usage.server";
-import { flushUsageSettlements, meteredCall } from "~/lib/llm/metering.server";
+import { flushUsageSettlements, meteredEngine } from "~/lib/llm/metering.server";
+import { USAGE_PURPOSES } from "~/lib/llm/usage-policy";
+import { LlmError } from "~/lib/llm/errors.server";
 import { isDivergenceAvailable, isSecondaryAvailable } from "~/lib/llm/index.server";
 import { createFakeEngine, createFakeJudge } from "~/lib/llm/engines/fake.server";
 import { createTestDb } from "./helpers/db";
+import { PG_MODE } from "./helpers/pg-test";
 
 const now = new Date("2026-10-17T00:00:00Z");
 const env = { LLM_MONTHLY_BUDGET_USD: "0.0001" };
-const request = { engine: "claude", model: "claude-haiku-4-5", purpose: "translate" as const, role: "primary" as const, estimateMicro: 60, now, env };
+const request = { engine: "claude", model: "claude-haiku-4-5", purpose: "translate", role: "primary", estimateMicro: 60, now, env } as const;
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+const completionEnv = { LLM_MONTHLY_BUDGET_USD: "1" };
+function complete(db: Db, provider: () => Promise<{ text: string; inputTokens: number; outputTokens: number }>, start = now, clock = () => start) {
+  return meteredEngine(db, { purpose: request.purpose, env: completionEnv, now: start, clock })
+    .complete({ engine: request.engine, model: request.model, complete: provider }, { system: "", user: "Test completion", maxOutputTokens: 32 });
+}
+
+it("derives the ledger purposes in the same order as the installed check constraint", async () => {
+  const db = await createTestDb();
+  const { rows: [constraint] } = await db.execute(sql`
+    select pg_get_constraintdef(oid) as definition from pg_constraint
+    where conrelid = 'llm_usage'::regclass and conname = 'llm_usage_purpose_check'
+  `) as { rows: { definition: string }[] };
+  expect([...constraint.definition.matchAll(/'([^']+)'/g)].map(match => match[1])).toEqual(USAGE_PURPOSES);
+});
 
 it("atomically admits one of two concurrent reservations that would exceed the cap together", async () => {
   const db = await createTestDb();
@@ -22,6 +42,29 @@ it("atomically admits one of two concurrent reservations that would exceed the c
   await settleReservation(db, row.id, { inputTokens: 10, outputTokens: 2, now });
   expect(await getMonthlyCostMicro(db, now)).toBe(20);
   expect((await db.select().from(llmUsage))[0]).toMatchObject({ reserved: false, inputTokens: 10, outputTokens: 2 });
+});
+
+it.skipIf(!PG_MODE)("serializes admission across two PostgreSQL connections until the first reservation commits", { tags: ["postgres"] }, async () => {
+  const db = await createTestDb();
+  const { first, second } = await db.transaction(async tx => {
+    const first = await reserveUsage(tx, request);
+    const second = Promise.allSettled([reserveUsage(db, request)]);
+    await expect.poll(async () => {
+      const { rows: [lock] } = await tx.execute(sql`
+        select exists (
+          select 1 from pg_locks where locktype = 'relation' and relation = 'llm_usage'::regclass
+          and mode = 'ShareRowExclusiveLock' and not granted and pg_backend_pid() = any(pg_blocking_pids(pid))
+        ) as waiting
+      `) as { rows: { waiting: boolean }[] };
+      return lock.waiting;
+    }).toBe(true);
+    return { first, second };
+  });
+  expect(await second).toMatchObject([{ status: "rejected", reason: { name: "BudgetPausedError", reason: "insufficient" } }]);
+  expect(await db.select().from(llmUsage)).toMatchObject([{ id: first, reserved: true, costUsdMicro: 60 }]);
+  expect(await settleReservation(db, first, { inputTokens: 10, outputTokens: 2, now })).toBe(20);
+  expect(await getMonthlyCostMicro(db, now)).toBe(20);
+  await expect(reserveUsage(db, request)).resolves.toBeTypeOf("number");
 });
 
 it("retries ledger persistence without repeating a successful provider call", async () => {
@@ -43,9 +86,10 @@ it("retries ledger persistence without repeating a successful provider call", as
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   const provider = vi.fn(async () => ({ text: "paid result", inputTokens: 10, outputTokens: 2 }));
   try {
-    const result = await meteredCall(db, { ...request, clock: () => now }, provider, r => r);
+    const result = await complete(db, provider);
     expect(result).toMatchObject({ result: { text: "paid result" }, costUsdMicro: 20 });
-    expect((await db.select().from(llmUsage))[0]).toMatchObject({ reserved: true, costUsdMicro: 60 });
+    expect((await db.select().from(llmUsage))[0]).toMatchObject({ reserved: true, costUsdMicro: expect.any(Number) });
+    expect(await getMonthlyCostMicro(db, now)).toBeGreaterThan(20);
     await flushUsageSettlements(db);
     expect((await db.select().from(llmUsage))[0]).toMatchObject({ reserved: false, costUsdMicro: 20 });
     expect(provider).toHaveBeenCalledTimes(1);
@@ -58,11 +102,29 @@ it("counts an outstanding reservation across a UTC month boundary", async () => 
   await expect(reserveUsage(db, { ...request, now: new Date("2026-10-01T00:00:01Z") })).rejects.toMatchObject({ name: "BudgetPausedError" });
 });
 
-it("removes an uncharged failed call's reservation and keeps chat and public budgets independent", async () => {
+it("removes an uncharged failed call's reservation and leaves the whole cap available", async () => {
   const db = await createTestDb();
-  const id = await reserveUsage(db, request);
-  await releaseReservation(db, id);
+  const failure = new Error("provider unavailable");
+  const provider = vi.fn(async () => {
+    expect(await getMonthlyCostMicro(db, now)).toBeGreaterThan(0);
+    throw failure;
+  });
+  await expect(complete(db, provider)).rejects.toBe(failure);
   expect(await db.select().from(llmUsage)).toEqual([]);
+  expect(await getMonthlyCostMicro(db, now)).toBe(0);
+  await expect(reserveUsage(db, { ...request, env: completionEnv, estimateMicro: 1_000_000 })).resolves.toBeTypeOf("number");
+});
+
+it("settles a charged failure and rethrows the provider error", async () => {
+  const db = await createTestDb();
+  const failure = new LlmError("invalid_output", "invalid response", { inputTokens: 10, outputTokens: 2 });
+  await expect(complete(db, async () => { throw failure; })).rejects.toBe(failure);
+  expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: false, inputTokens: 10, outputTokens: 2, costUsdMicro: 20 }]);
+  expect(await getMonthlyCostMicro(db, now)).toBe(20);
+});
+
+it("keeps chat and public budgets independent", async () => {
+  const db = await createTestDb();
   await reserveUsage(db, { ...request, estimateMicro: 100 });
   await expect(reserveUsage(db, { ...request, purpose: "chat", role: "chat", env: { ...env, CHAT_LLM_MONTHLY_BUDGET_USD: "0.0001" } })).resolves.toBeTypeOf("number");
 });
@@ -135,9 +197,10 @@ it("preserves the provider error and logs a failed reservation release", async (
   vi.spyOn(db, "delete").mockImplementationOnce(() => { throw new Error("release unavailable"); });
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   const original = new Error("provider unavailable");
-  await expect(meteredCall(db, { ...request, clock: () => now }, async () => { throw original; }, () => ({ inputTokens: 0, outputTokens: 0 }))).rejects.toBe(original);
+  await expect(complete(db, async () => { throw original; })).rejects.toBe(original);
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("reservation release failed"), "release unavailable");
-  expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: true, costUsdMicro: 60 }]);
+  expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: true }]);
+  expect(await getMonthlyCostMicro(db, now)).toBeGreaterThan(0);
 });
 
 it("retries pending actual usage after conservative expiration without repeating the provider call", async () => {
@@ -157,11 +220,13 @@ it("retries pending actual usage after conservative expiration without repeating
     return builder;
   });
   vi.spyOn(console, "warn").mockImplementation(() => {});
-  const provider = vi.fn(async () => ({ inputTokens: 10, outputTokens: 2 }));
-  await meteredCall(db, { ...request, now: finished, clock: () => new Date() }, provider, r => r);
+  const provider = vi.fn(async () => ({ text: "paid result", inputTokens: 10, outputTokens: 2 }));
+  await complete(db, provider, finished, () => new Date());
+  const estimate = await getMonthlyCostMicro(db, finished);
+  expect(estimate).toBeGreaterThan(20);
   await vi.advanceTimersByTimeAsync(600_001);
   await flushUsageSettlements(db);
-  expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: false, costUsdMicro: 60, createdAt: finished }]);
+  expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: false, costUsdMicro: estimate, createdAt: finished }]);
   unavailable = false;
   await flushUsageSettlements(db);
   expect(await db.select().from(llmUsage)).toMatchObject([{ reserved: false, costUsdMicro: 20, createdAt: finished }]);
@@ -175,7 +240,7 @@ it("drops a missing settlement from pending and logs it only once", async () => 
   const usage = await import("~/lib/llm/usage.server");
   const settlement = vi.spyOn(usage, "settleReservation").mockRejectedValueOnce(new Error("temporary write failure"));
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-  await meteredCall(db, { ...request, clock: () => now }, async () => ({ inputTokens: 10, outputTokens: 2 }), r => r);
+  await complete(db, async () => ({ text: "paid result", inputTokens: 10, outputTokens: 2 }));
   settlement.mockRestore();
   await db.delete(llmUsage);
   warn.mockClear();

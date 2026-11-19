@@ -5,7 +5,7 @@ import { postQuestionMaterials, readableQuestionPost } from "./ai-question-mater
 import { questionPrompt, questionText, resolveQuestionCompleter, verifyQuestionAnswer } from "./ai-question-answer.server";
 import { questionResponseSchema, saveQuestionReport, signQuestionResponse, verifyQuestionReceipt } from "./ai-question-reports.server";
 import { countQuestionEvent, hitQuestionIpLimit, hitQuestionMemberLimit, markQuestionDraft } from "./ai-question-usage.server";
-import { completionEstimate, meteredCall } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import { BudgetPausedError } from "./llm/errors.server";
 import { budgetResumeAt } from "./llm/usage.server";
 import type { LlmEnv } from "./llm/types";
@@ -68,14 +68,9 @@ export async function askPostQuestion(db: Db, input: {
   try {
     const completer = input.completer ?? resolveQuestionCompleter(env);
     const prompt = { ...questionPrompt(materials, input.question, input.language), signal: input.request.signal };
-    const { result } = await meteredCall(db, {
-      engine: completer.engine, model: completer.model, purpose: "ask", role: "ask",
-      estimateMicro: completionEstimate(completer.engine, completer.model, prompt.system, prompt.user, prompt.maxOutputTokens, env),
-      now, clock, env, signal: input.request.signal,
-    }, async () => {
+    const { result } = await meteredEngine(db, { purpose: "ask", now, clock, env }).complete(completer, prompt, async () => {
       await countQuestionEvent(db, "ask", "asked", clock());
-      return completer.complete(prompt);
-    }, result => ({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }));
+    });
     const answer = verifyQuestionAnswer(result.text, materials);
     // Recheck cited sources after generation. Other replies and newly available
     // translations do not invalidate passages that are still readable and unchanged.

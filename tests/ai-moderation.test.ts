@@ -55,14 +55,16 @@ it("automatically hides repeated writes, notifies, publishes automation and lets
   expect((await db.select().from(entries).where(eq(entries.id, third.id)))[0].hiddenAt).toBeNull();
 });
 
-it("AI spam runs later, accepts only a confident structured verdict, and meters public-budget usage", async () => {
+it("AI spam still runs under a degraded public budget and meters the confident verdict", async () => {
   const db = await world(); vi.stubEnv("MODERATION_SPAM_ENABLED", "1"); vi.stubEnv("MODERATION_AI_SPAM_ENABLED", "1");
+  vi.stubEnv("LLM_MONTHLY_BUDGET_USD", "10");
+  await db.insert(llmUsage).values({ engine: "claude", model: "claude-haiku-4-5", purpose: "translate", costUsdMicro: 8_500_000 });
   const created = await topic(db, "See https://example.org"); if (!created.ok) throw new Error(created.error);
   expect(await db.select().from(moderationActions)).toEqual([]);
   const calls: string[] = [];
   await runDueJobs(db, createModerationHandlers({ completer: engine({ spam: true, confidence: 0.99, reason: "Unsolicited commercial spam" }, calls) }), { logger: quiet });
   expect(calls).toHaveLength(1);
-  expect(await db.select().from(llmUsage)).toMatchObject([{ purpose: "moderation", reserved: false }]);
+  expect(await db.select().from(llmUsage).where(eq(llmUsage.purpose, "moderation"))).toMatchObject([{ purpose: "moderation", reserved: false }]);
   expect(await db.select().from(moderationActions)).toMatchObject([{ automatic: true, action: "hide" }]);
 });
 

@@ -3,7 +3,7 @@ import type { chatMessages } from "./db/schema";
 import type { Lang } from "./languages";
 import { resolveEngines } from "./llm/config.server";
 import { translateChecked } from "./llm/translate.server";
-import { meteredCall, translationEstimate } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import { CHAT_NUSHI_PROMPT_VERSION } from "./chat-nushi-config.server";
 import { m } from "~/paraglide/messages.js";
 
@@ -22,13 +22,10 @@ export async function translateChatNushi(db: Db, message: typeof chatMessages.$i
   }
   const engine = resolveEngines().primary;
   if (!engine) throw new Error("Village chat AI translation is unavailable");
+  const metered = meteredEngine(db, { ...options, purpose: "ask_village" }).translation(engine);
   let text = message.body;
   for (const [from, to] of [...shape.ranges].reverse()) {
-    const result = await translateChecked({ ...engine, async translate(req) {
-      const { result } = await meteredCall(db, { engine: engine.id, model: engine.model, purpose: "ask_village", role: "ask", estimateMicro: translationEstimate(engine.id, engine.model, req), now: options.clock(), clock: options.clock, signal: options.signal },
-        () => engine.translate({ ...req, signal: options.signal }), result => ({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }));
-      return result;
-    } }, { text: message.body.slice(from, to), from: message.lang as Lang, to: language, signal: options.signal });
+    const result = await translateChecked(metered, { text: message.body.slice(from, to), from: message.lang as Lang, to: language, signal: options.signal });
     if (result.flags.length || result.text.length > 2400) throw new Error("Village chat AI translation failed verification");
     text = text.slice(0, from) + result.text + text.slice(to);
   }

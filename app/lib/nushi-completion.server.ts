@@ -4,7 +4,7 @@ import { parseQuestionJson, normalizeQuestionQuote, type AnswerVerificationReaso
 import { AI_QUESTION_LIMITS as limits, type AiQuestionAnswer } from "./ai-questions";
 import { verifyNushiAnswerResult } from "./nushi-answer.server";
 import type { CompleteRequest, JsonCompleter } from "./llm/completion.server";
-import { completionEstimate, meteredCall } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import type { LlmEnv } from "./llm/types";
 
 const limitReasons = new Set<AnswerVerificationReason>(["readings_count", "citations_count", "reading_too_long", "quote_too_long", "output_too_long"]);
@@ -47,10 +47,9 @@ export async function completeNushiAnswer(db: Db, completer: JsonCompleter, prom
   options: { destination?: "public-reply" | "chat"; voiceApplied?: boolean; clock: () => Date; env: LlmEnv }) {
   const { destination = "public-reply", clock, env } = options;
   const verification = { voiceApplied: options.voiceApplied };
+  const metered = meteredEngine(db, { purpose: "ask_village", clock, env });
   const complete = async (request: CompleteRequest) => {
-    const { result } = await meteredCall(db, { engine: completer.engine, model: completer.model, purpose: "ask_village", role: "ask",
-      estimateMicro: completionEstimate(completer.engine, completer.model, request.system, request.user, request.maxOutputTokens, env), now: clock(), clock, env, signal: request.signal },
-    () => completer.complete(request), value => ({ inputTokens: value.inputTokens, outputTokens: value.outputTokens }));
+    const { result } = await metered.complete(completer, request);
     return result.text;
   };
   let raw = await complete(prompt);

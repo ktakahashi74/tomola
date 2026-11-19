@@ -4,7 +4,7 @@ import { z } from "zod";
 import { figureMedia, figureReadings, figureTranslations, media } from "~/lib/db/schema";
 import { enabledTargetLangs, isEnabledLang } from "~/lib/enabled-langs.server";
 import { FIGURE_VERSION, figureTranslationRegions, normalizeFigureReading, normalizeFigureNewlines } from "~/lib/figure";
-import { createFigureReader, FIGURE_IMAGE_TOKEN_BOUND, FIGURE_READING_OUTPUT_TOKENS, FIGURE_READING_PROMPT, FIGURE_READING_PROMPT_VERSION, figureTranslationEnabled, figureReadingUser, parseFigureReading, type FigureReader } from "~/lib/figure-reading.server";
+import { createFigureReader, FIGURE_READING_PROMPT_VERSION, figureTranslationEnabled, parseFigureReading, type FigureReader } from "~/lib/figure-reading.server";
 import { assertFigureFontsAvailable } from "~/lib/figure-fonts.server";
 import type { TranslationResult } from "~/lib/llm/types";
 import { createFigureRenderer, usableFigure } from "~/lib/figure-render.server";
@@ -13,13 +13,11 @@ import { readFigureSource, readMediaBatch } from "~/lib/media-store.server";
 import { jobLlmOptions, LlmError, translate, type LlmOptions } from "~/lib/llm/index.server";
 import { primaryEngineId, primaryModelOf } from "~/lib/llm/config.server";
 import { promptVersionOf } from "~/lib/llm/prompt.server";
-import { completionEstimate, meteredCall } from "~/lib/llm/metering.server";
-import { costMicro } from "~/lib/llm/pricing.server";
+import { meteredEngine } from "~/lib/llm/metering.server";
 import { FLAG_MARKDOWN_BUDGET, HIDDEN_PRIMARY_FLAGS } from "~/lib/llm/flags";
 import { inspectTranslation } from "~/lib/llm/translation-inspect.core.server";
 import { preservesFigureMath } from "~/lib/figure";
 import { loadGlossary, matchGlossary } from "~/lib/translations.server";
-import { paidTranslationCall } from "./paid-translation.server";
 import { currentJobSignal } from "./signal.server";
 import type { JobHandlers } from "./queue.server";
 
@@ -48,6 +46,7 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
       if (saved.state === "pending") {
         const reader = deps.reader ?? createFigureReader(options.env);
         const signal = options.signal ?? currentJobSignal();
+        const metered = meteredEngine(ctx.db, { purpose: "translate", now: options.clock ?? ctx.now, env: options.env, signal });
         let result: TranslationResult | null = null;
         for (let attempt = 0; attempt < 2; attempt++) {
           const retryOverlap = attempt === 1;
@@ -55,11 +54,7 @@ export function createFigureHandlers(deps: { reader?: FigureReader; llm?: LlmOpt
           if (retryOverlap && !(await readFigureSource(ctx.db, key))?.bytes) return;
           try {
             const callKey = `figure-reading:${key}:${reader.id}:${reader.model}${retryOverlap ? ":overlap-retry" : ""}`;
-            ({ result } = await paidTranslationCall(createHash("sha256").update(callKey).digest("hex"), () => meteredCall(ctx.db, {
-              engine: reader.id, model: reader.model, purpose: "translate", role: "primary",
-              estimateMicro: completionEstimate(reader.id, reader.model, FIGURE_READING_PROMPT, figureReadingUser(retryOverlap), FIGURE_READING_OUTPUT_TOKENS, options.env) + costMicro(reader.id, reader.model, FIGURE_IMAGE_TOKEN_BOUND, 0, options.env),
-              now: options.clock?.() ?? ctx.now, clock: options.clock ?? (() => ctx.now), env: options.env, signal,
-            }, () => reader.read(image.bytes!, signal, retryOverlap), result => result)));
+            ({ result } = await metered.readFigure(reader, image.bytes, retryOverlap, createHash("sha256").update(callKey).digest("hex")));
           } catch (error) {
             if (!(error instanceof LlmError) || error.retryable) throw error;
             result = null;

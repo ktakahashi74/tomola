@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import { closeDb, getDb } from "../app/lib/db/client.server";
-import { glossaryEntries, glossaryRevisions, jobs, profiles, user } from "../app/lib/db/schema";
+import { glossaryEntries, glossaryRevisions, jobs, llmUsage, profiles, user } from "../app/lib/db/schema";
 import { createTopic } from "../app/lib/entries.server";
 import { createGlossaryEntry } from "../app/lib/glossary.server";
 import { createInvitation } from "../app/lib/invitations.server";
@@ -231,6 +231,8 @@ try {
   await seedConfirmReasons(relatedDb);
   const { seedMembers } = await import("./seed-members");
   await seedMembers(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
+  // A charged failure with only input usage, in a separate budget from public translations.
+  await relatedDb.insert(llmUsage).values({ engine: "claude", model: "claude-usage-fixture", purpose: "ask", inputTokens: 12, costUsdMicro: 12 });
   const { seedIntroductions } = await import("./seed-introductions");
   await seedIntroductions(relatedDb, path.dirname(process.env.PGLITE_DATA_DIR!), process.env.BETTER_AUTH_URL!);
   const { seedTranslationReportResults } = await import("./seed-translation-report-results");

@@ -7,16 +7,24 @@ import { BudgetPausedError } from "./errors.server";
 import { nushiMonthlyBudgetMicro } from "../nushi-config.server";
 import { postAskMonthlyBudgetMicro } from "../ai-question-config.server";
 import { budgetReservationWaitCondition } from "../jobs/budget-wait.server";
+import { budgetAllows, USAGE_POLICY, USAGE_PURPOSES, type UsageBudget, type UsagePurpose, type UsageRole } from "./usage-policy";
 
-export type { BudgetState };
+export type { BudgetState, UsagePurpose };
 
 // Cost ledger and monthly budget, using UTC month boundaries.
 
-export type UsagePurpose = "translate" | "retry" | "judge" | "embed" | "chat" | "moderation" | "ask" | "ask_village" | "village_slug_suggest";
-export const PUBLIC_USAGE_PURPOSES: readonly UsagePurpose[] = ["translate", "retry", "judge", "embed", "moderation", "village_slug_suggest"];
-export const CHAT_USAGE_PURPOSES: readonly UsagePurpose[] = ["chat"];
-export const NUSHI_USAGE_PURPOSES: readonly UsagePurpose[] = ["ask_village"];
-export const POST_ASK_USAGE_PURPOSES: readonly UsagePurpose[] = ["ask"];
+const purposesFor = (budget: UsageBudget): readonly UsagePurpose[] => USAGE_PURPOSES.filter(purpose => USAGE_POLICY[purpose].budget === budget);
+export const PUBLIC_USAGE_PURPOSES = purposesFor("public");
+export const CHAT_USAGE_PURPOSES = purposesFor("chat");
+export const NUSHI_USAGE_PURPOSES = purposesFor("nushi");
+export const POST_ASK_USAGE_PURPOSES = purposesFor("postAsk");
+
+const MONTHLY_BUDGETS = {
+  public: { purposes: PUBLIC_USAGE_PURPOSES, limit: monthlyBudgetMicro, state: budgetStateFor },
+  chat: { purposes: CHAT_USAGE_PURPOSES, limit: chatMonthlyBudgetMicro, state: hardCapState },
+  nushi: { purposes: NUSHI_USAGE_PURPOSES, limit: nushiMonthlyBudgetMicro, state: hardCapState },
+  postAsk: { purposes: POST_ASK_USAGE_PURPOSES, limit: postAskMonthlyBudgetMicro, state: hardCapState },
+} satisfies Record<UsageBudget, unknown>;
 
 export function chatMonthlyBudgetMicro(env: LlmEnv = process.env): number {
   const raw = env.CHAT_LLM_MONTHLY_BUDGET_USD?.trim() || "2";
@@ -78,6 +86,14 @@ export function budgetStateFor(usedMicro: number, budgetMicro: number): BudgetSt
   return "normal";
 }
 
+function hardCapState(usedMicro: number, budgetMicro: number): BudgetState {
+  return usedMicro >= budgetMicro ? "stopped" : "normal";
+}
+
+export function assertBudget(state: BudgetState, purpose: UsagePurpose, now: Date, role: UsageRole = USAGE_POLICY[purpose].role): void {
+  if (!budgetAllows(state, purpose, role)) throw new BudgetPausedError(state, budgetResumeAt(now), role);
+}
+
 // Admission includes this month's reservations and recent calls crossing midnight.
 export const RESERVATION_TTL_MS = 10 * 60 * 1000;
 export async function getMonthlyCostMicro(db: Db, now: Date = new Date(), purposes: readonly UsagePurpose[] = PUBLIC_USAGE_PURPOSES): Promise<number> {
@@ -110,7 +126,7 @@ type ReservationRequest = {
   engine: string;
   model: string;
   purpose: UsagePurpose;
-  role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat" | "ask";
+  role: UsageRole;
   estimateMicro: number;
   now: Date;
   env?: LlmEnv;
@@ -122,11 +138,10 @@ export async function reserveUsage(db: Db, req: ReservationRequest): Promise<num
   if (!Number.isSafeInteger(req.estimateMicro) || req.estimateMicro < 0) throw new Error("Invalid LLM cost estimate");
   return db.transaction(async tx => {
     await tx.execute(sql`lock table ${llmUsage} in share row exclusive mode`);
-    const chat = req.purpose === "chat";
-    const purposes = chat ? CHAT_USAGE_PURPOSES : req.purpose === "ask" ? POST_ASK_USAGE_PURPOSES : req.purpose === "ask_village" ? NUSHI_USAGE_PURPOSES : PUBLIC_USAGE_PURPOSES;
-    const budget = await getBudgetStatus(tx, req.now, req.env, purposes);
-    const disabled = budget.state === "stopped" || (budget.state === "degraded" && !["primary", "embed", "chat", "ask"].includes(req.role));
-    if (disabled) throw new BudgetPausedError(budget.state, budgetResumeAt(req.now), req.role);
+    const bucket = USAGE_POLICY[req.purpose].budget;
+    const { purposes } = MONTHLY_BUDGETS[bucket];
+    const budget = await budgetStatus(tx, req.now, req.env ?? process.env, purposes, bucket);
+    assertBudget(budget.state, req.purpose, req.now, req.role);
     const committed = await getMonthlyCostMicro(tx, req.now, purposes);
     if (committed + req.estimateMicro > budget.budgetMicro) throw new BudgetPausedError(budget.state, budgetResumeAt(req.now), req.role, "insufficient");
     const [row] = await tx.insert(llmUsage).values({ engine: req.engine, model: req.model, purpose: req.purpose, costUsdMicro: req.estimateMicro, reserved: true, createdAt: req.now }).returning({ id: llmUsage.id });
@@ -163,14 +178,17 @@ export type BudgetStatus = {
 };
 
 export async function getBudgetStatus(db: Db, now: Date = new Date(), env: LlmEnv = process.env, purposes: readonly UsagePurpose[] = PUBLIC_USAGE_PURPOSES): Promise<BudgetStatus> {
-  const chat = purposes.length === 1 && purposes[0] === "chat";
-  const ask = purposes.length === 1 && purposes[0] === "ask";
-  const nushi = purposes.length === 1 && purposes[0] === "ask_village";
+  const bucket = purposes.length ? USAGE_POLICY[purposes[0]].budget : "public";
+  return budgetStatus(db, now, env, purposes, purposes.every(purpose => USAGE_POLICY[purpose].budget === bucket) ? bucket : "public");
+}
+
+async function budgetStatus(db: Db, now: Date, env: LlmEnv, purposes: readonly UsagePurpose[], bucket: UsageBudget): Promise<BudgetStatus> {
   const usedMicro = await monthlyCostMicro(db, now, purposes, "exclude");
-  const budgetMicro = chat ? chatMonthlyBudgetMicro(env) : ask ? postAskMonthlyBudgetMicro(env) : nushi ? nushiMonthlyBudgetMicro(env) : monthlyBudgetMicro(env);
+  const policy = MONTHLY_BUDGETS[bucket];
+  const budgetMicro = policy.limit(env);
   const { start, end } = monthRangeUtc(now);
   return {
-    state: chat || ask || nushi ? usedMicro >= budgetMicro ? "stopped" : "normal" : budgetStateFor(usedMicro, budgetMicro),
+    state: policy.state(usedMicro, budgetMicro),
     usedMicro,
     budgetMicro,
     percent: budgetMicro > 0 ? (usedMicro / budgetMicro) * 100 : 100,

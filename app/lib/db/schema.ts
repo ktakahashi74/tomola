@@ -1,4 +1,5 @@
 import { TRANSLATION_REPORT_OUTCOMES } from "../translation-report-results";
+import { USAGE_PURPOSES } from "../llm/usage-policy";
 import { sql, type SQL } from "drizzle-orm";
 import {
   bigint,
@@ -931,7 +932,7 @@ export const llmUsage = pgTable(
   (t) => [
     index("llm_usage_created_idx").on(t.createdAt),
     index("llm_usage_reserved_idx").on(t.createdAt).where(sql`${t.reserved} = true`),
-    check("llm_usage_purpose_check", oneOf(t.purpose, ["translate", "retry", "judge", "embed", "chat", "moderation", "ask", "ask_village", "village_slug_suggest"])),
+    check("llm_usage_purpose_check", oneOf(t.purpose, USAGE_PURPOSES)),
   ],
 );
 

@@ -18,7 +18,7 @@ import { runRetentionCleanup } from "~/lib/retention.server";
 import { RETENTION, daysBefore } from "~/lib/retention";
 import type { JsonCompleter } from "~/lib/llm/completion.server";
 import * as usageLedger from "~/lib/llm/usage.server";
-import { flushUsageSettlements, meteredCall } from "~/lib/llm/metering.server";
+import { flushUsageSettlements, meteredEngine } from "~/lib/llm/metering.server";
 
 const env = { POST_ASK_AI: "1", TRANSLATION_PRIMARY: "fake" };
 const request = () => new Request("http://localhost/t/1/ask/action", { method: "POST" });
@@ -180,8 +180,9 @@ it("defers accounting with numerical usage only when a successful answer cannot 
   });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   const now = new Date();
-  const result = await meteredCall(f.db, { engine: "fake", model: "fake-question", purpose: "ask", role: "ask", estimateMicro: 0, now, clock: () => now, env },
-    async () => ({ text: "DEFERRED_PRIVATE_ANSWER", inputTokens: 9, outputTokens: 7 }), value => value);
+  const result = await meteredEngine(f.db, { purpose: "ask", now, env }).complete({
+    engine: "fake", model: "fake-question", async complete() { return { text: "DEFERRED_PRIVATE_ANSWER", inputTokens: 9, outputTokens: 7 }; },
+  }, { system: "", user: "DEFERRED_PRIVATE_QUESTION", maxOutputTokens: 32 });
   expect(result.result.text).toBe("DEFERRED_PRIVATE_ANSWER");
   await flushUsageSettlements(f.db);
   expect(settle).toHaveBeenCalledTimes(2);

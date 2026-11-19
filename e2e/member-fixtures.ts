@@ -162,6 +162,7 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   { email: "ai_readiness_writer@example.com", handle: "ai_readiness_writer", homeArea: "ja", uiLocale: "en" },
   { email: "ai_readiness_reader@example.com", handle: "ai_readiness_reader", homeArea: "en", uiLocale: "en" },
   { email: "ai_readiness_operator@example.com", handle: "ai_readiness_operator", homeArea: "en", uiLocale: "en" },
+  { email: "usage_operator@example.com", handle: "usage_operator", homeArea: "en", uiLocale: "en" },
   ...EARLY_MEMBERS,
   {"email": "olga@example.com", "handle": "olga", "homeArea": "ja", "uiLocale": "en"},
   {"email": "quinn@example.com", "handle": "quinn", "homeArea": "ja", "uiLocale": "en"},

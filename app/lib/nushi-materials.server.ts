@@ -11,7 +11,7 @@ import { findLiteral } from "./combined-search.server";
 import { closeResults, findSimilar } from "./search.server";
 import { resolveEmbeddingEngine } from "./llm/config.server";
 import { isUsableEmbedding } from "./llm/index.server";
-import { embeddingEstimate, meteredCall } from "./llm/metering.server";
+import { meteredEngine } from "./llm/metering.server";
 import { boundQuestionMaterials, projectQuestionSource, type AiQuestionMaterials, type AiQuestionSource } from "./ai-question-materials.server";
 import { loadMdTranslations } from "./md/translations.server";
 import { loadReplyLocations } from "./reply-locations.server";
@@ -135,11 +135,7 @@ export async function collectNushiMaterials(db: Db, input: { villageId: string; 
     }
     const engine = options.embedding ?? resolveEmbeddingEngine(options.env);
     const req = { text: query, task: "query" as const, signal: options.signal };
-    const { result } = await meteredCall(db, {
-      engine: engine.id, model: engine.model, purpose: "ask_village", role: "ask",
-      estimateMicro: embeddingEstimate(engine.id, engine.model, req, options.env),
-      now: options.now, clock: options.clock, env: options.env, signal: options.signal,
-    }, () => engine.embed(req), value => ({ inputTokens: value.inputTokens, outputTokens: 0 }));
+    const { result } = await meteredEngine(db, { ...options, purpose: "ask_village" }).embed(engine, req);
     if (isUsableEmbedding(result.vector)) for (const row of closeResults(await findSimilar(db, result.vector, engine.model, 20, input.villageId, excludedAuthors), query)) if (row.id !== input.excludeEntryId && !found.has(row.id)) found.set(row.id, row);
   }
   const searchIds = [...found].filter(([id, row]) => !priorityIds.has(id) && row.threadId !== input.contextThreadId).map(([id]) => id);

@@ -1,6 +1,7 @@
 import { DeferJob } from "~/lib/jobs/queue.server";
 import { BUDGET_RESERVATION_WAIT } from "~/lib/jobs/defer-reasons";
 import type { BudgetState } from "./types";
+import type { UsageRole } from "./usage-policy";
 
 export type LlmErrorCode =
   // The model did not answer, e.g. safety refusal or blocked input.
@@ -54,7 +55,7 @@ export class BudgetPausedError extends DeferJob {
   constructor(
     readonly state: BudgetState,
     until: Date,
-    readonly role: "primary" | "secondary" | "retry" | "judge" | "embed" | "chat" | "ask",
+    readonly role: UsageRole,
     readonly reason: "state" | "insufficient" = "state",
   ) {
     super(until, reason === "insufficient" ? `llm budget ${state}: insufficient remaining budget for ${role}` : `llm budget ${state}: ${role} disabled`, reason === "insufficient" ? BUDGET_RESERVATION_WAIT : undefined);

@@ -7,8 +7,9 @@ import { automaticallyHideEntry } from "../moderation-automation.server";
 import { aiSpamEnabled, moderationAiConfig, triageEnabled } from "../moderation-ai-config.server";
 import { auditModerationEvidence, ModerationEvidenceUnavailable, reportEvidence } from "../moderation-evidence.server";
 import { createJsonCompleter, type CompleteRequest, type JsonCompleter } from "../llm/completion.server";
-import { completionEstimate, meteredCall } from "../llm/metering.server";
+import { meteredEngine } from "../llm/metering.server";
 import { budgetResumeAt, getBudgetState } from "../llm/usage.server";
+import { budgetAllows } from "../llm/usage-policy";
 import { DeferJob, type JobContext, type JobHandlers } from "./queue.server";
 
 const shortText = (max: number) => z.string().trim().min(1).max(max).refine(text => !text.includes("\u0000"));
@@ -30,11 +31,11 @@ function json(text: string): unknown { try { return JSON.parse(text); } catch { 
 
 export function createModerationHandlers(deps: { completer?: JsonCompleter } = {}): JobHandlers {
   async function complete(ctx: JobContext, request: CompleteRequest, completer: JsonCompleter, before?: () => Promise<void>) {
-    const { result } = await meteredCall(ctx.db, { engine: completer.engine, model: completer.model, purpose: "moderation", role: "primary", estimateMicro: completionEstimate(completer.engine, completer.model, request.system, request.user, request.maxOutputTokens), now: ctx.now, clock: ctx.clock ?? (() => ctx.now), signal: ctx.signal }, async () => { await before?.(); return completer.complete(request); }, r => r);
+    const { result } = await meteredEngine(ctx.db, { ...ctx, purpose: "moderation" }).complete(completer, request, before);
     return json(result.text);
   }
   async function budget(ctx: JobContext) {
-    if (await getBudgetState(ctx.db, ctx.now) === "stopped") throw new DeferJob(budgetResumeAt(ctx.now), "moderation budget stopped");
+    if (!budgetAllows(await getBudgetState(ctx.db, ctx.now), "moderation")) throw new DeferJob(budgetResumeAt(ctx.now), "moderation budget stopped");
   }
   return {
     moderation_spam: async (job, ctx) => {
