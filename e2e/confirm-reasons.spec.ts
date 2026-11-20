@@ -2,13 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type BrowserContext, type Page } from "@playwright/test";
 import { test } from "./editor-fixture";
-import { clientHeaders, formatMessage, enMessages as m, logSize, loginCodeFor, magicLinkFor, signUp, state } from "./helpers";
+import { clientHeaders, formatMessage, enMessages as m, logSize, loginCodeFor, magicLinkFor, requestMagicLink, signUp, state } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 let context: BrowserContext;
 let page: Page;
 let usedLink: string;
-const fixture = () => JSON.parse(fs.readFileSync(path.join(state().dir, "confirm-reasons.json"), "utf8")) as { invite: string; otherInvite: string; expiredLink: string };
+const fixture = () => JSON.parse(fs.readFileSync(path.join(state().dir, "confirm-reasons.json"), "utf8")) as { invite: string; otherInvite: string; expiryInvite: string };
 
 test.beforeAll(async ({ browser }) => {
   context = await browser.newContext({ javaScriptEnabled: false, extraHTTPHeaders: clientHeaders("10.36.0.1") });
@@ -95,21 +95,31 @@ test("after logout a used link explains single use and offers a new email withou
   expect(await failed.text()).toContain(m.confirm_used_heading);
 });
 
-test("an expired link explains the time limit on GET and POST without JavaScript", async () => {
-  const clock = path.join(state().dir, "server-clock.txt");
-  fs.writeFileSync(clock, String(16 * 60_000));
+test("an expired link explains the time limit on GET and POST without JavaScript", async ({ browser }) => {
+  const email = "confirm_reasons_expired@example.com";
+  const { baseURL, dir } = state();
+  const clock = path.join(dir, "server-clock.txt");
+  const previous = fs.readFileSync(clock, "utf8");
+  const expiryContext = await browser.newContext({ javaScriptEnabled: false, extraHTTPHeaders: clientHeaders("10.36.0.4") });
   try {
-    await page.goto(fixture().expiredLink);
-    await expect(page.getByRole("heading", { level: 1, name: m.confirm_expired_heading, exact: true })).toBeVisible();
-    await expect(page.getByText(formatMessage(m.confirm_expired, { minutes: 15 }), { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: m.login_submit, exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: m.confirm_submit, exact: true })).toHaveCount(0);
-    expect(await page.content()).not.toContain("confirm_reasons_expired@example.com");
-    const failed = await context.request.post("/auth/confirm", { headers: { origin: state().baseURL }, form: { token: new URL(fixture().expiredLink).searchParams.get("token")! } });
+    const expiryPage = await expiryContext.newPage();
+    await expiryPage.goto(fixture().expiryInvite);
+    const link = await requestMagicLink(expiryPage, email);
+    fs.writeFileSync(clock, String(Number(previous) + 16 * 60_000));
+    await expiryPage.goto(link);
+    await expect(expiryPage.getByRole("heading", { level: 1, name: m.confirm_expired_heading, exact: true })).toBeVisible();
+    await expect(expiryPage.getByText(formatMessage(m.confirm_expired, { minutes: 15 }), { exact: true })).toBeVisible();
+    await expect(expiryPage.getByRole("button", { name: m.login_submit, exact: true })).toBeVisible();
+    await expect(expiryPage.getByRole("button", { name: m.confirm_submit, exact: true })).toHaveCount(0);
+    expect(await expiryPage.content()).not.toContain(email);
+    const failed = await expiryContext.request.post("/auth/confirm", { headers: { origin: baseURL }, form: { token: new URL(link).searchParams.get("token")! } });
     expect(failed.status()).toBe(400);
     expect(await failed.text()).toContain(m.confirm_expired_heading);
     expect(failed.headers()["cache-control"]).toContain("no-store");
     expect(failed.headers()["referrer-policy"]).toBe("strict-origin");
     expect(failed.headers()["x-robots-tag"]).toBe("noindex");
-  } finally { fs.writeFileSync(clock, "0"); }
+  } finally {
+    fs.writeFileSync(clock, previous);
+    await expiryContext.close();
+  }
 });
