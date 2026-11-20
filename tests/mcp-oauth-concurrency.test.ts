@@ -1,14 +1,18 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type pg from "pg";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createAuth } from "~/lib/auth/auth.server";
+import { hashMagicLinkToken } from "~/lib/auth/plugins";
+import type { Db } from "~/lib/db/client.server";
 import { oauthClient, oauthConsent, oauthRefreshToken } from "~/lib/db/schema";
 import { withMcpAuth } from "~/lib/mcp/auth.server";
+import type { MetadataFetch } from "~/lib/mcp/cimd.server";
 import { authorizationRedirect } from "~/lib/mcp/consent.server";
 import { pruneRotationReplays, revokeConnection } from "~/lib/mcp/connections.server";
 import { handleOAuthHttp } from "~/lib/mcp/oauth-http.server";
 import { addMember } from "./helpers/db";
+import { deferred } from "./helpers/deferred";
 import { expectSettlesWithin, holdTx, waitForLockWait } from "./helpers/pg-concurrency";
 import { createScratchDb, REAL_PG_URL, type ScratchDb } from "./helpers/pg-real";
 
@@ -22,6 +26,96 @@ describe.skipIf(!REAL_PG_URL)("OAuth issuance and connection cancellation on Pos
   beforeAll(async () => { scratch = await createScratchDb(); admin = await scratch.admin(); }, 120_000);
   afterEach(async () => { await scratch.closeOpened(); });
   afterAll(async () => { await scratch?.drop(); }, 60_000);
+
+  it.each(["cimd", "dcr"] as const)("reuses pending %s client resources across grant and revoke without holding PostgreSQL connections", async registration => {
+    const issue = await scratch.open("oauth-discovery-issue");
+    const cancel = await scratch.open("oauth-discovery-cancel");
+    const origin = "https://issuer.example.net";
+    const cimd = registration === "cimd";
+    const clientId = cimd ? "https://client.example.net/discovery-fixture.json" : "remote-keys-fixture";
+    const jwksUri = `${origin}/fixture-jwks`;
+    const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    let jwk = { ...pair.publicKey.export({ format: "jwk" }), kid: "fixture-key", alg: "ES256", use: "sig" };
+    await issue.insert(oauthClient).values({ id: clientId, clientId, redirectUris: [`${origin}/callback`],
+      ...(cimd ? { clientDiscoveryId: "cimd" } : { tokenEndpointAuthMethod: "private_key_jwt", jwksUri }) });
+    const memberId = `discovery-member-${registration}`;
+    const refresh = `fixture-refresh-${registration}`;
+    await addMember(issue, memberId, `discovery_${registration}`);
+    await issue.insert(oauthRefreshToken).values({ id: refresh, token: hashMagicLinkToken(refresh), clientId, userId: memberId,
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000), scopes: ["read"] });
+    const entered = deferred();
+    const release = deferred();
+    let fetches = 0;
+    const metadataFetch: MetadataFetch = async input => {
+      expect(String(input)).toBe(cimd ? clientId : jwksUri);
+      fetches += 1;
+      entered.resolve();
+      await release.promise;
+      if (!cimd) return Response.json({ keys: [jwk] });
+      return Response.json({ client_id: clientId, client_name: "Discovery fixture", redirect_uris: [`${origin}/callback`], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none", scope: "read offline_access" });
+    };
+    const credentials = (path: string, extra?: { aud?: string; iss?: string; alg?: string; key?: typeof pair.privateKey }): Record<string, string> => {
+      if (cimd) return { client_id: clientId };
+      const header = Buffer.from(JSON.stringify({ alg: extra?.alg ?? "ES256", kid: jwk.kid })).toString("base64url");
+      const payload = Buffer.from(JSON.stringify({ iss: extra?.iss ?? clientId, sub: clientId, aud: extra?.aud ?? `${origin}/api/auth/oauth2/${path}`, exp: Math.floor(Date.now() / 1000) + 120, jti: randomUUID() })).toString("base64url");
+      const value = `${header}.${payload}`;
+      const signature = sign("sha256", Buffer.from(value), { key: extra?.key ?? pair.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url");
+      return { client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: `${value}.${signature}` };
+    };
+    const request = (db: Db, path: string, params: Record<string, string>) =>
+      handleOAuthHttp(new Request(`${origin}/api/auth/oauth2/${path}`, { method: "POST", body: new URLSearchParams(params) }),
+        db, createAuth(db, { baseURL: origin, secret, sendMagicLink: async () => {}, metadataFetch }), origin);
+    // Even a regression to Better Auth's default DCR path must stay offline.
+    const defaultFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => metadataFetch(input, init));
+    onTestFinished(() => { defaultFetch.mockRestore(); });
+    const token = request(issue, "token", { ...credentials("token"), grant_type: "authorization_code", code: "unused-code", redirect_uri: `${origin}/callback`, code_verifier: "c".repeat(64), resource: `${origin}/mcp` });
+    const revokeCredentials = credentials("revoke");
+    const revokeToken = (client: Record<string, string>) => request(cancel, "revoke", { ...client, token: refresh, token_type_hint: "refresh_token" });
+    const revoke = revokeToken(revokeCredentials);
+    try {
+      await expectSettlesWithin(entered.promise, 2000, "metadata fetch starts");
+      // Inspect the actual server while the test transport is stopped in I/O.
+      await expect.poll(async () => {
+        const activity = await admin.query("select application_name, bool_and(state = 'idle' and xact_start is null) as idle from pg_stat_activity where datname = current_database() and application_name in ('oauth-discovery-issue', 'oauth-discovery-cancel') group by application_name");
+        return Object.fromEntries(activity.rows.map(row => [row.application_name, row.idle]));
+      }, { timeout: 2000 }).toEqual({ "oauth-discovery-issue": true, "oauth-discovery-cancel": true });
+      const lock = holdTx(issue, tx => tx.select({ id: oauthClient.id }).from(oauthClient).where(eq(oauthClient.clientId, clientId)).for("no key update"));
+      try { await expectSettlesWithin(lock.ready, 1000, "client lock during discovery"); }
+      finally { await lock.rollback(); }
+      expect(fetches).toBe(1);
+    } finally {
+      release.resolve();
+      await Promise.allSettled([token, revoke]);
+    }
+    expect(await (await token).json()).toMatchObject({ error: "invalid_grant" });
+    const revoked = await revoke;
+    expect(revoked.status, await revoked.clone().text()).toBe(200);
+    const [refreshRow] = await issue.select({ revoked: oauthRefreshToken.revoked }).from(oauthRefreshToken).where(eq(oauthRefreshToken.id, refresh));
+    expect(refreshRow?.revoked).toBeInstanceOf(Date);
+    expect(fetches).toBe(1);
+    expect(defaultFetch).not.toHaveBeenCalled();
+    if (!cimd) {
+      const refused = async (client: Record<string, string>) => {
+        const response = await revokeToken(client);
+        expect(response.ok).toBe(false);
+        expect(await response.json()).toMatchObject({ error: "invalid_client" });
+      };
+      await refused(revokeCredentials);
+      await refused(credentials("revoke", { aud: "https://other.example.net/api/auth/oauth2/revoke" }));
+      await refused(credentials("revoke", { iss: "another-client" }));
+      await refused(credentials("revoke", { alg: "none" }));
+      const rotated = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+      await refused(credentials("revoke", { key: rotated.privateKey }));
+      jwk = { ...jwk, ...rotated.publicKey.export({ format: "jwk" }), kid: "rotated-key" };
+      expect((await revokeToken(credentials("revoke", { key: rotated.privateKey }))).status).toBe(200);
+      const [stored] = await issue.select({ discovery: oauthClient.clientDiscoveryId }).from(oauthClient).where(eq(oauthClient.clientId, clientId));
+      expect(stored.discovery).toBeNull();
+      const before = fetches;
+      await issue.update(oauthClient).set({ jwksUri: "https://other.example.net/jwks" }).where(eq(oauthClient.clientId, clientId));
+      await refused(credentials("revoke"));
+      expect(fetches).toBe(before);
+    }
+  });
 
   it("prunes expired replays in bounded batches without waiting for a locked token", async () => {
     const [block, cleanup] = await Promise.all([scratch.open("replay-block"), scratch.open("replay-cleanup")]);

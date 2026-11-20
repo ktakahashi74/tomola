@@ -3,8 +3,8 @@ import { passkey } from "@better-auth/passkey";
 import { magicLink, jwt } from "better-auth/plugins";
 import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
-import { fetchClientMetadataResource } from "@better-auth/cimd/node";
-import { fetchMcpClientMetadata } from "~/lib/mcp/cimd.server";
+import type { ClientDiscovery } from "@better-auth/oauth-provider";
+import { DCR_JWKS_DISCOVERY_ID, fetchMcpClientMetadata, type MetadataFetch } from "~/lib/mcp/cimd.server";
 import { browserBindingIdentifier, browserNonceDigest, validBrowserNonce } from "./magic-link-browser.server";
 import { magicLinkNextIdentifier, safeMagicLinkNext } from "./magic-link-next.server";
 import { APIError } from "better-auth/api";
@@ -28,8 +28,21 @@ export type SendMagicLink = (
 
 // Derive the passkey rpID (hostname) and origin from baseURL (BETTER_AUTH_URL). Passkeys work only on the site where they were registered
 // (a different rpID prevents the browser from offering another site's credentials). Compare origin with what the browser sends, without relying on the request's Origin header.
-export function authPlugins(sendMagicLink: SendMagicLink, opts: { baseURL: string; metadataFetch?: typeof fetchClientMetadataResource }) {
+export function authPlugins(sendMagicLink: SendMagicLink, opts: { baseURL: string; metadataFetch?: MetadataFetch; prepareRemoteKeys?: boolean }) {
   const site = new URL(opts.baseURL);
+  const metadataFetch = opts.metadataFetch ?? fetchMcpClientMetadata;
+  const dcrJwks: ClientDiscovery = {
+    id: DCR_JWKS_DISCOVERY_ID,
+    matches: () => true,
+    resolve: async (ctx, _clientId, client) => {
+      if (!client?.jwksUri || client.clientDiscoveryId !== DCR_JWKS_DISCOVERY_ID) return null;
+      // Unlike CIMD, a dynamically registered client cannot use its own origin
+      // as authority for a JWKS URI. Retain the provider's trusted-origin rule.
+      if (!ctx.context.isTrustedOrigin(client.jwksUri)) throw new APIError("BAD_REQUEST", { error: "invalid_client" });
+      return client;
+    },
+    fetchClientMetadataResource: metadataFetch,
+  };
   return [
     magicLink({
       expiresIn: 60 * 15,
@@ -84,7 +97,7 @@ export function authPlugins(sendMagicLink: SendMagicLink, opts: { baseURL: strin
       accessTokenExpiresIn: MCP_ACCESS_TOKEN_SECONDS,
       refreshTokenReuseInterval: 30,
       storeTokens: { hash: async (token) => hashMagicLinkToken(token) },
-      extensions: [{ claims: { accessToken: async ({ ctx, client, user, grantType }) => {
+      extensions: [...opts.prepareRemoteKeys ? [{ clientDiscovery: dcrJwks }] : [], { claims: { accessToken: async ({ ctx, client, user, grantType }) => {
         if (!user) throw new Error("MCP requires a member authorization grant");
         // A new consent gets a new id. Old JWTs remain rejected after revoke/reconnect, even if still signed and unexpired.
         const consent = await ctx.context.adapter.findOne<{ id: string }>({
@@ -102,6 +115,6 @@ export function authPlugins(sendMagicLink: SendMagicLink, opts: { baseURL: strin
         return { tomola_consent: consent.id, ...(codeId ? { tomola_line: lineMark(codeId) } : {}) };
       } } }],
     }),
-    cimd({ metadataProfile: "mcp-2026-07-28", fetchClientMetadataResource: opts.metadataFetch ?? fetchMcpClientMetadata }),
+    cimd({ metadataProfile: "mcp-2026-07-28", fetchClientMetadataResource: metadataFetch }),
   ];
 }

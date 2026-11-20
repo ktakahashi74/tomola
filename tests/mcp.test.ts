@@ -59,6 +59,12 @@ const sent: { token: string; metadata?: Record<string, unknown> }[] = [];
 const globals = globalThis as { __tomolaDb?: Promise<Db>; __tomolaAuth?: Promise<ReturnType<typeof createAuth>> };
 let saved: typeof globals;
 const cimdId = "https://clients.example.net/tomola.json";
+const cimdJwtId = "https://clients.example.net/signed-client.json";
+const cimdJwksUri = "https://clients.example.net/keys.json";
+const cimdJwtKey = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+const cimdJwk = { ...cimdJwtKey.publicKey.export({ format: "jwk" }), kid: "cimd-fixture-key", alg: "ES256", use: "sig" };
+const cimdJwtCacheHeaders = { "Cache-Control": "no-cache", ETag: '"cimd-fixture"' };
+let cimdConditionalFetches = 0;
 const a: McpClientIdentity = { key: "oauth:client-a", id: "client-a", name: "A", uri: "https://a.example.org", tokenId: null };
 const b: McpClientIdentity = { key: "oauth:client-b", id: "client-b", name: "B", uri: "https://b.example.org", tokenId: null };
 
@@ -85,7 +91,15 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(http.address() as { port: number }).port}`;
   vi.stubEnv("BETTER_AUTH_URL", base);
   vi.stubEnv("ENABLED_LANGS", "ja,en");
-  auth = createAuth(db, { baseURL: base, secret: "test-secret-0123456789abcdef0123456789abcdef", sendMagicLink: async ({ token, metadata }) => { sent.push({ token, metadata }); const outcome = magicLinkOutcome.getStore(); if (outcome) outcome.result = "sent"; }, metadataFetch: async (input) => {
+  auth = createAuth(db, { baseURL: base, secret: "test-secret-0123456789abcdef0123456789abcdef", sendMagicLink: async ({ token, metadata }) => { sent.push({ token, metadata }); const outcome = magicLinkOutcome.getStore(); if (outcome) outcome.result = "sent"; }, metadataFetch: async (input, init) => {
+    if (String(input) === cimdJwksUri) return Response.json({ keys: [cimdJwk] });
+    if (String(input) === cimdJwtId) {
+      if (new Headers(init?.headers).get("if-none-match") === cimdJwtCacheHeaders.ETag) {
+        cimdConditionalFetches += 1;
+        return new Response(null, { status: 304, headers: cimdJwtCacheHeaders });
+      }
+      return Response.json({ client_id: cimdJwtId, client_name: "Signed fixture", application_type: "native", redirect_uris: [`${base}/callback`], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "private_key_jwt", jwks_uri: cimdJwksUri, scope: "read draft offline_access" }, { headers: cimdJwtCacheHeaders });
+    }
     expect(String(input)).toBe(cimdId);
     return Response.json({ client_id: cimdId, client_name: "A self-reported name", client_uri: "https://clients.example.net", application_type: "native", redirect_uris: [`${base}/callback`], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none", scope: "read draft offline_access" });
   } });
@@ -119,7 +133,7 @@ async function authorize(clientId: string, credentials: Record<string, string> =
   const request = await loadConsentRequest(db, auth, query);
   expect(request.clientId).toBe(clientId);
   expect(request.redirectOrigin).toBe(new URL(base).origin);
-  expect(request.registration).toBe(clientId === cimdId ? "cimd" : "dcr");
+  expect(request.registration).toBe(clientId === cimdId || clientId === cimdJwtId ? "cimd" : "dcr");
   const consentHeaders = new Headers({ cookie, origin: base });
   const consent = await auth.api.oauth2Consent({ request: new Request(`${base}/mcp/consent`, { method: "POST", headers: consentHeaders }), body: { accept: true, scope: "read draft offline_access", oauth_query: query }, headers: consentHeaders });
   const callback = new URL((await authorizationRedirect(consent))!, base);
@@ -692,10 +706,10 @@ describe("OAuth registration and immediate revocation", () => {
       }
     }
   });
-  it("authenticates signed private_key_jwt with no body client_id for issuance and revocation", async () => {
-    const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
-    const jwk = { ...pair.publicKey.export({ format: "jwk" }), kid: "fixture-key", alg: "ES256", use: "sig" };
-    const clientId = await register({ token_endpoint_auth_method: "private_key_jwt", jwks: { keys: [jwk] } });
+  it.each(["dcr", "cimd"] as const)("authenticates signed %s private_key_jwt with no body client_id for issuance and revocation", async registration => {
+    const pair = registration === "cimd" ? cimdJwtKey : generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = registration === "cimd" ? cimdJwk : { ...pair.publicKey.export({ format: "jwk" }), kid: "fixture-key", alg: "ES256", use: "sig" };
+    const clientId = registration === "cimd" ? cimdJwtId : await register({ token_endpoint_auth_method: "private_key_jwt", jwks: { keys: [jwk] } });
     const assertion = (endpoint: string) => {
       const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: jwk.kid })).toString("base64url");
       const payload = Buffer.from(JSON.stringify({ iss: clientId, sub: clientId, aud: `${base}/api/auth/oauth2/${endpoint}`, exp: Math.floor(Date.now() / 1000) + 120, iat: Math.floor(Date.now() / 1000), jti: randomUUID(), padding: "p".repeat(17 * 1024) })).toString("base64url");
@@ -708,8 +722,10 @@ describe("OAuth registration and immediate revocation", () => {
     const segments = token.access_token.split(".");
     segments[2] = (segments[2][0] === "a" ? "b" : "a") + segments[2].slice(1);
     expect((await modern("server/discover", segments.join("."))).status).toBe(401);
+    const beforeRevoke = cimdConditionalFetches;
     const revoked = await formPost("/api/auth/oauth2/revoke", { token: token.access_token, token_type_hint: "access_token", ...credentials("revoke") });
     expect(revoked.status, await revoked.clone().text()).toBe(200);
+    if (registration === "cimd") expect(cimdConditionalFetches).toBe(beforeRevoke + 1);
     expect((await modern("server/discover", token.access_token)).status).toBe(401);
     const refreshed = await formPost("/api/auth/oauth2/token", { grant_type: "refresh_token", refresh_token: token.refresh_token, ...credentials("token") });
     expect(refreshed.status, await refreshed.clone().text()).toBe(200);

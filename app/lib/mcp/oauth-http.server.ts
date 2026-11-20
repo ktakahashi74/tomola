@@ -2,12 +2,13 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { mcpRevokedToken, oauthAccessToken, oauthRefreshToken, oauthClient } from "~/lib/db/schema";
 import { hashMagicLinkToken } from "~/lib/auth/plugins";
-import { bindAuthToDatabase } from "~/lib/auth/auth.server";
+import { authMetadataFetch, bindAuthToDatabase } from "~/lib/auth/auth.server";
 import { mcpUnauthorized, tokenDigest, type McpAuth } from "./auth.server";
 import { verifyLocalMcpJwt } from "./jwt.server";
 import { MCP_ACCESS_TOKEN_SECONDS, lineMark, revokedLineId } from "./line.server";
 import { isCredentialSessionFresh } from "~/lib/auth/credential-session.server";
 import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
+import { MetadataFetchBusy, withPreparedMetadata } from "./cimd.server";
 
 // Consume bounded machine bodies once. Reconstruct the request so provider parsing has no unchecked stream.
 export async function boundedOAuthRequest(request: Request): Promise<Request | null> {
@@ -22,7 +23,7 @@ export async function boundedOAuthRequest(request: Request): Promise<Request | n
     if (bytes > 64 * 1024) { void reader.cancel(); return null; }
     chunks.push(part.value);
   }
-  return new Request(request.url, { method: request.method, headers: request.headers, body: Buffer.concat(chunks), redirect: request.redirect });
+  return new Request(request.url, { method: request.method, headers: request.headers, body: Buffer.concat(chunks), redirect: request.redirect, signal: request.signal });
 }
 
 // Unverified values select a stable client mutex only. The OAuth provider verifies every credential afterwards.
@@ -65,13 +66,23 @@ export async function handleOAuthHttp(request: Request, db: Db, auth: McpAuth, b
     const clientId = oauthCandidateClientId(bounded, form);
     const explicit = form.get("client_id");
     if (basic && typeof explicit === "string" && explicit && explicit !== clientId) return Response.json({ error: "invalid_client" }, { status: 400 });
-    return db.transaction(async (tx) => {
-      // The candidate id selects a mutex, never an authenticated identity. The provider still validates it.
-      await tx.select({ id: oauthClient.id }).from(oauthClient).where(eq(oauthClient.clientId, clientId)).for("no key update");
-      // Keep the installed plugins/configuration, but bind all provider grant and token writes to this transaction.
-      const transactional = bindAuthToDatabase(auth, tx);
-      return processOAuthHttp(bounded, tx, auth, baseURL, transactional.handler);
-    });
+    try {
+      return await withPreparedMetadata(authMetadataFetch(auth), bounded.signal, (metadataFetch, requirePrepared) => db.transaction(async tx => {
+        // The candidate id selects a mutex, never an authenticated identity. The provider still validates it.
+        await tx.select({ id: oauthClient.id }).from(oauthClient).where(eq(oauthClient.clientId, clientId)).for("no key update");
+        const transactional = bindAuthToDatabase(auth, tx, metadataFetch);
+        try {
+          return await processOAuthHttp(bounded, tx, auth, baseURL, transactional.handler);
+        } finally {
+          // Provider discovery translates transport errors into OAuth responses. Check for a
+          // deferred resource explicitly so that even those responses roll back this attempt.
+          requirePrepared();
+        }
+      }));
+    } catch (error) {
+      if (!(error instanceof MetadataFetchBusy)) throw error;
+      return Response.json({ error: "temporarily_unavailable" }, { status: 429, headers: { "Cache-Control": "no-store" } });
+    }
   }
   return processOAuthHttp(bounded, db, auth, baseURL, auth.handler);
 }
