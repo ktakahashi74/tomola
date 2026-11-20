@@ -6,6 +6,9 @@ test("suggests local and AI village addresses while preserving manual edits and 
   await waitForClientRoute(page);
   const name = page.getByLabel(m.village_name_field, { exact: true });
   const slug = page.getByLabel(m.village_slug_field, { exact: true });
+  const suggest = page.getByRole("button", { name: m.village_slug_suggest, exact: true });
+  const status = page.getByRole("status").filter({ hasText: m.village_slug_suggesting });
+  await expect(suggest).toBeDisabled();
   const requests: string[] = [];
   page.on("request", request => { if (request.url().endsWith("/villages/suggest-slug")) requests.push(request.postData() ?? ""); });
   await name.fill("Café Reading Club");
@@ -20,57 +23,63 @@ test("suggests local and AI village addresses while preserving manual edits and 
   await name.fill("Another Name");
   await name.blur();
   await expect(slug).toHaveValue("my-own-address");
+  await suggest.click();
+  await expect(slug).toHaveValue("another-name");
+  await slug.fill("my-own-address");
   await name.fill("京都の集い");
   await name.blur();
   await expect(slug).toHaveValue("my-own-address");
   expect(requests).toEqual([]);
+  await suggest.click();
+  await expect(slug).toHaveValue("gathering-place");
+  expect(requests).toHaveLength(1);
   await slug.fill("");
   await name.fill("京都の読書会");
   await expect(slug).toHaveValue("");
-  expect(requests).toEqual([]);
+  expect(requests).toHaveLength(1);
   await name.blur();
   await expect(slug).toHaveValue("gathering-place");
-  expect(requests).toHaveLength(1);
+  expect(requests).toHaveLength(2);
   await name.focus();
   await name.blur();
   await expect(slug).toHaveValue("gathering-place");
-  expect(requests).toHaveLength(1);
+  expect(requests).toHaveLength(2);
 
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
-  let arrived!: () => void;
-  const arriving = new Promise<void>(resolve => { arrived = resolve; });
   await page.route("**/villages/suggest-slug", async route => {
-    const response = await route.fetch();
-    arrived();
     await held;
-    await route.fulfill({ response });
+    await route.fulfill({ json: { slug: "stale-suggestion" } });
   });
   await name.fill("韓国語の集い");
-  await name.blur();
-  await arriving;
-  await expect(page.getByRole("status").filter({ hasText: m.village_slug_suggesting })).toBeVisible();
+  await Promise.all([page.waitForRequest("**/villages/suggest-slug"), suggest.click()]);
+  await expect(status).toBeVisible();
+  await expect(suggest).toHaveAttribute("aria-busy", "true");
+  await expect(slug).toBeEditable();
+  expect(requests).toHaveLength(3);
   await slug.fill("chosen-by-me");
   release();
-  await expect(slug).toHaveValue("chosen-by-me");
   await page.unrouteAll({ behavior: "wait" });
+  await expect(status).toBeHidden();
   await expect(slug).toHaveValue("chosen-by-me");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("does not repeat a null suggestion until the name changes, including unsupported Latin letters", async ({ page }) => {
+test("allows address suggestion retries and keeps manual text on failure", async ({ page }) => {
   await useMember(page, "zslug_creator@example.com", "/villages/new");
   await waitForClientRoute(page);
   const name = page.getByLabel(m.village_name_field, { exact: true });
   const slug = page.getByLabel(m.village_slug_field, { exact: true });
+  const suggest = page.getByRole("button", { name: m.village_slug_suggest, exact: true });
+  const status = page.getByRole("status");
   const requests: string[] = [];
   page.on("request", request => { if (request.url().endsWith("/villages/suggest-slug")) requests.push(request.postData() ?? ""); });
   await page.route("**/villages/suggest-slug", route => route.fulfill({ json: { slug: null } }));
   await name.fill("Ƶebra Club");
   await expect(slug).toHaveValue("");
   await Promise.all([page.waitForResponse("**/villages/suggest-slug"), name.blur()]);
-  await expect(page.getByRole("status")).toHaveText("");
+  await expect(status).toHaveText(m.village_slug_suggest_failed);
   expect(requests).toHaveLength(1);
   await name.focus();
   await name.blur();
@@ -83,6 +92,41 @@ test("does not repeat a null suggestion until the name changes, including unsupp
   expect(requests).toHaveLength(1);
   await name.fill("新しい集い");
   await Promise.all([page.waitForResponse("**/villages/suggest-slug"), name.blur()]);
-  await expect(page.getByRole("status")).toHaveText("");
+  await expect(status).toHaveText(m.village_slug_suggest_failed);
   expect(requests).toHaveLength(2);
+
+  await slug.fill("address-to-keep");
+  await suggest.click();
+  await expect(status).toHaveText(m.village_slug_suggest_failed);
+  await expect(slug).toHaveValue("address-to-keep");
+  expect(requests).toHaveLength(3);
+
+  await page.unrouteAll({ behavior: "wait" });
+  await page.route("**/villages/suggest-slug", route => route.fulfill({ status: 503 }));
+  await suggest.click();
+  await expect(status).toHaveText(m.village_slug_suggest_failed);
+  await expect(slug).toHaveValue("address-to-keep");
+
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.unrouteAll({ behavior: "wait" });
+  await page.route("**/villages/suggest-slug", async route => {
+    await held;
+    await route.fulfill({ json: { slug: "stale-suggestion" } });
+  });
+  await Promise.all([page.waitForRequest("**/villages/suggest-slug"), suggest.click()]);
+  await expect(status).toHaveText(m.village_slug_suggesting);
+  await expect(status).toHaveText(m.village_slug_suggest_failed);
+  await expect(slug).toHaveValue("address-to-keep");
+
+  await Promise.all([page.waitForRequest("**/villages/suggest-slug"), suggest.click()]);
+  await name.fill("変更した名前");
+  release();
+  await page.unrouteAll({ behavior: "wait" });
+  await expect(status).toHaveText("");
+  await expect(slug).toHaveValue("address-to-keep");
+
+  await page.route("**/villages/suggest-slug", route => route.fulfill({ json: { slug: "new-name" } }));
+  await suggest.click();
+  await expect(slug).toHaveValue("new-name");
 });

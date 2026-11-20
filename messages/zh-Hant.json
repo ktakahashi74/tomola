@@ -2415,6 +2415,8 @@
   "chat_nushi_description": "在聊天室中，系統僅使用呼叫成員的訊息來理解問題。回覆與周圍訊息均不包含在內。回答取材自同村的公開貼文，且僅有已同意條款的村的成員可以讀取。問題、回答以及業者發生的錯誤均不會被記錄至請求或生成記錄中。",
   "village_slug_ai_help": "若名稱包含非拉丁字母，AI 會接收該名稱以建議英文網址。建立村前請先檢查並編輯該建議；網址建立後將無法變更。",
   "village_slug_suggesting": "正在建議網址…",
+  "village_slug_suggest": "產生網址建議",
+  "village_slug_suggest_failed": "未能產生網址建議。請重試或直接輸入網址。",
   "ai_use_village_slug": "村網址建議",
   "ai_use_sent_village_slug": "建立村時輸入的名稱，用於建議英文 URL 別名。",
   "nushi_truncated": "已省略部分材料。",
