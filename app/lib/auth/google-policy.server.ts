@@ -27,12 +27,15 @@ export async function prepareGoogleFlow(ctx: BeforeContext, enabled: boolean) {
   if (ctx.path === "/link-social") await freshSessionMiddleware(ctx);
   const invitationId = ctx.path === "/sign-in/social" ? googleInvitationContext.getStore() ?? null : null;
   await addOAuthServerContext({ invitationId });
-  const target = new URL(safeLocalPath(ctx.body?.callbackURL), ctx.context.baseURL);
-  let targetPath = "/";
-  try { targetPath = decodeURI(target.pathname); } catch { /* Invalid encoding returns home. */ }
+  const targetPath = new URL(safeLocalPath(ctx.body?.callbackURL), ctx.context.baseURL).pathname;
   // State is stored in plaintext. Keep invite links, query values and fragments
-  // out of every return URL, even when supplied directly to the API.
-  const callbackURL = /^\/(?:invite|auth|api\/auth)(?:\/|$)/i.test(targetPath) ? "/" : targetPath;
+  // out of every return URL. Decode only for checks and keep the encoded path.
+  let callbackURL = "/";
+  try {
+    const decodedPath = decodeURIComponent(targetPath);
+    if (!decodedPath.startsWith("//") && !/[\\\x00-\x1f\x7f]/.test(decodedPath)
+      && !/^\/(?:invite|auth|api\/auth)(?:[/?#]|$)/i.test(decodedPath)) callbackURL = targetPath;
+  } catch { /* Invalid encoding returns home. */ }
   // Keep arbitrary scopes, authorization parameters and client state out of the
   // provider request. Never send an address as a Google login_hint.
   for (const key of Object.keys(ctx.body)) delete ctx.body[key];
@@ -55,7 +58,13 @@ export function finishGoogleFlow(ctx: Pick<BeforeContext, "path" | "params"> & {
   const headers = ctx.context.responseHeaders;
   const location = headers?.get("location");
   if (!headers || !location) return;
-  const url = new URL(location, ctx.context.baseURL);
+  const base = new URL(ctx.context.baseURL);
+  const url = URL.parse(location, base);
+  // Enforce the return boundary even for state issued before the path checks.
+  if (!url || url.protocol !== base.protocol || url.origin !== base.origin || url.pathname.startsWith("//")) {
+    headers.set("location", "/");
+    return;
+  }
   // Better Auth adds a description for a rejected new user but omits it for
   // an existing unlinked user. Normalize that observable difference as well.
   if (url.pathname === "/login" && url.searchParams.get("error") === "account_not_linked") {

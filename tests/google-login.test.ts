@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { getAuthStateVerificationIdentifier } from "better-auth";
 import { eq } from "drizzle-orm";
 import { createAuth } from "~/lib/auth/auth.server";
 import { googleLoginConfig } from "~/lib/auth/google-config.server";
@@ -17,6 +18,7 @@ import { findValidInvitationByToken } from "~/lib/invitations.server";
 import { googleInvitationContext } from "~/lib/auth/google-policy.server";
 import { googleBrowserBlocked, googleBrowserFromRequest } from "~/lib/auth/google-browser";
 import { action as inviteAction, loader as inviteLoader } from "~/routes/invite";
+import { action as loginAction } from "~/routes/login";
 
 vi.hoisted(() => vi.resetModules());
 vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/messages-json")).jsonMessages() }));
@@ -314,6 +316,38 @@ describe("Google application routes and notices", () => {
     g.__tomolaAuth = Promise.resolve(h.auth); g.__tomolaDb = Promise.resolve(h.db);
     try { return await run(); } finally { g.__tomolaAuth = oldAuth; g.__tomolaDb = oldDb; }
   }
+  it("keeps native sign-in returns on the site while preserving encoded paths", async () => {
+    const h = await setup();
+    const invitation = await h.invite();
+    expect((await h.callback(await h.start(invitation.cookie))).headers.get("location")).toBe("/onboarding");
+    await withAuth(h, async () => {
+      for (const [next, expected] of [
+        ["/%5Cexample.invalid", "/"],
+        ["/%09/example.invalid", "/"],
+        ["/t/%0d%0a", "/"],
+        ["/t/%zz", "/"],
+        ["/%69nvite%2Ffixture", "/"],
+        ["/t/42?lang=ja#reply-1", "/t/42"],
+        ["/u/%E6%97%A5%E6%9C%AC", "/u/%E6%97%A5%E6%9C%AC"],
+      ]) {
+        const request = new Request(`${BASE}/login`, { method: "POST", headers: { origin: BASE }, body: new URLSearchParams({ intent: "google-login", next }) });
+        const start = await loginAction({ request } as never) as Response;
+        const flow = { url: new URL(start.headers.get("location")!), cookie: cookies(start) };
+        const result = await h.callback(flow);
+        expect(result.headers.get("location"), next).toBe(expected);
+      }
+    });
+  });
+  it("keeps redirects for an already-started Google flow on the site", async () => {
+    const h = await setup();
+    const invitation = await h.invite();
+    expect((await h.callback(await h.start(invitation.cookie))).headers.get("location")).toBe("/onboarding");
+    const flow = await h.start();
+    const where = eq(verification.identifier, getAuthStateVerificationIdentifier(flow.url.searchParams.get("state")!));
+    const [stored] = await h.db.select().from(verification).where(where);
+    await h.db.update(verification).set({ value: JSON.stringify({ ...JSON.parse(stored.value), callbackURL: "/\\example.invalid" }) }).where(where);
+    expect((await h.callback(flow)).headers.get("location")).toBe("/");
+  });
   it("binds the submitted invitation rather than another tab's cookie and stores no secret in OAuth state", async () => {
     const h = await setup(); const first = await h.invite(); const other = await h.invite("other@gmail.com");
     await withAuth(h, async () => {
