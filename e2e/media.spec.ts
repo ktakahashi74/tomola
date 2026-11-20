@@ -62,7 +62,7 @@ for (const width of [1366, 390]) {
     const src = await image.getAttribute("src");
     const response = await context.request.get(src!); expect(response.status()).toBe(200);
     expect(response.headers()["content-security-policy"]).toBe("default-src 'none'; sandbox");
-    expect(response.headers()["cache-control"]).toBe("private, max-age=86400");
+    expect(response.headers()["cache-control"]).toBe("private, no-store");
     expect((await context.request.get(src!.replace("2000x1000", "1x1"))).status()).toBe(404);
     const guest = await context.browser()!.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.240") });
     try {
@@ -70,7 +70,7 @@ for (const width of [1366, 390]) {
       expect(guestImage.status()).toBe(process.env.E2E_PUBLIC_READING === "1" ? 200 : 404);
       if (process.env.E2E_PUBLIC_READING === "1") {
         const guestPage = await guest.newPage(); await guestPage.goto(topicURL); await expect(guestPage.locator('main img[alt="A synthetic diagram"]').first()).toBeVisible();
-        expect(guestImage.headers()["cache-control"]).toBe("private, max-age=86400");
+        expect(guestImage.headers()["cache-control"]).toBe("private, no-store");
       }
     } finally { await guest.close(); }
   });

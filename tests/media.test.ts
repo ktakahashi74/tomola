@@ -368,7 +368,7 @@ describe("storage, writer and reader boundaries", () => {
     expect(results.find(row => row.status === "rejected")).toMatchObject({ reason: { code: "quota" } });
     expect(await db.select({ count: count() }).from(media)).toEqual([{ count: MEDIA_LIMITS.storedCount }]);
   });
-  it("uses fixed safe headers, private caching, ID lookup and conditional requests", async () => {
+  it("uses fixed safe headers, no-store, ID lookup and conditional requests", async () => {
     const saved = await putMedia(db, "media-member", image);
     const response = await fetchImage(saved.url);
     expect(response.status).toBe(200); expect(Buffer.from(await response.arrayBuffer())).toEqual(image.bytes);
@@ -376,7 +376,7 @@ describe("storage, writer and reader boundaries", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
     expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
-    expect(response.headers.get("cache-control")).toBe("private, max-age=86400");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect((await fetchImage(saved.url, { "If-None-Match": `W/${response.headers.get("etag")}` })).status).toBe(304);
     const head = await fetchImage(saved.url, {}, "HEAD"); expect(await head.text()).toBe(""); expect(head.headers.get("content-length")).toBe(String(image.bytes.length));
     for (const dimensions of ["1x1", "80x41", "81x40", "2001x40"]) {
@@ -389,9 +389,9 @@ describe("storage, writer and reader boundaries", () => {
     expect((await fetchImage(saved.url)).status).toBe(404);
     vi.stubEnv("PUBLIC_READING", "1");
     const publicImage = await fetchImage(saved.url);
-    expect(publicImage.status).toBe(200); expect(publicImage.headers.get("cache-control")).toBe("private, max-age=86400");
+    expect(publicImage.status).toBe(200); expect(publicImage.headers.get("cache-control")).toBe("private, no-store");
     const unchanged = await fetchImage(saved.url, { "If-None-Match": publicImage.headers.get("etag")! });
-    expect(unchanged.status).toBe(304); expect(unchanged.headers.get("cache-control")).toBe("private, max-age=86400");
+    expect(unchanged.status).toBe(304); expect(unchanged.headers.get("cache-control")).toBe("private, no-store");
   });
   it.each([false, true])("image reads leave page counters unchanged, including missing IDs and exhausted counters (public=%s)", async publicReader => {
     const saved = await putMedia(db, "media-member", image);

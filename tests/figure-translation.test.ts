@@ -388,7 +388,10 @@ describe("figure translation pipeline", () => {
 
   it("applies original visibility to both replies and translated images before conditional responses", async () => {
     const w = await world(); await w.run();
-    const tag = (await get(w.path)).headers.get("etag")!;
+    const variant = await get(w.path);
+    expect(variant.status).toBe(200);
+    expect(variant.headers.get("cache-control")).toBe("private, no-store");
+    const tag = variant.headers.get("etag")!;
     await db.update(entries).set({ hiddenAt: new Date() }).where(eq(entries.id, w.entry.id));
     expect((await get(w.path, { "If-None-Match": tag })).status).toBe(404);
     expect((await get(w.url)).status).toBe(404);

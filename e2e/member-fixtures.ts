@@ -210,6 +210,7 @@ export const MEMBER_FIXTURES: readonly SeedMember[] = [
   {"email": "ai_connect_member@example.com", "handle": "ai_connect_member", "homeArea": "en", "uiLocale": "en"},
   ...(["en", "ja"] as const).map(locale => ({ email: `writing_guide_${locale}@example.com`, handle: `writing_guide_${locale}`, homeArea: "en" as const, uiLocale: locale })),
   {"email": "media_uploader@example.com", "handle": "media_uploader", "homeArea": "en", "uiLocale": "en"},
+  ...["cache_image_owner", "cache_image_reader"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   {"email": "enrollment@example.com", "handle": "enrollment", "homeArea": "en", "uiLocale": "en"},
   {"email": "related_browser_writer@example.com", "handle": "related_browser_writer", "homeArea": "en", "uiLocale": "en"},
   {"email": "related_browser_reader@example.com", "handle": "related_browser_reader", "homeArea": "en", "uiLocale": "en"},
