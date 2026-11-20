@@ -1,5 +1,7 @@
 import { isDeletedIdentity } from "../deleted-member";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { is } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import * as schema from "~/lib/db/schema";
 import { RETENTION, DAY_MS } from "~/lib/retention";
@@ -21,9 +23,17 @@ function allowed(value: unknown, model: string): boolean {
 
 // Enforce the lifetime at the authoritative read, including library middleware
 // that calls getSession internally instead of the app's session helper.
-function wrap<T extends Pick<Adapter, "findOne" | "findMany">>(adapter: T, prepareRemoteKeys: boolean): T {
+function wrap<T extends Pick<Adapter, "create" | "findOne" | "findMany">>(adapter: T, db: Db, prepareRemoteKeys: boolean): T {
   return {
     ...adapter,
+    create: query => {
+      // Roll back duplicate assertion inserts to a savepoint so the provider
+      // can read the existing row and return invalid_client.
+      if (query.model === "oauthClientAssertion" && is(db, PgTransaction)) {
+        return db.transaction(() => adapter.create(query));
+      }
+      return adapter.create(query);
+    },
     findOne: async <R>(query: Parameters<Adapter["findOne"]>[0]) => {
       const value = await adapter.findOne<R>(bounded(query));
       if (prepareRemoteKeys && query.model === "oauthClient") {
@@ -44,6 +54,6 @@ export function sessionAdapter(db: Db, prepareRemoteKeys = false): ReturnType<ty
   const factory = drizzleAdapter(db, { provider: "pg", schema });
   return options => {
     const adapter = factory(options);
-    return { ...wrap(adapter, prepareRemoteKeys), transaction: callback => adapter.transaction(tx => callback(wrap(tx, prepareRemoteKeys))) };
+    return { ...wrap(adapter, db, prepareRemoteKeys), transaction: callback => adapter.transaction(tx => callback(wrap(tx, db, prepareRemoteKeys))) };
   };
 }

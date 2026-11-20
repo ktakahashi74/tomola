@@ -727,11 +727,19 @@ describe("OAuth registration and immediate revocation", () => {
     expect(revoked.status, await revoked.clone().text()).toBe(200);
     if (registration === "cimd") expect(cimdConditionalFetches).toBe(beforeRevoke + 1);
     expect((await modern("server/discover", token.access_token)).status).toBe(401);
-    const refreshed = await formPost("/api/auth/oauth2/token", { grant_type: "refresh_token", refresh_token: token.refresh_token, ...credentials("token") });
+    const refreshCredentials = credentials("token");
+    const refreshed = await formPost("/api/auth/oauth2/token", { grant_type: "refresh_token", refresh_token: token.refresh_token, ...refreshCredentials });
     expect(refreshed.status, await refreshed.clone().text()).toBe(200);
     const newer = await refreshed.json();
-    const cancel = await formPost("/api/auth/oauth2/revoke", { token: newer.refresh_token, token_type_hint: "refresh_token", ...credentials("revoke") });
+    const replayedGrant = await formPost("/api/auth/oauth2/token", { grant_type: "refresh_token", refresh_token: newer.refresh_token, ...refreshCredentials });
+    expect(replayedGrant.status, await replayedGrant.clone().text()).toBe(400);
+    expect(await replayedGrant.json()).toMatchObject({ error: "invalid_client" });
+    const revokeParams = { token: newer.refresh_token, token_type_hint: "refresh_token", ...credentials("revoke") };
+    const cancel = await formPost("/api/auth/oauth2/revoke", revokeParams);
     expect(cancel.status).toBe(200);
+    const replayedRevoke = await formPost("/api/auth/oauth2/revoke", revokeParams);
+    expect(replayedRevoke.status, await replayedRevoke.clone().text()).toBe(400);
+    expect(await replayedRevoke.json()).toMatchObject({ error: "invalid_client" });
     // Revoking a refresh token ends that line (its refresh tokens and access tokens). The consent stays.
     const rows = await db.select().from(oauthRefreshToken).where(eq(oauthRefreshToken.clientId, clientId));
     expect(rows.length).toBeGreaterThan(0);
