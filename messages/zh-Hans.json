@@ -2415,6 +2415,8 @@
   "chat_nushi_description": "在聊天中，仅呼叫成员的消息会被用于理解问题。回复和周围消息均不包含在内。回答基于同村的公开帖子，且仅对同意此项的村的成员可见。问题、回答以及提供商错误均不会被记录到请求或生成记录中。",
   "village_slug_ai_help": "对于包含非拉丁字母的名称，AI 会接收该名称以建议英文地址。在创建村之前，请检查并编辑该建议；创建后将无法更改该地址。",
   "village_slug_suggesting": "正在建议地址…",
+  "village_slug_suggest": "生成地址建议",
+  "village_slug_suggest_failed": "未能生成地址建议。请重试或直接输入地址。",
   "ai_use_village_slug": "村地址建议",
   "ai_use_sent_village_slug": "创建村时输入的名称，用于建议英文 URL 别名。",
   "nushi_truncated": "部分素材已被省略。",

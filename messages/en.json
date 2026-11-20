@@ -3000,6 +3000,8 @@
   "chat_nushi_description": "In chat, only the calling member’s message is used to interpret the question. Replies and surrounding messages are excluded. Answers draw on the same village’s public posts and are readable only by consenting village members. Questions, answers and provider errors are not copied into request or generation records.",
   "village_slug_ai_help": "For names with non-Latin letters, AI receives the name to suggest an English address. Review and edit the suggestion before creating the village; you cannot change the address later.",
   "village_slug_suggesting": "Suggesting an address…",
+  "village_slug_suggest": "Suggest an address",
+  "village_slug_suggest_failed": "No address was suggested. Try again or enter one.",
   "ai_use_village_slug": "Village address suggestions",
   "ai_use_sent_village_slug": "The name entered when creating a village, to suggest an English URL slug.",
   "nushi_truncated": "Some material was left out.",
