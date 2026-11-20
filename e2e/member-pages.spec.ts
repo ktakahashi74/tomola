@@ -44,8 +44,13 @@ test("the member header opens an empty own page with the introduction entry poin
   await useMember(owner, EMAIL);
   await ownPage();
   await expect(owner.getByRole("link", { name: en.member_page_write_intro, exact: true })).toHaveAttribute("href", "/t/new?intro=1");
-  await expect(owner.getByText(en.member_page_topics_empty, { exact: true })).toBeVisible();
+  await expect(owner.locator("#posts").getByText(en.member_page_topics_empty, { exact: true })).toBeVisible();
   await expectMemberPageOnly(owner);
+  await owner.getByRole("link", { name: en.member_page_edit_profile, exact: true }).click();
+  await expect(owner).toHaveURL(url => url.pathname === "/settings" && url.hash === "#settings-profile");
+  await expect(owner.getByRole("heading", { name: en.settings_profile_heading, exact: true })).toBeInViewport();
+  await owner.getByRole("link", { name: en.settings_return, exact: true }).click();
+  await expect(owner).toHaveURL(new RegExp(`/u/${MEMBER}$`));
 });
 
 test("the introduction default and question choice are mutually exclusive, and posting keeps the ordinary thread", async () => {
@@ -123,6 +128,7 @@ test("member topics append 30 at a time, keep original language, and require mem
   await expect(owner.locator("#posts li")).toHaveCount(30);
   await expect(owner.locator('#posts span[lang="ja"]')).toHaveCount(30);
   await expect(owner.getByRole("link", { name: en.member_page_write_intro, exact: true })).toHaveCount(0);
+  await expect(owner.getByRole("link", { name: en.member_page_edit_profile, exact: true })).toHaveCount(0);
   await expectMemberPageOnly(owner);
   const first = await owner.locator("#posts li > a").evaluateAll(links => links.map(link => link.getAttribute("href")));
   await owner.locator("[data-load-more]").click();

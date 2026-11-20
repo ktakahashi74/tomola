@@ -50,7 +50,8 @@ import { HOME_AREA_CHANGE_DAYS } from "~/lib/profile-settings";
 import { removeOwnPasskey } from "~/lib/auth/passkeys.server";
 import { SigningFailureResponse, signingPreferenceValue, withSignedWrite } from "~/lib/signing.server";
 import { and, eq } from "drizzle-orm";
-import { account, profiles } from "~/lib/db/schema";
+import { account, entries, profiles } from "~/lib/db/schema";
+import { visibleIntroduction } from "~/lib/member-pages.server";
 import { SignedForm } from "~/components/signed-form";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { villageChatEnabled } from "~/lib/village-chat-enabled.server";
@@ -84,13 +85,15 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
   const next = nextHomeAreaChangeAt(profile);
   const nextHandle = nextHandleChangeAt(profile);
   const saved = new URL(request.url).searchParams.get("saved");
-  const [avatar] = await db.select({ publicId: profiles.publicId, avatarMediaId: profiles.avatarMediaId }).from(profiles).where(eq(profiles.userId, user.id));
+  const [memberDetails] = await db.select({ publicId: profiles.publicId, avatarMediaId: profiles.avatarMediaId, introEntryId: entries.id })
+    .from(profiles).leftJoin(entries, visibleIntroduction(profiles)).where(eq(profiles.userId, user.id));
   return {
     ...(villageChatEnabled() ? { chatOwn: true } : {}),
     ...(nushiVoiceEnabled() && villagesEnabled() ? { nushiVoiceHref: `/v/personal/${profile.handle}#nushi-voice` } : {}),
     nushi: nushiEnabled() || chatNushiEnabled() ? { ...await nushiPreferences(db, user.id, request), personal: await personalVillage(db, user.id).then(village => village ? { id: village.id, enabled: village.nushiEnabled === true } : null) } : null,
-    avatarUrl: memberAvatarUrl(avatar)!,
-    avatarUploaded: !!avatar?.avatarMediaId,
+    avatarUrl: memberAvatarUrl(memberDetails)!,
+    avatarUploaded: !!memberDetails?.avatarMediaId,
+    introEntryId: memberDetails?.introEntryId ?? null,
     returnTo: settingsReturnFromRequest(request),
     homeArea: profile.homeArea,
     handle: profile.handle,
@@ -334,7 +337,8 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             ["settings-languages", m.settings_langs_heading()],
             ["settings-ai", m.settings_ai_section_heading()],
             ["settings-email", m.settings_email_heading()],
-            ["settings-account", m.settings_account_heading()],
+            ["settings-profile", m.settings_profile_heading()],
+            ["settings-login", m.settings_login_heading()],
             ["settings-records", m.settings_records_heading()],
             ["settings-advanced", m.settings_advanced_heading()],
           ].map(([id, label]) => (
@@ -472,8 +476,8 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
         </Form>
       </section>
 
-      <section id="settings-account" aria-labelledby="settings-account-heading" className="scroll-mt-4 space-y-8">
-        <h2 id="settings-account-heading" className="text-xl font-semibold">{m.settings_account_heading()}</h2>
+      <section id="settings-profile" aria-labelledby="settings-profile-heading" className="scroll-mt-4 space-y-8">
+        <h2 id="settings-profile-heading" className="text-xl font-semibold">{m.settings_profile_heading()}</h2>
 
         <AvatarSettings url={loaderData.avatarUrl} uploaded={loaderData.avatarUploaded} />
         <section id="settings-display-name" className="scroll-mt-4 space-y-3">
@@ -502,7 +506,13 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             </SignedForm>
           </details>
         </section>
+        <p>{loaderData.introEntryId !== null
+          ? <Link to={`/t/${loaderData.introEntryId}`} className="link-ui">{m.member_page_intro_heading()}</Link>
+          : <Link to="/t/new?intro=1" className="link-ui">{m.member_page_write_intro()}</Link>}</p>
+      </section>
 
+      <section id="settings-login" aria-labelledby="settings-login-heading" className="scroll-mt-4 space-y-8">
+        <h2 id="settings-login-heading" className="text-xl font-semibold">{m.settings_login_heading()}</h2>
         {actionData?.intent === "delete-passkey" && <p role="alert" className="text-destructive">{m.signing_failed()}</p>}
         <PasskeySettings passkeys={passkeys} fresh={loaderData.credentialFresh} saved={saved === "passkey-removed" ? saved : null} returnTo={returnTo} />
         {loaderData.google && <section id="settings-google" aria-labelledby="settings-google-heading" className="scroll-mt-4 space-y-3">

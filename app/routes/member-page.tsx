@@ -28,6 +28,7 @@ import { parsePage } from "~/lib/params.server";
 import { parsePageParam } from "~/lib/pagination";
 import { m } from "~/paraglide/messages.js";
 import { privateCacheMiddleware } from "~/lib/http/private-cache.server";
+import { withSettingsReturn } from "~/lib/settings-return";
 
 export const middleware: Route.MiddlewareFunction[] = [privateCacheMiddleware, readingChunk(loader, (result, section) => section === "vlist" ? result.personal : result)];
 
@@ -93,7 +94,10 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
   const [avatarReportOpen, setAvatarReportOpen] = useState(false);
   return (
     <main className="space-y-6">
-      <h1 className="text-2xl font-bold wrap-anywhere">{loaderData.avatarUrl && <img src={loaderData.avatarUrl} alt="" className="member-avatar member-avatar-prominent me-3 inline-block rounded" />}<AuthorLink handle={handle} name={loaderData.name} latin={loaderData.nameLatin} byline reader/></h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold wrap-anywhere">{loaderData.avatarUrl && <img src={loaderData.avatarUrl} alt="" className="member-avatar member-avatar-prominent me-3 inline-block rounded" />}<AuthorLink handle={handle} name={loaderData.name} latin={loaderData.nameLatin} byline reader/></h1>
+        {own && <p className="ui-meta"><Link to={withSettingsReturn("/settings#settings-profile", `/u/${handle}`)} className="link-ui">{m.member_page_edit_profile()}</Link></p>}
+      </div>
       {actionData?.error && <p role="alert">{actionData.error === "duplicate" ? m.flag_already_reported() : m.flag_error()}</p>}
       {loaderData.reported && <p role="status">{m.flag_thanks()}</p>}
       {!own && loaderData.hasDisplayName && <details className="ui-meta" onToggle={event => { if (event.currentTarget.open) setReportOpen(true); }}>

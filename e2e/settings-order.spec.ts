@@ -30,7 +30,8 @@ for (const width of [1280, 390]) {
     await openTranslationSettings(page);
     await expect(languages.getByRole("combobox", { name: en.display_lang_label, exact: true })).toBeVisible();
     await expect(languages.getByText(formatMessage(en.settings_display_effect, { lang: LANG_LABELS.en }), { exact: true })).toBeVisible();
-    const handle = page.getByRole("region", { name: en.settings_handle_heading, exact: true });
+    const profile = page.getByRole("region", { name: en.settings_profile_heading, exact: true });
+    const handle = profile.getByRole("region", { name: en.settings_handle_heading, exact: true });
     await expect(handle.getByText("@settings_order", { exact: true })).toBeVisible();
     await expect(handle.getByLabel(en.onboarding_handle, { exact: true })).toBeHidden();
     await handle.locator("summary").click();
@@ -44,8 +45,8 @@ for (const width of [1280, 390]) {
     await expect(contents.locator('a[href="#settings-advanced"]')).toHaveCount(1);
     await expect(contents.locator('a[href="#settings-links"], a[href="#settings-share"], a[href="#settings-export"]')).toHaveCount(0);
     await expect(contents).toBeInViewport({ ratio: 1 });
-    const early = [en.settings_langs_heading, en.settings_email_heading];
-    const later = [en.settings_sessions_heading, en.settings_share_heading];
+    const early = [en.settings_langs_heading, en.settings_email_heading, en.settings_profile_heading];
+    const later = [en.settings_login_heading, en.settings_sessions_heading, en.settings_share_heading];
     for (const first of early) {
       for (const second of later) {
         const firstSection = page.getByRole("region", { name: first, exact: true });

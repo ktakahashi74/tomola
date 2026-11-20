@@ -63,7 +63,7 @@ export const onboardingData = loaderFixture<OnboardingRoute.ComponentProps["load
 export const settingsData = loaderFixture<SettingsRoute.ComponentProps["loaderData"]>(() => ({
   homeArea: "ja", handle: "fixture", displayLang: null, readLangs: ["ja"], nextAreaChange: null,
   nextHandleChange: null, saved: null, passkeys: [], emailPref: "auto", signPosts: false,
-  shareBookmarklet: "", nushi: null, avatarUrl: "/avatar/fixture", avatarUploaded: false,
+  shareBookmarklet: "", nushi: null, avatarUrl: "/avatar/fixture", avatarUploaded: false, introEntryId: null,
   returnTo: null, displayName: null, displayNameLatin: null, colorScheme: null, credentialFresh: false,
 }));
 
