@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { MOTION_LIMITS, MEDIA_LIMITS, MediaError } from "~/lib/media";
+import { MOTION_LIMITS, MEDIA_LIMITS, MediaError, isMultipartMediaType } from "~/lib/media";
 import { inspectMotion } from "./motion-header";
 
 let motionActive = false;
@@ -45,14 +45,14 @@ export async function withReceiveSlot<T>(memberId: string, work: () => Promise<T
   }
 }
 
-export async function readMediaForm(request: Request): Promise<File> {
+export async function readMediaBody(request: Request, maxBytes: number): Promise<Buffer<ArrayBuffer>> {
   const announced = request.headers.get("content-length");
-  if (announced && (!/^\d+$/.test(announced) || Number(announced) > MEDIA_LIMITS.requestBytes)) throw new MediaError("too_large", 413);
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data;") || !request.body) throw new MediaError("type");
+  if (announced !== null && (!/^\d+$/.test(announced) || Number(announced) > maxBytes)) throw new MediaError("too_large", 413);
+  if (!request.body) throw new MediaError("generic");
   const reader = request.body.getReader();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const bytes = await Promise.race([
+    return await Promise.race([
       (async () => {
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -60,14 +60,23 @@ export async function readMediaForm(request: Request): Promise<File> {
           const part = await reader.read();
           if (part.done) break;
           size += part.value.byteLength;
-          if (size > MEDIA_LIMITS.requestBytes) throw new MediaError("too_large", 413);
-          chunks.push(part.value);
+          if (size > maxBytes) throw new MediaError("too_large", 413);
+          if (part.value.byteLength) chunks.push(part.value);
         }
         return Buffer.concat(chunks);
       })(),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new MediaError("generic", 408)), MEDIA_LIMITS.receivingMs); }),
     ]);
-    const form = await new Request(request.url, { method: "POST", headers: { "content-type": request.headers.get("content-type")! }, body: bytes }).formData();
+  } catch (error) { throw error instanceof MediaError ? error : new MediaError("generic"); }
+  finally { clearTimeout(timer); void reader.cancel().catch(() => {}); }
+}
+
+export async function readMediaForm(request: Request): Promise<File> {
+  const contentType = request.headers.get("content-type");
+  if (!contentType || !isMultipartMediaType(contentType) || !request.body) throw new MediaError("type");
+  const bytes = await readMediaBody(request, MEDIA_LIMITS.requestBytes);
+  try {
+    const form = await new Request(request.url, { method: "POST", headers: { "content-type": contentType }, body: bytes }).formData();
     const all = [...form.entries()];
     if (all.length !== 1 || all[0][0] !== "image" || typeof all[0][1] === "string") throw new MediaError("generic");
     const file = all[0][1];
@@ -75,7 +84,6 @@ export async function readMediaForm(request: Request): Promise<File> {
     if (!file.size) throw new MediaError("generic");
     return file;
   } catch (error) { throw error instanceof MediaError ? error : new MediaError("generic"); }
-  finally { clearTimeout(timer); void reader.cancel().catch(() => {}); }
 }
 
 export function rewriteMedia(bytes: Uint8Array, opts: { avatar?: boolean } = {}): Promise<RewrittenMedia> {

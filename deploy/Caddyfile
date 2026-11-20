@@ -10,6 +10,11 @@
 #
 # Preserve Host when forwarding to the app, Caddy's default. React Router checks form origins by comparing Origin and Host, so do not change it.
 
+(imageResetRequest) {
+	path_regexp ^/(settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+	not header_regexp Content-Type (?i)^multipart/form-data[[:blank:]]*;
+}
+
 {$SITE_ADDRESS} {
 	# The app handles compression in server.ts, so do not add encode in Caddy.
 	reverse_proxy app:3000 {
@@ -25,6 +30,9 @@
 	@imageUpload {
 		method POST
 		path_regexp ^/(api/media|media|settings/avatar|v/[a-z0-9]+(-[a-z0-9]+)*/icon)(\.data)?$
+		not {
+			import imageResetRequest
+		}
 	}
 	request_body @imageUpload {
 		max_size 10551296
@@ -37,6 +45,14 @@
 	}
 	request_body @ordinaryBody {
 		max_size 2MiB
+	}
+	# Avatar and village icon resets have a smaller limit within the image actions.
+	@imageReset {
+		method POST
+		import imageResetRequest
+	}
+	request_body @imageReset {
+		max_size 256
 	}
 
 	header {

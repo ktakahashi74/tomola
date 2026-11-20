@@ -1,19 +1,19 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { avatarSeed, avatarSvg, automaticAvatarUrl, AVATAR_EDGE } from "~/lib/avatar-image.server";
 import { exportMemberAvatar, loadMemberAvatars, setMemberAvatar } from "~/lib/member-avatar.server";
 import { createAvatarReport, moderateAvatar, loadAvatarReportCards } from "~/lib/avatar-moderation.server";
-import { rewriteMedia } from "~/lib/media-processing.server";
+import { rewriteMedia, withReceiveSlot } from "~/lib/media-processing.server";
 import { deleteMedia, deleteOwnMedia, listOwnMedia, readMediaBatch } from "~/lib/media-store.server";
 import { createTopic } from "~/lib/entries.server";
 import { canReadMedia } from "~/lib/media-references.server";
-import { media, moderationActions, notifications, profiles, reports } from "~/lib/db/schema";
+import { media, moderationActions, notifications, profiles, rateLimits, reports } from "~/lib/db/schema";
 import { createAppeal, decideAppeal, getAppealableAction, listOpenAppeals } from "~/lib/appeals.server";
 import { listReportCards } from "~/lib/moderation.server";
 import { buildMemberExport, MEMBER_EXPORT_VERSION } from "~/lib/exports.server";
 import { deleteAccount } from "~/lib/account-delete.server";
-import { parseMediaPath } from "~/lib/media";
+import { MEDIA_LIMITS, parseMediaPath } from "~/lib/media";
 import { BASE, setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 
 let h: RouteHarness;
@@ -111,6 +111,82 @@ describe("member avatars", () => {
     expect(await reset.json()).toMatchObject({ uploaded: false });
     expect(await exportMemberAvatar(h.db, h.ids.av_upload)).toEqual({ uploaded: false, mime: null, base64: null });
     expect(await h.db.select().from(media).where(eq(media.id, id))).toMatchObject([{ bytes: null }]);
+  });
+
+  it("bounds reset bodies with and without an announced size and charges malformed attempts", async () => {
+    const { action } = await import("~/routes/settings-avatar");
+    const userId = await h.signIn("av_reset_limit");
+    const reset = (body: BodyInit, headers: Record<string, string> = {}) => {
+      const request = h.request("/settings/avatar", { as: "av_reset_limit", headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers } });
+      return new Request(request.url, { method: "POST", headers: request.headers, body, duplex: "half" } as RequestInit);
+    };
+    const oversized = new URLSearchParams({ intent: "reset", note: "x".repeat(256) }).toString();
+    const announced = reset(oversized, { "Content-Length": String(oversized.length) });
+    const declared = await action({ request: announced });
+    expect(declared.status).toBe(413);
+    expect(await declared.json()).toEqual({ error: "too_large" });
+    expect(announced.bodyUsed).toBe(false);
+    const bytes = new TextEncoder().encode(oversized);
+    const received = await action({ request: reset(new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes.subarray(0, 128));
+        controller.enqueue(bytes.subarray(128));
+        controller.close();
+      },
+    })) });
+    expect(received.status).toBe(413);
+    for (const body of ["intent=invalid", "intent=reset&intent=reset"]) {
+      expect((await action({ request: reset(body) })).status).toBe(400);
+    }
+    const key = eq(rateLimits.key, `media:member:${userId}`);
+    expect(await h.db.select({ count: rateLimits.count }).from(rateLimits).where(key)).toEqual([{ count: 4 }]);
+    await h.db.update(rateLimits).set({ count: MEDIA_LIMITS.hourly }).where(key);
+    const exhausted = reset("intent=reset");
+    const denied = await action({ request: exhausted });
+    expect(denied.status).toBe(429);
+    expect(denied.headers.get("retry-after")).toBeTruthy();
+    expect(exhausted.bodyUsed).toBe(false);
+  });
+
+  it("shares receive admission and releases a timed-out reset body", async () => {
+    const { action } = await import("~/routes/settings-avatar");
+    const userId = await h.signIn("av_reset_receive");
+    const ordinary = () => h.request("/settings/avatar", { as: "av_reset_receive", form: { intent: "reset" } });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const occupied = Array.from({ length: MEDIA_LIMITS.receivingPerMember }, () => withReceiveSlot(userId, () => gate));
+    try {
+      const request = ordinary();
+      expect((await action({ request })).status).toBe(503);
+      expect(request.bodyUsed).toBe(false);
+    } finally {
+      release();
+      await Promise.all(occupied);
+    }
+    const cancelled = vi.fn();
+    const request = new Request(ordinary().url, {
+      method: "POST", headers: ordinary().headers, body: new ReadableStream({ cancel: cancelled }), duplex: "half",
+    } as RequestInit);
+    let startReading!: () => void;
+    const reading = new Promise<void>(resolve => { startReading = resolve; });
+    const getReader = request.body!.getReader.bind(request.body!);
+    vi.spyOn(request.body!, "getReader").mockImplementation(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      startReading();
+      return getReader();
+    });
+    try {
+      const response = action({ request });
+      await Promise.race([reading, response]);
+      await vi.advanceTimersByTimeAsync(MEDIA_LIMITS.receivingMs);
+      expect((await response).status).toBe(408);
+      expect(cancelled).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+    const restored = await action({ request: ordinary() });
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toMatchObject({ uploaded: false });
   });
 
   it("serves active images publicly, withdraws replaced URLs and limits evidence to owner and operators", async () => {

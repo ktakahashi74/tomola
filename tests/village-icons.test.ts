@@ -105,9 +105,14 @@ describe("village icons", () => {
     expect(meta).toMatchObject({ width: 256, height: 256, format: "webp" });
     for (const key of ["exif", "xmp", "icc", "iptc", "orientation"] as const) expect(meta[key]).toBeUndefined();
     expect((await buildMemberExport(h.db, h.ids.vi_coowner)).village_icons).toContainEqual({ village: row.slug, mime: "image/webp", base64: image.bytes.toString("base64") });
-    await expect(setVillageIcon(h.db, h.ids.vi_outsider, row.slug!, null)).rejects.toMatchObject({ status: 403 });
-    const reset = await setVillageIcon(h.db, h.ids.vi_coowner, row.slug!, null);
-    expect(reset).toEqual({ uploaded: false, url: VILLAGE_ICON });
+    const reset = (as: string) => route.action({
+      request: h.request(`/v/${row.slug}/icon`, { as, form: { intent: "reset" } }),
+      params: { slug: row.slug! },
+    });
+    expect((await reset("vi_outsider")).status).toBe(403);
+    const restored = await reset("vi_coowner");
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toEqual({ uploaded: false, url: VILLAGE_ICON });
     expect((await h.db.select().from(media).where(eq(media.id, bytes.id)))[0].bytes).toBeNull();
   });
 

@@ -3,7 +3,7 @@
 // Reject Content-Length above the limit with 413 Payload Too Large before reading. Without Content-Length (Transfer-Encoding: chunked), count incoming bytes and
 // return 413 when the limit is exceeded. Stop the incoming stream and close the connection after flushing the rejection, including when a chunked upload never finishes.
 // MAX_REQUEST_BODY_BYTES is in bytes, default 2 MiB. Apply the same upstream Caddy limit in deploy/Caddyfile request_body.
-import { MEDIA_LIMITS } from "../app/lib/media.ts";
+import { MEDIA_LIMITS, isMultipartMediaType } from "../app/lib/media.ts";
 import type { NextFunction, Request, Response } from "express";
 
 export const DEFAULT_MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
@@ -20,7 +20,7 @@ export const DRAIN_TIMEOUT_MS = 10_000;
 
 // Match only image actions, including React Router's fetcher URLs. Ignore the
 // query without normalizing the path into a different upload route.
-export const IMAGE_UPLOAD_PATH = /^\/(?:api\/media|media|settings\/avatar|v\/[a-z0-9]+(?:-[a-z0-9]+)*\/icon)(?:\.data)?$/;
+export const IMAGE_UPLOAD_PATH = /^\/(?:api\/media|media|(?<avatarOrIcon>settings\/avatar|v\/[a-z0-9]+(?:-[a-z0-9]+)*\/icon))(?:\.data)?$/;
 
 function rejection(req: Request) {
   return /^\/api\/media(?:\.data)?$/.test(req.originalUrl.split("?", 1)[0])
@@ -65,7 +65,12 @@ function reject(req: Request, res: Response): void {
 export function bodyLimit(maxBytes: number) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const path = req.originalUrl.split("?", 1)[0];
-    const limit = req.method === "POST" && IMAGE_UPLOAD_PATH.test(path) ? MEDIA_LIMITS.requestBytes : maxBytes;
+    const image = req.method === "POST" ? IMAGE_UPLOAD_PATH.exec(path) : null;
+    let limit = maxBytes;
+    if (image) {
+      const reset = image.groups?.avatarOrIcon && !isMultipartMediaType(req.headers["content-type"]);
+      limit = reset ? Math.min(maxBytes, MEDIA_LIMITS.resetRequestBytes) : MEDIA_LIMITS.requestBytes;
+    }
     const length = req.headers["content-length"];
     if (length !== undefined) {
       // With an in-limit Content-Length, HTTP framing prevents extra bytes from reaching the handler as body data.

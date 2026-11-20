@@ -1,5 +1,5 @@
-import { MEDIA_LIMITS, MediaError } from "~/lib/media";
-import { readMediaForm, rewriteMedia, withMediaSlot, withReceiveSlot } from "~/lib/media-processing.server";
+import { MEDIA_LIMITS, MediaError, isMultipartMediaType } from "~/lib/media";
+import { readMediaBody, readMediaForm, rewriteMedia, withMediaSlot, withReceiveSlot } from "~/lib/media-processing.server";
 import { hitRateLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { and, eq } from "drizzle-orm";
 import { rateLimits } from "~/lib/db/schema";
@@ -12,11 +12,18 @@ export async function avatarUploadAction(request: Request, { db, user }: { db: D
   const rateResponse = (rate: Awaited<ReturnType<typeof hitRateLimit>>) => Response.json({ error: "rate" }, { status: 429, headers: { ...rateLimitHeaders(rate), "Cache-Control": "no-store" } });
   try {
     await authorize?.(db, user.id);
-    if (!request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data;")) {
-      const form = await request.formData();
-      if (form.get("intent") !== "reset") throw new MediaError("generic");
-      const rate = await hitRateLimit(db, rule);
-      if (!rate.allowed) return rateResponse(rate);
+    const contentType = request.headers.get("content-type");
+    if (!isMultipartMediaType(contentType)) {
+      const limited = await withReceiveSlot(user.id, async () => {
+        // Charge admitted attempts, including malformed forms, before consuming the body.
+        const rate = await hitRateLimit(db, rule);
+        if (!rate.allowed) return rateResponse(rate);
+        if (contentType?.split(";", 1)[0].trim().toLowerCase() !== "application/x-www-form-urlencoded") throw new MediaError("generic");
+        const bytes = await readMediaBody(request, MEDIA_LIMITS.resetRequestBytes);
+        const form = new URLSearchParams(bytes.toString("utf8"));
+        if (form.size !== 1 || form.get("intent") !== "reset") throw new MediaError("generic");
+      });
+      if (limited) return limited;
       return Response.json(await save(db, user.id, null), { headers: { "Cache-Control": "no-store" } });
     }
     // Avoid decoding for an exhausted member. This read does not charge uploads refused for lack of a decoder slot.

@@ -4,6 +4,7 @@ import { LANGS, type Lang } from "./languages.ts";
 export const MEDIA_LIMITS = {
   inputBytes: 10 * 1024 * 1024,
   requestBytes: 10 * 1024 * 1024 + 64 * 1024,
+  resetRequestBytes: 256,
   pixels: 40_000_000,
   edge: 2000,
   storedBytes: 2 * 1024 * 1024,
@@ -25,6 +26,10 @@ export const MEDIA_LIMITS = {
   receiving: 8,
   receivingPerMember: 3,
 } as const;
+
+export function isMultipartMediaType(contentType: string | null | undefined): boolean {
+  return /^multipart\/form-data[ \t]*;/i.test(contentType ?? "");
+}
 
 // Server-only motion limits stay out of the reading and editor bundles.
 export const MOTION_LIMITS = {

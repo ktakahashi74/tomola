@@ -221,9 +221,11 @@ describe("maxRequestBodyBytes", () => {
 it("keeps Caddy image paths and body limits aligned with the app", () => {
   const caddy = readFileSync(new URL("../deploy/Caddyfile", import.meta.url), "utf8");
   const patterns = [...caddy.matchAll(/^\s*path_regexp\s+(\S+)\s*$/gm)].map(match => match[1]);
-  expect(patterns).toHaveLength(2);
-  expect(patterns[0]).toBe(patterns[1]);
-  const caddyPath = new RegExp(patterns[0]);
+  expect(patterns).toHaveLength(3);
+  const [resetPath, uploadPath, ordinaryBodyException] = patterns;
+  expect(uploadPath).toBe(ordinaryBodyException);
+  const caddyPath = new RegExp(uploadPath);
+  const caddyResetPath = new RegExp(resetPath);
   const accepted = ["/api/media", "/media", "/settings/avatar", "/v/a/icon", "/v/1/icon", "/v/pictures-1/icon", "/v/a-b-2/icon"];
   const rejected = [
     "/media/x", "/mediax", "/settings/avatarx", "/v/a/icon/x", "/v/A/icon", "/v//icon",
@@ -234,27 +236,30 @@ it("keeps Caddy image paths and body limits aligned with the app", () => {
   for (const [paths, expected] of [[accepted, true], [rejected, false]] as const) {
     for (const base of paths) {
       for (const path of [base, `${base}.data`]) {
-        const appMatches = IMAGE_UPLOAD_PATH.test(path);
-        expect(appMatches, path).toBe(expected);
-        expect(caddyPath.test(path), path).toBe(appMatches);
+        const appMatch = IMAGE_UPLOAD_PATH.exec(path);
+        expect(!!appMatch, path).toBe(expected);
+        expect(caddyPath.test(path), path).toBe(!!appMatch);
+        expect(caddyResetPath.test(path), path).toBe(!!appMatch?.groups?.avatarOrIcon);
       }
     }
   }
 
-  const limits = [...caddy.matchAll(/^\s*request_body\s+@(imageUpload|ordinaryBody)\s*\{\s*max_size\s+(\d+)(MiB)?\s*\}/gm)];
-  expect(limits).toHaveLength(2);
+  const limits = [...caddy.matchAll(/^\s*request_body\s+@(imageUpload|ordinaryBody|imageReset)\s*\{\s*max_size\s+(\d+)(MiB)?\s*\}/gm)];
+  expect(limits).toHaveLength(3);
   expect(Object.fromEntries(limits.map(([, matcher, value, unit]) => [matcher, Number(value) * (unit === "MiB" ? 1024 ** 2 : 1)]))).toEqual({
     imageUpload: MEDIA_LIMITS.requestBytes,
     ordinaryBody: DEFAULT_MAX_REQUEST_BODY_BYTES,
+    imageReset: MEDIA_LIMITS.resetRequestBytes,
   });
 });
 
 
 const uploadPaths = ["/media", "/settings/avatar", "/v/pictures-1/icon"].flatMap(path => [path, `${path}?lang=en`, `${path}.data`, `${path}.data?index&lang=en`]);
+const multipart = { "Content-Type": "Multipart/Form-Data; boundary=upload" };
 it.each(["length", "chunked"])("only expands image POST limits (%s)", async framing => {
   const { port } = await start(DEFAULT_MAX_REQUEST_BODY_BYTES);
   const body = Buffer.alloc(DEFAULT_MAX_REQUEST_BODY_BYTES + 1);
-  const headers: Record<string, string> = framing === "length" ? { "Content-Length": String(body.length) } : { "Transfer-Encoding": "chunked" };
+  const headers: Record<string, string> = { ...multipart, ...(framing === "length" ? { "Content-Length": String(body.length) } : { "Transfer-Encoding": "chunked" }) };
   for (const path of uploadPaths) {
     expect((await send(port, { path, headers, chunks: [body] })).status, path).toBe(200);
   }
@@ -266,13 +271,26 @@ it.each(["length", "chunked"])("only expands image POST limits (%s)", async fram
   ]) expect((await send(port, { ...opts, headers, chunks: [body] })).status, JSON.stringify(opts)).toBe(413);
 });
 
+it.each(["length", "chunked"])("uses a small reset limit for avatar and village icon POSTs (%s)", async framing => {
+  const { port } = await start(DEFAULT_MAX_REQUEST_BODY_BYTES);
+  const body = Buffer.alloc(MEDIA_LIMITS.resetRequestBytes + 1);
+  const headers = {
+    "Content-Type": "Application/X-WWW-Form-Urlencoded; charset=UTF-8",
+    ...(framing === "length" ? { "Content-Length": String(body.length) } : { "Transfer-Encoding": "chunked" }),
+  };
+  for (const path of ["/settings/avatar", "/v/pictures-1/icon.data?index"]) {
+    expect((await send(port, { path, headers, chunks: [body] })).status).toBe(413);
+    expect((await send(port, { path, headers: { "Content-Type": headers["Content-Type"] }, chunks: ["intent=reset"] })).status).toBe(200);
+  }
+});
+
 it.each(uploadPaths)("preserves the image request limit at %s", async path => {
   const { port } = await start(DEFAULT_MAX_REQUEST_BODY_BYTES);
   const body = Buffer.alloc(MEDIA_LIMITS.requestBytes);
-  expect((await send(port, { path, headers: { "Content-Length": String(body.length) }, chunks: [body] })).status).toBe(200);
-  expect((await send(port, { path, headers: { "Content-Length": String(body.length + 1) }, chunks: [body, "x"] })).status).toBe(413);
-  expect((await send(port, { path, headers: { "Transfer-Encoding": "chunked" }, chunks: [body] })).status).toBe(200);
-  expect((await send(port, { path, headers: { "Transfer-Encoding": "chunked" }, chunks: [body, "x"] })).status).toBe(413);
+  expect((await send(port, { path, headers: { ...multipart, "Content-Length": String(body.length) }, chunks: [body] })).status).toBe(200);
+  expect((await send(port, { path, headers: { ...multipart, "Content-Length": String(body.length + 1) }, chunks: [body, "x"] })).status).toBe(413);
+  expect((await send(port, { path, headers: { ...multipart, "Transfer-Encoding": "chunked" }, chunks: [body] })).status).toBe(200);
+  expect((await send(port, { path, headers: { ...multipart, "Transfer-Encoding": "chunked" }, chunks: [body, "x"] })).status).toBe(413);
 });
 
 it.each(["/media", "/preview"])("uses the route's drain allowance before a timed close for %s", path => {
