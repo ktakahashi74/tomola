@@ -246,7 +246,7 @@ export const villageDepartures = pgTable("village_departures", {
   leftAt: timestamp("left_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.villageId, t.userId] })]);
 
-// Following a village (read-only interest: it neither lets the member write nor chat there, and nobody sees how many follow). Only public villages can be followed.
+// Following a village (read-only interest: it neither lets the member write nor chat there, and nobody sees how many follow). Only shared public villages can be followed here.
 export const villageFollows = pgTable("village_follows", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
@@ -1624,7 +1624,7 @@ export const savedTopics = pgTable("saved_topics", {
 ]);
 
 // Following a topic (a thread or a question; the id is never a reply's). A member's own topics and the topics they replied to are followed automatically; a topic the member took
-// off stays as `unfollowed` (the record that stops the automatic follow). Choosing a stance does not follow. No backfill: it starts with new posts. Members are not followed.
+// off stays as `unfollowed` (the record that stops the automatic follow). Choosing a stance does not follow. No backfill: it starts with new posts.
 export const follows = pgTable(
   "follows",
   {

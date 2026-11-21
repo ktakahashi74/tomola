@@ -39,6 +39,7 @@ it("combines own, village and author topics and preserves access boundaries acro
     const both = await add("Both sources", organization, shared.id);
     const person = await add("Author only", organization, (await personalVillage(h.db, organization))!.id);
     const place = await add("Village only", writer, shared.id);
+    const ownShared = await add("Own shared topic", reader, shared.id);
     await add("Unrelated author", writer, (await personalVillage(h.db, writer))!.id);
     const excluded = [await add("Departed author", DELETED_MEMBER_ID, shared.id)];
     for (const author of [reader, organization, writer]) {
@@ -57,14 +58,14 @@ it("combines own, village and author topics and preserves access boundaries acro
     const bodies = async (query: string) => (await home(query)).topics.map(t => t.id);
     for (const order of ["created", "activity", "insightful"]) {
       const ids = await bodies(`?scope=following&order=${order}`);
-      expect(ids.sort((a, b) => a - b)).toEqual([own, both, person, place]);
+      expect(ids.sort((a, b) => a - b)).toEqual([own, both, person, place, ownShared]);
     }
     await follow(false);
-    expect(await bodies("?scope=following")).toEqual([person, both, own]);
+    expect(await bodies("?scope=following")).toEqual([ownShared, person, both, own]);
     await followAuthor(false);
-    expect(await bodies("?scope=following")).toEqual([own]);
+    expect(await bodies("?scope=following")).toEqual([ownShared, own]);
     await follow(true);
-    expect(await bodies("?scope=following")).toEqual([place, both, own]);
+    expect(await bodies("?scope=following")).toEqual([ownShared, place, both, own]);
     await followAuthor(true);
     expect(await h.db.select().from(notifications)).toEqual([]);
     const exported = await buildMemberExport(h.db, reader);
@@ -98,7 +99,7 @@ it("combines own, village and author topics and preserves access boundaries acro
       expect(response.status).toBe(200);
       expect(response.headers.get("Cache-Control")).toContain("private");
       const markdown = await response.text();
-      for (const id of [own, both, person, place]) expect(markdown).toMatch(new RegExp(`p-${id}["'\\s]`));
+      for (const id of [own, both, person, place, ownShared]) expect(markdown).toMatch(new RegExp(`p-${id}["'\\s]`));
       for (const id of excluded) expect(markdown).not.toMatch(new RegExp(`p-${id}["'\\s]`));
       expect(markdown).not.toContain("Organization reply");
     }

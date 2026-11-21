@@ -15,11 +15,11 @@ export function unreadFollowedTopicCondition(db: Db, userId: string) {
   );
 }
 
-// Following a topic.
+// Watching replies to a topic.
 // - Automatic: a member follows the topics they create and the topics they reply to, in the same transaction as the post (autoFollow). A topic the member took off
 //   (`unfollowed`) is never followed again automatically. Choosing a stance, voting and editing do not follow, and there is no backfill.
 // - By hand: setFollow (the thread page, POST /follow).
-// - Members are not followed, and the number of followers is shown nowhere.
+// - The watch list and its count are private.
 
 export async function getFollowState(db: Db, userId: string, threadId: number): Promise<FollowState | null> {
   const [row] = await db
