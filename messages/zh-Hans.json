@@ -2442,5 +2442,20 @@
   "member_page_follow_hint": "关注此成员后，其公开帖子会出现在首页的“已关注”中。",
   "village_membership_unfollow": "取消关注此村",
   "village_membership_follow": "关注此村",
-  "village_membership_follow_help": "关注后，此村的帖子会出现在首页的“已关注”中。取消关注后，你仍是成员，可以发帖并使用可用的聊天功能。"
+  "village_membership_follow_help": "关注后，此村的帖子会出现在首页的“已关注”中。取消关注后，你仍是成员，可以发帖并使用可用的聊天功能。",
+  "article_views": "阅读 {count} 次",
+  "article_views_translated": "阅读 {count} 次（其中译文 {translated} 次）",
+  "article_views_help": "统计文章被打开的次数，包含重复访问。",
+  "article_views_since": "自 {since}（UTC）起统计。",
+  "stats_reading_browser": "浏览器阅读",
+  "stats_reading_cumulative": "自开始统计以来的累计",
+  "stats_reading_measure": "项目",
+  "stats_reading_dedupe": "同一浏览器标签页在 30 分钟内对同一文章、同一显示语言及同一版本（原文或译文）仅计一次。",
+  "metrics_article_reading_article": "文章",
+  "metrics_article_reading_empty": "此期间内没有文章阅读记录。",
+  "metrics_article_reading_help": "最多显示 50 篇当前公开的文章。由于统计周期不同且不含已删除或隐藏的文章，其合计可能与全站总计不同。",
+  "metrics_article_reading_original": "原文",
+  "metrics_article_reading_period": "最近 30 天，{start} 至 {end}（UTC，含首尾）。",
+  "metrics_article_reading_since": "按文章统计开始于 {at}。",
+  "metrics_article_reading_title": "按文章统计阅读"
 }

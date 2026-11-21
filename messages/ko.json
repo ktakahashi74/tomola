@@ -2973,5 +2973,20 @@
   "member_page_follow_hint": "이 사람을 팔로우하면 공개 게시물이 홈의 ‘팔로잉’에 표시됩니다.",
   "village_membership_unfollow": "이 빌리지 팔로우 취소",
   "village_membership_follow": "이 빌리지 팔로우",
-  "village_membership_follow_help": "팔로우하면 이 빌리지의 게시물이 홈의 ‘팔로잉’에 표시됩니다. 팔로우를 취소해도 멤버 자격은 유지되며 계속 글을 쓰거나 이용 가능한 채팅을 사용할 수 있습니다."
+  "village_membership_follow_help": "팔로우하면 이 빌리지의 게시물이 홈의 ‘팔로잉’에 표시됩니다. 팔로우를 취소해도 멤버 자격은 유지되며 계속 글을 쓰거나 이용 가능한 채팅을 사용할 수 있습니다.",
+  "article_views": "조회 {count}회",
+  "article_views_translated": "조회 {count}회(번역본 {translated}회)",
+  "article_views_help": "반복 방문을 포함해 글을 연 누적 횟수입니다.",
+  "article_views_since": "{since} (UTC)부터 측정 중입니다.",
+  "stats_reading_browser": "브라우저 읽기",
+  "stats_reading_cumulative": "측정 시작 이후 누적",
+  "stats_reading_measure": "항목",
+  "stats_reading_dedupe": "같은 브라우저 탭에서 같은 글·표시 언어·구분(원문 또는 번역본)을 열면 30분에 한 번만 집계합니다.",
+  "metrics_article_reading_article": "글",
+  "metrics_article_reading_empty": "이 기간에 읽힌 글이 없습니다.",
+  "metrics_article_reading_help": "현재 공개된 글을 최대 50건까지 표시합니다. 집계 기간이 다르고 삭제되거나 숨겨진 글은 제외되므로 합계가 사이트 전체 집계와 다를 수 있습니다.",
+  "metrics_article_reading_original": "원문",
+  "metrics_article_reading_period": "최근 30일간({start}~{end}, UTC, 양일 포함).",
+  "metrics_article_reading_since": "글별 측정은 {at}에 시작되었습니다.",
+  "metrics_article_reading_title": "글별 읽기 현황"
 }

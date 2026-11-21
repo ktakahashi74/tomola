@@ -3158,5 +3158,20 @@
   "member_page_follow_hint": "Abonnez-vous à cette personne pour voir ses publications publiques dans les abonnements sur votre page d’accueil.",
   "village_membership_unfollow": "Se désabonner de ce village",
   "village_membership_follow": "S’abonner à ce village",
-  "village_membership_follow_help": "L’abonnement affiche les publications du village dans les abonnements sur l’accueil. Si vous vous désabonnez, vous restez membre et pouvez continuer à publier et à utiliser le chat s’il est disponible."
+  "village_membership_follow_help": "L’abonnement affiche les publications du village dans les abonnements sur l’accueil. Si vous vous désabonnez, vous restez membre et pouvez continuer à publier et à utiliser le chat s’il est disponible.",
+  "article_views": "{count} lectures",
+  "article_views_translated": "{count} lectures ({translated} en traduction)",
+  "article_views_help": "Nombre d’ouvertures de l’article, visites répétées comprises.",
+  "article_views_since": "Mesure commencée le {since} (UTC).",
+  "stats_reading_browser": "Lectures sur navigateur",
+  "stats_reading_cumulative": "Totaux depuis le début des mesures",
+  "stats_reading_measure": "Indicateur",
+  "stats_reading_dedupe": "Un même onglet de navigateur ne compte qu’une fois en 30 minutes un même article, une même langue d’affichage et une même version (originale ou traduite).",
+  "metrics_article_reading_article": "Article",
+  "metrics_article_reading_empty": "Aucune lecture d’article sur cette période.",
+  "metrics_article_reading_help": "Jusqu’à 50 articles actuellement publics. Ces comptes couvrent une autre période et excluent les articles supprimés ou masqués ; leur somme peut donc différer des totaux du site.",
+  "metrics_article_reading_original": "Original",
+  "metrics_article_reading_period": "30 derniers jours, du {start} au {end} (UTC, inclus).",
+  "metrics_article_reading_since": "La mesure par article a commencé le {at}.",
+  "metrics_article_reading_title": "Lectures par article"
 }

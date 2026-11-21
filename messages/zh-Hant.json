@@ -2442,5 +2442,20 @@
   "member_page_follow_hint": "追蹤這位成員後，其公開貼文會出現在首頁的「已追蹤」中。",
   "village_membership_unfollow": "取消追蹤此村",
   "village_membership_follow": "追蹤此村",
-  "village_membership_follow_help": "追蹤後，此村的貼文會出現在首頁的「已追蹤」中。取消追蹤後，你仍是成員，可以發文並使用可用的聊天功能。"
+  "village_membership_follow_help": "追蹤後，此村的貼文會出現在首頁的「已追蹤」中。取消追蹤後，你仍是成員，可以發文並使用可用的聊天功能。",
+  "article_views": "閱讀 {count} 次",
+  "article_views_translated": "閱讀 {count} 次（其中翻譯 {translated} 次）",
+  "article_views_help": "計算文章被開啟的次數，包含重複造訪。",
+  "article_views_since": "自 {since}（UTC）起測量。",
+  "stats_reading_browser": "瀏覽器閱讀",
+  "stats_reading_cumulative": "測量開始以來的累計",
+  "stats_reading_measure": "項目",
+  "stats_reading_dedupe": "同一個瀏覽器分頁在 30 分鐘內對同一篇文章、同一種顯示語言及同一版本（原文或翻譯）只計一次。",
+  "metrics_article_reading_article": "文章",
+  "metrics_article_reading_empty": "這段期間沒有文章閱讀紀錄。",
+  "metrics_article_reading_help": "最多顯示 50 篇目前公開的文章。由於統計期間不同且不含已刪除或隱藏的文章，加總可能與全站總計不同。",
+  "metrics_article_reading_original": "原文",
+  "metrics_article_reading_period": "最近 30 天，{start} 至 {end}（UTC，含起訖日）。",
+  "metrics_article_reading_since": "按文章測量始於 {at}。",
+  "metrics_article_reading_title": "各文章閱讀次數"
 }
