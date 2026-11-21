@@ -583,7 +583,7 @@
   "log_action_delete": "運営者が投稿を削除",
   "log_action_restore": "削除した投稿を復元",
   "delete_summary": "この投稿を削除",
-  "delete_warning_topic": "投稿は、全員から見えなくなります。返信は残りますが、開けなくなります。元に戻せません。",
+  "delete_warning_topic": "この投稿を削除すると、投稿とすべての返信を誰も読めなくなります。元に戻せません。",
   "delete_warning_reply": "返信は、全員に「削除された投稿」と表示されます。スレッドでの場所は残ります。元に戻せません。",
   "delete_confirm": "削除する",
   "mod_delete": "投稿を削除する（運営者）",

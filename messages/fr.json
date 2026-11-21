@@ -890,7 +890,7 @@
   "log_action_delete": "Publication supprimée par un opérateur",
   "log_action_restore": "Publication supprimée restaurée",
   "delete_summary": "Supprimer cette publication",
-  "delete_warning_topic": "La publication disparaît pour tout le monde. Ses réponses restent dans la base de données mais ne peuvent plus être ouvertes. Cette action est irréversible.",
+  "delete_warning_topic": "Si vous supprimez cette publication, plus personne ne pourra la lire ni lire ses réponses. Cette action est irréversible.",
   "delete_warning_reply": "La réponse est remplacée par « Publication supprimée » pour tout le monde ; sa place dans le fil de discussion est conservée. Cette action est irréversible.",
   "delete_confirm": "Oui, supprimer",
   "mod_delete": "Supprimer la publication (opérateurs uniquement)",

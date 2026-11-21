@@ -596,7 +596,7 @@
   "log_action_delete": "貼文已由營運者刪除",
   "log_action_restore": "已還原刪除的貼文",
   "delete_summary": "刪除此貼文",
-  "delete_warning_topic": "此貼文將對所有人隱藏。其回覆仍會保留在資料庫中，但無法再開啟。此操作無法復原。",
+  "delete_warning_topic": "刪除這篇貼文後，任何人都無法閱讀這篇貼文及其所有回覆。此操作無法復原。",
   "delete_warning_reply": "此回覆對所有人將顯示為「已刪除的貼文」；其在討論串中的位置仍會保留。此動作無法復原。",
   "delete_confirm": "是，刪除它",
   "mod_delete": "刪除貼文（僅限營運者）",
