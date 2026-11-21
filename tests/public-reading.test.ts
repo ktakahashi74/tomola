@@ -14,6 +14,7 @@ import { serveThreadMd, serveListMd, serveAreaMd } from "~/lib/md/twin.server";
 import { llmsTxt, aiTxt, helpAiMd } from "~/lib/api/guides.server";
 import { assertStartupConfig } from "~/lib/startup-checks.server";
 import { readerLoginHref } from "~/lib/public-reading";
+import { readReadingMark } from "~/lib/reading-mark.server";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
 import { m } from "~/paraglide/messages.js";
@@ -259,7 +260,17 @@ describe("public reading configuration and browser boundaries", () => {
       const before = await mod.loader(h.args(h.request(path, { as: "reader" }), params));
       vi.stubEnv("PUBLIC_READING", "1");
       const after = await mod.loader(h.args(h.request(path, { as: "reader" }), params));
-      const withoutTime = (value: unknown) => { const copy = { ...value as Record<string, unknown> }; delete copy.loadedAt; return copy; };
+      const withoutTime = (value: unknown) => {
+        const copy = { ...value as Record<string, unknown> };
+        delete copy.loadedAt;
+        if (typeof copy.readingMark === "string") {
+          const display = readReadingMark(Number(params.id), copy.readingMark);
+          expect(display).not.toBeNull();
+          const { sourceLang, readLang, isTranslated } = display!;
+          copy.readingMark = { sourceLang, readLang, isTranslated };
+        }
+        return copy;
+      };
       expect(withoutTime(after)).toEqual(withoutTime(before));
     }
   });

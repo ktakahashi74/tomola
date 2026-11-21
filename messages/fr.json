@@ -3173,5 +3173,6 @@
   "metrics_article_reading_original": "Original",
   "metrics_article_reading_period": "30 derniers jours, du {start} au {end} (UTC, inclus).",
   "metrics_article_reading_since": "La mesure par article a commencé le {at}.",
-  "metrics_article_reading_title": "Lectures par article"
+  "metrics_article_reading_title": "Lectures par article",
+  "metrics_article_reading_translated": "Traduction"
 }

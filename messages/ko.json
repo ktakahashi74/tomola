@@ -2988,5 +2988,6 @@
   "metrics_article_reading_original": "원문",
   "metrics_article_reading_period": "최근 30일간({start}~{end}, UTC, 양일 포함).",
   "metrics_article_reading_since": "글별 측정은 {at}에 시작되었습니다.",
-  "metrics_article_reading_title": "글별 읽기 현황"
+  "metrics_article_reading_title": "글별 읽기 현황",
+  "metrics_article_reading_translated": "번역본"
 }

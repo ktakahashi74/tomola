@@ -2789,6 +2789,7 @@
   "metrics_article_reading_period": "Latest 30 days, {start} to {end} (UTC, inclusive).",
   "metrics_article_reading_since": "Article-level measurement began {at}.",
   "metrics_article_reading_title": "Reads by article",
+  "metrics_article_reading_translated": "Translation",
   "stats_reading_title": "Reading",
   "stats_reading_help": "Weekly browser reads of public articles: visits, not people. A visible page sends one notice; prefetches and most robots are not counted. Authenticated authors and members excluded from observation are omitted.",
   "stats_reading_since": "Measurement began on {since} (UTC). Earlier weeks are unmeasured; the first week can be partial.",

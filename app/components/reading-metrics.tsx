@@ -29,7 +29,7 @@ export function ArticleReadingMetrics({ readings }: { readings: Awaited<ReturnTy
     {articles.length === 0 ? <p>{m.metrics_article_reading_empty()}</p> : <div className="overflow-x-auto"><Table>
       <TableHeader><TableRow>
         {[m.metrics_article_reading_article(), m.stats_reading_browser(), m.metrics_article_reading_original(),
-          m.stats_reading_translated(), m.stats_reading_markdown(), "API", "MCP", m.stats_reading_crawler()]
+          m.metrics_article_reading_translated(), m.stats_reading_markdown(), "API", "MCP", m.stats_reading_crawler()]
           .map(label => <TableHead key={label} scope="col">{label}</TableHead>)}
       </TableRow></TableHeader>
       <TableBody>{articles.map(row => <TableRow key={row.id}>

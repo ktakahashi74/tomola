@@ -88,6 +88,7 @@ export const OPERATOR_ONLY_KEYS: ReadonlySet<string> = new Set([
   "metrics_article_reading_period",
   "metrics_article_reading_since",
   "metrics_article_reading_title",
+  "metrics_article_reading_translated",
   "metrics_reading_help",
   "metrics_reading_read_lang",
   "metrics_reading_source_lang",

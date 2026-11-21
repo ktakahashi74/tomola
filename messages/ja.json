@@ -1997,6 +1997,7 @@
   "metrics_article_reading_period": "直近30日間（UTCの {start} から {end} まで、両日を含む）。",
   "metrics_article_reading_since": "記事別の計測開始は {at} です。",
   "metrics_article_reading_title": "記事別の閲覧",
+  "metrics_article_reading_translated": "訳",
   "stats_reading_title": "読まれ方",
   "stats_reading_help": "公開の記事がブラウザーで読まれた週ごとの回数です。人数ではありません。ページが見えた時の知らせで数え、先読みとロボットの多くは数えません。認証で分かる書き手本人と、観測から除外された会員の読みは含みません。",
   "stats_reading_since": "計測開始は {since}（UTC）です。それより前の週は未計測で、最初の週は一部の期間だけを含みます。",

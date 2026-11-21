@@ -9,6 +9,7 @@ import { createReply, createTopic } from "~/lib/entries.server";
 import { buildMemberExport } from "~/lib/exports.server";
 import { AREAS } from "~/lib/languages";
 import { getMetrics } from "~/lib/metrics.server";
+import { readReadingMark } from "~/lib/reading-mark.server";
 import { grantModerator } from "~/lib/roles.server";
 import { setStance } from "~/lib/stances.server";
 import { setVote } from "~/lib/votes.server";
@@ -300,7 +301,7 @@ describe("Insightful, by every route a member can read", () => {
 // the two worlds is the per-language composition.) The question has 6 presses from 3 languages in both: world A is ja 3, en 2, fr 1; world B is ja 1, en 1, fr 4. The reply has 2 presses
 // from 2 languages: A is ja and en, B is ja and fr. Members who pressed the same things in both worlds (ja1) and members who pressed nothing read the pages. The only fields left out
 // of the comparison are the times at which a page or an answer was made (`loadedAt`, `at`, `asOf`, `as_of`) and the signed read token of the "open in AI" link (`?k=`, which holds the member's
-// random id), which differ between any two calls.
+// random id), and the expiration and signature of the browser reading mark.
 describe("Insightful: the same totals and the same number of languages from a different composition give the same bytes", () => {
   const MEMBERS: Array<[handle: string, area: "ja" | "en" | "fr" | "vi"]> = [
     ["ja1", "ja"],
@@ -359,7 +360,10 @@ describe("Insightful: the same totals and the same number of languages from a di
         const page = await (await import("~/routes/topic")).loader(w.args(w.request(`/t/${id}`, { as }), { id: String(id) }));
         // Account UUIDs differ between worlds; independently verify the account binding before normalizing that identity.
         expect(page.ownerId).toBe(w.ids[as]);
-        out[`${as} loader /t/${id}`] = withoutClock(JSON.stringify({ ...page, ownerId: as }));
+        const display = page.readingMark === null ? null : readReadingMark(id, page.readingMark);
+        if (page.readingMark !== null) expect(display).not.toBeNull();
+        const readingMark = display && { sourceLang: display.sourceLang, readLang: display.readLang, isTranslated: display.isTranslated };
+        out[`${as} loader /t/${id}`] = withoutClock(JSON.stringify({ ...page, ownerId: as, readingMark }));
         for (const [route, path, params] of [["latest", "/latest", {}], ["home", "/", {}], ["area", "/a/ja", { lang: "ja" }]] as const) {
           const data = await ((await import(`../app/routes/${route}.tsx`)) as { loader: (a: never) => unknown }).loader(w.args(w.request(path, { as }), params));
           out[`${as} loader ${path}`] = withoutClock(JSON.stringify(data));

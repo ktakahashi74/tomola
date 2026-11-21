@@ -101,6 +101,7 @@ test("counts the initial translation and the client-side source switch once acro
   await expect(page.getByRole("heading", { level: 3, name: en.stats_reading_cumulative, exact: true })).toBeVisible();
   await page.goto("/admin/metrics");
   const operatorTable = page.getByRole("region", { name: en.metrics_article_reading_title });
+  await expect(operatorTable.getByRole("columnheader", { name: en.metrics_article_reading_translated, exact: true })).toBeVisible();
   const row = operatorTable.getByRole("row").filter({ has: page.getByRole("link", { name: "Article count browser fixture" }) });
   await expect(row.getByRole("cell").nth(5)).toHaveText("3");
   await expect(row.getByRole("cell").nth(1)).toHaveText(String(articleCounts.total + 2));

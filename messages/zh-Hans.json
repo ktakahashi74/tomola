@@ -2457,5 +2457,6 @@
   "metrics_article_reading_original": "原文",
   "metrics_article_reading_period": "最近 30 天，{start} 至 {end}（UTC，含首尾）。",
   "metrics_article_reading_since": "按文章统计开始于 {at}。",
-  "metrics_article_reading_title": "按文章统计阅读"
+  "metrics_article_reading_title": "按文章统计阅读",
+  "metrics_article_reading_translated": "译文"
 }
