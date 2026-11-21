@@ -106,6 +106,9 @@ describe("every write path goes through the writer gate", () => {
       ["topic-edit", () => import("~/routes/topic-edit") as never, `/t/${id}/edit`, { id }, { title: "x", body: "y" }],
       ["reply-edit", () => import("~/routes/reply-edit") as never, `/c/${id}/edit`, { id }, { body: "y" }],
       ["draft (save, publish, delete)", () => import("~/routes/draft") as never, "/drafts/1", { id: "1" }, { intent: "save", body: "y" }],
+      ["MCP entry edit confirmation", () => import("~/routes/mcp-entry-edit") as never, "/mcp/entry-edits/1", { id: "1" }, { intent: "apply" }],
+      ["MCP entry deletion confirmation", () => import("~/routes/mcp-entry-delete") as never, `/mcp/entries/${id}/delete`, { id }, { confirm: "1" }],
+      ["MCP village confirmation", () => import("~/routes/village-proposal") as never, "/village-proposals/1", { id: "1" }, { intent: "apply" }],
       ["Nushi refresh", () => import("~/routes/nushi-action") as never, "/nushi/action", {}, { intent: "refresh", answerId: "1" }],
       ["vote", () => import("~/routes/vote"), "/vote", {}, { entryId: id, on: "1" }],
       ["stance (choose, change, withdraw)", () => import("~/routes/stance"), "/stance", {}, { questionId: id, position: "agree", version: "0" }],
@@ -117,7 +120,7 @@ describe("every write path goes through the writer gate", () => {
     for (const [name, load, p, params, form] of cases) {
       const mod = await load();
       if (p === "/villages/suggest-slug") { vi.stubEnv("VILLAGES", "1"); vi.stubEnv("VILLAGE_SLUG_SUGGEST", "1"); }
-      if (p === "/v/garden/nushi") vi.stubEnv("VILLAGES", "1");
+      if (p === "/v/garden/nushi" || p.startsWith("/village-proposals/")) vi.stubEnv("VILLAGES", "1");
       try {
         const outcome = await h.outcome(() => mod.action(h.args(h.request(p, { as: "halfway", form }), params)));
         expect(outcome, name).toMatchObject({ status: 302, location: "/onboarding" });

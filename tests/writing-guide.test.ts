@@ -100,11 +100,11 @@ describe("public writing instructions", () => {
     const handoff = text.split("### Images for topics\n")[1];
     for (const section of [delivery, handoff]) {
       expect(section.indexOf("tomola_draft_get")).toBeLessThan(section.indexOf("tomola_draft_update"));
-      for (const instruction of ["current body", "preserving", "image Markdown", "edits", "old local copy"]) expect(section).toContain(instruction);
+      for (const instruction of ["current body", "image Markdown", "expectedVersion"]) expect(section).toContain(instruction);
     }
     expect(delivery).toContain("This API creates drafts only");
     expect(delivery).toContain("have the author reopen it in the browser, read its current body");
-    expect(handoff).toContain("The HTTP draft API has no read or update endpoint");
+    expect(handoff).toContain("read the draft again before proposing a revision");
     expect(handoff).toContain("have the author reopen the current draft in the browser");
   });
 

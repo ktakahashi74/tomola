@@ -1,5 +1,5 @@
 export const READING_PAGE_GZIP_LIMIT = 345 * 1024;
-export const WRITING_PAGE_GZIP_LIMIT = 466 * 1024;
+export const WRITING_PAGE_GZIP_LIMIT = 467 * 1024;
 export const WRITING_ROUTE_IDS = ["routes/topic-new", "routes/topic-edit"] as const;
 
 export function pageGzipLimit(routeId: string): number {

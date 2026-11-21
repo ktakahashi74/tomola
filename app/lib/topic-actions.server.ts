@@ -3,7 +3,7 @@ import type { requireWriter } from "~/lib/auth/session.server";
 import { defaultPostLang } from "~/lib/profiles.server";
 import { applyPastedFrontmatter, formString, readEntryForm, readReplyParent } from "~/lib/entry-form.server";
 import { createReply, deleteOwnEntry, isEntryInThread, replyLocation } from "~/lib/entries.server";
-import { createDraft, deleteLinkedDraft, linkedDraftOf, updateDraft } from "~/lib/drafts.server";
+import { createDraft, deleteLinkedDraft, linkedDraftOf, lockLinkedClientDraft, updateDraft } from "~/lib/drafts.server";
 import { createReport } from "~/lib/moderation.server";
 import { createTranslationReport, updateTranslationReportDetails } from "~/lib/translation-reports.server";
 import { setIntroduction, unsetIntroduction } from "~/lib/member-pages.server";
@@ -118,12 +118,13 @@ export async function postTopicReply(context: TopicAction) {
   const { body, lang, langCode, langSource, aiAssistance, stanceTag } = pasted.input;
   // The draft that "Write with AI" made is removed in the same transaction, so that a failure here cannot leave a reply made and the form still sendable.
   const res = await withSignedWrite(db, user.id, request, form, async tx => {
+    if (!await lockLinkedClientDraft(tx, user.id, form)) return { ok: false as const, error: "draft_conflict" as const };
     const created = await createReply(tx, user.id, threadId, { body, lang, langCode, langSource, aiAssistance, parentId: pasted.parentId, stanceTag, ...(form.has("nushiParentId") ? { nushiParentId: Number(form.get("nushiParentId")) } : {}) });
-    if (created.ok) await deleteLinkedDraft(tx, user.id, form, { questionReplyPublished: true });
+    if (created.ok) await deleteLinkedDraft(tx, user.id, form, { id: created.id, threadId });
     return created;
   });
   if (res.ok) {
     throw redirect(postedLocation(await replyLocation(db, threadId, res.id, { lang: langCarry(request) }), res.id, res.followed));
   }
-  return replyError(form, res.error);
+  return replyError(form, res.error, res.error === "draft_conflict" ? 409 : 400);
 }

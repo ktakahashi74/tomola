@@ -93,7 +93,7 @@ it("keeps an explicit draft destination, but resolves an omitted destination onl
   await setDefaultVillage(db, "pv-owner", "en");
   const cleared = await createClientDraft(db, "pv-owner", client, { kind: "topic", ...input, village: "@pv_owner" });
   if (!cleared.ok) throw new Error("draft failed");
-  expect(await updateClientDraft(db, "pv-owner", client, cleared.id, { village: null })).toMatchObject({ ok: true });
+  expect(await updateClientDraft(db, "pv-owner", client, cleared.id, { village: null, expectedVersion: 1 })).toMatchObject({ ok: true });
   expect((await getDraft(db, "pv-owner", cleared.id))?.village).toBeNull();
   const published = await publishDraft(db, "pv-owner", implicit.id);
   const owned = await publishDraft(db, "pv-owner", explicit.id);

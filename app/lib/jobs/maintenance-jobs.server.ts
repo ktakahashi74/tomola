@@ -13,6 +13,8 @@ import { pruneIdentitySnapshots } from "~/lib/identity-retention.server";
 import { pruneExpiredInvitationRecipients } from "~/lib/invitations.server";
 import { pruneInvitationNotes } from "~/lib/invitation-note.server";
 import { pruneRotationReplays, pruneUnusedClients } from "~/lib/mcp/connections.server";
+import { pruneEntryEditProposals } from "~/lib/mcp/post-proposals.server";
+import { pruneVillageProposals } from "~/lib/mcp/village-proposals.server";
 import { ensureDailyJob } from "./daily.server";
 import { defineJobHandlers, type TypedJobHandler } from "./queue.server";
 
@@ -72,6 +74,8 @@ export function runMaintenanceCleanup(db: Db, now = new Date(), options: Retenti
     await pruneInvitationNotes(db, now, results);
     await pruneUnusedClients(db, now, results);
     await pruneRotationReplays(db, now, results);
+    await pruneEntryEditProposals(db, now, results);
+    await pruneVillageProposals(db, now, results);
     if (removed > 0) console.log(`[jobs] cleanup: deleted ${removed} finished job(s) older than ${RETENTION.finishedJobDays} days`);
     return results;
   });

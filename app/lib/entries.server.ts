@@ -24,7 +24,7 @@ import { inScope, type Viewer } from "~/lib/roles.server";
 import { checkStanceAttributes, STANCE_TAGS, type StanceAttrError, type StanceTag } from "~/lib/stances";
 import { loadStanceAttrFacts, touchAltOriginal, touchQuestion } from "~/lib/questions.server";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
-import { publicTopicPlace, rootTopic, rootTopicOn, undeletedTopic } from "~/lib/visibility.server";
+import { publicTopicPlace, rootTopic, rootTopicOn, undeletedTopic, visibleWithTopic } from "~/lib/visibility.server";
 import { cursorTime, readingCondition } from "~/lib/reading-page.server";
 import { readingPage, type ReadingRequest, type ReadingPage } from "~/lib/reading-page";
 import { afterPageBoundary } from "~/lib/page-boundary.server";
@@ -728,7 +728,7 @@ async function editEntryImplementation(
   editorId: string,
   entryId: number,
   input: unknown,
-  opts: { kind?: "topic" | "reply"; now?: Date; expectedVersion?: string } = {},
+  opts: { kind?: "topic" | "reply"; now?: Date; expectedVersion?: string; visibleOnly?: boolean } = {},
 ): Promise<
   { ok: true; id: number; threadId: number; changed: boolean } | { ok: false; error: EditError }
 > {
@@ -782,6 +782,12 @@ async function editEntryImplementation(
       .for("no key update");
     if (!current || current.deletedAt) return { ok: false as const, error: "not_found" as const };
     if (current.authorId !== editorId) return { ok: false as const, error: "forbidden" as const };
+    if (opts.visibleOnly) {
+      const [visible] = await tx.select({ id: entries.id }).from(entries).innerJoin(rootTopic, rootTopicOn())
+        .where(and(eq(entries.id, entryId), visibleWithTopic()));
+      if (!visible) return { ok: false as const, error: "not_found" as const };
+      if (current.stanceLockedAt !== null) return { ok: false as const, error: "locked" as const };
+    }
     // Only versioned form submissions opt in. Compare after locking, before any update,
     // including no-op and label-only edits. Direct callers retain their existing behavior.
     if (opts.expectedVersion !== undefined && opts.expectedVersion !== entryEditVersion(current)) {

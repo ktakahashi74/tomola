@@ -58,7 +58,7 @@ describe("Markdown admission and saved content", () => {
     expect(await createClientDraft(h.db, member, client, { kind: "topic", lang: "en", body: costly })).toEqual(denied);
     const owned = await createClientDraft(h.db, member, client, { kind: "topic", lang: "en", body: "Client draft." });
     if (!owned.ok) throw new Error("client control failed");
-    expect(await updateClientDraft(h.db, member, client, owned.id, { body: costly })).toEqual(denied);
+    expect(await updateClientDraft(h.db, member, client, owned.id, { body: costly, expectedVersion: 1 })).toEqual(denied);
     expect((await getDraft(h.db, member, owned.id))!.body).toBe("Client draft.");
     expect((await h.db.select().from(drafts)).length).toBe(2);
   }, 20_000);

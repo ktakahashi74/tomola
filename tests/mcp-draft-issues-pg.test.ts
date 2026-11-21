@@ -32,7 +32,7 @@ describe.skipIf(!REAL_PG_URL)("draft diagnostics after PostgreSQL commit", { tag
       if (call[0] === "inspectDraftMarkdown") { announce(); await resume; }
       return run(...call);
     });
-    const updating = updateClientDraft(db, "draft-writer", client, initial.id, { body: "Saved edit @missing" });
+    const updating = updateClientDraft(db, "draft-writer", client, initial.id, { body: "Saved edit @missing", expectedVersion: 1 });
     try {
       await expectSettlesWithin(entered, 5000, "draft diagnostics admission");
       await other.transaction(async tx => {

@@ -19,7 +19,7 @@ import { glossaryProposalPrefill } from "~/lib/glossary-proposal.server";
 import { defaultPostLang } from "~/lib/profiles.server";
 import { loadAltOrigin } from "~/lib/objections.server";
 import { parseIdOrNull } from "~/lib/params.server";
-import { ownTopicDraftIds, createDraft, deleteLinkedDraft, linkedDraftOf, updateDraft } from "~/lib/drafts.server";
+import { ownTopicDraftIds, createDraft, deleteLinkedDraft, linkedDraftOf, lockLinkedClientDraft, updateDraft } from "~/lib/drafts.server";
 import { applyPastedFrontmatter, formString, readEntryForm, submitTopicForm } from "~/lib/entry-form.server";
 import { DRAFT_RATE_LIMIT, hitRateLimit, hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { postedLocation } from "~/lib/posted-ui";
@@ -143,17 +143,19 @@ export async function action({ request }: Route.ActionArgs) {
     if (!rate.allowed) return data({ error: "rate_limited", values }, { status: 429, headers: rateLimitHeaders(rate) });
     // The draft that "Write with AI" made is removed in the same transaction, so that a failure here cannot leave a post made and the form still sendable.
     const res = await withSignedWrite(db, user.id, request, form, async tx => {
+      if (!await lockLinkedClientDraft(tx, user.id, form)) return { ok: false as const, error: "draft_conflict" as const, village: undefined };
       const posted = await submitTopicForm(tx, { user, profile }, form, { responseTo: responsePostId(new URL(request.url).searchParams) });
       if (posted.ok && supplement.trim()) {
         const saved = await writePostAiMaterial(tx, user.id, posted.id, { body: supplement, version: 0 });
         if (!saved.ok) throw new Error("Supplement could not be saved");
       }
-      if (posted.ok) await deleteLinkedDraft(tx, user.id, form);
+      if (posted.ok) await deleteLinkedDraft(tx, user.id, form, { id: posted.id, threadId: posted.id });
       return posted;
     });
     if (res.ok) {
       throw redirect(postedLocation(`/t/${res.id}`, res.id));
     }
+    if (res.error === "draft_conflict") return data({ error: res.error, values }, { status: 409 });
     return fail(res.error, res.village);
   }
   catch (error) {

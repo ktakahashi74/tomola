@@ -77,15 +77,16 @@ describe("the draft that writing with an AI made", () => {
   it("is removed by a post only when it is the member's own and still at the version the screen saw", async () => {
     const mine = await ownDraft("writer");
     const theirs = await ownDraft("other");
-    expect(await deleteLinkedDraft(h.db, h.ids.writer, form({ fromDraft: String(theirs), fromDraftVersion: "1" }))).toBe(false);
+    const finish = (fields: Record<string, string>) => h.db.transaction(tx => deleteLinkedDraft(tx, h.ids.writer, form(fields), { id: 1, threadId: 1 }));
+    expect(await finish({ fromDraft: String(theirs), fromDraftVersion: "1" })).toBe(false);
     expect(await getDraft(h.db, h.ids.other, theirs)).not.toBeNull();
     // Without the version the screen saw, nothing is removed.
-    expect(await deleteLinkedDraft(h.db, h.ids.writer, form({ fromDraft: String(mine) }))).toBe(false);
+    expect(await finish({ fromDraft: String(mine) })).toBe(false);
     // An AI changed the draft after the screen saved it (version 2): it is kept.
     expect((await updateDraft(h.db, h.ids.writer, mine, { lang: "en", body: "The AI's version" }, { expectedVersion: 1 })).ok).toBe(true);
-    expect(await deleteLinkedDraft(h.db, h.ids.writer, form({ fromDraft: String(mine), fromDraftVersion: "1" }))).toBe(false);
+    expect(await finish({ fromDraft: String(mine), fromDraftVersion: "1" })).toBe(false);
     expect((await getDraft(h.db, h.ids.writer, mine))?.body).toBe("The AI's version");
-    expect(await deleteLinkedDraft(h.db, h.ids.writer, form({ fromDraft: String(mine), fromDraftVersion: "2" }))).toBe(true);
+    expect(await finish({ fromDraft: String(mine), fromDraftVersion: "2" })).toBe(true);
     expect(await getDraft(h.db, h.ids.writer, mine)).toBeNull();
   });
 

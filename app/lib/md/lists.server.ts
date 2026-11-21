@@ -30,7 +30,7 @@ import { loadReactions } from "~/lib/votes.server";
 // Followed posts with unread replies by default; ?all=1 includes every followed post. Latest activity first, and always the reader's own list.
 export type ListSpec = { kind: "latest" } | { kind: "area"; lang: Lang } | { kind: "home" } | { kind: "following" } | { kind: "villages" } | { kind: "village"; slug: string; villageId: string };
 export const allowsPublicListRead = (spec: ListSpec | null): boolean => spec?.kind !== "following";
-export type ListMdOptions = { all?: boolean; page: number; lang: Lang | null; k: string | null; asks?: boolean; long?: boolean; order?: TopicOrder | null };
+export type ListMdOptions = { all?: boolean; page: number; lang: Lang | null; k: string | null; asks?: boolean; long?: boolean; order?: TopicOrder | null; mcpPageArgs?: Record<string, FmValue | undefined> };
 
 // The language a village's name and description are written in (lang) is always given once it is known; the machine translation of them beside the original, as a title has one,
 // only when ?lang= asks for a language the village was not written in. `prefix` is put before the keys (the head of a village's own list says village_lang, village_name_translation, ...).
@@ -162,7 +162,7 @@ export async function buildListMarkdown(db: Db, profile: Profile | null, spec: L
   // Body YAML is generated here; all untrusted values such as titles are quoted YAML strings.
   const next = hasNext ? mdUrl(`${path}.md`, { k: opts.k, lang: opts.lang, page: opts.page + 1, extra: Object.keys(carry).length > 0 ? carry : undefined }) : null;
   const footer = mdBlock(
-    { type: "index", page: opts.page, next, content_trust: "untrusted_user_content" },
+    { type: "index", page: opts.page, next, next_args: hasNext && opts.mcpPageArgs ? { ...opts.mcpPageArgs, page: opts.page + 1 } : undefined, content_trust: "untrusted_user_content" },
     next ? `Next page: ${next}` : "End of list.",
   );
   return joinBlocks([header, `${body}`, footer]);

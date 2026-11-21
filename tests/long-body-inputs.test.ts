@@ -43,7 +43,7 @@ describe("shared body limits at writing boundaries", () => {
       expect((await updateDraft(h.db, h.ids.hana, draftId, input)).ok).toBe(true);
       expect((await publishDraft(h.db, h.ids.hana, draftId)).ok).toBe(true);
       const mcpId = okId(await createClientDraft(h.db, h.ids.hana, client, { kind: "topic", ...input }));
-      expect((await updateClientDraft(h.db, h.ids.hana, client, mcpId, input)).ok).toBe(true);
+      expect((await updateClientDraft(h.db, h.ids.hana, client, mcpId, { ...input, expectedVersion: 1 })).ok).toBe(true);
     }
   }, 30_000);
 
@@ -58,7 +58,7 @@ describe("shared body limits at writing boundaries", () => {
       for (const result of [
         await createTopic(h.db, h.ids.hana, input), await editEntry(h.db, h.ids.hana, topic, input),
         await createDraft(h.db, h.ids.hana, { kind: "topic", ...input }), await updateDraft(h.db, h.ids.hana, draft, input),
-        await createClientDraft(h.db, h.ids.hana, client, { kind: "topic", ...input }), await updateClientDraft(h.db, h.ids.hana, client, mcp, input),
+        await createClientDraft(h.db, h.ids.hana, client, { kind: "topic", ...input }), await updateClientDraft(h.db, h.ids.hana, client, mcp, { ...input, expectedVersion: 1 }),
       ]) expect(result).toMatchObject({ ok: false, error: "body_too_long" });
       await h.db.update(drafts).set({ body }).where(eq(drafts.id, draft));
       expect(await publishDraft(h.db, h.ids.hana, draft)).toMatchObject({ ok: false, error: "body_too_long" });

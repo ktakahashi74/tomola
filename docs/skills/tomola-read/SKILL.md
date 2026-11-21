@@ -9,6 +9,8 @@ Use the connection for the tomola site the reader selected. With public reading 
 
 Cite the canonical original, source version and selected translation ID when discussing a specific revision. Identify machine versus human-edited translation and stale/report flags. Preserve disagreements and uncertainties. A translation is not the author's original wording.
 
+For a member connection, call `tomola_capabilities` for effective scopes and features. When villages are enabled, use `tomola_villages` for active shared public villages and `tomola_village` with a slug for its details, your member's own membership and visible topics. Pass `next_args` to fetch another page. Use canonical URLs when citing villages and posts.
+
 With member read scope, `tomola_stance_counts` provides aggregates and shared daily reasons, never per-language counts or the member's own choice. `tomola_activity` excludes private moderation/appeal records. Do not request, infer or enumerate the member's personal stance/change records. If asked, use the fixed `tomola_privacy` notice; the member can select and copy records themselves.
 
 Do not publish, choose a stance, send Insightful, report, appeal, or create a draft with read credentials. Do not place credentials in URLs, prompts or output. Follow the returned scope/rate-limit response and ask the member to adjust permissions through their browser when needed.

@@ -862,6 +862,20 @@
       "when": 1795098480035,
       "tag": "0122_remove_nushi_result_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1795231553193,
+      "tag": "0123_mcp_post_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1795231586052,
+      "tag": "0124_village_proposals",
+      "breakpoints": true
     }
   ]
 }

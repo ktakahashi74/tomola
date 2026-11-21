@@ -54,11 +54,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     const form = await request.formData();
     const intent = formString(form, "intent");
 
-    if (intent === "delete") {
-      if (!(await deleteDraft(db, user.id, id))) throw data("Not found", { status: 404 });
-      throw redirect("/drafts");
-    }
-    if (intent !== "save" && intent !== "publish" && intent !== "remove_alt") throw data("Bad request", { status: 400 });
+    if (intent !== "save" && intent !== "publish" && intent !== "remove_alt" && intent !== "delete") throw data("Bad request", { status: 400 });
 
     // Save screen contents before publication so failed validation does not lose edits. Do the same when removing the original-question link (remove_alt).
     // Topic drafts have the 「立場を聞く」 checkbox. Alternative-framing targets are fixed at creation and cannot change here; unchecking leaves alt_of present and prevents saving.
@@ -67,20 +63,29 @@ export async function action({ request, params }: Route.ActionArgs) {
     // The form carries no ai_assistance: saving keeps the value the draft already has (set by frontmatter or the API), and publishing hands it on to the post.
     const { title, body, lang, asksStance, stanceTag, village, villageExplicit, villageDisplayed } = readEntryForm(form);
     const draft = await getDraft(db, user.id, id);
-    const browserDraft = draft?.via === "web" && !draft.clientId;
-    const versionOptions = { returnVersion: true, ...(browserDraft ? { expectedVersion: Number(formString(form, "version")) } : {}) };
+    const expectedVersion = Number(formString(form, "version"));
+    const versionOptions = { returnVersion: true, expectedVersion };
     const proof = (version: number) => signingViewToken({ userId: user.id, kind: "draft", id, version: String(version), title: draft?.kind === "topic" ? titleOrNull(title) : null, body, lang });
     async function result(error: string | null, saved = false, version?: number, altRemoved = false, status = error ? 400 : 200, resolvedVillage?: string) {
       const latest = error === "draft_conflict" ? await getDraft(db, user.id, id) : null;
       const latestView = latest ? signingViewToken({ userId: user.id, kind: "draft", id, version: String(latest.version), title: latest.title, body: latest.body, lang: latest.lang }) : null;
       // Echo unsaved input, using the new basis whenever this request saved before publication was refused.
       const target = resolvedVillage ?? village;
-      const values = error ? { title, body, lang, asksStance, version: version !== undefined ? String(version) : formString(form, "version"), signingView: version !== undefined ? proof(version) : formString(form, "signingView"), ...(villagesEnabled() ? { village: target } : {}) } : null;
+      const values = error && intent !== "delete" ? { title, body, lang, asksStance, version: version !== undefined ? String(version) : formString(form, "version"), signingView: version !== undefined ? proof(version) : formString(form, "signingView"), ...(villagesEnabled() ? { village: target } : {}) } : null;
       return data({ error, saved, altRemoved, version, signingView: version === undefined ? undefined : proof(version), latest: latest ? { draft: latest, signingView: latestView! } : null, values, ...(villagesEnabled() && draft?.kind === "topic" ? { village: target ?? draft.village ?? null } : {}) }, { status, headers: { "Cache-Control": "private, no-store" } });
     }
     if (!draft) {
       if (form.has("version")) return result("not_found", false, undefined, false, 404);
       throw data("Not found", { status: 404 });
+    }
+    if (intent === "delete") {
+      const version = draft.via === "api" || form.has("version") ? expectedVersion : undefined;
+      if (version !== undefined && (!Number.isInteger(version) || version < 1 || version > 2_147_483_647)) return result("draft_conflict", false, undefined, false, 409);
+      if (!(await deleteDraft(db, user.id, id, version))) {
+        const exists = await getDraft(db, user.id, id);
+        return result(exists ? "draft_conflict" : "not_found", false, undefined, false, exists ? 409 : 404);
+      }
+      throw redirect("/drafts");
     }
     const input = draft.kind === "topic" ? { title, body, lang, asksStance, ...(villagesEnabled() ? { village: villageExplicit === false ? undefined : village } : {}) } : { title, body, lang, stanceTag: draft.threadAsksStance ? stanceTag : undefined };
     if (intent === "publish") {
@@ -103,21 +108,19 @@ export async function action({ request, params }: Route.ActionArgs) {
         });
       } catch (error) {
         if (error instanceof SigningFailureResponse) return result(error.code, false, undefined, false, error.status, error.village);
-        if (browserDraft && error instanceof Response && error.status === 409) return result("draft_conflict", false, undefined, false, 409);
+        if (error instanceof Response && error.status === 409) return result("draft_conflict", false, undefined, false, 409);
         throw error;
       }
       if (res.ok && "id" in res) throw redirect(postedLocation(res.kind === "topic" ? `/t/${res.id}` : await replyLocation(db, res.threadId, res.id), res.id, res.kind === "reply" && res.followed));
       const error = res.ok ? null : res.error;
-      if (error === "not_found" && !browserDraft) throw data("Not found", { status: 404 });
       return result(error, didSave, savedVersion, false, error === "draft_conflict" ? 409 : error === "not_found" ? 404 : 400, !res.ok && "village" in res ? res.village : undefined);
     }
     const saved = await updateDraft(db, user.id, id, input, versionOptions);
     if (!saved.ok) {
-      if (saved.error === "not_found" && !browserDraft) throw data("Not found", { status: 404 });
       return result(saved.error, false, undefined, false, saved.error === "draft_conflict" ? 409 : saved.error === "not_found" ? 404 : 400);
     }
     if (intent === "remove_alt") {
-      const removed = await removeDraftAltOf(db, user.id, id, { returnVersion: true, ...(browserDraft ? { expectedVersion: saved.version } : {}) });
+      const removed = await removeDraftAltOf(db, user.id, id, { returnVersion: true, expectedVersion: saved.version });
       if (!removed.ok) return result(removed.error, true, saved.version, false, removed.error === "draft_conflict" ? 409 : 400);
       return result(null, true, removed.version ?? saved.version, true);
     }
@@ -323,6 +326,7 @@ function DraftForm({ loaderData, actionData }: Route.ComponentProps) {
           }}
         >
           <input type="hidden" name="intent" value="delete" />
+          <input type="hidden" name="version" value={version} />
           <Button variant="destructive" type="submit">
             {m.draft_delete()}
           </Button>
