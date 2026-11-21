@@ -423,6 +423,25 @@ main:focus {
   line-height: 1.6;
 }
 
+/* A member page with a personal village leads with that village. Posts placed in other villages follow,
+   set apart by a rule and one step quieter, so the two lists do not read as equals. */
+#village ~ #posts {
+  margin-block-start: 2rem;
+  padding-block-start: 1.25rem;
+  border-block-start: 1px solid var(--border);
+}
+#village ~ #posts > h2 {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+#village ~ #posts .topic-row { padding-block: .5rem; }
+#village ~ #posts .topic-title {
+  font-size: .9375rem;
+  font-weight: 400;
+}
+#village ~ #posts .topic-title:is(:lang(ja), :lang(zh), :lang(ko)) { font-weight: 500; }
+
 .reading-toc-track,
 .reading-toc-sidebar {
   display: none;
