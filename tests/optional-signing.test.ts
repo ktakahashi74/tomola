@@ -26,7 +26,7 @@ it("publishes, replies, edits, changes the handle and publishes drafts without p
     ["topic", `/t/${topic.id}`, { id: String(topic.id) }, { body: "Unsigned reply", lang: "ja" }],
     ["topic-edit", `/t/${topic.id}/edit`, { id: String(topic.id) }, { title: "New title", body: "Edited topic" }],
     ["reply-edit", `/c/${reply.id}/edit`, { id: String(reply.id) }, { body: "Edited reply" }],
-    ["draft", `/drafts/${draft.id}`, { id: String(draft.id) }, { intent: "publish", body: "Reviewed AI draft", lang: "ja" }],
+    ["draft", `/drafts/${draft.id}`, { id: String(draft.id) }, { intent: "publish", version: "1", body: "Reviewed AI draft", lang: "ja" }],
     ["settings", "/settings", {}, { intent: "handle", handle: "new_hana" }],
   ] as const;
   for (const [name, path, params, form] of cases) {
@@ -111,7 +111,7 @@ it("keeps last-client metadata after an MCP client updates its own draft", async
   const client = { key: "oauth:client", id: "https://ai.example/client.json", name: "AI editor", uri: "https://ai.example", tokenId: null };
   const created = await createClientDraft(h.db, h.ids.hana, client, { kind: "topic", body: "MCP draft", lang: "ja" });
   if (!created.ok) throw new Error(created.error);
-  expect(await updateClientDraft(h.db, h.ids.hana, client, created.id, { body: "Last updated by MCP" })).toMatchObject({ ok: true });
+  expect(await updateClientDraft(h.db, h.ids.hana, client, created.id, { body: "Last updated by MCP", expectedVersion: 1 })).toMatchObject({ ok: true });
   const form = new FormData(); form.set("intent", "publish"); form.set("body", "Last updated by MCP"); form.set("lang", "ja");
   const preview = await previewSignedWrite(h.db, h.ids.hana, `/drafts/${created.id}`, form);
   expect(preview).toMatchObject({ signatureRequired: false, lastEditor: { id: client.id, name: client.name }, content: { body: "Last updated by MCP" } });

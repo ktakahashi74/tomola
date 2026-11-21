@@ -102,6 +102,14 @@ function routeOperation(path: string, form: FormData): { operation: SigningOpera
   if (match) return { operation: "edit-topic", id: Number(match[1]) };
   match = /^\/c\/(\d+)\/edit$/.exec(path);
   if (match) return { operation: "edit-reply", id: Number(match[1]) };
+  if (/^\/mcp\/entry-edits\/\d+$/.test(path)) {
+    const kind = formString(form, "entryKind");
+    const entryId = formString(form, "entryId");
+    if ((kind === "topic" || kind === "reply") && /^[1-9]\d{0,15}$/.test(entryId) && Number.isSafeInteger(Number(entryId))) {
+      return { operation: kind === "topic" ? "edit-topic" : "edit-reply", id: Number(entryId) };
+    }
+    throw new SigningError("invalid_target", 400);
+  }
   match = /^\/drafts\/(\d+)$/.exec(path);
   if (match && intent === "publish") return { operation: "publish-draft", id: Number(match[1]) };
   if (path === "/settings" && intent === "display-name") return { operation: "change-display-name", id: null };
@@ -202,7 +210,7 @@ async function loadIntent(tx: Tx, userId: string, pathname: string, form: FormDa
     target.parentId = entry.parentId;
     target.altOf = entry.altOf;
     content = { title: operation === "edit-topic" ? publicTitle(raw.title) : null, body: raw.body, lang: editable.entry.mode === "moderator-fix" ? entry.lang : raw.lang || entry.lang };
-    input = { ...content, asksStance: entry.asksStance, aiAssistance: entry.aiAssistance, stanceTag: operation === "edit-reply" ? raw.stanceTag : entry.stanceTag, note: formString(form, "note"), mode: editable.entry.mode };
+    input = { ...content, asksStance: entry.asksStance, aiAssistance: entry.aiAssistance, stanceTag: operation === "edit-reply" && !pathname.startsWith("/mcp/entry-edits/") ? raw.stanceTag : entry.stanceTag, note: formString(form, "note"), mode: editable.entry.mode };
   } else if (operation === "delete-account") {
     const posts = formString(form, "posts") || "keep";
     if (!["keep", "delete"].includes(posts) || formString(form, "confirmation") !== profile.handle) throw new SigningError("invalid_payload", 400);

@@ -1,6 +1,8 @@
 import { exportPostAiMaterials } from "./post-ai-materials.server";
 import { ownPushSubscriptions } from "./push/subscriptions.server";
 import { exportVillageIcons } from "./village-icon.server";
+import { exportOwnEntryEditProposals } from "./mcp/post-proposals.server";
+import { exportOwnVillageProposals } from "./mcp/village-proposals.server";
 import { exportMemberAvatar } from "./member-avatar.server";
 import { createHmac, randomBytes } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -307,7 +309,8 @@ export async function buildObservationExport(
 // Version 15 includes notification registration counts, coarse labels and dates.
 // Version 16 includes the member's saved appearance.
 // Version 17 includes source-attribution snapshots belonging to the member.
-export const MEMBER_EXPORT_VERSION = 17;
+// Version 18 includes the member's pending village proposals, including private icon candidates.
+export const MEMBER_EXPORT_VERSION = 18;
 
 export type MemberExport = {
   format: "tomola-member-export";
@@ -397,6 +400,8 @@ export type MemberExport = {
   follows: Array<{ thread_id: number; state: string; created_at: string; updated_at: string }>;
   // The villages the member follows: only the village selector (slug or @handle) and when the member began to follow it. A village that is not public any more is not listed.
   village_icons: Awaited<ReturnType<typeof exportVillageIcons>>;
+  entry_edit_proposals: Awaited<ReturnType<typeof exportOwnEntryEditProposals>>;
+  village_proposals: Awaited<ReturnType<typeof exportOwnVillageProposals>>;
   village_follows: Array<{ village: string; created_at: string }>;
   signatures: Array<{ id: number; entry_id: number | null; source_hash: string | null; operation: string; signed_payload: string; payload_hash: string; challenge: string; credential_id: string; public_key: string; rp_id: string; origin: string; assertion: Record<string, unknown>; authenticator_data: string; client_data_json: string; signature: string; created_at: string }>;
   ai_materials: Awaited<ReturnType<typeof exportPostAiMaterials>>;
@@ -420,6 +425,7 @@ async function exportVillageFollows(db: Db, userId: string): Promise<MemberExpor
 }
 
 export async function buildMemberExport(db: Db, userId: string, opts: { now?: Date } = {}): Promise<MemberExport> {
+  const now = opts.now ?? new Date();
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId));
   const own = await db
     .select()
@@ -460,7 +466,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     nushi_sources: sourceRows.map(row => ({ answer_id: row.answerId, entry_id: row.entryId, author: row.author, created_at: row.createdAt.toISOString() })),
     push_subscriptions: { count: pushRows.length, registrations: pushRows.map(row => ({ browser: row.browser, os: row.os, registered_at: row.createdAt.toISOString() })) },
     version: MEMBER_EXPORT_VERSION,
-    generated_at: (opts.now ?? new Date()).toISOString(),
+    generated_at: now.toISOString(),
     profile: profile
       ? {
           handle: profile.handle,
@@ -537,6 +543,8 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     saved_topics: savedRows.map(row => ({ topic_id: row.topicId, created_at: row.createdAt.toISOString() })),
     follows: followRows.map((f) => ({ thread_id: f.threadId, state: f.state, created_at: f.createdAt.toISOString(), updated_at: f.updatedAt.toISOString() })),
     village_icons: await exportVillageIcons(db, userId),
+    entry_edit_proposals: await exportOwnEntryEditProposals(db, userId, now),
+    village_proposals: await exportOwnVillageProposals(db, userId, now),
     village_follows: villageFollowRows,
     signatures: signatureRows.map(({ signature: s }) => ({ id: s.id, entry_id: s.entryId, source_hash: s.sourceHash, operation: s.operation, signed_payload: s.payload, payload_hash: s.payloadHash, challenge: s.challenge, credential_id: s.credentialId, public_key: s.publicKey, rp_id: s.rpId, origin: s.origin, assertion: s.assertion, authenticator_data: s.authenticatorData, client_data_json: s.clientDataJson, signature: s.signature, created_at: s.createdAt.toISOString() })),
     chat_messages: await exportOwnChat(db, userId),

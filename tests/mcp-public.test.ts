@@ -109,7 +109,7 @@ describe("anonymous MCP", () => {
   it("rejects every member-only tool as unknown without authentication challenges or writes", async () => {
     const before = await db.select().from(drafts);
     const privateNotifications = await db.select().from(notifications);
-    for (const name of ["tomola_glossary", "tomola_search", "tomola_activity", "tomola_stance_counts", "tomola_draft_create", "tomola_draft_list", "tomola_draft_get", "tomola_draft_update", "tomola_draft_delete"]) {
+    for (const name of ["tomola_capabilities", "tomola_villages", "tomola_village", "tomola_glossary", "tomola_search", "tomola_activity", "tomola_stance_counts", "tomola_draft_create", "tomola_draft_list", "tomola_draft_get", "tomola_draft_update", "tomola_draft_delete", "tomola_draft_status", "tomola_entry_edit_prepare", "tomola_entry_delete_prepare", "tomola_village_change_prepare"]) {
       const response = await publicCall(name, { id: topicId, kind: "topic", body: "ATTEMPTED-WRITE" }, { token: readToken, headers: { cookie: "better-auth.session_token=ignored" } });
       expect(response.status).not.toBe(401); expect(response.status).not.toBe(403);
       expect(response.headers.get("www-authenticate")).toBeNull();

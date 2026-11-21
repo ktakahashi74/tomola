@@ -170,7 +170,7 @@ describe("village destinations", () => {
     const created = await createClientDraft(db, "actor", client, { kind: "topic", ...input, village: "ignored" });
     if (!created.ok) throw new Error(created.error);
     expect(created).not.toHaveProperty("village");
-    expect(await updateClientDraft(db, "actor", client, created.id, { village: "ignored-again", body: "Updated off body." })).toMatchObject({ ok: true });
+    expect(await updateClientDraft(db, "actor", client, created.id, { village: "ignored-again", body: "Updated off body.", expectedVersion: 1 })).toMatchObject({ ok: true });
     const draft = (await getDraft(db, "actor", created.id))!;
     expect(draft).not.toHaveProperty("village");
     expect(buildDraftMarkdown(draft)).not.toContain("village:");
@@ -183,7 +183,7 @@ describe("village destinations", () => {
     const db = await setup();
     const saved = await createClientDraft(db, "actor", client, { kind: "topic", ...input });
     if (!saved.ok) throw new Error(saved.error);
-    for (const operation of [() => updateClientDraft(db, "actor", client, saved.id, { village: "ja" }), () => publishDraft(db, "actor", saved.id)]) {
+    for (const operation of [() => updateClientDraft(db, "actor", client, saved.id, { village: "ja", expectedVersion: 1 }), () => publishDraft(db, "actor", saved.id)]) {
       const { pending } = await db.transaction(async tx => {
         await tx.select({ id: profiles.userId }).from(profiles).where(eq(profiles.userId, "actor")).for("update");
         const pending = operation(); void pending.catch(() => {});

@@ -30,11 +30,21 @@ ${connectSafetySection(plan)}
 
 Before preparing a post or reply, read ${plan.origin}${WRITING_MD_PATH} for Markdown syntax, image preparation and limits.
 
-read: tomola_thread (original plus optional selected translation and version IDs), tomola_search, tomola_latest (optional sourceLang), tomola_activity (public changes or content-only notifications), tomola_stance_counts (aggregate counts and the shared daily reasons), tomola_glossary.
+Call tomola_capabilities on the member endpoint to check effective scopes, writing eligibility and feature availability. Actions report available, missing_scope, writing_unavailable, disabled, browser_required or unsupported. A supported action may still require ownership or membership for a particular target.
+
+For tools requiring both read and draft, use OAuth and grant both scopes. Each PAT is issued for either reading or drafting.
+
+With read permission, use tomola_thread (original plus optional selected translation and version IDs), tomola_search, tomola_latest (optional sourceLang), tomola_activity (public changes or content-only notifications), tomola_stance_counts (aggregate counts and the shared daily reasons) and tomola_glossary. If villages are enabled, tomola_villages lists active shared public villages. Use tomola_village with a slug for details, your own membership and management eligibility, and visible topics. Pass the returned next_args to the same tool for another page. Personal villages, rosters and invitations are excluded from these tools.
 
 ${DRAFT_RESPONSE_GUIDE}
 
-draft: tomola_draft_create, tomola_draft_list, tomola_draft_get, tomola_draft_update, tomola_draft_delete. Each is bound to the authenticated creation client. A draft PAT cannot read forum posts. Draft creation returns approvalUrl; Publishing happens only in the member's browser: the member opens approvalUrl, checks the displayed text and publishes it. API and MCP credentials cannot publish. If the member has turned on passkey confirmation in settings, publishing also asks for a passkey signature. The signature does not establish that the member read or understood the text. No tool publishes, selects a stance, sends Insightful, reports, or appeals. Personal stance and stance-change records are not shared; tomola_privacy returns the fixed disclosure. The member may select and copy records from the screen themselves.
+With draft permission, call tomola_draft_create, tomola_draft_list, tomola_draft_get, tomola_draft_update, tomola_draft_delete or tomola_draft_status. Draft access is bound to the member and creation client. Give each intended draft a unique requestId in create and send identical arguments on retry. Use the current version from get as expectedVersion for update or discard. Status reports pending, published, discarded or unknown and supplies entryUrl while the published post is readable. The member opens approvalUrl to review and publish. If they have enabled passkey confirmation, publication asks for their signature.
+
+With both read and draft, call tomola_entry_edit_prepare for changes to the member's published post or reply, or tomola_entry_delete_prepare for a browser deletion confirmation. Pass entryId and give the member approvalUrl. Editing accepts title, body or lang, with title available for topics. Call tomola_entry_edit_get for your pending proposal. Use tomola_entry_edit_status to track an edit proposal and tomola_entry_edit_discard with expectedVersion to discard it. Status and discard require draft. Edit proposals expire after seven days. Deletion of a topic makes all its replies unreadable. Removal of a reply leaves its replies readable.
+
+When villages are enabled, an owner with read and draft permission can call tomola_village_change_prepare for a shared village's name or description, then share approvalUrl for browser review. Use tomola_village_change_get and tomola_village_change_discard for that client's pending proposals. An icon operation additionally requires media. Set icon to { action: "reset" } to restore the default or { action: "replace", mediaId } with a still image from the upload API. The proposal keeps a separate private copy of the candidate icon. To remove that copy before approval, discard the proposal.
+
+The member confirms publication, editing, deletion and village changes in the browser. Automatic publication through MCP is unsupported. Personal stance and stance-change records are available for members to select and copy from their own screens. tomola_privacy returns the fixed disclosure.
 
 ${mediaUploadGuide(plan.origin)}
 

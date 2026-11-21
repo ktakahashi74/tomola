@@ -1,5 +1,6 @@
 import { bodyWithinLimits } from "./body-length";
 import { resolvePostLanguage } from "./lang-detect";
+import { finishDraftReceipt, type DraftPublication } from "./draft-receipts.server";
 import { recordDraftPublication } from "./eval/signals.server";
 import { finishQuestionDraft } from "./ai-question-usage.server";
 import { checkBodyBudget } from "~/lib/markdown.server";
@@ -9,7 +10,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { AI_ASSISTANCE, type AiAssistance } from "~/lib/ai-assistance";
 import type { Db, Tx } from "~/lib/db/client.server";
-import { apiTokens, drafts, entries, profiles } from "~/lib/db/schema";
+import { apiTokens, draftReceipts, drafts, entries, profiles } from "~/lib/db/schema";
 import {
   createReply,
   createTopic,
@@ -185,7 +186,7 @@ async function createDraftImplementation(
   // For via = "api", preserve the token id and frontmatter exactly as received (app/lib/api/drafts-api.server.ts).
   // maxPendingApiDrafts: per-member pending API draft limit when via = "api". Lock the member row and count/insert in one transaction
   // to prevent concurrent requests exceeding the limit.
-  opts: { aiSource?: "api" | "mcp"; via?: EntryVia; now?: Date; tokenId?: number | null; rawFrontmatter?: string | null; maxPendingApiDrafts?: number; client?: { key: string; id: string; name: string; uri: string | null }; villageId?: string | null; responseTo?: number | null } = {},
+  opts: { aiSource?: "api" | "mcp"; via?: EntryVia; now?: Date; tokenId?: number | null; rawFrontmatter?: string | null; maxPendingApiDrafts?: number; client?: { key: string; id: string; name: string; uri: string | null }; villageId?: string | null; responseTo?: number | null; request?: { id: string; hash: string } } = {},
 ): Promise<{ ok: true; id: number } | { ok: false; error: DraftError }> {
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: fieldError(parsed.error.issues) };
@@ -245,15 +246,21 @@ async function createDraftImplementation(
     updatedAt: now,
   };
   const cap = (opts.via ?? "web") === "api" ? opts.maxPendingApiDrafts : undefined;
-  if (cap === undefined) {
+  const clientKey = values.via === "api" ? values.clientKey ?? (values.tokenId === null ? null : `token:${values.tokenId}`) : null;
+  if (cap === undefined && clientKey === null) {
     const [row] = await db.insert(drafts).values(values).returning({ id: drafts.id });
     return { ok: true, id: row.id };
   }
   return db.transaction(async (tx) => {
     // Lock the member row before counting, serializing concurrent requests from the same member.
-    await tx.select({ userId: profiles.userId }).from(profiles).where(eq(profiles.userId, authorId)).for("update");
-    if ((await countApiDrafts(tx, authorId)) >= cap) return { ok: false as const, error: "too_many_pending_drafts" as const };
+    if (cap !== undefined) {
+      await tx.select({ userId: profiles.userId }).from(profiles).where(eq(profiles.userId, authorId)).for("update");
+      if ((await countApiDrafts(tx, authorId)) >= cap) return { ok: false as const, error: "too_many_pending_drafts" as const };
+    }
     const [row] = await tx.insert(drafts).values(values).returning({ id: drafts.id });
+    if (clientKey !== null) await tx.insert(draftReceipts).values({
+      draftId: row.id, authorId, clientKey, requestId: opts.request?.id, requestHash: opts.request?.hash,
+    });
     return { ok: true as const, id: row.id };
   });
 }
@@ -289,7 +296,7 @@ type DraftUpdateArgs<SkipUnchanged extends boolean> = [
 async function updateDraftImplementation(
   ...[db, authorId, draftId, input, opts = {}]: [db: Db, ...args: DraftUpdateArgs<false>] | [tx: Tx, ...args: DraftUpdateArgs<boolean>]
 ): Promise<{ ok: true; version?: number } | { ok: false; error: DraftError }> {
-  if (opts.expectedVersion !== undefined && (!Number.isSafeInteger(opts.expectedVersion) || opts.expectedVersion < 1)) return { ok: false, error: "draft_conflict" };
+  if (opts.expectedVersion !== undefined && (!Number.isInteger(opts.expectedVersion) || opts.expectedVersion < 1 || opts.expectedVersion > 2_147_483_647)) return { ok: false, error: "draft_conflict" };
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: fieldError(parsed.error.issues) };
   const d = parsed.data;
@@ -455,29 +462,47 @@ export async function listDrafts(db: Db, authorId: string, opts: { limit?: numbe
 export function linkedDraftOf(form: FormData): { id: number; version: number } | null {
   const id = String(form.get("fromDraft") ?? ""), version = String(form.get("fromDraftVersion") ?? "");
   if (!/^[1-9]\d{0,15}$/.test(id) || !/^[1-9]\d{0,9}$/.test(version)) return null;
-  return { id: Number(id), version: Number(version) };
+  const values = { id: Number(id), version: Number(version) };
+  return Number.isSafeInteger(values.id) && values.version <= 2_147_483_647 ? values : null;
 }
 
-// That draft is removed once what was written from it is posted, and only if it is still at the version the screen saw: an AI may have changed it since, and that version is
-// kept. Call it inside the transaction of the post, so that a failure here does not leave a post made and the form still sendable.
-export async function deleteLinkedDraft(db: Db, authorId: string, form: FormData, opts: { questionReplyPublished?: boolean } = {}): Promise<boolean> {
+// A client draft may also be published from a browser editor linked to it. Reserve that
+// version before creating a post, so publication through the draft screen cannot win too.
+// Ordinary web editors may publish their form while leaving a replaced local draft in place.
+export async function lockLinkedClientDraft(tx: Tx, authorId: string, form: FormData): Promise<boolean> {
+  const linked = linkedDraftOf(form);
+  if (!linked) return true;
+  if (villagesEnabled()) await lockVillageProfile(tx, authorId);
+  const [draft] = await tx.select({ version: drafts.version }).from(drafts)
+    .where(and(eq(drafts.id, linked.id), eq(drafts.authorId, authorId), eq(drafts.via, "api"))).for("update");
+  if (draft) return draft.version === linked.version;
+  const [consumed] = await tx.select({ id: draftReceipts.draftId }).from(draftReceipts)
+    .where(and(eq(draftReceipts.draftId, linked.id), eq(draftReceipts.authorId, authorId)));
+  return !consumed;
+}
+
+// Called inside the post transaction. Browser-side edits never overwrite a newer AI draft.
+export async function deleteLinkedDraft(tx: Tx, authorId: string, form: FormData, published: DraftPublication): Promise<boolean> {
   const linked = linkedDraftOf(form);
   if (!linked) return false;
-  const deleted = await db
-    .delete(drafts)
+  const [deleted] = await tx.delete(drafts)
     .where(and(eq(drafts.id, linked.id), eq(drafts.authorId, authorId), eq(drafts.version, linked.version)))
-    .returning({ id: drafts.id });
-  if (deleted.length) await finishQuestionDraft(db, linked.id, opts.questionReplyPublished === true);
-  return deleted.length > 0;
+    .returning({ id: drafts.id, via: drafts.via });
+  if (!deleted) return false;
+  if (deleted.via === "api") await finishDraftReceipt(tx, linked.id, published);
+  await finishQuestionDraft(tx, linked.id, published.id !== published.threadId);
+  return true;
 }
 
-export async function deleteDraft(db: Db, authorId: string, draftId: number): Promise<boolean> {
+export async function deleteDraft(db: Db, authorId: string, draftId: number, expectedVersion?: number): Promise<boolean> {
   return db.transaction(async tx => {
-    const deleted = await tx.delete(drafts)
-      .where(and(eq(drafts.id, draftId), eq(drafts.authorId, authorId)))
-      .returning({ id: drafts.id });
-    if (deleted.length) await finishQuestionDraft(tx, draftId, false);
-    return deleted.length > 0;
+    const [deleted] = await tx.delete(drafts)
+      .where(and(eq(drafts.id, draftId), eq(drafts.authorId, authorId), expectedVersion === undefined ? undefined : eq(drafts.version, expectedVersion)))
+      .returning({ id: drafts.id, via: drafts.via });
+    if (!deleted) return false;
+    if (deleted.via === "api") await finishDraftReceipt(tx, draftId, null);
+    await finishQuestionDraft(tx, draftId, false);
+    return true;
   });
 }
 
@@ -516,7 +541,9 @@ async function publishDraftImplementation(
       if (draft.kind === "topic") {
         const res = await createTopic(tx, authorId, { ...common, title: draft.title, asksStance: draft.asksStance, altOf: draft.altOf }, { via, now: opts.now, responseTo: draft.responseTo, ...(villagesEnabled() ? { villageId: draft.villageId, villageDisplayed: opts.villageDisplayed } : {}) });
         if (!res.ok) throw new PublishFailed(res.error, res.village);
-        await recordDraftPublication(tx, res.id, draft, opts.now ?? new Date());
+        const now = opts.now ?? new Date();
+        if (via === "api") await finishDraftReceipt(tx, draftId, { id: res.id, threadId: res.id }, now);
+        await recordDraftPublication(tx, res.id, draft, now);
         return { ok: true, kind: "topic", id: res.id, threadId: res.id };
       }
       const threadId = draft.threadId;
@@ -529,8 +556,10 @@ async function publishDraftImplementation(
         { via, now: opts.now },
       );
       if (!res.ok) throw new PublishFailed(res.error);
-      await recordDraftPublication(tx, res.id, draft, opts.now ?? new Date());
-      await finishQuestionDraft(tx, draftId, true, opts.now ?? new Date());
+      const now = opts.now ?? new Date();
+      if (via === "api") await finishDraftReceipt(tx, draftId, { id: res.id, threadId }, now);
+      await recordDraftPublication(tx, res.id, draft, now);
+      await finishQuestionDraft(tx, draftId, true, now);
       return { ok: true, kind: "reply", id: res.id, threadId, followed: res.followed };
     });
   } catch (error) {

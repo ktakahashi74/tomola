@@ -823,6 +823,90 @@ export const drafts = pgTable(
   ],
 );
 
+// Client-visible outcomes survive consumption of a draft. No title or body is retained here.
+export const draftReceipts = pgTable(
+  "draft_receipts",
+  {
+    draftId: bigint("draft_id", { mode: "number" }).primaryKey(),
+    authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    clientKey: text("client_key").notNull(),
+    requestId: text("request_id"),
+    requestHash: text("request_hash"),
+    state: text("state").$type<"pending" | "published" | "discarded">().notNull().default("pending"),
+    entryId: bigint("entry_id", { mode: "number" }),
+    threadId: bigint("thread_id", { mode: "number" }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("draft_receipts_request_idx").on(t.authorId, t.clientKey, t.requestId),
+    check("draft_receipts_request_check", sql`(${t.requestId} is null and ${t.requestHash} is null) or
+      (${t.requestId} is not null and length(${t.requestId}) between 1 and 128 and ${t.requestHash} is not null)`),
+    check("draft_receipts_state_check", sql`(${t.state} = 'pending' and ${t.finishedAt} is null and ${t.entryId} is null and ${t.threadId} is null)
+      or (${t.state} = 'published' and ${t.finishedAt} is not null and ${t.entryId} is not null and ${t.threadId} is not null)
+      or (${t.state} = 'discarded' and ${t.finishedAt} is not null and ${t.entryId} is null and ${t.threadId} is null)`),
+  ],
+);
+
+// An edit proposal has its own lifecycle and cannot be published as a new draft.
+export const entryEditProposals = pgTable(
+  "entry_edit_proposals",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    clientKey: text("client_key").notNull(),
+    clientName: text("client_name").notNull(),
+    entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }),
+    entryVersion: text("entry_version").notNull(),
+    version: integer("version").notNull().default(1),
+    state: text("state").$type<"pending" | "applied" | "discarded">().notNull().default("pending"),
+    title: text("title"),
+    body: text("body"),
+    lang: text("lang").$type<SourceLang>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("entry_edit_proposals_author_idx").on(t.authorId, t.state),
+    index("entry_edit_proposals_entry_idx").on(t.entryId),
+    index("entry_edit_proposals_expiry_idx").on(t.expiresAt),
+    check("entry_edit_proposals_expiry_check", sql`${t.expiresAt} > ${t.createdAt}`),
+    check("entry_edit_proposals_version_check", sql`${t.version} >= 1`),
+    check("entry_edit_proposals_state_check", sql`(${t.state} = 'pending' and ${t.body} is not null and ${t.lang} is not null and ${t.finishedAt} is null)
+      or (${t.state} in ('applied', 'discarded') and ${t.title} is null and ${t.body} is null and ${t.lang} is null and ${t.finishedAt} is not null)`),
+  ],
+);
+
+export const villageProposals = pgTable(
+  "village_proposals",
+  {
+    id: text("id").primaryKey().default(sql`replace(gen_random_uuid()::text, '-', '')`),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    clientKey: text("client_key").notNull(),
+    clientId: text("client_id").notNull(),
+    clientName: text("client_name").notNull(),
+    villageId: text("village_id").notNull().references(() => villages.id, { onDelete: "cascade" }),
+    sourceVersion: text("source_version").notNull(),
+    name: text("name"),
+    description: text("description"),
+    iconAction: text("icon_action").$type<"keep" | "reset" | "replace">().notNull(),
+    iconBytes: binary("icon_bytes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index("village_proposals_user_idx").on(t.userId, t.expiresAt),
+    index("village_proposals_expiry_idx").on(t.expiresAt),
+    index("village_proposals_village_idx").on(t.villageId),
+    check("village_proposals_id_check", sql`${t.id} ~ '^[0-9a-f]{32}$'`),
+    check("village_proposals_source_version_check", sql`${t.sourceVersion} ~ '^[0-9a-f]{64}$'`),
+    check("village_proposals_changes_check", sql`${t.name} is not null or ${t.description} is not null or ${t.iconAction} <> 'keep'`),
+    check("village_proposals_icon_check", sql`(${t.iconAction} in ('keep', 'reset') and ${t.iconBytes} is null)
+      or (${t.iconAction} = 'replace' and ${t.iconBytes} is not null and octet_length(${t.iconBytes}) between 1 and 262144)`),
+    check("village_proposals_expiry_check", sql`${t.expiresAt} > ${t.createdAt}`),
+  ],
+);
+
 // Two-minute, single-use WebAuthn challenges. The challenge bytes contain the SHA-256 of the canonical payload as well as a random nonce.
 // All consumers lock the member first and consume the challenge together with the credential counter and the authorized mutation.
 export const signingChallenges = pgTable(

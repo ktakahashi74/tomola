@@ -127,9 +127,9 @@ describe("writing on screen states no ai_assistance", () => {
     const page = await import("~/routes/draft");
     const act = (id: number, form: Record<string, string>) => h.outcome(async () => page.action(await h.signedArgs(h.request(`/drafts/${id}`, { as: "hana", form }), { id: String(id) })));
     // Saving from the draft page (which has no such field) leaves the value alone; a posted aiAssistance is not read.
-    expect((await act(created.id, { intent: "save", title: "api draft", body: "Edited.", lang: "en", aiAssistance: "none" })).status).toBe(200);
+    expect((await act(created.id, { intent: "save", version: "1", title: "api draft", body: "Edited.", lang: "en", aiAssistance: "none" })).status).toBe(200);
     expect((await getDraft(h.db, h.ids.hana, created.id))?.aiAssistance).toBe("coauthor");
-    expect((await act(created.id, { intent: "publish", title: "api draft", body: "Edited.", lang: "en" })).status).toBe(302);
+    expect((await act(created.id, { intent: "publish", version: "2", title: "api draft", body: "Edited.", lang: "en" })).status).toBe(302);
     expect(await stored("api draft")).toMatchObject({ aiAssistance: "coauthor", via: "api", body: "Edited." });
     expect((await act(screenDraft.id, { intent: "publish", version: String(screenDraft.version), title: "screen draft", body: "Draft.", lang: "ja" })).status).toBe(302);
     expect((await stored("screen draft")).aiAssistance).toBeNull();

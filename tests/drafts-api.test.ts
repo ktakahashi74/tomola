@@ -224,7 +224,7 @@ describe("POST /api/drafts: creating a draft", () => {
     const id = created.json.id as number;
     const page = await import("~/routes/draft");
     const publish = (as: string | undefined, headers: Record<string, string> = {}) =>
-      h.outcome(async () => page.action(await h.signedArgs(h.request(`/drafts/${id}`, { as, form: { intent: "publish", title: "To approve", body: "Approved body.", lang: "en" }, headers }), { id: String(id) })));
+      h.outcome(async () => page.action(await h.signedArgs(h.request(`/drafts/${id}`, { as, form: { intent: "publish", version: "1", title: "To approve", body: "Approved body.", lang: "en" }, headers }), { id: String(id) })));
     // A draft Bearer token alone cannot publish without a cookie session.
     expect(await publish(undefined, { authorization: `Bearer ${draftToken}` })).toMatchObject({ status: 302, location: "/login" });
     // Reject a request that is neither a read nor same-origin.

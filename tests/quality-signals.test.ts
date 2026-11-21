@@ -129,7 +129,7 @@ describe("aggregate translation quality signals", () => {
     const client = { key: "oauth:test-client", id: "test-client", name: "Test client", uri: null, tokenId: null };
     const mcp = await createClientDraft(db, "writer", client, { kind: "topic", lang: "ja", body: "First AI body." });
     if (!mcp.ok) throw new Error(mcp.error);
-    await updateClientDraft(db, "writer", client, mcp.id, { body: "Second AI body." });
+    await updateClientDraft(db, "writer", client, mcp.id, { body: "Second AI body.", expectedVersion: 1 });
     expect(await publishDraft(db, "writer", mcp.id)).toMatchObject({ ok: true });
     const invalid = await createDraft(db, "writer", { kind: "topic", lang: "ja", body: "" }, { via: "api" });
     if (!invalid.ok) throw new Error(invalid.error);
@@ -164,8 +164,9 @@ describe("aggregate translation quality signals", () => {
     const client = { key: "oauth:c", id: "c", name: "Client", uri: null, tokenId: null };
     const created = await createClientDraft(db, "writer", client, { kind: "topic", lang: "ja", body: "AI body" });
     if (!created.ok) throw new Error(created.error);
-    await updateDraft(db, "writer", created.id, { lang: "ja", body: "Human body" });
-    await updateClientDraft(db, "writer", client, created.id, { title: "AI title" });
+    const browserEdit = await updateDraft(db, "writer", created.id, { lang: "ja", body: "Human body" }, { returnVersion: true });
+    if (!browserEdit.ok) throw new Error(browserEdit.error);
+    expect(await updateClientDraft(db, "writer", client, created.id, { title: "AI title", expectedVersion: browserEdit.version })).toMatchObject({ ok: true });
     const [draft] = await db.select().from(drafts);
     expect(draft.aiBaseline).toEqual({ title: "AI title", body: "AI body" });
     expect(draft.body).toBe("Human body");

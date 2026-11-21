@@ -87,13 +87,14 @@ describe("connection data and discovery", () => {
     expect(general).toContain("/.well-known/oauth-authorization-server/api/auth");
     expect(general).toContain("S256 PKCE");
     expect(general).toContain("tools/list");
+    expect(general).toContain("tomola_capabilities");
     expect(general).toContain("tomola_latest");
-    expect(general).toContain("empty topics list");
+    expect(general).toContain("empty list");
     expect(general).toContain("isError");
     expect(general).toContain("tomola_draft_create");
     expect(general).toContain("tomola_draft_list");
     expect(general).toContain("empty array ([])");
-    expect(general).toMatch(/do not create a draft merely to test/);
+    expect(general).toContain("without creating a test draft");
     expect(general).toContain("server address field");
     for (const client of plan.clients) {
       expect(general).not.toContain(client.label);

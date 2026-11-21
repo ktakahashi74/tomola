@@ -11,7 +11,7 @@ import * as rates from "~/lib/rate-limit.server";
 import { createAuth } from "~/lib/auth/auth.server";
 import { isAllowedAuthEndpoint } from "~/lib/auth/endpoints.server";
 import type { Db } from "~/lib/db/client.server";
-import { oauthConsent, oauthClient, drafts, entries, notifications, profiles, translations, oauthRefreshToken, mcpRevokedToken, rateLimits, session, verification } from "~/lib/db/schema";
+import { oauthConsent, oauthClient, drafts, entries, notifications, profiles, translations, oauthRefreshToken, mcpRevokedToken, rateLimits, session, verification, villages, villageMembers } from "~/lib/db/schema";
 import { browserBindingIdentifier } from "~/lib/auth/magic-link-browser.server";
 import { revokedLineId } from "~/lib/mcp/line.server";
 import { authenticateRead } from "~/lib/api/read-auth.server";
@@ -47,6 +47,8 @@ import { parseBlocks } from "./helpers/md";
 import { AI_USE_GUIDANCE } from "~/lib/api/ai-use-guidance.server";
 import { messageOf } from "~/lib/draft-errors.server";
 import { DRAFT_ISSUES_NOTICE } from "~/lib/draft-issues";
+import { TOPICS_PER_PAGE } from "~/lib/pagination";
+import { ensureLanguageVillages } from "~/lib/villages.server";
 
 let db: Db;
 let auth: ReturnType<typeof createAuth>;
@@ -148,6 +150,102 @@ async function modern(method: string, token: string, params: object = {}, header
   return fetch(`${base}/mcp`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": method, ...(method === "tools/call" ? { "Mcp-Name": (params as { name: string }).name } : {}), ...headers }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: { ...params, _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { name: "Untrusted self-report", version: "1" }, "io.modelcontextprotocol/clientCapabilities": {} } } }) });
 }
 
+const memberCall = (token: string, name: string, args: object = {}) => modern("tools/call", token, { name, arguments: args });
+
+async function memberOutput(response: Response) {
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  const { result } = await response.json();
+  expect(result.isError).not.toBe(true);
+  return result.content[0].text as string;
+}
+
+const memberJson = async (response: Response) => JSON.parse(parseBlocks(await memberOutput(response))[0].body);
+
+describe("Member MCP workflow discovery", () => {
+  it("reports effective consent even when no scopes remain and distinguishes browser confirmation", async () => {
+    vi.stubEnv("VILLAGES", "");
+    vi.stubEnv("PUBLIC_READING", "1");
+    try {
+      const clientId = await register();
+      const token = (await authorize(clientId)).access_token;
+      await db.update(oauthConsent).set({ scopes: ["draft", "offline_access"] }).where(eq(oauthConsent.clientId, clientId));
+      const draftOnly = await memberJson(await memberCall(token, "tomola_capabilities"));
+      expect(draftOnly).toMatchObject({
+        scopes: ["draft", "offline_access"], writer: { allowed: true }, features: { villages: false, publicReading: true },
+        actions: {
+          read: { status: "missing_scope", missingScopes: ["read"] },
+          saveDrafts: { status: "available" }, readVillages: { status: "disabled" },
+          uploadMedia: { status: "missing_scope", missingScopes: ["media"] },
+          publishDraft: { status: "browser_required" }, autoPublish: { status: "unsupported" },
+        },
+        links: { connections: `${base}/settings/connections`, draftReview: `${base}/drafts` },
+      });
+      const toolList = (await (await modern("tools/list", token)).json()).result.tools;
+      expect(toolList.some((tool: { name: string }) => tool.name === "tomola_villages")).toBe(false);
+      await db.update(oauthConsent).set({ scopes: [] }).where(eq(oauthConsent.clientId, clientId));
+      expect(await memberJson(await memberCall(token, "tomola_capabilities"))).toMatchObject({ scopes: [] });
+      expect((await memberCall(token, "tomola_latest")).status).toBe(403);
+    } finally { vi.unstubAllEnvs(); vi.stubEnv("BETTER_AUTH_URL", base); vi.stubEnv("ENABLED_LANGS", "ja,en"); }
+  });
+
+  it("reads shared villages, own membership and visible paged topics without returning private records", async () => {
+    vi.stubEnv("VILLAGES", "1");
+    try {
+      await ensureLanguageVillages(db);
+      const [shared] = await db.insert(villages).values([
+        { slug: "mcp-village-fixture", kind: "invite_public", name: "MCP village", description: "https://village.example.org/info?k=fixture_secret" },
+        { slug: "mcp-village-closed", kind: "closed", name: "Private village marker" },
+      ]).returning();
+      await db.insert(villageMembers).values([{ villageId: shared.id, userId: "member", role: "owner" }, { villageId: shared.id, userId: "other", role: "member" }]);
+      await db.insert(entries).values([
+        ...Array.from({ length: TOPICS_PER_PAGE + 1 }, (_, i) => ({ kind: "topic" as const, authorId: "member", lang: "en" as const, title: `MCP visible topic ${i}`, body: "Body", villageId: shared.id })),
+        { kind: "topic", authorId: "other", lang: "en", title: "Private hidden topic marker", body: "Private body marker", villageId: shared.id, hiddenAt: new Date() },
+        { kind: "topic", authorId: "other", lang: "en", title: "Private deleted topic marker", body: "Private body marker", villageId: shared.id, deletedAt: new Date() },
+      ]);
+      const denied = await memberCall(draftToken, "tomola_villages");
+      expect(denied.status).toBe(403);
+      expect(denied.headers.get("www-authenticate")).toContain('scope="read"');
+
+      const directory = await memberOutput(await memberCall(readToken, "tomola_villages", { lang: "en" }));
+      expect(directory).toContain("content_trust: untrusted_user_content");
+      expect(directory).toContain("credential_links_redacted: true");
+      expect(directory).not.toMatch(/Private village marker|fixture_secret|@june|@hana/);
+      expect(parse(parseBlocks(directory).at(-1)!.body)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ slug: "mcp-village-fixture", canonical: `${base}/v/mcp-village-fixture`, joined: true, members: 2 }),
+      ]));
+      const detail = await memberOutput(await memberCall(readToken, "tomola_village", { slug: "MCP-VILLAGE-FIXTURE", lang: "en", long: true }));
+      expect(detail).not.toMatch(/Private (hidden|deleted|body)|fixture_secret|roster|invite_id/);
+      const blocks = parseBlocks(detail);
+      expect(blocks[1].fm).toMatchObject({ type: "village_membership", joined: true, owner: true, can_manage: true, can_change_icon: true, member_count: 2 });
+      expect(blocks[2].fm).toMatchObject({ canonical: `${base}/v/mcp-village-fixture?long=1` });
+      const nextArgs = blocks.at(-1)!.fm.next_args as object;
+      expect(nextArgs).toEqual({ slug: "mcp-village-fixture", page: 2, lang: "en", long: true });
+      const next = parseBlocks(await memberOutput(await memberCall(readToken, "tomola_village", nextArgs)));
+      expect(next.at(-1)!.fm).toMatchObject({ page: 2, next: null });
+      expect(parse(next[2].body)).toHaveLength(1);
+      const languageVillage = await memberOutput(await memberCall(readToken, "tomola_village", { slug: "ja" }));
+      expect(languageVillage).toContain(`${base}/v/ja`);
+      expect(parseBlocks(languageVillage)[1].fm.can_manage).toBe(false);
+      expect(await memberOutput(await memberCall(readToken, "tomola_village", { slug: "mcp-village-closed" }))).toContain("Not found.");
+
+      const oauth = (await authorize(await register())).access_token;
+      const noMedia = await memberCall(oauth, "tomola_village_change_prepare", { slug: shared.slug, icon: { action: "reset" } });
+      expect(noMedia.status).toBe(403);
+      expect(noMedia.headers.get("www-authenticate")).toContain('scope="read draft media"');
+      const noDraft = await memberCall(readToken, "tomola_village_change_prepare", { slug: shared.slug, name: "Scope check" });
+      expect(noDraft.status).toBe(403);
+      const proposal = await memberJson(await memberCall(oauth, "tomola_village_change_prepare", { slug: shared.slug, name: "Proposed fixture name" }));
+      expect(proposal).toMatchObject({ village: shared.slug, status: "pending", approvalUrl: `${base}/village-proposals/${proposal.id}` });
+      const other = (await authorize(await register())).access_token;
+      const inaccessible = await memberCall(other, "tomola_village_change_get", { id: proposal.id });
+      expect((await inaccessible.json()).result.isError).toBe(true);
+      expect(await memberJson(await memberCall(oauth, "tomola_village_change_get", { id: proposal.id }))).toEqual(proposal);
+      expect(await memberOutput(await memberCall(oauth, "tomola_village_change_discard", { id: proposal.id }))).toContain("Proposal discarded.");
+    } finally { vi.stubEnv("VILLAGES", ""); }
+  });
+});
+
 describe("MCP ownership and output security", () => {
   it("includes canonical AI guidance in member initialization instructions", async () => {
     const client = new LegacyClient({ name: "guidance-fixture", version: "1" });
@@ -170,7 +268,7 @@ describe("MCP ownership and output security", () => {
     const prose = "This is a place for people to share their ideas and to learn from each other.";
     const created = await call("tomola_draft_create", { kind: "topic", body: `${prose}\n\n@missing` });
     expect(created).toMatchObject({ lang: "en", language: { source: "detected", detected: "en" }, issues: [{ kind: "unknown_mention", location: { field: "body", line: 3 } }], issuesNotice: DRAFT_ISSUES_NOTICE });
-    const updated = await call("tomola_draft_update", { id: created.id, body: "これは日本語の本文です。考えを共有します。" });
+    const updated = await call("tomola_draft_update", { id: created.id, expectedVersion: created.version, body: "これは日本語の本文です。考えを共有します。" });
     expect(updated).toMatchObject({ lang: "en", issues: [{ kind: "lang_mismatch" }] });
     const read = await call("tomola_draft_get", { id: created.id });
     expect(read.issues).toEqual(updated.issues);
@@ -179,9 +277,9 @@ describe("MCP ownership and output security", () => {
       expect(row).not.toHaveProperty("issues");
       expect(row).not.toHaveProperty("language");
     }
-    const repaired = await call("tomola_draft_update", { id: created.id, lang: "ja" });
+    const repaired = await call("tomola_draft_update", { id: created.id, expectedVersion: read.version, lang: "ja" });
     expect(repaired.issues).toEqual([]);
-    const denied = await modern("tools/call", draftToken, { name: "tomola_draft_update", arguments: { id: created.id, title: "bad\ntitle" } });
+    const denied = await memberCall(draftToken, "tomola_draft_update", { id: created.id, expectedVersion: repaired.version, title: "bad\ntitle" });
     const error = await denied.json();
     expect(error.result.isError).toBe(true);
     expect(parseBlocks(error.result.content[0].text)[0].body.trim()).toBe(`invalid_title: ${messageOf("invalid_title")}`);
@@ -210,7 +308,7 @@ describe("MCP ownership and output security", () => {
       };
       const created = await call("tomola_draft_create", { kind: "topic", lang: "en", body: "Saved despite unavailable diagnostics" });
       expect(created).toMatchObject({ body: "Saved despite unavailable diagnostics", version: 1 });
-      const updated = await call("tomola_draft_update", { id: created.id, body: "Updated despite unavailable diagnostics" });
+      const updated = await call("tomola_draft_update", { id: created.id, expectedVersion: created.version, body: "Updated despite unavailable diagnostics" });
       expect(updated).toMatchObject({ body: "Updated despite unavailable diagnostics", version: 2 });
       expect(await call("tomola_draft_get", { id: created.id })).toMatchObject({ body: updated.body, version: 2 });
       const [saved] = await db.select().from(drafts).where(eq(drafts.id, created.id));
@@ -256,16 +354,16 @@ describe("MCP ownership and output security", () => {
     expect((await listClientDrafts(db, "member", a)).map((row) => row.id)).toContain(own.id);
     for (const forbidden of [other.id, browser.id]) {
       expect(await getClientDraft(db, "member", a, forbidden)).toBeNull();
-      expect(await updateClientDraft(db, "member", a, forbidden, { body: "attack" })).toMatchObject({ ok: false, error: "not_found" });
-      expect(await deleteClientDraft(db, "member", a, forbidden)).toBe(false);
+      expect(await updateClientDraft(db, "member", a, forbidden, { expectedVersion: 1, body: "other draft" })).toMatchObject({ ok: false, error: "not_found" });
+      expect(await deleteClientDraft(db, "member", a, forbidden, 1)).toEqual({ ok: false, error: "not_found" });
     }
     expect(await getClientDraft(db, "other", a, own.id)).toBeNull();
-    expect(await updateClientDraft(db, "member", a, own.id, { body: "edited" })).toMatchObject({ ok: true });
+    expect(await updateClientDraft(db, "member", a, own.id, { expectedVersion: 1, body: "edited" })).toMatchObject({ ok: true });
     expect(await getClientDraft(db, "member", a, own.id)).toMatchObject({ body: "edited", version: 2, clientId: "client-a", clientName: "A", clientUpdatedAt: expect.any(Date) });
-    expect(await updateClientDraft(db, "member", a, own.id, { title: "Only the title changes" })).toMatchObject({ ok: true });
+    expect(await updateClientDraft(db, "member", a, own.id, { expectedVersion: 2, title: "Only the title changes" })).toMatchObject({ ok: true });
     expect(await getClientDraft(db, "member", a, own.id)).toMatchObject({ body: "edited", title: "Only the title changes", version: 3 });
     expect(await getClientDraft(db, "member", b, other.id)).toMatchObject({ body: "client B private", version: 1 });
-    expect(await deleteClientDraft(db, "member", a, own.id)).toBe(true);
+    expect(await deleteClientDraft(db, "member", a, own.id, 3)).toEqual({ ok: true });
   });
   it("redacts generated and member-pasted credentials and always marks the payload untrusted", () => {
     const input = `https://tomola.example/t/1.md?lang=en&k=secret ${readToken} oai2.user.123.0.hash.signature`;
@@ -308,9 +406,13 @@ describe("MCP ownership and output security", () => {
     expect(readDenied.status).toBe(403);
     expect(readDenied.headers.get("www-authenticate")).toContain('scope="read"');
     await db.update(profiles).set({ suspendedUntil: new Date(Date.now() + 60_000) }).where(eq(profiles.userId, "member"));
-    const denied = await modern("tools/call", draftToken, { name: "tomola_draft_create", arguments: { kind: "topic", body: "cannot save" } });
-    expect(JSON.stringify(await denied.json())).toContain("suspended");
-    await db.update(profiles).set({ suspendedUntil: null }).where(eq(profiles.userId, "member"));
+    try {
+      const denied = await memberCall(draftToken, "tomola_draft_create", { kind: "topic", body: "cannot save" });
+      expect(JSON.stringify(await denied.json())).toContain("suspended");
+      expect(await memberJson(await memberCall(draftToken, "tomola_capabilities"))).toMatchObject({
+        writer: { allowed: false, reason: "suspended" }, actions: { readDrafts: { status: "available" }, saveDrafts: { status: "writing_unavailable" } },
+      });
+    } finally { await db.update(profiles).set({ suspendedUntil: null }).where(eq(profiles.userId, "member")); }
     const allowed = await modern("tools/call", draftToken, { name: "tomola_draft_create", arguments: { kind: "topic", body: "saved by PAT" } });
     expect(allowed.headers.get("cache-control")).toBe("private, no-store");
     expect(JSON.stringify(await allowed.json())).toContain("approvalUrl");
@@ -844,12 +946,16 @@ describe("connecting an AI tool", () => {
     expect((await refused.json()).error).toBe("invalid_redirect_uri");
   });
 
-  it("keeps optional media and offline_access in authorization-server metadata only", async () => {
+  it("advertises media in resource metadata for village icon proposals without requesting it for initial discovery", async () => {
     const { loader } = await import("~/routes/mcp-metadata");
-    const resource = await (await loader({ request: new Request(`${base}/.well-known/oauth-protected-resource/mcp`) } as never)).json();
-    expect(resource.scopes_supported).toEqual(["read", "draft"]);
+    const resource = async () => (await loader({ request: new Request(`${base}/.well-known/oauth-protected-resource/mcp`) } as never)).json();
+    vi.stubEnv("VILLAGES", "");
+    expect((await resource()).scopes_supported).toEqual(["read", "draft"]);
+    vi.stubEnv("VILLAGES", "1");
+    try { expect((await resource()).scopes_supported).toEqual(["read", "draft", "media"]); }
+    finally { vi.stubEnv("VILLAGES", ""); }
     const server = await (await loader({ request: new Request(`${base}/.well-known/oauth-authorization-server/api/auth`) } as never)).json();
-    expect(server.scopes_supported).toEqual(expect.arrayContaining([...resource.scopes_supported, "media", "offline_access"]));
+    expect(server.scopes_supported).toEqual(expect.arrayContaining(["read", "draft", "media", "offline_access"]));
     const challenge = await modern("server/discover", "not-a-token");
     expect(challenge.status).toBe(401);
     expect(challenge.headers.get("www-authenticate")).toContain('scope="read draft"');

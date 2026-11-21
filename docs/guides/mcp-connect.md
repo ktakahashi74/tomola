@@ -36,19 +36,36 @@ codex mcp add tomola-read --url https://tomola.example.org/mcp --bearer-token-en
 
 Set `TOMOLA_READ_TOKEN` to a read PAT dedicated to that client. If you set a draft PAT under another name, it cannot read posts and handles only its own client's drafts. With OAuth, you can check the permissions one by one.
 
-## Reading and drafting
+## Member tools
 
 | Permission | Tools |
 | --- | --- |
-| read | `tomola_thread`, `tomola_search`, `tomola_latest`, `tomola_activity`, `tomola_stance_counts`, `tomola_glossary` |
-| draft | `tomola_draft_create`, `tomola_draft_list`, `tomola_draft_get`, `tomola_draft_update`, `tomola_draft_delete` |
+| Member connection | `tomola_capabilities`. Shows effective scopes, writing eligibility, enabled features and actions requiring browser confirmation |
+| read | `tomola_thread`, `tomola_search`, `tomola_latest`, `tomola_activity`, `tomola_stance_counts`, `tomola_glossary`; `tomola_villages` and `tomola_village` when enabled |
+| draft | `tomola_draft_create`, `tomola_draft_list`, `tomola_draft_get`, `tomola_draft_update`, `tomola_draft_delete`, `tomola_draft_status`, `tomola_entry_edit_status`, `tomola_entry_edit_discard` |
+| read and draft | `tomola_entry_edit_prepare`, `tomola_entry_edit_get`, `tomola_entry_delete_prepare`; `tomola_village_change_prepare`, `tomola_village_change_get` and `tomola_village_change_discard` when enabled |
+| read, draft and media | `tomola_village_change_prepare` with an icon operation. Upload replacement images through `POST /api/media` with media permission |
 | Fixed statement | `tomola_privacy`. Returns only the statement that your own stances and their change history are not provided |
 
 A thread includes the original, the translation into the chosen language, the revision of the original and the IDs of the translation rows. `tomola_thread` also accepts `lang: "all"` for available translations in enabled-language order; originals identify translations still pending. Without a language, the language is chosen in this order: the "Translate posts into" setting, the language of the screens you last used, the first enabled language among "Languages you read in the original", and the site default. MCP and the Markdown versions do not choose the translation language from Accept-Language. Hidden or deleted text is not returned, even to the author's connection. Stances are returned only as the total and the number of languages of the people who answered; per-language counts and your own stance are not returned. The reasons panel uses the same shared daily selection as the screens: after drawing a source language, replies with at least one counted Insightful are preferred before drawing an author and reply. The number of reactions does not rank that pool. Notifications are limited to replies, mentions and followed topics; private records of moderation and appeals are not returned.
 
-Drafts are limited to the authenticated client that created them. A client cannot read, edit or delete drafts made in the browser or by another AI. You open the `approvalUrl` in a browser, check the content and the revision, and press the publish button. If you have chosen it in settings, publishing also asks for a passkey signature. API and MCP credentials cannot publish. The signature alone does not prove that you read or understood the text. An AI updating the revision cancels any earlier approval. There are no tools for publishing, choosing a stance, Insightful, reporting or appealing. If your own stances or their history are needed, choose them on the screen and copy them yourself.
+Call `tomola_capabilities` on the member endpoint to tell a missing scope from a disabled feature, a writing restriction, a browser confirmation or an unsupported action. The response includes settings links. A given post or village may require separate ownership checks.
+
+Use OAuth with both scopes for tools that require `read` and `draft` together. A PAT is issued for one of those scopes.
+
+### Drafts and review links
+
+Drafts are limited to the authenticated client that created them. Give a new draft a unique `requestId` and use the same arguments when retrying a creation. To revise or discard a draft, read its current version with `tomola_draft_get` and supply it as `expectedVersion`. Read the current draft again after a conflict and preserve the member's changes. `tomola_draft_status` reports `pending`, `published`, `discarded` or `unknown`. A published result includes `entryUrl` while the post is readable.
+
+Open `approvalUrl` in a browser to check the draft and publish. If you have enabled passkey confirmation, you also sign it there. For an existing post or reply, the client can call `tomola_entry_edit_prepare` with `entryId` and the proposed fields. Open its `approvalUrl` to check the changes and apply them. If the published post changes first, prepare a fresh proposal and review it. Edit proposals expire after seven days. Call `tomola_entry_delete_prepare` with `entryId` to open a deletion review for your own post. Deleting a topic makes all its replies unreadable. Deleting a reply leaves its replies readable. The confirmation page shows the impact before you decide.
+
+Publication, applying an edit or a village proposal, and deletion of an existing post use your browser session. Automatic publication through MCP is unsupported. For private stance records, select and copy the records you need from your own screen.
 
 ### Village destinations
+
+When villages are enabled, `tomola_villages` lists active shared villages. `tomola_village` takes the slug and returns the village details, your own role and management eligibility, and the readable topic index. Pass `next_args` to `tomola_village` for the next page. These tools exclude personal villages, rosters and invitations.
+
+An owner can ask the client to prepare a name or description change with `tomola_village_change_prepare`. An icon operation requires media permission as well. For a replacement, upload a still image through `POST /api/media` and use the returned `mediaId`. For a reset, pass `{ "action": "reset" }` as `icon`. Review the proposal at `approvalUrl` and apply the changes from your browser. The proposal has its own private copy of the icon. Discarding the proposal removes that copy.
 
 With `VILLAGES=1`, `tomola_draft_create` and `tomola_draft_update` expose a `village` argument for topic drafts. Use the slug of an active shared public-kind village the member has joined, or `@handle` for the member's own personal village. It is not a display name or database ID; another member's personal village is not a valid topic destination.
 

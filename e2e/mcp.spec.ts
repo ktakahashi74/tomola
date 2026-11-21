@@ -5,7 +5,7 @@ import { test } from "./editor-fixture";
 import { waitForClientRoute, useMember, clientHeaders, enMessages, jaMessages, state  } from "./helpers";
 import { enableSigningAuthenticator } from "./signing-helper";
 
-test("OAuth consent, owned drafts, unsigned confirmation and immediate revocation in English and Japanese", async ({ page, browser, request }) => {
+test("OAuth consent, draft publication, post and village review, and immediate revocation in English and Japanese", async ({ page, browser, request }) => {
   test.setTimeout(180_000);
   const { baseURL, mcpInvite } = state();
   const loopback = await oauthLoopback();
@@ -92,16 +92,20 @@ test("OAuth consent, owned drafts, unsigned confirmation and immediate revocatio
     await expect(ja.getByText(jaMessages.mcp_disclosure, { exact: true })).toBeVisible();
     await ja.getByRole("button", { name: jaMessages.mcp_allow, exact: true }).click();
     const token = await exchange(ja, second);
-    const created = await call(ja.request, token, "tomola_draft_create", { kind: "topic", lang: "en", title: "MCP signed publication", body: "Prepared only by the second client." });
-    expect(created.status()).toBe(200);
-    const result = await created.json();
-    expect(result.result.isError).not.toBe(true);
-    const draft = JSON.parse(result.result.content[0].text.split("\n---\n").at(-1));
+    const toolJson = async (name: string, args: object = {}) => {
+      const response = await call(ja.request, token, name, args);
+      expect(response.status(), await response.text()).toBe(200);
+      const { result } = await response.json();
+      expect(result.isError, JSON.stringify(result)).not.toBe(true);
+      return JSON.parse(result.content[0].text.split("\n---\n").at(-1));
+    };
+    const create = { requestId: "browser-draft", kind: "topic", lang: "en", title: "MCP signed publication", body: "Prepared only by the second client." };
+    const draft = await toolJson("tomola_draft_create", create);
     expect(draft).toMatchObject({ clientId: second, version: 1 });
     expect(new URL(draft.approvalUrl).searchParams.has("k")).toBe(false);
-    const updated = await call(ja.request, token, "tomola_draft_update", { id: draft.id, body: "Last updated by the second client." });
-    expect(updated.status()).toBe(200);
-    expect((await updated.json()).result.isError).not.toBe(true);
+    expect(await toolJson("tomola_draft_create", create)).toMatchObject({ id: draft.id, version: 1 });
+    const updated = await toolJson("tomola_draft_update", { id: draft.id, expectedVersion: draft.version, body: "Last updated by the second client." });
+    expect(updated.version).toBe(2);
     await ja.goto(draft.approvalUrl);
     // This scenario reads existing text without typing; wait for the approval handler to finish loading.
     await waitForClientRoute(ja);
@@ -111,6 +115,49 @@ test("OAuth consent, owned drafts, unsigned confirmation and immediate revocatio
     await ja.getByRole("dialog", { name: jaMessages.signing_heading }).getByRole("button", { name: jaMessages.confirm_publish, exact: true }).click();
     await ja.waitForURL(/\/t\/(\d+)\?posted=\1$/);
     await expect(ja.getByRole("heading", { name: "MCP signed publication", exact: true })).toBeVisible();
+    const entryId = Number(new URL(ja.url()).pathname.split("/").at(-1));
+    const receipt = { status: "published", draftId: draft.id, entryUrl: `${baseURL}/t/${entryId}` };
+    expect(await toolJson("tomola_draft_status", { id: draft.id })).toMatchObject(receipt);
+    expect(await toolJson("tomola_draft_create", create)).toMatchObject(receipt);
+
+    const edit = await toolJson("tomola_entry_edit_prepare", { entryId, body: "Revised text for the browser review." });
+    await ja.goto(edit.approvalUrl);
+    await waitForClientRoute(ja);
+    await expect(ja.getByRole("heading", { name: jaMessages.mcp_entry_edit_review })).toBeVisible();
+    await expect(ja.getByText("Revised text for the browser review.", { exact: true })).toBeVisible();
+    await ja.getByRole("button", { name: jaMessages.mcp_entry_apply }).click();
+    await ja.waitForURL(url => url.pathname === `/t/${entryId}` && url.searchParams.has("edited"));
+    expect(await toolJson("tomola_entry_edit_status", { id: edit.id })).toMatchObject({ status: "applied", entryId });
+
+    const deletion = await toolJson("tomola_entry_delete_prepare", { entryId });
+    expect(deletion).toMatchObject({ replyCount: 0, replyImpact: "thread_replies_unreadable" });
+    await ja.goto(deletion.approvalUrl);
+    await waitForClientRoute(ja);
+    await expect(ja.getByText(jaMessages.delete_warning_topic, { exact: true })).toBeVisible();
+    await ja.getByRole("button", { name: jaMessages.delete_confirm }).click();
+    await ja.waitForURL(url => url.pathname === "/");
+    expect(await toolJson("tomola_draft_status", { id: draft.id })).toEqual({ status: "published", draftId: draft.id });
+
+    const capabilities = await toolJson("tomola_capabilities");
+    if (capabilities.features.villages) {
+      const slug = "mcp-review-fixture";
+      await ja.goto("/villages/new");
+      await waitForClientRoute(ja);
+      await ja.getByLabel(jaMessages.village_name_field).fill("MCP review fixture");
+      await ja.getByLabel(jaMessages.village_slug_field, { exact: true }).fill(slug);
+      await ja.getByRole("button", { name: jaMessages.village_create, exact: true }).click();
+      await ja.waitForURL(url => url.pathname === `/v/${slug}`);
+      const village = await toolJson("tomola_village_change_prepare", { slug, description: "Description proposed by the second client." });
+      await ja.goto(village.approvalUrl);
+      await waitForClientRoute(ja);
+      await expect(ja.getByRole("heading", { name: jaMessages.village_proposal_title })).toBeVisible();
+      await expect(ja.getByText("Description proposed by the second client.", { exact: true })).toBeVisible();
+      await ja.getByRole("button", { name: jaMessages.village_proposal_apply }).click();
+      await ja.waitForURL(url => url.pathname === `/v/${slug}`);
+      const detail = await call(ja.request, token, "tomola_village", { slug, lang: "en" });
+      expect(detail.status()).toBe(200);
+      expect(await detail.text()).toContain("Description proposed by the second client.");
+    }
 
     await ja.goto("/settings/connections");
     await expect(ja.getByRole("heading", { name: jaMessages.mcp_connections_title })).toBeVisible();

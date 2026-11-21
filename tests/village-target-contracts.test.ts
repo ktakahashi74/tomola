@@ -86,14 +86,14 @@ it("extends the existing HTTP creation and MCP create/update contracts without e
   const view = (result: { content: { text: string }[] }) => JSON.parse(parseBlocks(result.content[0].text)[0].body);
   const saved = view(await call("tomola_draft_create", { kind: "topic", body: "MCP destination body.", lang: "en", village: "en" }));
   expect(saved).toMatchObject({ village: "en", version: 1 });
-  expect(view(await call("tomola_draft_update", { id: saved.id, village: "ja" }))).toMatchObject({ village: "ja", version: 2 });
+  expect(view(await call("tomola_draft_update", { id: saved.id, expectedVersion: saved.version, village: "ja" }))).toMatchObject({ village: "ja", version: 2 });
   const other = await createApiToken(h.db, h.ids.vt_owner, { name: "Other client", kind: "draft" });
   if (!other.ok) throw new Error(other.error);
-  const wrongClient = await call("tomola_draft_update", { id: saved.id, village: "en" }, other.token);
+  const wrongClient = await call("tomola_draft_update", { id: saved.id, expectedVersion: 2, village: "en" }, other.token);
   expect(wrongClient).toMatchObject({ isError: true });
   expect(parseBlocks(wrongClient.content[0].text)[0].body.trim().split(":")[0]).toBe("not_found");
   expect(view(await call("tomola_draft_get", { id: saved.id }))).toMatchObject({ village: "ja", version: 2 });
-  const missingVillage = await call("tomola_draft_update", { id: saved.id, village: "missing-target" });
+  const missingVillage = await call("tomola_draft_update", { id: saved.id, expectedVersion: 2, village: "missing-target" });
   expect(missingVillage).toMatchObject({ isError: true });
   expect(parseBlocks(missingVillage.content[0].text)[0].body.trim().split(":")[0]).toBe("village_required");
   expect(view(await call("tomola_draft_get", { id: saved.id }))).toMatchObject({ village: "ja", version: 2 });

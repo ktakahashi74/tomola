@@ -142,9 +142,9 @@ Design principles, current designs, site operating policies, and future directio
 
 Machine-facing details should not clutter manual reading, while AI representations stay aligned with the same posts and revisions. A member's unnamed position is excluded from ordinary Markdown. Position distributions are also excluded from change feeds and manifests. Detailed comparative reasons for not building a custom CLI are not recorded.
 
-## 23 Limit external AI writes to drafts
+## 23 Require browser confirmation for external AI proposals
 
-**Current design.** APIs and MCP provide reading and drafts, not publishing, positions, reactions, reports or appeals. Drafts bind to the member and originating client, excluding browser and other-client drafts. Members publish through the browser after checking full text, destination, changes and last client. Per-member limits span Web, API and MCP.
+**Current design.** APIs and MCP provide scoped reading and draft creation. MCP also prepares post edits, deletion reviews and shared village changes. Drafts and proposals bind to the member and originating client. The member reviews the current content and consequences in the browser before confirming publication or a change. Per-member limits span Web, API and MCP.
 
 **Rationale and limits.** External credential permissions enforce the boundary that people take responsibility for content published in their names. Personal unnamed positions and their history are not provided. This boundary proves neither comprehension nor that AI cannot operate a browser.
 
