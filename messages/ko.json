@@ -851,7 +851,7 @@
   "log_action_delete": "운영자가 게시물 삭제함",
   "log_action_restore": "삭제된 게시물 복원",
   "delete_summary": "이 게시물 삭제",
-  "delete_warning_topic": "이 게시물은 모든 사람에게 표시되지 않게 됩니다. 답글은 데이터베이스에 남아 있지만 더 이상 열 수 없습니다. 이 작업은 되돌릴 수 없습니다.",
+  "delete_warning_topic": "이 게시물을 삭제하면 아무도 게시물과 모든 답글을 읽을 수 없게 됩니다. 이 작업은 되돌릴 수 없습니다.",
   "delete_warning_reply": "답글은 모든 사람에게 \"삭제된 게시물\"로 대체되며, 스레드 내 자리는 유지됩니다. 이 작업은 되돌릴 수 없습니다.",
   "delete_confirm": "예, 삭제합니다",
   "mod_delete": "게시물 삭제(운영자 전용)",

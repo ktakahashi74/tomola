@@ -870,7 +870,7 @@
   "log_action_delete": "Post deleted by an operator",
   "log_action_restore": "Deleted post restored",
   "delete_summary": "Delete this post",
-  "delete_warning_topic": "The post disappears for everyone. Its replies stay in the database but can no longer be opened. This cannot be undone.",
+  "delete_warning_topic": "If you delete this post, no one will be able to read it or any of its replies. This cannot be undone.",
   "delete_warning_reply": "The reply is replaced by \"Deleted post\" for everyone; its place in the thread stays. This cannot be undone.",
   "delete_confirm": "Yes, delete it",
   "mod_delete": "Delete the post (operators only)",
