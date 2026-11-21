@@ -248,7 +248,7 @@ describe("public reading configuration and browser boundaries", () => {
       const { action } = mod;
       if (!action) throw new Error("missing action");
       const response = await h.outcome(() => action(h.args(h.request(path, { form: { body: "write" } }), params)));
-      expect(response).toMatchObject(path === "/" ? { status: 405 } : { status: 302, location: "/login" });
+      expect(response).toMatchObject({ status: 302, location: "/login" });
       expect(await h.outcome(async () => (await mod.loader(h.args(h.request(path, { as: "pending" }), params))))).toMatchObject({ status: 302, location: "/onboarding" });
     }
   });

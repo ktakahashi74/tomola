@@ -45,11 +45,13 @@ test("joined state moves follow controls into membership and leaving preserves a
   await expect(joined(page).locator("..")).toHaveAttribute("open", "");
   const menu = joined(page).locator("..");
   await menu.getByRole("button", { name: m.village_membership_unfollow, exact: true }).click();
+  await waitForClientRoute(page);
   await expect(joined(page)).toBeVisible();
   await expect(header(page).getByRole("link", { name: m.village_post_here, exact: true })).toBeVisible();
-  if (!(await menu.getAttribute("open") === "")) await joined(page).click();
+  if (await menu.getAttribute("open") === null) await joined(page).click();
   await menu.getByRole("button", { name: m.village_membership_follow, exact: true }).click();
-  if (!(await menu.getAttribute("open") === "")) await joined(page).click();
+  await waitForClientRoute(page);
+  if (await menu.getAttribute("open") === null) await joined(page).click();
   const leave = header(page).getByRole("button", { name: m.village_leave, exact: true });
   await expect(leave).toBeVisible();
   await leave.focus();

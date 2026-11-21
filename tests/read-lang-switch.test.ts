@@ -177,7 +177,7 @@ describe("screen overrides without changes to machine reads or preferences", () 
     return { ...data, topic: data.topic };
   };
 
-  it("omits list reading menus for members and guests while preserving explicit reading overrides", async () => {
+  it("shows the reading menu on member home with villages and keeps explicit language overrides on lists", async () => {
     vi.stubEnv("PUBLIC_READING", "1");
     vi.stubEnv("VILLAGES", "1");
     await (await import("~/lib/villages.server")).ensureLanguageVillages(h.db);
@@ -193,7 +193,7 @@ describe("screen overrides without changes to machine reads or preferences", () 
       for (const as of [undefined, "reading_reader"]) {
         const { loaderData, element } = await load(h.request(`${path}?lang=fr`, { as }));
         const html = await renderInRouter(() => element, path);
-        expect(html.includes("reading-lang-menu"), `${as ?? "guest"}: ${path}`).toBe(false);
+        expect(html.includes("reading-lang-menu"), `${as ?? "guest"}: ${path}`).toBe(path === "/" && as !== undefined);
         expect(loaderData).toMatchObject({ readingLanguage: { current: "fr" }, langParam: "fr" });
       }
     }

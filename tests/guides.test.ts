@@ -109,7 +109,7 @@ describe("public guides", () => {
       "/a/<lang>.md",
       "/home.md",
       `${BASE}/following.md`,
-      "who follows a topic, and how many do, is shown nowhere",
+      "The list of watchers and their count are private",
       "/search.md?q=",
       "search_status",
       "/changes.md?since=",

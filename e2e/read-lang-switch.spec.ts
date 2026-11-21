@@ -40,7 +40,7 @@ async function evidence(page: Page, name: string) {
 test.describe("page reading language", () => {
 
 
-  test("lists omit language menus and carry explicit language links while articles keep their controls", async ({ browser }) => {
+  test("list language links preserve explicit overrides while articles keep their reading controls", async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.241") });
     try {
@@ -53,7 +53,7 @@ test.describe("page reading language", () => {
       const usualIds = await listIds(page);
       for (const pathname of ["/", "/a/ja", "/v/ja"]) {
         await page.goto(`${pathname}?lang=fr&rl=1`);
-        await expect(menu(page)).toHaveCount(0);
+        await expect(menu(page)).toHaveCount(pathname === "/" && process.env.E2E_VILLAGES === "1" ? 1 : 0);
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
       }
       await evidence(page, "village-chosen");
