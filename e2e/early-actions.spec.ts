@@ -68,7 +68,7 @@ test("primary navigation controls work before hydration", async ({ page }) => {
     await expect(page).toHaveURL(scenario.url);
   }
   // A fold opened before hydration (the list filter on the home order row) stays open after it.
-  const filterSummary = page.locator(`main summary[aria-label^="${messages.filter_prefix}"]`);
+  const filterSummary = page.locator(`main summary[aria-label="${messages.home_filter_label}"]`);
   await beforeHydration(page, "/", async () => {
     await filterSummary.click();
   });

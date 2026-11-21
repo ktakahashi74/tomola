@@ -290,28 +290,30 @@ test("public readers keep the list and can retry after network and HTTP failures
   await expect(page.locator('[data-reading-list="list"] > [role="status"]')).toHaveText("Added 30 posts.");
 });
 
-test("public readers can sign in and follow a personal village without losing its expanded range", async ({ page }) => {
+test("public readers can sign in and follow a member without losing the expanded post range", async ({ page }) => {
   await restoreMember(page, state().dir, "load_more_follower@example.com", "load_more_follower", "/u/load_more_author#village");
   await waitForClientRoute(page);
   const section = page.locator("#village");
   const button = section.getByRole("button", { name: m.list_load_more, exact: true });
   await button.click();
   await expect(section.locator("li.topic-row")).toHaveCount(60);
-  const expanded = page.url();
+  await expect(page).toHaveURL(url => url.searchParams.get("vlist_count") === "60");
+  const expanded = new URL(page.url());
+  expanded.hash = "";
   const chunk = await pauseRequest(page, url => url.searchParams.has("_reading_chunk"));
   const submission = await pauseRequest(page, url => url.pathname === "/u/load_more_author.data", "POST");
   try {
     await button.click();
     await chunk.arrived;
     await expect(button).toBeDisabled();
-    await section.getByRole("button", { name: `${m.village_follow} @load_more_author` }).click();
+    await page.getByRole("button", { name: `${m.village_follow} @load_more_author`, exact: true }).click();
     await submission.arrived;
     chunk.release();
     await expect(button).toBeEnabled();
     await expect(section.locator("li.topic-row")).toHaveCount(60);
     submission.release();
-    await expect(section.getByRole("button", { name: `${m.village_following} @load_more_author` })).toBeVisible();
-    await expect(page).toHaveURL(expanded);
+    await expect(page.getByRole("button", { name: `${m.village_following} @load_more_author`, exact: true })).toBeVisible();
+    await expect(page).toHaveURL(expanded.href);
     await expect(section.locator("li.topic-row")).toHaveCount(60);
   } finally {
     chunk.release();
