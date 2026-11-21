@@ -443,7 +443,7 @@ test.describe("operator correction of a locked question", () => {
     await opalContext.close();
   });
 
-  test("an operator fixes the typo of the locked question with a note; the author is notified and reads the fixed title; the metrics page has the new sections and no number of a single question", async () => {
+  test("an operator fixes the typo of the locked question with a note; the author is notified and reads the fixed title; aggregate metrics omit individual question titles", async () => {
     await useMember(opal, "opal@example.com");
     await opal.goto(`${path}/edit`);
     await expect(opal.getByRole("heading", { level: 1, name: enMessages.edit_fix_title })).toBeVisible();
@@ -482,9 +482,14 @@ test.describe("operator correction of a locked question", () => {
     const thisWeek = updates.locator("tbody tr").last();
     await expect(thisWeek).not.toContainText(enMessages.metrics_unobserved);
     await expect(thisWeek).toContainText("%");
-    // the operator-only note says the numbers are summed across questions, and the page has no title of a question next to a number by area
+    // The operator-only note explains that the numbers are summed across questions.
     await expect(opal.getByText(enMessages.metrics_small_numbers)).toBeVisible();
-    await expect(opal.locator("main")).not.toContainText(TITLE_FIXED);
-    await expect(opal.locator("main")).not.toContainText(QUESTION);
+    // Article reading counts are reported by title. Check every other metrics section.
+    const metricsSections = await opal.locator('main > section:not([aria-labelledby="article-reading-metrics"])').all();
+    expect(metricsSections.length).toBeGreaterThan(0);
+    for (const section of metricsSections) {
+      await expect(section).not.toContainText(TITLE_FIXED);
+      await expect(section).not.toContainText(QUESTION);
+    }
   });
 });
