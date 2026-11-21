@@ -46,6 +46,7 @@ export const VILLAGE_MEMBER_FIXTURES: readonly SeedMember[] = [
   ...["vc_creator", "vc_joiner", "vc_open_creator", "vc_outsider"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   ...["switch", "rich", "settings", "draft", "frontmatter", "screens", "conflict", "stale", "recheck", "recheck_nojs"].map(name => ({ email: `vtarget_${name}@example.com`, handle: `vtarget_${name}`, homeArea: "en" as const, uiLocale: "en" as const })),
   { email: "vfollow_owner@example.com", handle: "vfollow_owner", homeArea: "en", uiLocale: "en" },
+  ...["quartz_browser_reader", "quartz_browser_author"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "other" as const, readLangs: ["ja" as const], uiLocale: "ja" as const })),
   ...["vfollow_reader", "vfollow_nojs"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "other" as const, readLangs: ["en" as const], uiLocale: "en" as const })),
   ...["vpage_owner", "vtarget_serialized", "vtarget_signed_review"].map(handle => ({ email: `${handle}@example.com`, handle, homeArea: "en" as const, uiLocale: "en" as const })),
   { email: "vtarget_join@example.com", handle: "vtarget_join", homeArea: "other", uiLocale: "en" },

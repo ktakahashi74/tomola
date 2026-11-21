@@ -90,6 +90,11 @@ export async function seedVillages(db: Db, dir: string) {
     const topic = await createTopic(db, followOwner.id, { title, body: `A post in ${name}.`, lang: "en", village: slug });
     if (!topic.ok) throw new Error(topic.error);
   }
+  const quartzAuthor = nushiMemberId("quartz_browser_author");
+  const quartz = await createVillage(db, quartzAuthor, { slug: "quartz-reading", name: "読書の広場", kind: "open", description: "読んだ本について話し合う場です。" });
+  if (!quartz.ok) throw new Error(quartz.error);
+  const quartzTopic = await createTopic(db, quartzAuthor, { lang: "ja", title: "読書会で話したいこと", body: "次の読書会で話したいことを書きました。", village: quartz.slug });
+  if (!quartzTopic.ok) throw new Error(quartzTopic.error);
   const [serializedWriter] = await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.handle, "vtarget_serialized"));
   await changeVillageMembership(db, serializedWriter.id, "ja", "join");
   const [reviewOwner] = await db.select({ id: profiles.userId }).from(profiles).where(eq(profiles.handle, "vr_owner"));

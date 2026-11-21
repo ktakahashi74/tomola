@@ -21,7 +21,7 @@ describe("the stream home in English and in Japanese", () => {
   it("says the order, the switch, the filters, the row counts in English", async () => {
     const html = await drawHome("en");
     const t = text(html);
-    // A post with no reply shows no "0 replies", and the name of the filter is read out but not drawn.
+    // A post with no reply shows no count.
     expect(t).not.toContain(messageMarkup(m.home_replies({ count: 0 })));
     expect(html).toContain(`aria-label="${messageMarkup(m.home_order_label())}"`);
     expect(html).toContain(`aria-label="${messageMarkup(m.list_filter_label())}"`);
@@ -50,13 +50,12 @@ describe("the stream home in English and in Japanese", () => {
 
 });
 
-it.each(["en", "ja"] as const)("names a collapsed filter for screen readers only, without a space after a Japanese colon in %s", async locale => {
+it.each(["en", "ja"] as const)("labels the unfiltered disclosure in %s", async locale => {
   const html = await drawHome(locale);
-  const label = `${m.filter_prefix()}${locale === "ja" ? "" : " "}${m.home_filter_all()}`;
+  const label = m.home_filter_label();
   expect(html).toContain(`aria-label="${messageMarkup(label)}"`);
-  // The drawn text is the chosen value alone.
   expect(text(html)).not.toContain(messageMarkup(m.filter_prefix()));
-  expect(html).toMatch(new RegExp(`<summary[^>]*>${messageMarkup(m.home_filter_all())}<`));
+  expect(html).toMatch(new RegExp(`<summary[^>]*>${messageMarkup(label)}<`));
 });
 
 it("puts no folded ordering rule in the order row", async () => {

@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import { test } from "./editor-fixture";
 import { captureScreenshot, clientHeaders, closePlaces, enMessages as m, formatMessage, openPlaces, openPostSettings, useMember, waitForClientRoute } from "./helpers";
 
-test("a personal village has its own follow section and delivers only the posts placed there", async ({ browser }) => {
+test("a member follow delivers public topics from their personal and shared villages", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "en-US", extraHTTPHeaders: clientHeaders("192.0.2.240") });
   try {
     const page = await context.newPage();
@@ -17,8 +17,8 @@ test("a personal village has its own follow section and delivers only the posts 
     const elsewhere = page.locator("#posts li").filter({ has: page.getByRole("link", { name: "Personal elsewhere post", exact: true }) });
     await expect(elsewhere.locator('a[href="/v/en"]')).toHaveCount(0);
     await expect(elsewhere.locator('span[lang="en"]')).toBeVisible();
-    await village.getByRole("button", { name: `${m.village_follow} @pv_author`, exact: true }).click();
-    await expect(village.getByRole("button", { name: `${m.village_following} @pv_author`, exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: `${m.village_follow} @pv_author`, exact: true }).click();
+    await expect(page.getByRole("button", { name: `${m.village_following} @pv_author`, exact: true })).toHaveAttribute("aria-pressed", "true");
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/"); await waitForClientRoute(page);
@@ -43,7 +43,7 @@ test("a personal village has its own follow section and delivers only the posts 
       await captureScreenshot(page, { path: `after-member-${width}.png`, fullPage: true }, "personal-villages");
       await page.goto("/?follow=1"); await waitForClientRoute(page);
       await expect(page.getByRole("link", { name: "Personal browser post", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Personal elsewhere post", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "Personal elsewhere post", exact: true })).toBeVisible();
       if (width === 390) await openPlaces(page);
       await expect(page.getByRole("link", { name: m.village_personal, exact: true })).toHaveAttribute("href", "/u/pv_browser_reader");
       await captureScreenshot(page, { path: `after-places-${width}.png`, fullPage: true }, "personal-villages");
@@ -56,8 +56,8 @@ test("a personal village has its own follow section and delivers only the posts 
     const twin = await context.request.get("/following.md");
     expect(await twin.text()).not.toContain("@pv_author");
     await page.goto("/u/pv_author");
-    await page.locator("#village").getByRole("button", { name: `${m.village_following} @pv_author`, exact: true }).click();
-    await expect(page.locator("#village").getByRole("button", { name: `${m.village_follow} @pv_author`, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: `${m.village_following} @pv_author`, exact: true }).click();
+    await expect(page.getByRole("button", { name: `${m.village_follow} @pv_author`, exact: true })).toBeVisible();
     const guest = await browser.newContext();
     try {
       const anonymous = await guest.newPage();

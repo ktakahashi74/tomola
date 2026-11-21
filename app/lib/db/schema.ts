@@ -1,3 +1,4 @@
+import type { HomeScope } from "../home-scope";
 import { TRANSLATION_REPORT_OUTCOMES } from "../translation-report-results";
 import { USAGE_PURPOSES } from "../llm/usage-policy";
 import { sql, type SQL } from "drizzle-orm";
@@ -440,7 +441,7 @@ export const profiles = pgTable(
     // Treat names differing only in case, full-width/half-width forms, or composed characters as identical to prevent duplicates.
     handleKey: text("handle_key").notNull(),
     homeArea: text("home_area").notNull(),
-    homeScope: text("home_scope").$type<"all" | "following">().notNull().default("all"),
+    homeScope: text("home_scope").$type<HomeScope>().notNull().default("all"),
     defaultVillageId: text("default_village_id").references(() => villages.id),
     defaultVillageReset: boolean("default_village_reset").notNull().default(false),
     villagePreparedAt: timestamp("village_prepared_at", { withTimezone: true }),

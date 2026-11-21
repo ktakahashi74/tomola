@@ -43,7 +43,7 @@ it("renders navigation from layout data before JavaScript: a village row shows a
 it.each(["/u/side_unit", "/u/side_unit/", "/u/side_other"])("keeps the places column and drawer with the current personal village at %s", async path => {
   const html = await render(path, { ...data,
     villages: [{ slug: "@side_unit", name: "", kind: "personal", language: null }],
-    followedVillages: [{ slug: "@side_other", name: "@side_other", kind: "personal", language: null }],
+    followedMembers: [{ handle: "side_other", name: "@side_other" }],
   });
   expect(html).toContain('data-site-navigation="true"');
   const places = [...html.matchAll(/<nav\b[^>]*>[\s\S]*?<\/nav>/g)].map(match => match[0]);

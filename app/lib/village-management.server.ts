@@ -16,7 +16,7 @@ import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { handleKey } from "~/lib/handles";
 import { checkPagination } from "~/lib/pagination";
 import { resetPersonalDefault } from "./personal-villages.server";
-import { activeSharedVillageCondition, enrollInVillage, sharedVillageCondition, villageBySlug } from "~/lib/villages.server";
+import { activeSharedVillageCondition, addVillageMembership, enrollInVillage, sharedVillageCondition, villageBySlug } from "~/lib/villages.server";
 import { decideVillageLangOf, memberVillageLang, requestVillageTranslations, villageSourceLang } from "~/lib/village-translations.server";
 import { validVillageSlug, villageDescriptionText, villageNameText, villageText, VILLAGE_CREATE_LIMIT, VILLAGE_INVITE_DAILY_LIMIT, VILLAGE_REMOVAL_REASON_MAX, VILLAGE_ROSTER_PAGE_SIZE, type VillageInviteKind } from "~/lib/villages";
 
@@ -91,7 +91,7 @@ export async function createVillage(db: Db, userId: string, input: { slug: unkno
     const sourceLang = chosenLang ?? memberVillageLang(profile);
     const [village] = await tx.insert(villages).values({ slug, kind, name, description, sourceLang, createdBy: userId }).onConflictDoNothing({ target: villages.slug }).returning();
     if (!village) return fail("slug_taken");
-    await tx.insert(villageMembers).values({ villageId: village.id, userId, role: "owner" });
+    await addVillageMembership(tx, userId, village.id, "owner");
     await requestVillageTranslations(tx, village.id);
     await record(tx, village.id, actor, "create", { kind });
     return { ok: true, slug };

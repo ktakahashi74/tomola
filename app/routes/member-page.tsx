@@ -5,7 +5,7 @@ import { createAvatarReport } from "~/lib/avatar-moderation.server";
 import { createDisplayNameReport } from "~/lib/display-name-moderation.server";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { assertSameOrigin } from "~/lib/http/csrf.server";
-import { setVillageFollow } from "~/lib/village-follows.server";
+import { isFollowingMember, setMemberFollow } from "~/lib/member-follows.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { hitMemberLimit, rateLimitHeaders } from "~/lib/rate-limit.server";
 import { Button } from "~/components/ui/button";
@@ -42,6 +42,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!member) throw data("Not found", { status: 404, headers: privateHeaders });
   if (member.redirectTo) throw redirect(member.redirectTo, { headers: privateHeaders });
   const query = new URL(request.url).searchParams;
+  const canFollow = villagesEnabled() && user.id !== member.userId;
   const personalPage = villagesEnabled() ? parsePageParam(query.get("vpage")) : 1;
   if (personalPage === null) throw data("Not found", { status: 404, headers: privateHeaders });
   const content = await loadMemberPageContent(db, member, {
@@ -54,7 +55,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   // Other readers get the speaking-style link only when its page exists for them.
   const voiceVillage = nushiVoiceEnabled() && content.personal ? await personalVillage(db, member.userId) : null;
   const showVoice = !!voiceVillage && (user.id === member.userId || (await nushiVoiceHistory(db, [voiceVillage.id])).length > 0);
-  return { ...content, ...(showVoice ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
+  const following = canFollow ? await isFollowingMember(db, user.id, member.userId) : null;
+  return { ...content, following, ...(showVoice ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -77,9 +79,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (intent !== "follow" && intent !== "unfollow") throw data("Invalid intent", { status: 400, headers: privateHeaders });
   const rate = await hitMemberLimit(db, "village-follow", user.id);
   if (!rate.allowed) return data({ error: "rate_limited" }, { status: 429, headers: { ...privateHeaders, ...rateLimitHeaders(rate) } });
-  const result = await setVillageFollow(db, user.id, `@${member.handle}`, intent === "follow");
+  const result = await setMemberFollow(db, user.id, member.userId, intent === "follow");
   if (!result.ok) throw data("Not found", { status: 404, headers: privateHeaders });
-  return redirect(form.get("returnTo") === "/following" ? "/following" : `/u/${member.handle}${query.size ? `?${query}` : ""}#village`, { headers: privateHeaders });
+  return redirect(`/u/${member.handle}${query.size ? `?${query}` : ""}`, { headers: privateHeaders });
 }
 
 export function headers() { return privateHeaders; }
@@ -96,6 +98,10 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
     <main className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold wrap-anywhere">{loaderData.avatarUrl && <img src={loaderData.avatarUrl} alt="" className="member-avatar member-avatar-prominent me-3 inline-block rounded" />}<AuthorLink handle={handle} name={loaderData.name} latin={loaderData.nameLatin} byline reader/></h1>
+        {loaderData.following !== null && <div className="space-y-1">
+          <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={loaderData.following} name="intent" value={loaderData.following ? "unfollow" : "follow"}>{loaderData.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>
+          {!loaderData.following && <p className="ui-help text-muted-foreground">{m.member_page_follow_hint()}</p>}
+        </div>}
         {own && <p className="ui-meta"><Link to={withSettingsReturn("/settings#settings-profile", `/u/${handle}`)} className="link-ui">{m.member_page_edit_profile()}</Link></p>}
       </div>
       {actionData?.error && <p role="alert">{actionData.error === "duplicate" ? m.flag_already_reported() : m.flag_error()}</p>}
@@ -123,11 +129,7 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
         </section>
       ) : null}
       {personal && <section className="space-y-3" id="village" aria-labelledby="personal-village-heading">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 id="personal-village-heading" className="text-lg font-semibold">{m.member_page_topics_heading()}</h2>
-          {!own && <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={personal.following} name="intent" value={personal.following ? "unfollow" : "follow"}>{personal.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>}
-        </div>
-        {!own && <p className="ui-help text-muted-foreground">{m.member_page_village_follow_hint()}</p>}
+        <h2 id="personal-village-heading" className="text-lg font-semibold">{m.member_page_topics_heading()}</h2>
         <ReadingList topics={personal.topics} list={personal.list!} anchor="#village">{items => <MemberTopics topics={items} own={own} />}</ReadingList>
         {loaderData.nushiVoiceHref && <Link className="link-ui inline-block" to={loaderData.nushiVoiceHref}>{m.village_nushi_title()}</Link>}
       </section>}

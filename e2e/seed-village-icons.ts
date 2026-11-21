@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../app/lib/db/client.server";
 import { profiles, villageMembers, villages } from "../app/lib/db/schema";
 import { createVillage } from "../app/lib/village-management.server";
-import { setVillageFollow } from "../app/lib/village-follows.server";
+import { setMemberFollow } from "../app/lib/member-follows.server";
 import { villagesEnabled } from "../app/lib/villages-enabled.server";
 import { setVillageIcon } from "../app/lib/village-icon.server";
 import { setMemberAvatar } from "../app/lib/member-avatar.server";
@@ -26,7 +26,7 @@ export async function seedVillageIcons(db: Db) {
       await setVillageIcon(db, owner.userId, slug, image);
       for (const handle of ["vi_view_ja", "vi_view_en"]) {
         await db.insert(villageMembers).values({ villageId: place.id, userId: person(handle).userId, role: "member" });
-        await setVillageFollow(db, person(handle).userId, "@vi_owner", true);
+        await setMemberFollow(db, person(handle).userId, owner.userId, true);
         await acceptChatConsent(db, person(handle).userId, slug);
       }
     }

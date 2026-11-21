@@ -38,11 +38,6 @@ export function parseLong(request: Request): boolean {
   return new URL(request.url).searchParams.get("long") === "1";
 }
 
-// Home ?follow=1: only the posts of the villages the member follows or has joined.
-export function parseFollowing(request: Request): boolean {
-  return new URL(request.url).searchParams.get("follow") === "1";
-}
-
 // List ?order=created|activity|insightful. Absent/empty uses caller-defined default (home:created); other values give 400.
 export function parseOrderParam(raw: string | null): TopicOrder | null | "invalid" {
   if (raw === null || raw === "") return null;

@@ -34,7 +34,8 @@ describe("village foundations", () => {
   it("accepts only empty or 1 settings", () => {
     expect(villagesEnabled({})).toBe(false);
     expect(villagesEnabled({ VILLAGES: " 1 " })).toBe(true);
-    for (const value of ["0", "true", "false", "yes", "2"]) expect(parseVillages(value).ok).toBe(false);
+    expect(villagesEnabled({ VILLAGES: "0" })).toBe(false);
+    for (const value of ["true", "false", "yes", "2"]) expect(parseVillages(value).ok).toBe(false);
   });
   it("creates random IDs and language villages idempotently, including lowercase Chinese slugs", async () => {
     const db = await createTestDb();

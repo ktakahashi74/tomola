@@ -72,7 +72,7 @@ export function NavigationDrawer() {
       {anythingNew && <UnreadDot label={labels.notification_unread} className="-ms-1 -mt-3" />}
     </summary>
     <nav aria-label={labels.nav_side_label} className="absolute start-0 z-50 max-h-[80vh] w-64 max-w-[calc(100vw-2rem)] space-y-1 overflow-y-auto rounded-md border bg-popover p-3 text-sm text-popover-foreground shadow-md [overflow-wrap:anywhere] top-full mt-2">
-      <PlaceList villages={data.villages} followedVillages={data.followedVillages} followedUnread={data.followedUnread} pathname={location.pathname} villagesEnabled={data.villagesEnabled} />
+      <PlaceList villages={data.villages} followedVillages={data.followedVillages} followedMembers={data.followedMembers} followedUnread={data.followedUnread} pathname={location.pathname} villagesEnabled={data.villagesEnabled} />
     </nav>
   </PersistentDetails>;
 }

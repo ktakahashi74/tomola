@@ -3,8 +3,8 @@ export type ParsedVillages = { ok: true; enabled: boolean } | { ok: false; error
 
 export function parseVillages(raw: string | undefined): ParsedVillages {
   const value = raw?.trim() ?? "";
-  if (value === "" || value === "1") return { ok: true, enabled: value === "1" };
-  return { ok: false, error: "VILLAGES must be 1 or empty (unset)" };
+  if (value === "" || value === "0" || value === "1") return { ok: true, enabled: value === "1" };
+  return { ok: false, error: "VILLAGES must be 1, 0 or empty (unset)" };
 }
 
 export function villagesEnabled(env: Env = process.env): boolean {

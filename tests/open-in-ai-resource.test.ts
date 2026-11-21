@@ -9,6 +9,8 @@ it("drops tracking and unknown values while retaining each resource's reader val
     ["/latest.md", "page=2&lang=en&asks=1&long=1&order=activity"],
     ["/a/ja.txt", "lang=ja&order=insightful"],
     ["/following.md", "page=2&lang=ja&asks=1&all=1"],
+    ["/home.md", "scope=following&page=2"],
+    ["/home.txt", "follow=1&order=created"],
     ["/search.md", "q=hello&lang=fr"],
     ["/changes.md", "since=2026-10-01&cursor=2026-10-01_7"],
     ["/glossary.md", "page=2&to=ja&from=en&deleted=1"],
@@ -40,6 +42,7 @@ it("still rejects duplicate query names, including credentials, markers and igno
 it("keeps every supported Markdown reader's query names in the scope inventory", () => {
   const sources = [
     ["app/lib/md/twin.server.ts", [...READ_RESOURCE_QUERY_KEYS.page, ...READ_RESOURCE_QUERY_KEYS.following]],
+    ["app/lib/home-scope.ts", READ_RESOURCE_QUERY_KEYS.home.filter(key => key === "scope" || key === "follow")],
     ["app/routes/search-md.ts", READ_RESOURCE_QUERY_KEYS.search],
     ["app/routes/changes-md.ts", READ_RESOURCE_QUERY_KEYS.changes],
     ["app/routes/glossary-md.ts", READ_RESOURCE_QUERY_KEYS.glossary],

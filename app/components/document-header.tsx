@@ -1,3 +1,4 @@
+import type { FollowedMemberNavigation } from "~/lib/member-follows.server";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { GuestHeader } from "./guest-header";
@@ -47,7 +48,7 @@ export function DocumentHeader({ showWhyLink = false }: { showWhyLink?: boolean 
   useEffect(() => () => setDocumentMember(false), []);
   const member = navigation && !navigation.reader ? navigation : null;
   return <TooltipProvider><div ref={container} className="grid">
-    {member && <div className="min-w-0 [grid-area:1/1]"><NavigationDataContext.Provider value={{ villages: "villages" in member ? (member.villages as JoinedVillageNavigation[] | undefined) ?? [] : [], followedVillages: ("followedVillages" in member ? member.followedVillages : []) as FollowedVillageNavigation[], followedUnread: member.followedUnread, villagesEnabled: "villages" in member }}><MemberHeader data={member} whyLink={showWhyLink} /></NavigationDataContext.Provider></div>}
+    {member && <div className="min-w-0 [grid-area:1/1]"><NavigationDataContext.Provider value={{ villages: "villages" in member ? (member.villages as JoinedVillageNavigation[] | undefined) ?? [] : [], followedVillages: ("followedVillages" in member ? member.followedVillages : []) as FollowedVillageNavigation[], followedMembers: ("followedMembers" in member ? member.followedMembers : []) as FollowedMemberNavigation[], followedUnread: member.followedUnread, villagesEnabled: "villages" in member }}><MemberHeader data={member} whyLink={showWhyLink} /></NavigationDataContext.Provider></div>}
     {/* Keep the guest's actual wrapping height without exposing duplicate controls. */}
     <GuestHeader sizing={!!member} loginHref={readerLoginHref(location.pathname, location.search)} />
   </div></TooltipProvider>;

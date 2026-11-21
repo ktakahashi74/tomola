@@ -605,7 +605,7 @@
   "nav_notifications": "通知",
   "nav_notifications_unread": "{count} 条未读通知",
   "notifications_title": "通知",
-  "notifications_empty": "暂无通知。当你关注的帖子收到回复，或者有人回复你、提及你时，通知会显示在这里。",
+  "notifications_empty": "你追踪的帖子有新回复、有人回复你或提及你时，通知会出现在这里。",
   "notifications_mark_all": "全部标记为已读",
   "notification_unread": "未读",
   "notification_open": "打开",
@@ -933,86 +933,25 @@
   "offline_title": "您已离线",
   "offline_body": "目前无法连接到 tomola。请检查您的网络连接，然后重新打开首页。",
   "offline_home": "前往首页",
-  "nav_following": "关注的帖子",
-  "following_title": "关注的帖子",
+  "nav_following": "正在追踪的帖子",
+  "following_title": "正在追踪的帖子",
   "following_filter_label": "要显示的帖子",
   "following_filter_new": "新回复",
   "following_filter_all": "全部",
   "following_no_new_replies": "没有新回复。",
-  "following_rule": "你会自动关注自己撰写的帖子以及回复过的帖子。取消关注的帖子将保持未关注状态。",
-  "following_auto_label": "自动关注的帖子",
-  "following_empty": "这里空空如也。点击你关注的帖子上的“关注”或进行回复，它就会显示在这里。",
-  "follow_button": "关注",
-  "follow_following": "已关注",
-  "follow_unfollow": "取消关注",
-  "follow_help": "你会自动关注自己发起的帖子以及回复过的帖子。所关注帖子中的新回复会出现在通知中，并在阅读前合并为一条；除非另行设置，否则会通过每日摘要邮件发送给你。取消关注的帖子将保持未关注状态。选择立场不会让你关注该帖子。",
-  "notification_followed_thread": [
-    {
-      "declarations": [
-        "input count",
-        "input handle",
-        "input title",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你关注的帖子“{title}”有新回复：{count} 条（最新来自 @{handle}）。"
-      }
-    }
-  ],
-  "notification_followed_thread_nolatest": [
-    {
-      "declarations": [
-        "input count",
-        "input title",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你关注的帖子“{title}”有新回复：{count} 条。"
-      }
-    }
-  ],
+  "following_rule": "你会自动追踪自己发布或回复过的帖子的后续回复。停止追踪后，该设置会保留。",
+  "following_auto_label": "自动追踪的帖子",
+  "following_empty": "在帖子中选择“追踪回复”或发表回复，帖子就会出现在这里。",
+  "follow_button": "追踪回复",
+  "follow_following": "正在追踪回复",
+  "follow_unfollow": "停止追踪",
+  "follow_help": "你会自动追踪自己发布或回复过的帖子的后续回复。新回复会出现在通知中，阅读前合并显示，默认也会列入每日邮件摘要。停止追踪后，该设置会保留。选择立场不会改变追踪设置。",
+  "notification_followed_thread": "你追踪的帖子“{title}”有 {count} 条新回复。最新一条来自 @{handle}。",
+  "notification_followed_thread_nolatest": "你追踪的帖子“{title}”有 {count} 条新回复。",
   "notification_content_unavailable": "此通知相关的帖子（或其所属的帖子）现已被隐藏或删除。",
-  "mail_subject_followed_thread": "你关注的帖子有新回复",
-  "mail_item_followed_thread": [
-    {
-      "declarations": [
-        "input count",
-        "input excerpt",
-        "input handle",
-        "input title",
-        "input url",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你关注的帖子“{title}”有新回复：{count} 条。最新一条来自 @{handle}：\n\n{excerpt}\n\n{url}"
-      }
-    }
-  ],
-  "mail_item_followed_thread_nolatest": [
-    {
-      "declarations": [
-        "input count",
-        "input title",
-        "input url",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你关注的帖子“{title}”有新回复：{count} 条。\n\n{url}"
-      }
-    }
-  ],
+  "mail_subject_followed_thread": "追踪的帖子有新回复",
+  "mail_item_followed_thread": "你追踪的帖子“{title}”有 {count} 条新回复。最新一条来自 @{handle}。\n\n{excerpt}\n\n{url}",
+  "mail_item_followed_thread_nolatest": "你追踪的帖子“{title}”有 {count} 条新回复。\n\n{url}",
   "settings_email_auto": "自动（默认）：回复和提及立即发送，其他内容每天汇总一次",
   "settings_read_langs_help": "勾选语言的帖子将直接显示原文，不进行翻译。",
   "lang_not_open": "{lang}（目前不可用）",
@@ -1786,7 +1725,7 @@
   "posted_translating": "正在翻译为：",
   "posted_all_reached": "已传达到所有语言。",
   "posted_first": "这是您的首个帖子。翻译完成后，使用其他语言的人也能读到它。",
-  "posted_reply_followed": "已回复。你现在关注了这篇帖子。",
+  "posted_reply_followed": "回复已发布。你已开始追踪这个帖子的回复。",
   "edited_saved": "更改已保存。正在重新生成翻译。",
   "ai_write_changed": "为此 AI 生成的草稿在此页面保存后已被修改，因此未被覆盖。您输入的文本仍在此处。请从草稿箱中打开以查看最新版本。",
   "local_draft_older": "此文本更改前未发送的草稿（{time}）。",
@@ -1874,13 +1813,12 @@
   "notification_village_membership_ended": "你已不再是 {name} 的成员。你的帖子仍保留在这个村中。",
   "village_follow": "关注",
   "village_following": "已关注",
-  "village_join_follow_help": "关注后即可在主页的“{filter}”筛选中阅读此村落的帖子（仅限阅读）。加入后还可以发布帖子。",
-  "village_join_follow_help_chat": "关注后即可在主页的“{filter}”筛选中阅读此村落的帖子（仅限阅读）。加入后还可以发布帖子并参与聊天。",
-  "village_follow_members_help": "关注后即可在主页的“{filter}”筛选中阅读此村落的帖子（仅限阅读）。仅成员可在此发布帖子。",
+  "village_join_follow_help": "关注后，此村的帖子会出现在首页的“{filter}”中。加入后可以发帖，并会自动关注此村。",
+  "village_join_follow_help_chat": "关注后，此村的帖子会出现在首页的“{filter}”中。加入后可以发帖和聊天，并会自动关注此村。",
+  "village_follow_members_help": "关注后，此村的帖子会出现在首页的“{filter}”中。村成员可以在这里发帖，加入时会自动关注此村。",
   "village_follow_places": "关注的村",
   "village_follow_more": "另外{count}个",
-  "home_filter_following": "已加入和已关注的村",
-  "home_following_empty": "关注或加入一个村，它的帖子就会显示在这里。",
+  "home_following_empty": "关注成员或村后，他们的公开帖子会出现在这里。你自己的公开帖子也会显示。",
   "objections_neutrality": "包括原来的问题在内，任何一种提问方式都不被视为正确的方式。",
   "notification_reply_to_topic_language": "@{handle} 用{language}回复了你的帖子“{title}”。",
   "notification_reply_to_reply_language": "@{handle} 用{language}在“{title}”中回复了您的回复。",
@@ -1899,9 +1837,7 @@
   "translation_article_arrived": "已切换至译文。",
   "village_personal": "我的村",
   "village_personal_destination": "我的村（@{handle}）",
-  "village_personal_places": "成员的村",
   "member_page_elsewhere": "在其他地方的发帖",
-  "member_page_village_follow_hint": "关注这个村，就能收到这一栏里的帖子。",
   "display_name_native": "显示名（你的语言）",
   "display_name_latin": "显示名（拉丁字母）",
   "display_name_invalid": "每个名字请填写一行，最多 50 个字符，至少包含一个字母或文字，不能使用 @。拉丁字母形式只能使用拉丁字母、空格、连字符、撇号或句点。",
@@ -2495,5 +2431,16 @@
   "list_load_more": "查看更多",
   "list_added": "已添加 {count} 篇帖子。",
   "list_load_failed": "无法加载更多帖子。请重试。",
-  "list_back_latest": "返回最新帖子"
+  "list_back_latest": "返回最新帖子",
+  "home_scope_all": "全部",
+  "home_scope_following": "已关注",
+  "home_scope_label": "首页显示范围",
+  "home_filter_empty": "没有符合此筛选条件的帖子。",
+  "home_clear_filter": "清除筛选条件",
+  "home_see_all": "查看所有帖子",
+  "nav_followed_members": "已关注的成员",
+  "member_page_follow_hint": "关注此成员后，其公开帖子会出现在首页的“已关注”中。",
+  "village_membership_unfollow": "取消关注此村",
+  "village_membership_follow": "关注此村",
+  "village_membership_follow_help": "关注后，此村的帖子会出现在首页的“已关注”中。取消关注后，你仍是成员，可以发帖并使用可用的聊天功能。"
 }

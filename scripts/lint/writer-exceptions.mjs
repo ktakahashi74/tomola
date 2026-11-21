@@ -12,7 +12,7 @@ export const WRITER_EXCEPTIONS = {
       "api.drafts.ts": "token-authenticated; handleDraftCreate calls getWriter (checked in this file)",
       "auth-confirm.tsx": "before login: uses the magic link token",
       "follow.ts": "follows or unfollows a topic for the member's own notifications: not posting (a suspended member may still unfollow)",
-      "home.tsx": "always rejects POST with 405 and writes no data",
+      "home.tsx": "updates the member’s own home reading preference",
       "invite.tsx": "before login: sends the login link for an invitation",
       "login.tsx": "before login: sends the login link",
       "logout.tsx": "signs the session out",

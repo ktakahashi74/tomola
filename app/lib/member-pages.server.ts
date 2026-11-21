@@ -4,7 +4,6 @@ import { memberAvatarUrl } from "./member-avatar.server";
 import { selectDisplayNamePresentation } from "./display-names.server";
 import { personalVillage } from "./personal-villages.server";
 import { publicVillage } from "./villages.server";
-import { isFollowingVillage } from "./village-follows.server";
 import { localizeVillages } from "./village-translations.server";
 import type { PublicVillage } from "./villages.server";
 import { publicTopicPlace } from "~/lib/visibility.server";
@@ -47,7 +46,7 @@ export type MemberPageContent = {
   own: boolean;
   intro: null | { id: number; lang: Lang; title: string | null; headline: string; html: string; display: EntryDisplay };
   topics: { id: number; lang: Lang; title: TitleDisplay; createdAtISO: string; village?: PublicVillage; readLanguageCount?: number }[];
-  personal: null | { following: boolean; topics: MemberPageContent["topics"]; page: number; hasNext: boolean; list?: ReadingPage };
+  personal: null | { topics: MemberPageContent["topics"]; page: number; hasNext: boolean; list?: ReadingPage };
   page: number;
   hasNext: boolean;
   list?: ReadingPage;
@@ -132,7 +131,7 @@ export async function loadMemberPageContent(db: Db, member: MemberPageIdentity, 
     own,
     intro,
     topics: visible.map(row => contentRow(row, true)),
-    personal: personal ? { following: await isFollowingVillage(db, opts.viewerId, personal.id), topics: personalVisible.map(row => contentRow(row, false)), page: personalPage, hasNext: personalRows.length > (opts.personalReading?.count ?? PAGE_SIZE), ...(personalList ? { list: personalList } : {}) } : null,
+    personal: personal ? { topics: personalVisible.map(row => contentRow(row, false)), page: personalPage, hasNext: personalRows.length > (opts.personalReading?.count ?? PAGE_SIZE), ...(personalList ? { list: personalList } : {}) } : null,
     page,
     hasNext: rows.length > (opts.reading?.count ?? PAGE_SIZE),
     ...(list ? { list } : {}),

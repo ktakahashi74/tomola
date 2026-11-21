@@ -1,3 +1,4 @@
+import { addVillageMembership } from "./villages.server";
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { Db, Tx } from "~/lib/db/client.server";
@@ -102,8 +103,7 @@ export async function enrollFromSignupInvitation(db: Tx, userId: string, invitat
   const [departure] = await db.select({ id: villageDepartures.userId }).from(villageDepartures)
     .where(and(eq(villageDepartures.userId, userId), eq(villageDepartures.villageId, village.id)));
   if (departure) return null;
-  const inserted = await db.insert(villageMembers).values({ userId, villageId: village.id }).onConflictDoNothing().returning();
-  if (inserted.length) {
+  if (await addVillageMembership(db, userId, village.id)) {
     const [notice] = await db.insert(notifications).values({ userId, actorId: invitation.createdBy, villageId: village.id, kind: "village_added" })
       .returning({ id: notifications.id, userId: notifications.userId, kind: notifications.kind });
     // Keep profile creation out of notification rendering's import cycle.

@@ -28,8 +28,8 @@ import { loadReactions } from "~/lib/votes.server";
 // the thread's Markdown twin (a topic without a title has `excerpt`, the beginning of its body).
 
 // Followed posts with unread replies by default; ?all=1 includes every followed post. Latest activity first, and always the reader's own list.
-export type ListSpec = { kind: "latest" } | { kind: "area"; lang: Lang } | { kind: "home" } | { kind: "following" } | { kind: "villages" } | { kind: "village"; slug: string; villageId: string };
-export const allowsPublicListRead = (spec: ListSpec | null): boolean => spec?.kind !== "following";
+export type ListSpec = { kind: "latest" } | { kind: "area"; lang: Lang } | { kind: "home" } | { kind: "following-home" } | { kind: "following" } | { kind: "villages" } | { kind: "village"; slug: string; villageId: string };
+export const allowsPublicListRead = (spec: ListSpec | null): boolean => spec?.kind !== "following" && spec?.kind !== "following-home";
 export type ListMdOptions = { all?: boolean; page: number; lang: Lang | null; k: string | null; asks?: boolean; long?: boolean; order?: TopicOrder | null };
 
 // The language a village's name and description are written in (lang) is always given once it is known; the machine translation of them beside the original, as a title has one,
@@ -100,7 +100,8 @@ export async function buildListMarkdown(db: Db, profile: Profile | null, spec: L
       yamlList(translated.map((village, i) => ({ slug: village.slug, name: villages[i].name, description: villages[i].description, kind: village.kind, canonical: siteUrl(village.kind === "personal" ? `/u/${village.slug!.slice(1)}` : `/v/${village.slug}`), ...(village.kind === "personal" ? {} : { md: mdUrl(`/v/${village.slug}.md`, { k: opts.k, lang: opts.lang }) }), ...("members" in village ? { members: village.members, joined: village.joined } : {}), ...villageTranslationFields(village, written.get(village.slug), opts.lang) }))),
     ]);
   }
-  if (spec.kind === "following" && !profile) throw new Error("The following list requires a member");
+  const followingHome = spec.kind === "following-home";
+  if ((spec.kind === "following" || followingHome) && !profile) throw new Error("The selected list requires a member");
   const path = spec.kind === "village" ? `/v/${spec.slug}` : spec.kind === "latest" ? "/latest" : spec.kind === "area" ? `/a/${spec.lang}` : spec.kind === "following" ? "/following" : "/home";
   const asksOnly = opts.asks === true;
   // Questions only wins over long posts only (a question always has a title).
@@ -111,19 +112,21 @@ export async function buildListMarkdown(db: Db, profile: Profile | null, spec: L
   const order: TopicOrder = streamFilters ? opts.order ?? defaultOrder : defaultOrder;
   // The screen's address of the same list: only what differs from the default is written.
   const screenParams = new URLSearchParams();
+  if (followingHome) screenParams.set("scope", "following");
   if (order !== defaultOrder) screenParams.set("order", order);
   if (asksOnly) screenParams.set("asks", "1");
   if (titledOnly) screenParams.set("long", "1");
   if (spec.kind === "following" && opts.all) screenParams.set("all", "1");
   const screenQuery = screenParams.toString() ? `?${screenParams.toString()}` : "";
-  const canonical = siteUrl(`${spec.kind === "home" ? "/" : path}${screenQuery}`);
+  const canonical = siteUrl(`${spec.kind === "home" || followingHome ? "/" : path}${screenQuery}`);
   // The query that the link to the next page carries, besides ?lang= and ?k= (mdUrl): the order if it was asked for, and the filters.
   const carry: Record<string, string> = {};
+  if (followingHome) carry.scope = "following";
   if (opts.order && streamFilters) carry.order = opts.order;
   if (asksOnly) carry.asks = "1";
   if (titledOnly) carry.long = "1";
   if (spec.kind === "following" && opts.all) carry.all = "1";
-  const scope = spec.kind === "village" ? ({ kind: "village", villageId: spec.villageId } as const) : spec.kind === "following" && profile ? ({ kind: "followed", userId: profile.userId, unreadOnly: !opts.all } as const) : spec.kind === "area" ? ({ kind: "langs", langs: [spec.lang] } as const) : ({ kind: "all" } as const);
+  const scope = followingHome && profile ? ({ kind: "following-home", userId: profile.userId } as const) : spec.kind === "village" ? ({ kind: "village", villageId: spec.villageId } as const) : spec.kind === "following" && profile ? ({ kind: "followed", userId: profile.userId, unreadOnly: !opts.all } as const) : spec.kind === "area" ? ({ kind: "langs", langs: [spec.lang] } as const) : ({ kind: "all" } as const);
   // The home and the language lists have the page size of the cards on the screen; /latest.md keeps its own.
   const result = await listTopics(db, scope, { page: opts.page, ...(spec.kind === "latest" ? {} : { limit: TOPICS_PER_PAGE }), order, asksOnly, titledOnly });
   const body = section(await items(db, result.topics, opts));
@@ -135,8 +138,8 @@ export async function buildListMarkdown(db: Db, profile: Profile | null, spec: L
       : spec.kind === "area"
         ? `Topics in ${spec.lang}`
         : spec.kind === "following"
-          ? "Followed posts"
-          : `Home: topics in every language, ${orderPhrase}`;
+          ? "Watched posts"
+          : followingHome ? `Home: following, ${orderPhrase}` : `Home: topics in every language, ${orderPhrase}`;
   const village = spec.kind === "village" ? await villageBySlug(db, spec.slug) : null;
   const translatedVillage = village && opts.lang ? await localizeVillage(db, { slug: village.slug, name: village.name, description: village.description, language: village.language }, { displayLang: opts.lang, readLangs: [] }) : null;
   const villageWritten = village?.sourceLang;

@@ -373,7 +373,7 @@ describe("home page", () => {
     for (const intent of ["", "draft", "collapse"]) {
       for (const as of ["hana", undefined]) {
         const request = h.request("/?index", { as, form: { body: "Must not publish", intent } });
-        await expect(Promise.resolve().then(() => action(h.args(request)))).rejects.toMatchObject({ init: { status: 405, headers: { Allow: "GET, HEAD" } } });
+        expect(await h.outcome(() => action(h.args(request)))).toMatchObject({ status: as ? 400 : 302 });
       }
     }
     expect(await h.db.select().from(entries)).toEqual(before);

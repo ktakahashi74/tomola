@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { createAuth } from "~/lib/auth/auth.server";
 import { invitationCookie, invitationCookieName, readInvitationCookie } from "~/lib/auth/invitation-cookie.server";
 import { authSecret } from "~/lib/auth/secret.server";
-import { chatConsents, invitations, notifications, profiles, villageMembers, villages } from "~/lib/db/schema";
+import { chatConsents, invitations, notifications, profiles, villageFollows, villageMembers, villages } from "~/lib/db/schema";
 import { createInvitation, findValidInvitationByToken, markInvitationUsed, revokeInvitation } from "~/lib/invitations.server";
 import { createProfile } from "~/lib/profiles.server";
 import { consumedInvitationVillage, createSignupInvitation, invitationVillage, signupVillageChoices } from "~/lib/signup-village.server";
@@ -87,6 +87,8 @@ it.each([["invite_public", "en"], ["open", "en"], ["invite_public", "other"]] as
   expect(result).toMatchObject({ ok: true });
   const memberships = await db.select().from(villageMembers).where(eq(villageMembers.userId, member.id));
   expect(memberships.map(row => row.villageId).sort()).toEqual([a.id, ...(homeArea === "en" ? [(await languageVillage(db, "en"))!.id] : [])].sort());
+  const follows = await db.select().from(villageFollows).where(eq(villageFollows.userId, member.id));
+  expect(follows.map(row => row.villageId).sort()).toEqual(memberships.map(row => row.villageId).sort());
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, member.id));
   expect(profile.defaultVillageId).toBe((await personalVillage(db, member.id))!.id);
   expect(await db.select().from(chatConsents).where(eq(chatConsents.userId, member.id))).toEqual([]);

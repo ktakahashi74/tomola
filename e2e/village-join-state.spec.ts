@@ -4,7 +4,7 @@ import { captureScreenshot, enMessages as m, openVillageMembership, state, useMe
 
 const header = (page: Page) => page.locator("[data-village-header]");
 const joined = (page: Page) => header(page).locator("summary").filter({ hasText: m.village_joined });
-const follow = (page: Page) => header(page).locator('button[name="intent"][value="follow"], button[name="intent"][value="unfollow"]');
+const follow = (page: Page) => header(page).locator('button:is([value="follow"], [value="unfollow"]):not([data-village-membership] button)');
 const hint = (page: Page) => header(page).locator("[data-village-participation-help]");
 
 async function screenshots(page: Page, label: string) {
@@ -27,7 +27,7 @@ async function screenshots(page: Page, label: string) {
   if (membershipOpen) await header(page).locator("details[data-village-membership] > summary").click();
 }
 
-test("joined state replaces follow controls and leaving preserves an existing follow", async ({ page, browser }) => {
+test("joined state moves follow controls into membership and leaving preserves an existing follow", async ({ page, browser }) => {
   await useMember(page, "zjoin_reader@example.com", "/v/join-state-open");
   await expect(hint(page)).toBeVisible();
   await screenshots(page, "not-joined-open");
@@ -43,6 +43,13 @@ test("joined state replaces follow controls and leaving preserves an existing fo
   await joined(page).focus();
   await page.keyboard.press("Enter");
   await expect(joined(page).locator("..")).toHaveAttribute("open", "");
+  const menu = joined(page).locator("..");
+  await menu.getByRole("button", { name: m.village_membership_unfollow, exact: true }).click();
+  await expect(joined(page)).toBeVisible();
+  await expect(header(page).getByRole("link", { name: m.village_post_here, exact: true })).toBeVisible();
+  if (!(await menu.getAttribute("open") === "")) await joined(page).click();
+  await menu.getByRole("button", { name: m.village_membership_follow, exact: true }).click();
+  if (!(await menu.getAttribute("open") === "")) await joined(page).click();
   const leave = header(page).getByRole("button", { name: m.village_leave, exact: true });
   await expect(leave).toBeVisible();
   await leave.focus();
@@ -112,6 +119,8 @@ test("invited members confirm departure and the last owner can leave only after 
   await expect(ended.getByText(m.village_leave_invite_help, { exact: true })).toHaveCount(0);
   await ended.getByRole("button", { name: m.village_leave, exact: true }).click();
   await expect(joined(page)).toHaveCount(0);
+  await expect(follow(page)).toHaveAttribute("aria-pressed", "true");
+  await follow(page).click();
   await expect(follow(page)).toHaveCount(0);
   await expect(hint(page)).toHaveCount(0);
 });

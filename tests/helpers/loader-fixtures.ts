@@ -31,7 +31,7 @@ const readingLanguage = () => ({ current: "ja" as const, usual: "ja" as const, e
 
 export const homeData = loaderFixture<HomeRoute.ComponentProps["loaderData"]>(() => ({
   ...listDefaults("/home.md"), reader: false, layout: "unified", order: "created", filter: "all",
-  readingLanguage: readingLanguage(), followingAvailable: false, noVillagePlaces: false,
+  readingLanguage: readingLanguage(), followingAvailable: false, scope: "all", scopeAction: "/", filterReset: "/",
 }));
 export const followingData = loaderFixture<FollowingRoute.ComponentProps["loaderData"]>(() => ({
   ...listDefaults("/following.md"), all: false, hasFollowedTopics: false, asksOnly: false,

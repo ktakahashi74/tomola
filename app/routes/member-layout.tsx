@@ -1,3 +1,5 @@
+import { followedMemberNavigation, type FollowedMemberNavigation } from "~/lib/member-follows.server";
+import { displayLangFor } from "~/lib/display-lang.server";
 import { NavigationUnreadContext, type NavigationUnread } from "~/lib/navigation-unread";
 import { NavigationDataContext } from "~/lib/navigation-data";
 import { useCallback, useState } from "react";
@@ -47,13 +49,14 @@ export async function loader({ request }: { request: Request }) {
   const scopePromise = getMemberScope(request);
   // Initialize a missing display preference without adopting a shared link's language.
   const ui = negotiateUiLocale(request, enabledLangs(), profile.uiLocale);
-  const [scope, keys, apiDrafts, notificationState, joined, followedVillages] = await Promise.all([
+  const [scope, keys, apiDrafts, notificationState, joined, followedVillages, followedMembers] = await Promise.all([
     scopePromise,
     db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, user.id)).limit(1),
     countApiDrafts(db, user.id),
     synchronizeTopicRead(request).then(() => Promise.all([countUnreadNotifications(db, user.id), hasUnreadFollowedThread(db, user.id)])),
     villagesEnabled() ? joinedVillageNavigation(db, user.id, villageReaderFor(request, profile)) : Promise.resolve([]),
     villagesEnabled() ? followedVillageNavigation(db, user.id, villageReaderFor(request, profile), { excludeJoined: true }) : Promise.resolve([]),
+    villagesEnabled() ? followedMemberNavigation(db, user.id, displayLangFor(request, profile)) : Promise.resolve([]),
     ui.source === "cookie" || ui.source === "accept-language" ? rememberUiLocale(db, user.id, profile.uiLocale, ui.locale) : Promise.resolve(),
   ]);
   const navigation = {
@@ -73,7 +76,7 @@ export async function loader({ request }: { request: Request }) {
     welcome: welcomeFor(request, profile.handle),
   };
   if (!villagesEnabled()) return navigation;
-  return { ...navigation, villages: joined, followedVillages, ...(villageChatEnabled() ? { chatUnreadTotal: joined.reduce((total, village) => total + (village.unread ?? 0), 0) } : {}) };
+  return { ...navigation, villages: joined, followedVillages, followedMembers, ...(villageChatEnabled() ? { chatUnreadTotal: joined.reduce((total, village) => total + (village.unread ?? 0), 0) } : {}) };
 }
 
 export default function MemberLayout({ loaderData }: Route.ComponentProps) {
@@ -95,6 +98,7 @@ export default function MemberLayout({ loaderData }: Route.ComponentProps) {
   const places = loaderData.reader ? null : {
     villages: "villages" in navigation ? navigation.villages ?? [] : [],
     followedVillages: ("followedVillages" in navigation ? navigation.followedVillages : []) as FollowedVillageNavigation[],
+    followedMembers: ("followedMembers" in navigation ? navigation.followedMembers : []) as FollowedMemberNavigation[],
     followedUnread: "followedUnread" in navigation && navigation.followedUnread,
     villagesEnabled: "villages" in loaderData,
   };

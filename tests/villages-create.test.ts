@@ -1,3 +1,4 @@
+import { isFollowingVillage, setVillageFollow } from "~/lib/village-follows.server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
@@ -36,6 +37,33 @@ async function accept(db: Awaited<ReturnType<typeof setup>>, target = "guest", k
   expect(await respondToVillageInvite(db, target, "club", id, "accepted")).toMatchObject({ ok: true });
   return id;
 }
+
+it("follows on creation and when membership starts, and keeps follows on departure and removal", async () => {
+  const db = await setup();
+  const club = (await villageBySlug(db, "club"))!;
+  const following = (userId: string, villageId = club.id) => isFollowingVillage(db, userId, villageId);
+  expect(await following("owner")).toBe(true);
+  const invitation = await accept(db);
+  expect(await following("guest")).toBe(true);
+  expect(await removeVillageMember(db, "owner", "club", "vc_guest", "")).toMatchObject({ ok: true });
+  expect(await following("guest")).toBe(true);
+  await setVillageFollow(db, "guest", "club", false);
+  expect(await respondToVillageInvite(db, "guest", "club", invitation, "accepted")).toMatchObject({ ok: false });
+  expect(await following("guest")).toBe(false);
+  await accept(db);
+  expect(await following("guest")).toBe(true);
+  expect(await changeVillageMembership(db, "guest", "club", "leave")).toBe(true);
+  expect(await following("guest")).toBe(true);
+
+  const language = (await villageBySlug(db, "en"))!;
+  expect(await following("guest", language.id)).toBe(true);
+  await setVillageFollow(db, "guest", "en", false);
+  expect(await changeVillageMembership(db, "guest", "en", "join")).toBe(true);
+  expect(await following("guest", language.id)).toBe(false);
+  await changeVillageMembership(db, "guest", "en", "leave");
+  await changeVillageMembership(db, "guest", "en", "join");
+  expect(await following("guest", language.id)).toBe(true);
+});
 
 describe("member-created villages", () => {
   it("limits creation attempts to five a day even when the lifetime quota has space", async () => {

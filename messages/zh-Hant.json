@@ -605,7 +605,7 @@
   "nav_notifications": "通知",
   "nav_notifications_unread": "{count} 則未讀通知",
   "notifications_title": "通知",
-  "notifications_empty": "沒有通知。當您關注的貼文收到回覆，或者有人回覆您或提及您時，通知會顯示在此處。",
+  "notifications_empty": "你追蹤的貼文有新回覆、有人回覆你或提及你時，通知會出現在這裡。",
   "notifications_mark_all": "全部標示為已讀",
   "notification_unread": "未讀",
   "notification_open": "開啟",
@@ -933,86 +933,25 @@
   "offline_title": "您已離線",
   "offline_body": "目前無法連線至 tomola。請檢查您的網路連線，然後重新開啟首頁。",
   "offline_home": "前往首頁",
-  "nav_following": "追蹤的貼文",
-  "following_title": "追蹤的貼文",
+  "nav_following": "正在追蹤的貼文",
+  "following_title": "正在追蹤的貼文",
   "following_filter_label": "顯示的貼文",
   "following_filter_new": "新回覆",
   "following_filter_all": "全部",
   "following_no_new_replies": "沒有新回覆。",
-  "following_rule": "您會自動關注自己發表的貼文以及回覆過的貼文。取消關注的貼文將保持未關注狀態。",
-  "following_auto_label": "自動關注的貼文",
-  "following_empty": "目前空空如也。對感興趣的貼文按下「追蹤」或進行回覆，就會顯示在這裡。",
-  "follow_button": "追蹤",
-  "follow_following": "追蹤中",
-  "follow_unfollow": "取消關注",
-  "follow_help": "您會自動關注自己發起以及回覆過的貼文。您所關注貼文中的新回覆會出現在通知中，並在閱讀前合併顯示為一則；除非另有設定，否則也會透過每日摘要電子郵件寄送給您。取消關注的貼文會保持未關注狀態。選擇立場不會讓您關注該貼文。",
-  "notification_followed_thread": [
-    {
-      "declarations": [
-        "input count",
-        "input handle",
-        "input title",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你追蹤的貼文「{title}」有新的回覆：{count} 則（最新回覆來自 @{handle}）。"
-      }
-    }
-  ],
-  "notification_followed_thread_nolatest": [
-    {
-      "declarations": [
-        "input count",
-        "input title",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你追蹤的貼文「{title}」有新的回覆：{count} 則。"
-      }
-    }
-  ],
+  "following_rule": "你會自動追蹤自己發表或回覆過的貼文的後續回覆。停止追蹤後，這項設定會保留。",
+  "following_auto_label": "自動追蹤的貼文",
+  "following_empty": "在貼文中選擇「追蹤回覆」或發表回覆，貼文就會出現在這裡。",
+  "follow_button": "追蹤回覆",
+  "follow_following": "正在追蹤回覆",
+  "follow_unfollow": "停止追蹤",
+  "follow_help": "你會自動追蹤自己發表或回覆過的貼文的後續回覆。新回覆會出現在通知中，閱讀前合併顯示，預設也會列入每日電子郵件摘要。停止追蹤後，這項設定會保留。選擇立場不會改變追蹤設定。",
+  "notification_followed_thread": "你追蹤的貼文「{title}」有 {count} 則新回覆。最新一則來自 @{handle}。",
+  "notification_followed_thread_nolatest": "你追蹤的貼文「{title}」有 {count} 則新回覆。",
   "notification_content_unavailable": "此通知涉及的貼文（或其所屬貼文）目前已被隱藏或刪除。",
-  "mail_subject_followed_thread": "您關注的貼文有新回覆",
-  "mail_item_followed_thread": [
-    {
-      "declarations": [
-        "input count",
-        "input excerpt",
-        "input handle",
-        "input title",
-        "input url",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你追蹤的貼文「{title}」有新的回覆：{count} 則。最新回覆來自 @{handle}：\n\n{excerpt}\n\n{url}"
-      }
-    }
-  ],
-  "mail_item_followed_thread_nolatest": [
-    {
-      "declarations": [
-        "input count",
-        "input title",
-        "input url",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
-      "match": {
-        "countPlural=other": "你追蹤的貼文「{title}」有新的回覆：{count} 則。\n\n{url}"
-      }
-    }
-  ],
+  "mail_subject_followed_thread": "追蹤的貼文有新回覆",
+  "mail_item_followed_thread": "你追蹤的貼文「{title}」有 {count} 則新回覆。最新一則來自 @{handle}。\n\n{excerpt}\n\n{url}",
+  "mail_item_followed_thread_nolatest": "你追蹤的貼文「{title}」有 {count} 則新回覆。\n\n{url}",
   "settings_email_auto": "自動（預設）：回覆與提及立即發送，其他內容每日發送一次",
   "settings_read_langs_help": "勾選語言的貼文將直接顯示原文，不進行翻譯。",
   "lang_not_open": "{lang}（目前未開放）",
@@ -1786,7 +1725,7 @@
   "posted_translating": "正在翻譯成：",
   "posted_all_reached": "已送達所有語言。",
   "posted_first": "這是您的第一篇貼文。翻譯完成後，使用其他語言的人就能閱讀到它。",
-  "posted_reply_followed": "已回覆。你現在追蹤了這篇貼文。",
+  "posted_reply_followed": "回覆已發表。你已開始追蹤這則貼文的回覆。",
   "edited_saved": "變更已儲存。正在重新進行翻譯。",
   "ai_write_changed": "為 AI 產生的草稿在此畫面儲存後已遭變更，因此未被覆寫。您的文字仍保留於此。請從草稿中開啟以查看最新版本。",
   "local_draft_older": "此文字變更前未發送的草稿（{time}）。",
@@ -1874,13 +1813,12 @@
   "notification_village_membership_ended": "你已不再是 {name} 的會員。你的貼文仍保留在這個村中。",
   "village_follow": "追蹤",
   "village_following": "追蹤中",
-  "village_join_follow_help": "追蹤後即可在首頁的「{filter}」篩選條件中閱讀此村落的貼文（僅限閱讀）。加入後也可以在此發文。",
-  "village_join_follow_help_chat": "追蹤後即可在首頁的「{filter}」篩選條件中閱讀此村落的貼文（僅限閱讀）。加入後也可以在此發文與聊天。",
-  "village_follow_members_help": "追蹤後即可在首頁的「{filter}」篩選條件中閱讀此村落的貼文（僅限閱讀）。此處僅限成員發文。",
+  "village_join_follow_help": "追蹤後，此村的貼文會出現在首頁的「{filter}」中。加入後可以發文，並會自動追蹤此村。",
+  "village_join_follow_help_chat": "追蹤後，此村的貼文會出現在首頁的「{filter}」中。加入後可以發文和聊天，並會自動追蹤此村。",
+  "village_follow_members_help": "追蹤後，此村的貼文會出現在首頁的「{filter}」中。村成員可以在這裡發文，加入時會自動追蹤此村。",
   "village_follow_places": "追蹤的村",
   "village_follow_more": "另外{count}個",
-  "home_filter_following": "已加入及追蹤的村",
-  "home_following_empty": "追蹤或加入一個村，它的貼文就會顯示在這裡。",
+  "home_following_empty": "追蹤成員或村後，他們的公開貼文會出現在這裡。你自己的公開貼文也會顯示。",
   "objections_neutrality": "包括原本的問題在內，任何一種提問方式都不被視為正確的方式。",
   "notification_reply_to_topic_language": "@{handle} 用{language}回覆了您的貼文「{title}」。",
   "notification_reply_to_reply_language": "@{handle} 用{language}在「{title}」中回覆了您的回覆。",
@@ -1899,9 +1837,7 @@
   "translation_article_arrived": "已切換為譯文。",
   "village_personal": "我的村",
   "village_personal_destination": "我的村（@{handle}）",
-  "village_personal_places": "成員的村",
   "member_page_elsewhere": "在其他地方的貼文",
-  "member_page_village_follow_hint": "追蹤這個村，就能收到這一欄裡的貼文。",
   "display_name_native": "顯示名稱（你的語言）",
   "display_name_latin": "顯示名稱（拉丁字母）",
   "display_name_invalid": "每個名稱請填寫一行，最多 50 個字元，至少包含一個字母或文字，不能使用 @。拉丁字母形式只能使用拉丁字母、空格、連字號、撇號或句點。",
@@ -2495,5 +2431,16 @@
   "list_load_more": "載入更多",
   "list_added": "已新增 {count} 篇貼文。",
   "list_load_failed": "無法載入更多貼文。請再試一次。",
-  "list_back_latest": "返回最新貼文"
+  "list_back_latest": "返回最新貼文",
+  "home_scope_all": "全部",
+  "home_scope_following": "已追蹤",
+  "home_scope_label": "首頁顯示範圍",
+  "home_filter_empty": "沒有符合此篩選條件的貼文。",
+  "home_clear_filter": "清除篩選條件",
+  "home_see_all": "查看所有貼文",
+  "nav_followed_members": "已追蹤的成員",
+  "member_page_follow_hint": "追蹤這位成員後，其公開貼文會出現在首頁的「已追蹤」中。",
+  "village_membership_unfollow": "取消追蹤此村",
+  "village_membership_follow": "追蹤此村",
+  "village_membership_follow_help": "追蹤後，此村的貼文會出現在首頁的「已追蹤」中。取消追蹤後，你仍是成員，可以發文並使用可用的聊天功能。"
 }

@@ -153,7 +153,7 @@ it("defaults to a writable shared source village, honors explicit destinations a
   expect((await editor(`?respond=${original}`)).posting?.selected).toBe(beforeJoining.selected);
   expect((await editor(`?respond=${original}`)).posting?.choices.some(choice => choice.slug === "en")).toBe(false);
   expect(await h.db.select().from(villageMembers).where(and(eq(villageMembers.userId, h.ids.zresponder), eq(villageMembers.villageId, en.id)))).toEqual([]);
-  await enrollInVillage(h.db, h.ids.zresponder, en.id);
+  await h.db.transaction(tx => enrollInVillage(tx, h.ids.zresponder, en.id));
   const usual = (await editor("")).posting!;
   const response = (await editor(`?respond=${original}`)).posting!;
   expect(response.selected).toBe("en");

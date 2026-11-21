@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import type { FollowedMemberNavigation } from "~/lib/member-follows.server";
 import { useShellLabels } from "~/lib/use-shell-labels";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
@@ -43,8 +45,8 @@ function ChatMark({ slug, name, unread, mentions }: { slug: string; name: string
 
 // The places of a member, as one list: Home, Following, Read later, their own village, the villages joined (name = posts; a mark = something new in the chat, linking to it), and the way to the list of villages.
 // The side column (wide list screens) and the drawer (everywhere else) both show exactly this.
-export function PlaceList({ villages, followedVillages = [], followedUnread, pathname, villagesEnabled = true }: {
-  villages: JoinedVillageNavigation[]; followedVillages?: FollowedVillageNavigation[]; followedUnread: boolean; pathname: string; villagesEnabled?: boolean;
+export function PlaceList({ villages, followedVillages = [], followedMembers = [], followedUnread, pathname, villagesEnabled = true }: {
+  villages: JoinedVillageNavigation[]; followedVillages?: FollowedVillageNavigation[]; followedMembers?: FollowedMemberNavigation[]; followedUnread: boolean; pathname: string; villagesEnabled?: boolean;
 }) {
   const labels = useShellLabels();
   const path = pathname.replace(/\/$/, "") || "/";
@@ -56,7 +58,10 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
   const followedRow = (village: FollowedVillageNavigation) => <li key={village.slug}>
     <Link to={villagePath(village.slug)} title={villageNameTitle(village)} aria-current={villagePath(village.slug) === path ? "page" : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{village.iconUrl && <VillageIcon src={village.iconUrl} className="size-5 shrink-0 rounded" />}<span className="min-w-0">{villageName(village)}</span></Link>
   </li>;
-  const groups = [followedVillages.filter(v => v.kind !== "personal"), followedVillages.filter(v => v.kind === "personal")];
+  const memberPath = (member: FollowedMemberNavigation) => `/u/${member.handle}`;
+  const followedMemberRow = (member: FollowedMemberNavigation) => <li key={member.handle}>
+    <Link to={memberPath(member)} title={`@${member.handle}`} aria-current={memberPath(member) === path ? "page" : undefined} className="choice min-w-0 gap-2 px-1 py-1 [overflow-wrap:anywhere]">{member.avatarUrl && <VillageIcon src={member.avatarUrl} className="size-5 shrink-0 rounded" />}<bdi>{member.name ?? `@${member.handle}`}</bdi></Link>
+  </li>;
   return <>
     <ul className="space-y-0.5">
       <li><Link to="/" aria-current={home ? (path === "/" ? "page" : "true") : undefined} className="choice px-1 py-1">{labels.nav_home}</Link></li>
@@ -75,15 +80,24 @@ export function PlaceList({ villages, followedVillages = [], followedUnread, pat
           </li>;
         })}
       </ul></>}
-      {groups.map((group, index) => group.length > 0 && <section key={index}>
-        <h2 className="px-1 pt-3 ui-meta font-semibold text-muted-foreground">{index ? labels.village_personal_places : labels.village_follow_places}</h2>
-        <ul className="space-y-0.5">{group.slice(0, FOLLOWED_NAVIGATION_VISIBLE).map(followedRow)}</ul>
-        {group.length > FOLLOWED_NAVIGATION_VISIBLE && <details open={group.slice(FOLLOWED_NAVIGATION_VISIBLE).some(village => villagePath(village.slug) === path) || undefined}>
-          <summary className="choice cursor-pointer px-1 py-1 ui-meta">{group[0].moreLabel}</summary>
-          <ul className="space-y-0.5">{group.slice(FOLLOWED_NAVIGATION_VISIBLE).map(followedRow)}</ul>
-        </details>}
-      </section>)}
+      <FollowedLinks rows={followedVillages} label={labels.village_follow_places} path={path} href={village => villagePath(village.slug)} render={followedRow} />
+      <FollowedLinks rows={followedMembers} label={labels.nav_followed_members} path={path} href={memberPath} render={followedMemberRow} />
       <div className="mt-2 border-t pt-2"><Link to="/villages" aria-current={path === "/villages" ? "page" : undefined} className="choice px-1 py-1">{labels.nav_all_villages}</Link></div>
     </>}
   </>;
+}
+
+function FollowedLinks<T extends { moreLabel?: string }>({ rows, label, path, href, render }: {
+  rows: T[]; label: string; path: string; href: (row: T) => string; render: (row: T) => ReactNode;
+}) {
+  if (rows.length === 0) return null;
+  const extra = rows.slice(FOLLOWED_NAVIGATION_VISIBLE);
+  return <section>
+    <h2 className="px-1 pt-3 ui-meta font-semibold text-muted-foreground">{label}</h2>
+    <ul className="space-y-0.5">{rows.slice(0, FOLLOWED_NAVIGATION_VISIBLE).map(render)}</ul>
+    {extra.length > 0 && <details open={extra.some(row => href(row) === path) || undefined}>
+      <summary className="choice cursor-pointer px-1 py-1 ui-meta">{rows[0].moreLabel}</summary>
+      <ul className="space-y-0.5">{extra.map(render)}</ul>
+    </details>}
+  </section>;
 }

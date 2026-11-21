@@ -41,7 +41,7 @@ export const SHELL_LABEL_KEYS = [
   "site_tagline",
   "village_chat_title",
   "village_follow_places",
-  "village_personal_places",
+  "nav_followed_members",
   "villages_title",
 ] as const;
 

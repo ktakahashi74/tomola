@@ -5,7 +5,7 @@ import { m } from "~/paraglide/messages.js";
 import { messageMarkup } from "./helpers/message-markup";
 import { createReply, createTopic } from "~/lib/entries.server";
 import { setFollow } from "~/lib/follows.server";
-import { setVillageFollow } from "~/lib/village-follows.server";
+import { setMemberFollow } from "~/lib/member-follows.server";
 import { TOPICS_PER_PAGE } from "~/lib/pagination";
 import { parseBlocks } from "./helpers/md";
 import { renderInRouter } from "./helpers/render-in-router";
@@ -116,7 +116,7 @@ it("shows the new-reply indicator next to the total in a following row", async (
 it("ignores old village-page values in the screen, alternate and AI twin", async () => {
   vi.stubEnv("VILLAGES", "1");
   try {
-    expect(await setVillageFollow(h.db, h.ids.ben, "@anna", true)).toEqual({ ok: true });
+    expect(await setMemberFollow(h.db, h.ids.ben, h.ids.anna, true)).toEqual({ ok: true });
     const { loader } = await import("~/routes/following-md");
     const { meta } = await import("~/routes/following");
     for (const value of ["1", "2", "bad", "-1"]) {

@@ -3,9 +3,10 @@ import { parsePageParam } from "~/lib/pagination";
 
 // Carry the screen's supported filters, language and page to its Markdown alternate. The followed list supports asks and all; its activity order is fixed.
 // Ignore malformed values and transient controls. This helper runs in the browser too, so it has no server imports.
-export function listAlternateQuery(search: string, { streamFilters = true }: { streamFilters?: boolean } = {}): string {
+export function listAlternateQuery(search: string, { streamFilters = true, followingHome = false }: { streamFilters?: boolean; followingHome?: boolean } = {}): string {
   const params = new URLSearchParams(search);
   const out = new URLSearchParams();
+  if (followingHome) out.set("scope", "following");
   const lang = params.get("lang");
   if (isLang(lang)) out.set("lang", lang);
   if (params.get("asks") === "1") out.set("asks", "1");

@@ -33,7 +33,7 @@ export function SiteNavigation({ children }: { children: ReactNode }) {
   });
   return <ChatNavigationContext.Provider value={setChat}>
     <nav data-site-navigation aria-label={labels.nav_side_label} className="site-navigation space-y-1 text-sm [overflow-wrap:anywhere]">
-      <PlaceList villages={villages} followedVillages={data?.followedVillages} followedUnread={data?.followedUnread ?? false} pathname={pathname} villagesEnabled={data?.villagesEnabled ?? true} />
+      <PlaceList villages={villages} followedVillages={data?.followedVillages} followedMembers={data?.followedMembers} followedUnread={data?.followedUnread ?? false} pathname={pathname} villagesEnabled={data?.villagesEnabled ?? true} />
     </nav>
     {children}
   </ChatNavigationContext.Provider>;

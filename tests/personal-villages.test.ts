@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { addMember, createTestDb } from "./helpers/db";
-import { profiles, villages, handleHolds, villageFollows, villageMembers, entries, translations } from "~/lib/db/schema";
+import { profiles, villages, handleHolds, memberFollows, villageFollows, villageMembers, entries, translations } from "~/lib/db/schema";
 import MemberPage from "~/routes/member-page";
 import { renderInRouter } from "./helpers/render-in-router";
 import { personalVillage, ensurePersonalVillage } from "~/lib/personal-villages.server";
@@ -13,6 +13,8 @@ import { submitTopicForm } from "~/lib/entry-form.server";
 import { createDraft, getDraft, publishDraft } from "~/lib/drafts.server";
 import { createClientDraft, updateClientDraft } from "~/lib/mcp/drafts.server";
 import { canReadThreadPublicly } from "~/lib/md/thread.server";
+import { isFollowingVillage } from "~/lib/village-follows.server";
+import { listFollowedMembers, setMemberFollow } from "~/lib/member-follows.server";
 import { setVillageFollow, listFollowedVillages } from "~/lib/village-follows.server";
 import { loadMemberPageContent, resolveMemberPage, setIntroduction } from "~/lib/member-pages.server";
 import { READING_BATCH, readReadingRequest } from "~/lib/reading-page";
@@ -116,7 +118,21 @@ it("restores an unavailable default to the personal village and consumes its not
   expect((await db.select().from(profiles).where(eq(profiles.userId, "pv-owner")))[0].defaultVillageId).toBe(village.id);
 });
 
-it("allows public reading and member replies, while following delivers only posts placed in the personal village", async () => {
+it("preparation follows a language village only on actual enrollment", async () => {
+  vi.stubEnv("VILLAGES", "0");
+  vi.stubEnv("ENABLED_LANGS", "ja,en");
+  const db = await createTestDb();
+  await addMember(db, "prep-member", "prep_member", { homeArea: "en" });
+  expect(await prepareVillages(db, { write: true })).toMatchObject({ written: true, memberships: 1 });
+  const village = (await languageVillage(db, "en"))!;
+  expect(await isFollowingVillage(db, "prep-member", village.id)).toBe(true);
+  await setVillageFollow(db, "prep-member", "en", false);
+  await db.update(profiles).set({ villagePreparedAt: null }).where(eq(profiles.userId, "prep-member"));
+  expect(await prepareVillages(db, { write: true })).toMatchObject({ written: true, memberships: 0 });
+  expect(await isFollowingVillage(db, "prep-member", village.id)).toBe(false);
+});
+
+it("allows public reading and member replies, while following the author delivers their public topics", async () => {
   const { db } = await world();
   const ownId = await post(db);
   const elsewhereId = await post(db, "pv-owner", "en");
@@ -126,15 +142,13 @@ it("allows public reading and member replies, while following delivers only post
   expect(await canReadThreadPublicly(db, ownId)).toBe(true);
   expect(await getThread(db, ownId)).not.toBeNull();
   expect(await createReply(db, "pv-reader", ownId, { body: "A public reply.", lang: "en" })).toMatchObject({ ok: true });
-  await setVillageFollow(db, "pv-reader", "@pv_owner", true);
-  const listed = await listFollowedVillages(db, "pv-reader");
-  expect(listed).toMatchObject([{ kind: "personal", slug: "@pv_owner", name: "@pv_owner" }]);
-  const home = await listTopics(db, { kind: "my-villages", userId: "pv-reader" });
-  expect(home.topics.map(t => t.id)).toEqual([ownId]);
-  expect(home.topics.map(t => t.id)).not.toContain(elsewhereId);
+  expect(await setVillageFollow(db, "pv-reader", "@pv_owner", true)).toEqual({ ok: false, error: "not_found" });
+  expect(await setMemberFollow(db, "pv-reader", "pv-owner", true)).toEqual({ ok: true });
+  expect(await listFollowedMembers(db, "pv-reader")).toMatchObject([{ handle: "pv_owner" }]);
+  const home = await listTopics(db, { kind: "following-home", userId: "pv-reader" });
+  expect(home.topics.map(t => t.id)).toEqual([ownId, elsewhereId]);
   const member = (await resolveMemberPage(db, "pv_owner"))!;
   const content = await loadMemberPageContent(db, member, { viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1 });
-  expect(content.personal?.following).toBe(true);
   expect(content.personal?.topics.map(t => t.id)).toEqual([ownId]);
   expect(content.topics.map(t => t.id)).toEqual([elsewhereId]);
   expect(content.topics[0].village?.slug).toBe("en");
@@ -142,9 +156,9 @@ it("allows public reading and member replies, while following delivers only post
   const renamed = await postingVillages(db, "pv-owner");
   expect(renamed.ownHandle).toBe("pv_renamed");
   expect(renamed.choices[0].slug).toBe("@pv_renamed");
-  expect((await listFollowedVillages(db, "pv-reader"))[0].slug).toBe("@pv_renamed");
-  await setVillageFollow(db, "pv-reader", "@pv_renamed", false);
-  expect(await listFollowedVillages(db, "pv-reader")).toEqual([]);
+  expect((await listFollowedMembers(db, "pv-reader"))[0].handle).toBe("pv_renamed");
+  await setMemberFollow(db, "pv-reader", "pv-owner", false);
+  expect(await listFollowedMembers(db, "pv-reader")).toEqual([]);
 });
 
 it("omits language-village names on member rows while keeping community and organization names", async () => {
@@ -161,7 +175,7 @@ it("omits language-village names on member rows while keeping community and orga
     viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1,
     reading: readReadingRequest(request, "created"), personalReading: readReadingRequest(request, "created", 1, "vlist"),
   });
-  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...content, reported: false } }), "/u/pv_owner");
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...content, following: null, reported: false } }), "/u/pv_owner");
   expect(html).not.toContain('href="/v/en"');
   for (const place of places) {
     expect(html).toContain(`href="/v/${place.slug}"`);
@@ -198,14 +212,16 @@ it("excludes closed posts and memberships from member pages, introductions and f
     expect(JSON.stringify(content)).not.toMatch(/Secret|hidden-personal-fixture/);
   }
   expect(await listFollowedVillages(db, "pv-reader")).toEqual([]);
-  expect((await listTopics(db, { kind: "my-villages", userId: "pv-reader" })).topics).toEqual([]);
+  expect((await listTopics(db, { kind: "following-home", userId: "pv-reader" })).topics).toEqual([]);
 });
 
 it("ends a departing owner's village, clears its follows, preserves posts and does not transfer a reused handle", async () => {
   const { db, village } = await world();
   const id = await post(db);
-  await setVillageFollow(db, "pv-reader", "@pv_owner", true);
+  await setMemberFollow(db, "pv-reader", "pv-owner", true);
+  await setMemberFollow(db, "pv-owner", "pv-reader", true);
   await deleteAccount(db, "pv-owner", { confirmation: "pv_owner", posts: "keep" });
+  expect(await db.select().from(memberFollows)).toEqual([]);
   expect(await personalVillage(db, "pv-owner")).toBeNull();
   expect(await db.select().from(villages).where(eq(villages.ownerId, "pv-owner"))).toEqual([]);
   const [ended] = await db.select().from(villages).where(eq(villages.id, village.id));
@@ -270,7 +286,7 @@ it("gives the two member-page sections independent Load more links and keeps aut
   const first = await load(url);
   expect(first.personal?.topics).toHaveLength(READING_BATCH);
   expect(first.topics).toHaveLength(READING_BATCH);
-  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...first, reported: false } }), path);
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...first, following: null, reported: false } }), path);
   const links = [...html.matchAll(/<a\b[^>]*data-load-more="true"[^>]*href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll("&amp;", "&"), url));
   expect(links.map(link => link.hash)).toEqual(["#village", "#posts"]);
   const [villageLink, postsLink] = links;

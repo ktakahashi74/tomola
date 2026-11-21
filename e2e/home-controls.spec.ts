@@ -11,12 +11,10 @@ async function controls(page: Page, messages: Messages, area = false) {
   const order = page.getByRole("navigation", { name: messages.home_order_label, exact: true });
   const filter = page.getByRole("navigation", { name: messages.list_filter_label, exact: true });
   if (!area) {
-    const summary = page.locator(`summary[aria-label^="${messages.filter_prefix}"]`);
-    // The name of the filter is read out but not drawn: the chosen value alone is the text.
-    const accessible = messages === ja ? `${ja.filter_prefix}${ja.home_filter_all}` : `${en.filter_prefix} ${en.home_filter_all}`;
-    await expect(summary).toHaveText(messages.home_filter_all);
+    const summary = page.locator(`summary:is([aria-label="${messages.home_filter_label}"], [aria-label^="${messages.filter_prefix}"])`);
+    await expect(summary).toHaveText(messages.home_filter_label);
     await expect(page.locator("main .more-info")).toHaveCount(0);
-    await expect(summary).toHaveAccessibleName(accessible);
+    await expect(summary).toHaveAccessibleName(messages.home_filter_label);
     await summary.click();
   }
   await expect(filter).toBeVisible();
@@ -25,7 +23,7 @@ async function controls(page: Page, messages: Messages, area = false) {
   await expect(order).not.toContainText(messages.home_order_label);
   await expect(order.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(filter.locator('[aria-current="true"]')).toHaveCount(1);
-  if (!area) await page.locator(`summary[aria-label^="${messages.filter_prefix}"]`).click();
+  if (!area) await page.locator(`summary:is([aria-label="${messages.home_filter_label}"], [aria-label^="${messages.filter_prefix}"])`).click();
   const languages = page.getByRole("navigation", { name: messages.home_origlang_label, exact: true });
   if (area) {
     await page.locator("summary:has(h1)").click();
@@ -68,8 +66,8 @@ test("home and language lists retain accessible controls for public readers", as
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
           if (url === "/" && width === 390) {
             const order = page.getByRole("navigation", { name: messages.home_order_label, exact: true });
-            const filter = page.locator(`summary[aria-label^="${messages.filter_prefix}"]`);
-            for (const [query, label] of [["", messages.home_filter_all], ["asks=1", messages.list_questions_only], ["long=1", messages.home_filter_long]]) {
+            const filter = page.locator(`summary:is([aria-label="${messages.home_filter_label}"], [aria-label^="${messages.filter_prefix}"])`);
+            for (const [query, label] of [["", messages.home_filter_label], ["asks=1", messages.list_questions_only], ["long=1", messages.home_filter_long]]) {
               await page.goto(`/?${query}`);
               await waitForClientRoute(page);
               await expect(filter).toHaveText(label);
@@ -80,7 +78,7 @@ test("home and language lists retain accessible controls for public readers", as
               expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
               await filter.click();
               const options = page.getByRole("navigation", { name: messages.list_filter_label, exact: true });
-              await expect(options.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "true");
+              await expect(options.getByRole("link", { name: query ? label : messages.list_all_topics, exact: true })).toHaveAttribute("aria-current", "true");
             }
           }
         }
@@ -121,7 +119,7 @@ test("member list controls work with keyboard and fit narrow and wide screens in
       await expect(page).toHaveURL(new URL(`/?lang=${locale}&order=activity`, state().baseURL).href);
       await waitForClientRoute(page);
       const filter = page.getByRole("navigation", { name: messages.list_filter_label, exact: true });
-      const summary = page.locator(`summary[aria-label^="${messages.filter_prefix}"]`);
+      const summary = page.locator(`summary:is([aria-label="${messages.home_filter_label}"], [aria-label^="${messages.filter_prefix}"])`);
       const filterLabel = (label: string) => label;
       await expect(order.getByRole("link", { name: messages.home_order_activity, exact: true })).toHaveAttribute("aria-current", "page");
       await summary.click();
@@ -136,10 +134,10 @@ test("member list controls work with keyboard and fit narrow and wide screens in
       await waitForClientRoute(page);
       await expect(summary).toHaveText(filterLabel(messages.list_questions_only));
       await summary.click();
-      await filter.getByRole("link", { name: messages.home_filter_all, exact: true }).click();
+      await filter.getByRole("link", { name: messages.list_all_topics, exact: true }).click();
       await expect(page).toHaveURL(new URL(`/?lang=${locale}&order=activity`, state().baseURL).href);
       await waitForClientRoute(page);
-      await expect(summary).toHaveText(filterLabel(messages.home_filter_all));
+      await expect(summary).toHaveText(filterLabel(messages.home_filter_label));
     }
   } finally { await context.close(); }
 });

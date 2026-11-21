@@ -19,8 +19,8 @@ test("list selections preserve query choices with and without scripts", async ({
   try {
     for (const target of [page, await context.newPage()]) {
       await target.goto("/?lang=en&order=activity&page=2");
-      const summary = target.locator(`summary[aria-label^="${en.filter_prefix}"]`);
-      await expect(summary).toHaveText(en.home_filter_all);
+      const summary = target.locator(`summary:is([aria-label="${en.home_filter_label}"], [aria-label^="${en.filter_prefix}"])`);
+      await expect(summary).toHaveText(en.home_filter_label);
       await summary.click();
       const filter = target.getByRole("navigation", { name: en.list_filter_label, exact: true });
       await filter.getByRole("link", { name: en.home_filter_long, exact: true }).click();

@@ -6,7 +6,7 @@ import { closeVillageChatConnections } from "./village-chat-events.server";
 import { clearVillageChatMemberState } from "./village-chat-notifications.server";
 import { and, asc, count, eq, inArray, isNotNull, isNull, or, exists, sql } from "drizzle-orm";
 import type { Db, Tx } from "~/lib/db/client.server";
-import { entries, profiles, villageDepartures, villageMembers, villages } from "~/lib/db/schema";
+import { entries, profiles, villageDepartures, villageFollows, villageMembers, villages } from "~/lib/db/schema";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { SHARED_VILLAGE_KINDS } from "~/lib/villages";
@@ -63,9 +63,20 @@ export async function villageMembership(db: Db, villageId: string, userId: strin
   return { members: Number(members), joined: !!own, owner: own?.role === "owner" };
 }
 
+// The membership transition and its initial follow are atomic.
+export async function addVillageMembership(tx: Tx, userId: string, villageId: string, role: "member" | "owner" = "member"): Promise<boolean> {
+  const [inserted] = await tx.insert(villageMembers).values({ userId, villageId, role })
+    .onConflictDoNothing().returning({ villageId: villageMembers.villageId });
+  if (!inserted) return false;
+  const [active] = await tx.select({ id: villages.id }).from(villages)
+    .where(and(eq(villages.id, inserted.villageId), activeSharedVillageCondition())).for("share");
+  if (active) await tx.insert(villageFollows).values({ userId, villageId }).onConflictDoNothing();
+  return true;
+}
+
 // Caller owns the profile lock (or has just inserted it in this transaction).
-export async function enrollInVillage(db: Db, userId: string, villageId: string): Promise<void> {
-  await db.insert(villageMembers).values({ userId, villageId, role: "member" }).onConflictDoNothing();
+export async function enrollInVillage(db: Tx, userId: string, villageId: string): Promise<void> {
+  await addVillageMembership(db, userId, villageId);
   await db.update(profiles).set({
     villagePreparedAt: sql`coalesce(${profiles.villagePreparedAt}, now())`,
   }).where(eq(profiles.userId, userId));

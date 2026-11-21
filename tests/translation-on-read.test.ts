@@ -7,6 +7,7 @@ import * as metering from "~/lib/llm/metering.server";
 import { primaryModelOf } from "~/lib/llm/config.server";
 import { createReply, createTopic, editEntry } from "~/lib/entries.server";
 import { enqueueTranslations, TRANSLATE_JOB, TITLE_TRANSLATE_JOB } from "~/lib/translations.server";
+import { setMemberFollow } from "~/lib/member-follows.server";
 import { eagerBodyLangs } from "~/lib/translation-eager.server";
 import { translationEagerConfig } from "~/lib/translation-eager-config.server";
 import { markTranslationsSeen, requestBodyTranslations, translationReadStats, TRANSLATION_READ_CALLS_HOURLY } from "~/lib/translation-on-read.server";
@@ -71,6 +72,23 @@ it("adds village members and followers below the threshold, including for replie
   if (!reply.ok) throw new Error(reply.error);
   expect((await eagerBodyLangs(db, reply.id))).toEqual(["fr", "de"]);
 });
+it("adds a followed author's reader language only for public topics", async () => {
+  const db = await setup();
+  vi.stubEnv("TRANSLATION_EAGER_MIN_READERS", "50");
+  await addMember(db, "person-reader", "person_reader");
+  await db.update(profiles).set({ displayLang: "fr" }).where(eq(profiles.userId, "person-reader"));
+  expect(await setMemberFollow(db, "person-reader", "source", true)).toMatchObject({ ok: true });
+  const source = await topic(db);
+  expect(await eagerBodyLangs(db, source.id)).toEqual(["fr"]);
+  expect((await queued(db, TRANSLATE_JOB)).map(row => (row.payload as { lang: string }).lang)).toEqual(["fr"]);
+  const [closed] = await db.insert(villages).values({ kind: "closed", slug: "private-reader-fixture" }).returning();
+  const reply = await createReply(db, "source", source.id, { lang: "ja", body: "返信。" });
+  if (!reply.ok) throw new Error(reply.error);
+  expect(await eagerBodyLangs(db, reply.id)).toEqual([]);
+  await db.update(entries).set({ villageId: closed.id }).where(eq(entries.id, source.id));
+  expect(await eagerBodyLangs(db, source.id)).toEqual([]);
+});
+
 it("keeps recipient languages for notification excerpts and daily mail when N is raised", async () => {
   const db = await setup(); vi.stubEnv("TRANSLATION_EAGER_MIN_READERS", "50");
   await addMember(db, "reader", "scope_recipient");

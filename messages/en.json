@@ -893,7 +893,7 @@
     }
   ],
   "notifications_title": "Notifications",
-  "notifications_empty": "No notifications. They appear here when a post you follow gets a reply, or when someone replies to you or mentions you.",
+  "notifications_empty": "New replies to watched posts, replies to you and mentions will appear here.",
   "notifications_mark_all": "Mark all as read",
   "notification_unread": "unread",
   "notification_open": "Open",
@@ -1312,19 +1312,19 @@
   "offline_title": "You are offline",
   "offline_body": "tomola cannot be reached right now. Check your connection, then open the home page again.",
   "offline_home": "Go to the home page",
-  "nav_following": "Followed posts",
-  "following_title": "Followed posts",
+  "nav_following": "Watched posts",
+  "following_title": "Watched posts",
   "following_filter_label": "Posts to show",
   "following_filter_new": "New replies",
   "following_filter_all": "All",
   "following_no_new_replies": "No new replies.",
-  "following_rule": "You follow the posts you write and the posts you reply to. A post you unfollow stays unfollowed.",
-  "following_auto_label": "Posts you follow automatically",
-  "following_empty": "Nothing here yet. Press “Follow” on a post you care about, or reply to one, and it will show up here.",
-  "follow_button": "Follow",
-  "follow_following": "Following",
-  "follow_unfollow": "Unfollow",
-  "follow_help": "You automatically follow the posts you start and the posts you reply to. New replies in a post you follow appear in your notifications, grouped into one until you read them, and reach you by email in the daily digest unless you chose otherwise. A post you unfollow stays unfollowed. Choosing a stance does not make you follow the post.",
+  "following_rule": "You automatically watch replies to your posts and to posts you reply to. When you stop watching a post, it stays off.",
+  "following_auto_label": "Posts you watch automatically",
+  "following_empty": "To see a post here, choose “Watch replies” on the post or reply to it.",
+  "follow_button": "Watch replies",
+  "follow_following": "Watching replies",
+  "follow_unfollow": "Stop watching",
+  "follow_help": "You automatically watch replies to posts you start or reply to. New replies to watched posts appear in your notifications, grouped until you read them, and in your daily email digest by default. When you stop watching a post, it stays off. Choosing a stance leaves reply tracking as it is.",
   "notification_followed_thread": [
     {
       "declarations": [
@@ -1337,8 +1337,8 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "New reply in a post you follow, \"{title}\": {count} (the latest is from @{handle}).",
-        "countPlural=other": "New replies in a post you follow, \"{title}\": {count} (the latest is from @{handle})."
+        "countPlural=one": "New reply to a watched post, \"{title}\": {count} (the latest is from @{handle}).",
+        "countPlural=other": "New replies to a watched post, \"{title}\": {count} (the latest is from @{handle})."
       }
     }
   ],
@@ -1353,13 +1353,13 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "New reply in a post you follow, \"{title}\": {count}.",
-        "countPlural=other": "New replies in a post you follow, \"{title}\": {count}."
+        "countPlural=one": "New reply to a watched post, \"{title}\": {count}.",
+        "countPlural=other": "New replies to a watched post, \"{title}\": {count}."
       }
     }
   ],
   "notification_content_unavailable": "This notification was about a post (or the post it belongs to) that is now hidden or deleted.",
-  "mail_subject_followed_thread": "New replies in a post you follow",
+  "mail_subject_followed_thread": "New replies to a watched post",
   "mail_item_followed_thread": [
     {
       "declarations": [
@@ -1374,8 +1374,8 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "New reply in a post you follow, \"{title}\": {count}. The latest is from @{handle}:\n\n{excerpt}\n\n{url}",
-        "countPlural=other": "New replies in a post you follow, \"{title}\": {count}. The latest is from @{handle}:\n\n{excerpt}\n\n{url}"
+        "countPlural=one": "New reply to a watched post, \"{title}\": {count}. The latest is from @{handle}:\n\n{excerpt}\n\n{url}",
+        "countPlural=other": "New replies to a watched post, \"{title}\": {count}. The latest is from @{handle}:\n\n{excerpt}\n\n{url}"
       }
     }
   ],
@@ -1391,8 +1391,8 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "New reply in a post you follow, \"{title}\": {count}.\n\n{url}",
-        "countPlural=other": "New replies in a post you follow, \"{title}\": {count}.\n\n{url}"
+        "countPlural=one": "New reply to a watched post, \"{title}\": {count}.\n\n{url}",
+        "countPlural=other": "New replies to a watched post, \"{title}\": {count}.\n\n{url}"
       }
     }
   ],
@@ -2355,7 +2355,7 @@
   "posted_translating": "Being translated into:",
   "posted_all_reached": "It has reached every language.",
   "posted_first": "This is your first post. Once it is translated, people who read other languages will read it.",
-  "posted_reply_followed": "Reply posted. You're now following this post.",
+  "posted_reply_followed": "Reply posted. You’re now watching replies to this post.",
   "edited_saved": "Changes saved. The translations are being made again.",
   "ai_write_changed": "The draft made for the AI was changed after this screen saved it, so it was not overwritten. Your text is still here. Open it from your drafts to see the latest version.",
   "local_draft_older": "Unsent writing from before this text changed ({time}).",
@@ -2444,13 +2444,12 @@
   "notification_village_membership_ended": "You are no longer a member of {name}. Your posts remain in the village.",
   "village_follow": "Follow",
   "village_following": "Following",
-  "village_join_follow_help": "Follow to read this village's posts in your home's {filter} filter (reading only). Join to post here too.",
-  "village_join_follow_help_chat": "Follow to read this village's posts in your home's {filter} filter (reading only). Join to post and chat here too.",
-  "village_follow_members_help": "Follow to read this village's posts in your home's {filter} filter (reading only). Only members post here.",
+  "village_join_follow_help": "Follow to see this village’s posts in {filter} on the home page. Joining lets you post here and automatically follows the village.",
+  "village_join_follow_help_chat": "Follow to see this village’s posts in {filter} on the home page. Joining lets you post and chat here and automatically follows the village.",
+  "village_follow_members_help": "Follow to see this village’s posts in {filter} on the home page. Village members can post here and automatically follow when they join.",
   "village_follow_places": "Followed villages",
   "village_follow_more": "{count} more",
-  "home_filter_following": "Joined & followed villages",
-  "home_following_empty": "Follow a village or join one, and its posts appear here.",
+  "home_following_empty": "Follow people or villages to see their public posts here. Your public posts also appear here.",
   "objections_neutrality": "No way of asking, including the original question, is treated as the correct one.",
   "notification_reply_to_topic_language": "@{handle} replied in {language} to your post “{title}”.",
   "notification_reply_to_reply_language": "@{handle} replied in {language} to your reply in “{title}”.",
@@ -2469,9 +2468,7 @@
   "translation_article_arrived": "Switched to the translation.",
   "village_personal": "My village",
   "village_personal_destination": "My village (@{handle})",
-  "village_personal_places": "Members’ villages",
   "member_page_elsewhere": "Posts elsewhere",
-  "member_page_village_follow_hint": "Follow this village to read the posts in this section.",
   "display_name_native": "Display name (your language)",
   "display_name_latin": "Display name (Latin letters)",
   "display_name_invalid": "Use up to 50 characters on one line per name, with at least one letter and no @. For the Latin form, use Latin letters, spaces, hyphens, apostrophes or periods.",
@@ -3094,5 +3091,16 @@
     }
   ],
   "list_load_failed": "Could not load more posts. Try again.",
-  "list_back_latest": "Back to latest"
+  "list_back_latest": "Back to latest",
+  "home_scope_all": "All",
+  "home_scope_following": "Following",
+  "home_scope_label": "Home scope",
+  "home_filter_empty": "No posts match this filter.",
+  "home_clear_filter": "Clear filter",
+  "home_see_all": "See all posts",
+  "nav_followed_members": "Followed members",
+  "member_page_follow_hint": "Follow this person to see their public posts in Following on your home page.",
+  "village_membership_unfollow": "Unfollow this village",
+  "village_membership_follow": "Follow this village",
+  "village_membership_follow_help": "Following adds this village’s posts to Following on the home page. If you unfollow, you remain a member and can still post and use any available chat."
 }

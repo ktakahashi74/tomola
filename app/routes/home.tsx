@@ -1,5 +1,5 @@
 import { withMarkdownRead } from "~/lib/markdown-budget.server";
-import { data, Link } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/home";
 import { AsksFilter, type ListFilter } from "~/components/asks-filter";
@@ -8,18 +8,23 @@ import { PageHeader } from "~/components/page-header";
 import { HomeInstallGuide } from "~/components/home-install-guide";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { OrderSwitch } from "~/components/order-switch";
+import { ReadingLangMenu } from "~/components/reading-lang-menu";
+import { readingOnlyMark } from "~/lib/reading-lang";
 import { ReadingList } from "~/components/reading-list";
-import { readReadingRequest } from "~/lib/reading-page";
+import { clearReadingParams, readReadingRequest } from "~/lib/reading-page";
 import { readingChunk } from "~/lib/reading-page.server";
 import { TopicList } from "~/components/topic-list";
 import { tracksNewPosts } from "~/lib/tracks-new-posts";
-import { getReader } from "~/lib/auth/session.server";
+import { getReader, requireMember } from "~/lib/auth/session.server";
 import { displayLangFor, langCarry, readingLanguageChoice, screenReadLangsFor } from "~/lib/display-lang.server";
 import { listTopics } from "~/lib/entries.server";
 import { listAlternateQuery } from "~/lib/md/alternate";
 import { aiOpenLinks } from "~/lib/open-in-ai.server";
-import { parseAsks, parseFollowing, parseLong, parseOrder, parsePage } from "~/lib/params.server";
-import { hasVillagePlaces } from "~/lib/village-follows.server";
+import { parseAsks, parseLong, parseOrder, parsePage } from "~/lib/params.server";
+import { eq } from "drizzle-orm";
+import { profiles } from "~/lib/db/schema";
+import { FOLLOWING_HOME_LIST_SCOPE, isHomeScope, parseHomeScope, type HomeScope } from "~/lib/home-scope";
+import { assertSameOrigin } from "~/lib/http/csrf.server";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { getViewer } from "~/lib/roles.server";
 import { readPeekParam, readStanceMessage, skipRevalidationFor } from "~/lib/stance-ui";
@@ -33,6 +38,17 @@ import { readingRobotsMeta } from "~/lib/public-reading";
 
 export const handle = { PasskeyPrompt };
 
+function homeFilterHref(params: URLSearchParams) {
+  const filters = new URLSearchParams();
+  for (const key of ["order", "asks", "long", "lang"]) {
+    const value = params.get(key);
+    if (value !== null) filters.set(key, value);
+  }
+  const mark = readingOnlyMark(params.toString());
+  if (mark && filters.has("lang")) filters.set("rl", mark);
+  return filters.size ? `/?${filters}` : "/";
+}
+
 // A stance submission updates its own control without moving the list under the reader.
 export function shouldRevalidate({ formAction, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
   return skipRevalidationFor(formAction) ? false : defaultShouldRevalidate;
@@ -45,13 +61,13 @@ export function headers() {
   return readingHeaders();
 }
 
-export function meta({ location, matches }: Route.MetaArgs) {
+export function meta({ loaderData, location, matches }: Route.MetaArgs) {
   return [
     ...readingRobotsMeta(matches),
     { title: "tomola" },
     // The preview of a link to the home page: the site's own introduction, in the language of the screen.
     ...sharePreviewMeta(matches, location, { type: "website", title: m.site_name(), description: m.home_intro_guest(), lang: getLocale() }),
-    { tagName: "link" as const, rel: "alternate", type: "text/markdown", href: `/home.md${listAlternateQuery(location.search)}` },
+    { tagName: "link" as const, rel: "alternate", type: "text/markdown", href: `/home.md${listAlternateQuery(location.search, { followingHome: loaderData?.scope === "following" })}` },
     ...feedAlternate(matches, "/feed.xml", m.site_name(), location),
   ];
 }
@@ -72,18 +88,24 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
 
   const order = parseOrder(request);
   const long = parseLong(request);
-  // Both filters: questions only (a question always has a title, so it is a long post too).
-  // "Following" (members only, and only where villages exist): the posts of the villages the member follows or has joined. Questions-only wins over it, as over long posts.
   const followingAvailable = !!user && villagesEnabled();
-  const filter: ListFilter = asksOnly ? "asks" : followingAvailable && parseFollowing(request) ? "following" : long ? "long" : "all";
-  const result = await listTopics(db, user && filter === "following" ? { kind: "my-villages", userId: user.id } : { kind: "all" }, { reading: readReadingRequest(request, order, page), page, viewer, order, asksOnly, titledOnly: filter === "long" });
+  const explicitScope = followingAvailable ? parseHomeScope(url.searchParams) : null;
+  if (explicitScope === "invalid") throw data("Bad request", { status: 400 });
+  const scope = followingAvailable ? explicitScope ?? profile?.homeScope ?? "all" : "all";
+  // A question always has a title, so the questions filter takes precedence over long posts.
+  const filter: ListFilter = asksOnly ? "asks" : long ? "long" : "all";
+  const result = await listTopics(db, user && scope === "following" ? { kind: "following-home", userId: user.id } : { kind: "all" }, { reading: readReadingRequest(request, order, page), page, viewer, order, asksOnly, titledOnly: filter === "long" });
+  const filterReset = new URLSearchParams(url.search);
+  clearReadingParams(filterReset);
+  for (const key of ["page", "asks", "long", "_reading_chunk", "_routes"]) filterReset.delete(key);
   return {
     layout: "unified" as const,
     readingLanguage: readingLanguageChoice(request, profile),
     reader: !user,
     followingAvailable,
-    // Only asked for when the "Following" list is empty: whether there is any village to read from at all.
-    noVillagePlaces: user && filter === "following" && result.topics.length === 0 ? !await hasVillagePlaces(db, user.id) : false,
+    scope,
+    scopeAction: homeFilterHref(url.searchParams),
+    filterReset: filterReset.size ? `/?${filterReset}` : "/",
     langParam: langCarry(request),
     order,
     filter,
@@ -92,17 +114,26 @@ async function loaderImplementation({ request }: Route.LoaderArgs) {
     hasNext: result.hasNext,
     topics: await toTopicItems(db, result.topics, { ...opts, showVillage: true }),
     stanceMessage,
-    aiOpen: aiOpenLinks(request, profile, "/home", { asks: asksOnly, extra: { order, ...(filter === "long" ? { long: "1" } : {}) } }),
+    aiOpen: aiOpenLinks(request, profile, "/home", { asks: asksOnly, extra: { order, ...(filter === "long" ? { long: "1" } : {}), ...(scope === "following" ? { scope } : {}) } }),
   };
 }
 
-// The home does not accept writing; the header links to the dedicated editor.
-export function action({}: Route.ActionArgs) {
-  throw data("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+export async function action({ request }: Route.ActionArgs) {
+  assertSameOrigin(request);
+  if (request.method !== "POST") throw data("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } });
+  const { user, db } = await requireMember(request);
+  const form = await request.formData().catch(() => null);
+  const scope = form?.get("scope");
+  if (form?.get("intent") !== "home-scope" || !isHomeScope(scope)) throw data("Bad request", { status: 400 });
+  if (!villagesEnabled()) throw data("Not found", { status: 404 });
+  const returnTo = homeFilterHref(new URL(request.url).searchParams);
+  await db.update(profiles).set({ homeScope: scope }).where(eq(profiles.userId, user.id));
+  return redirect(returnTo, 303);
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { topics, langParam, page, aiOpen, order, filter, stanceMessage } = loaderData;
+  const { topics, langParam, page, aiOpen, order, filter, stanceMessage, scope } = loaderData;
+  const scopeOptions: [HomeScope, string][] = [["all", m.home_scope_all()], ["following", m.home_scope_following()]];
   return (
     <main className="space-y-4">
       {!loaderData.reader && <HomeInstallGuide />}
@@ -112,15 +143,31 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         purpose={loaderData.reader ? m.home_intro_guest() : undefined}
         // One row for everything that changes the list: the order and the filter at the start; the language read and "Open in AI" packed at the end (the first of them has the auto margin).
         // On a narrow screen the end part wraps as it fits, so no single item is left alone on a line of its own.
-        switches={<div className="relative flex w-full flex-wrap items-center gap-x-3 gap-y-1">
-          <OrderSwitch compact order={order} />
-          <AsksFilter filter={filter} withLong withFollowing={loaderData.followingAvailable} collapsed />
-          <div className={loaderData.reader ? "ms-auto" : undefined}><OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} /></div>
+        switches={<div className="w-full space-y-2">
+          {loaderData.followingAvailable && <Form method="post" action={loaderData.scopeAction} className="flex flex-wrap gap-x-4 gap-y-1" aria-label={m.home_scope_label()}>
+            <input type="hidden" name="intent" value="home-scope" />
+            {scopeOptions.map(([value, label]) => <button key={value} type="submit" name="scope" value={value} aria-pressed={scope === value} className="choice ui-meta">{label}</button>)}
+          </Form>}
+          <div className="relative flex w-full flex-wrap items-center gap-x-3 gap-y-1">
+            <OrderSwitch compact order={order} />
+            <AsksFilter filter={filter} withLong collapsed />
+            {loaderData.followingAvailable && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
+            <div className={loaderData.reader ? "ms-auto" : undefined}><OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} /></div>
+          </div>
         </div>}
       />
-      {loaderData.noVillagePlaces
-        ? <p>{m.home_following_empty()} <Link to="/villages" className="link-prose">{m.nav_all_villages()}</Link></p>
-        : <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>}
+      {topics.length === 0 && filter !== "all"
+        ? <p className="ui-help text-muted-foreground">{m.home_filter_empty()} <Link to={loaderData.filterReset} className="link-prose">{m.home_clear_filter()}</Link></p>
+        : topics.length === 0 && scope === "following"
+          ? <div className="space-y-2 ui-help text-muted-foreground">
+              <p>{m.home_following_empty()}</p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                <li><Link to="/villages" className="link-prose">{m.nav_all_villages()}</Link></li>
+                <li><Link to="/introductions" className="link-prose">{m.introductions_read()}</Link></li>
+                <li><Link to="/?scope=all" className="link-prose">{m.home_see_all()}</Link></li>
+              </ul>
+            </div>
+        : <ReadingList topics={topics} list={loaderData.list}>{items => <TopicList compactMeta seenScope={scope === "following" ? FOLLOWING_HOME_LIST_SCOPE : "/"} trackNew={!loaderData.list.older && tracksNewPosts({ page, order, filtered: filter !== "all" })} reader={loaderData.reader} topics={items} order={order} langParam={langParam} empty={m.home_empty()} stanceMessage={stanceMessage} />}</ReadingList>}
     </main>
   );
 }

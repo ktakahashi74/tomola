@@ -1,9 +1,9 @@
 import { m } from "~/paraglide/messages.js";
 import { withVillageIcons } from "./village-icon.server";
-import { and, desc, eq, inArray, notExists, sql, isNull, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
-import { profiles, topicListingStats, villageFollows, villageMembers, villages } from "~/lib/db/schema";
-import { activePublicPostVillageCondition, activeSharedVillageCondition, publicPostVillageCondition, type PublicVillage } from "~/lib/villages.server";
+import { topicListingStats, villageFollows, villageMembers, villages } from "~/lib/db/schema";
+import { activeSharedVillageCondition, sharedVillageCondition, type PublicVillage } from "~/lib/villages.server";
 import { FOLLOWED_NAVIGATION_VISIBLE, FOLLOWED_VILLAGES_MAX } from "~/lib/village-follow-limits";
 import { localizeVillages } from "~/lib/village-translations.server";
 import type { VillageReader, WithVillageTranslation } from "~/lib/village-translation-view";
@@ -18,10 +18,10 @@ export type VillageFollowResult = { ok: true } | { ok: false; error: "not_found"
 // be removed), and never on a village that is not public (it answers not_found, the same as for a village that does not exist).
 export async function setVillageFollow(db: Db, userId: string, slug: string, follow: boolean): Promise<VillageFollowResult> {
   return db.transaction(async tx => {
-    const [village] = await tx.select({ id: villages.id, endedAt: villages.endedAt }).from(villages)
-    .leftJoin(profiles, eq(profiles.userId, villages.ownerId))
-    .where(and(publicPostVillageCondition(), slug.startsWith("@") ? and(eq(villages.kind, "personal"), eq(profiles.handle, slug.slice(1).toLowerCase())) : eq(villages.slug, slug.toLowerCase()))).limit(1).for("share", { of: villages });
-    if (!village || (follow && village.endedAt)) return { ok: false, error: "not_found" };
+    const [village] = await tx.select({ id: villages.id }).from(villages)
+      .where(and(follow ? activeSharedVillageCondition() : sharedVillageCondition(), eq(villages.slug, slug.toLowerCase())))
+      .for("share");
+    if (!village) return { ok: false, error: "not_found" };
     if (follow) await tx.insert(villageFollows).values({ userId, villageId: village.id }).onConflictDoNothing();
     else await tx.delete(villageFollows).where(and(eq(villageFollows.userId, userId), eq(villageFollows.villageId, village.id)));
     return { ok: true };
@@ -40,11 +40,11 @@ export type FollowedVillage = Pick<PublicVillage, "name" | "slug" | "kind" | "la
 async function readFollowedVillages(db: Db, userId: string, opts: { excludeJoined?: boolean; page?: number } = {}): Promise<FollowedVillage[]> {
   // The most recent activity is one row read from the village's own index (not an aggregate over all of its topics).
   const latest = sql<Date | null>`(select t.last_activity_at from ${topicListingStats} t where t.village_id = ${villages.id} order by t.last_activity_at desc limit 1)`;
-  const rows = await db.select({ name: villages.name, slug: villages.slug, kind: villages.kind, language: villages.language, ownerHandle: profiles.handle, followedAt: villageFollows.createdAt, latestAt: latest })
-    .from(villageFollows).innerJoin(villages, eq(villages.id, villageFollows.villageId)).leftJoin(profiles, eq(profiles.userId, villages.ownerId))
-    .where(and(eq(villageFollows.userId, userId), activePublicPostVillageCondition(), or(isNull(villages.ownerId), isNotNull(profiles.userId)), opts.excludeJoined ? notExists(db.select({ one: sql`1` }).from(villageMembers).where(and(eq(villageMembers.villageId, villages.id), eq(villageMembers.userId, userId)))) : undefined))
-    .orderBy(sql`${latest} desc nulls last`, desc(villageFollows.createdAt), sql`coalesce(${villages.slug}, ${profiles.handle})`, villages.id).limit(FOLLOWED_VILLAGES_MAX + 1).offset(((opts.page ?? 1) - 1) * FOLLOWED_VILLAGES_MAX);
-  return rows.map(({ ownerHandle, ...row }) => ({ ...row, ...(row.kind === "personal" ? { slug: `@${ownerHandle}`, name: `@${ownerHandle}` } : {}), latestAt: row.latestAt ? new Date(row.latestAt) : null }));
+  const rows = await db.select({ name: villages.name, slug: villages.slug, kind: villages.kind, language: villages.language, followedAt: villageFollows.createdAt, latestAt: latest })
+    .from(villageFollows).innerJoin(villages, eq(villages.id, villageFollows.villageId))
+    .where(and(eq(villageFollows.userId, userId), activeSharedVillageCondition(), opts.excludeJoined ? notExists(db.select({ one: sql`1` }).from(villageMembers).where(and(eq(villageMembers.villageId, villages.id), eq(villageMembers.userId, userId)))) : undefined))
+    .orderBy(sql`${latest} desc nulls last`, desc(villageFollows.createdAt), villages.slug, villages.id).limit(FOLLOWED_VILLAGES_MAX + 1).offset(((opts.page ?? 1) - 1) * FOLLOWED_VILLAGES_MAX);
+  return rows.map(row => ({ ...row, latestAt: row.latestAt ? new Date(row.latestAt) : null }));
 }
 
 export async function listFollowedVillages(db: Db, userId: string, opts: { excludeJoined?: boolean; page?: number } = {}): Promise<FollowedVillage[]> {
@@ -58,10 +58,7 @@ export async function followedVillageNavigation(db: Db, userId: string, reader?:
   const followed = await listFollowedVillages(db, userId, opts);
   const rows: FollowedVillageNavigation[] = await withVillageIcons(db, await localizeVillages(db, followed.map(({ name, slug, kind, language }) => ({ name, slug, kind, language })), reader));
   // Keep the overflow label with the server-selected names; its translations need not travel in every page's scripts.
-  for (const personal of [false, true]) {
-    const group = rows.filter(row => (row.kind === "personal") === personal);
-    if (group.length > FOLLOWED_NAVIGATION_VISIBLE) group[0].moreLabel = m.village_follow_more({ count: group.length - FOLLOWED_NAVIGATION_VISIBLE });
-  }
+  if (rows.length > FOLLOWED_NAVIGATION_VISIBLE) rows[0].moreLabel = m.village_follow_more({ count: rows.length - FOLLOWED_NAVIGATION_VISIBLE });
   return rows;
 }
 
@@ -71,14 +68,4 @@ export async function followedAmong(db: Db, userId: string, slugs: readonly stri
   const rows = await db.select({ slug: villages.slug }).from(villageFollows).innerJoin(villages, eq(villages.id, villageFollows.villageId))
     .where(and(eq(villageFollows.userId, userId), activeSharedVillageCondition(), inArray(villages.slug, [...slugs])));
   return new Set(rows.flatMap(row => row.slug ? [row.slug] : []));
-}
-
-// Whether the member follows or has joined at least one village that can be read (the home's "Following" list says what to do when there is none).
-export async function hasVillagePlaces(db: Db, userId: string): Promise<boolean> {
-  const [followed] = await db.select({ id: villageFollows.villageId }).from(villageFollows).innerJoin(villages, eq(villages.id, villageFollows.villageId))
-    .where(and(eq(villageFollows.userId, userId), activePublicPostVillageCondition())).limit(1);
-  if (followed) return true;
-  const [joined] = await db.select({ id: villageMembers.villageId }).from(villageMembers).innerJoin(villages, eq(villages.id, villageMembers.villageId))
-    .where(and(eq(villageMembers.userId, userId), activeSharedVillageCondition())).limit(1);
-  return !!joined;
 }

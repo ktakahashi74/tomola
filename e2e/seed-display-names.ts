@@ -4,7 +4,7 @@ import { profiles } from "../app/lib/db/schema";
 import { createReply, createTopic } from "../app/lib/entries.server";
 import { updateDisplayNames } from "../app/lib/display-names.server";
 import { villagesEnabled } from "../app/lib/villages-enabled.server";
-import { setVillageFollow } from "../app/lib/village-follows.server";
+import { setMemberFollow } from "../app/lib/member-follows.server";
 
 export async function seedDisplayNames(db: Db) {
   for (const handle of ["dn_single", "dn_single_save"]) {
@@ -25,7 +25,7 @@ export async function seedDisplayNames(db: Db) {
     const [owner] = await db.select().from(profiles).where(eq(profiles.handle, "dn_places_owner"));
     const [reader] = await db.select().from(profiles).where(eq(profiles.handle, "dn_places_reader"));
     await updateDisplayNames(db, owner.userId, "風の書き手", "Wind Writer");
-    await setVillageFollow(db, reader.userId, "@dn_places_owner", true);
+    await setMemberFollow(db, reader.userId, owner.userId, true);
     const topic = await createTopic(db, owner.userId, { title: "Display name personal place", body: "自分のビレッジの表示名。", lang: "ja" }, { now: new Date("2020-01-01") });
     if (!topic.ok) throw Error(topic.error);
   }

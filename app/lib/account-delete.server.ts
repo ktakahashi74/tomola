@@ -7,7 +7,7 @@ import { and, eq, inArray, is, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db, Tx } from "./db/client.server";
 import * as schema from "./db/schema";
-import { accountDeletions, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, entries, entryMedia, entryMentionSnapshots, invitations, invitationNoteTranslations, jobs, media, memberSignatures, moderationActions, notifications, nushiReports, nushiSources, profiles, reports, suspendedEmailHashes, translations, user, verification, villageEvents, villageInvites, villageMembers, villages } from "./db/schema";
+import { accountDeletions, chatAccessLog, chatMessages, chatReportSnapshots, chatTranslationReports, entries, entryMedia, entryMentionSnapshots, invitations, invitationNoteTranslations, jobs, media, memberFollows, memberSignatures, moderationActions, notifications, nushiReports, nushiSources, profiles, reports, suspendedEmailHashes, translations, user, verification, villageEvents, villageInvites, villageMembers, villages } from "./db/schema";
 import { discardPaidTranslationCalls } from "./jobs/paid-translation.server";
 import { TRANSLATE_INVITATION_NOTE_JOB } from "./invitation-note.server";
 import { DELETED_MEMBER_EMAIL, DELETED_MEMBER_HANDLE, DELETED_MEMBER_ID, isDeletedIdentity } from "./deleted-member";
@@ -277,6 +277,7 @@ export async function completeAccountDeletion(db: Db, id: string, opts: { now?: 
     await tx.update(chatTranslationReports).set({ note: null }).where(eq(chatTranslationReports.reporterId, userId));
     await endPersonalVillage(tx, userId, now);
     await detachMember(tx, userId);
+    await tx.delete(memberFollows).where(or(eq(memberFollows.followerId, userId), eq(memberFollows.followedId, userId)));
     await tx.delete(user).where(eq(user.id, userId));
     await tx.update(accountDeletions).set({ userId: null, confirmation: null, villageDecisions: {}, state: "completed", noticeState: "pending", lastError: null, updatedAt: now, completedAt: now }).where(eq(accountDeletions.id, id));
     // The delivery address exists only in the retryable mail job, and is erased

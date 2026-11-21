@@ -37,6 +37,7 @@ export function TopicList({
   compactMeta = false,
   showOriginalLanguage = true,
   trackNew = false,
+  seenScope,
   actions,
 }: {
   actions?: (topic: TopicItem) => ReactNode;
@@ -49,9 +50,10 @@ export function TopicList({
   compactMeta?: boolean;
   showOriginalLanguage?: boolean;
   trackNew?: boolean;
+  seenScope?: string;
 }) {
   const location = useLocation();
-  const marks = useNewPostMarks(trackNew ? location.pathname : undefined, topics, readingVisitKey(location));
+  const marks = useNewPostMarks(trackNew ? seenScope ?? location.pathname : undefined, topics, readingVisitKey(location));
   if (topics.length === 0) return <p className="ui-help text-muted-foreground">{empty}</p>;
   return (
     <ul className="divide-y">

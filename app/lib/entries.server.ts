@@ -4,6 +4,7 @@ import { requestNushi } from "./nushi.server";
 import { readNushiAnswer } from "./nushi.server";
 import { resolvePostLanguage } from "./lang-detect";
 import { retainedAuthorColumn } from "./deleted-member.server";
+import { DELETED_MEMBER_ID } from "./deleted-member";
 import { withinEditGrace } from "./entry-history.server";
 import { inspectEntrySpam, lockAbuseWriter } from "./moderation-automation.server";
 import { safeErrorText } from "~/lib/error-text.server";
@@ -11,13 +12,13 @@ import { syncMediaReferences } from "~/lib/media-references.server";
 import { decorateMotionHtml, motionImages } from "./motion-display.server";
 import { activeEntryRender, prepareEntryRender, renderEntryForWrite, type PreparedEntryRender } from "./entry-render-preparation.server";
 import { withMarkdownScope, withMarkdownRead, MarkdownBudgetError } from "./markdown-budget.server";
-import { and, count, desc, eq, inArray, isNotNull, isNull, max, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, exists, inArray, isNotNull, isNull, max, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { activePublicPostVillageCondition, activeSharedVillageCondition, lockVillageProfile, villageForTopic } from "~/lib/villages.server";
 import { z } from "zod";
 import { AI_ASSISTANCE, type AiAssistance } from "~/lib/ai-assistance";
 import type { Db, Tx } from "~/lib/db/client.server";
-import { divergences, entries, entryRevisions, follows, profiles, reports, topicListingStats, translations, villageFollows, villageMembers, villages, type SavedMentionBinding } from "~/lib/db/schema";
+import { divergences, entries, entryRevisions, follows, memberFollows, profiles, reports, topicListingStats, translations, villageFollows, villages, type SavedMentionBinding } from "~/lib/db/schema";
 import { enabledLangs } from "~/lib/enabled-langs.server";
 import { SOURCE_LANGS, type SourceLang, type LangSource, type Area, type Lang } from "~/lib/languages";
 import { inScope, type Viewer } from "~/lib/roles.server";
@@ -1061,8 +1062,8 @@ export type TopicScope =
   | { kind: "not-langs"; langs: readonly Lang[] }
   | { kind: "followed"; userId: string; unreadOnly?: boolean }
   | { kind: "village"; villageId: string }
-  // The villages the member follows or has joined (public and not ended): the home's "Joined & followed villages" filter.
-  | { kind: "my-villages"; userId: string };
+  // The home combines the member’s own public topics and those from followed people and villages.
+  | { kind: "following-home"; userId: string };
 export type TopicPage = { topics: TopicSummary[]; page: number; limit: number; hasNext: boolean; list?: ReadingPage };
 // List ordering is independent of the reader. Insightful counts only the topic post,
 // excluding moderated reactions; ties use newest creation and then newest id.
@@ -1105,12 +1106,17 @@ export async function listTopics(
     conditions.push(notInArray(opts.order === "created" ? entries.lang : topicListingStats.lang, [...scope.langs]));
   } else if (scope.kind === "village") {
     conditions.push(eq(opts.order === "created" ? entries.villageId : topicListingStats.villageId, scope.villageId));
-  } else if (scope.kind === "my-villages") {
-    const column = opts.order === "created" ? entries.villageId : topicListingStats.villageId;
-    // One IN over the union of the two small sets, so that the planner can read the village indexes instead of filtering the whole list.
-    const followed = db.select({ id: villageFollows.villageId }).from(villageFollows).innerJoin(villages, eq(villages.id, villageFollows.villageId)).where(and(eq(villageFollows.userId, scope.userId), activePublicPostVillageCondition()));
-    const joined = db.select({ id: villageMembers.villageId }).from(villageMembers).innerJoin(villages, eq(villages.id, villageMembers.villageId)).where(and(eq(villageMembers.userId, scope.userId), activeSharedVillageCondition()));
-    conditions.push(inArray(column, followed.union(joined)));
+  } else if (scope.kind === "following-home") {
+    const column = created ? entries.villageId : topicListingStats.villageId;
+    const activePlace = db.select({ id: villages.id }).from(villages)
+      .where(and(eq(villages.id, entries.villageId), activePublicPostVillageCondition()));
+    const followedPlace = db.select({ id: villageFollows.villageId }).from(villageFollows)
+      .innerJoin(villages, eq(villages.id, villageFollows.villageId))
+      .where(and(eq(villageFollows.userId, scope.userId), eq(villageFollows.villageId, column), activeSharedVillageCondition()));
+    const followedAuthor = db.select({ id: memberFollows.followedId }).from(memberFollows)
+      .where(and(eq(memberFollows.followerId, scope.userId), eq(memberFollows.followedId, entries.authorId)));
+    conditions.push(exists(activePlace), ne(entries.authorId, DELETED_MEMBER_ID), isNull(entries.hiddenAt),
+      or(eq(entries.authorId, scope.userId), exists(followedPlace), exists(followedAuthor)));
   } else if (scope.kind === "followed") {
     conditions.push(scope.unreadOnly ? unreadFollowedTopicCondition(db, scope.userId) : inArray(entries.id, db.select({ id: follows.threadId }).from(follows).where(and(eq(follows.userId, scope.userId), eq(follows.state, "following")))));
   }

@@ -44,14 +44,15 @@ it.each(["zjoin_owner", "zjoin_guidance", undefined])("keeps Nushi guidance off 
   }
 });
 
-it("puts joined state and departure in the header, hides follows, and retains an existing follow after departure", async () => {
+it("puts joined state and departure in the header, puts the follow toggle inside membership, and retains an existing follow after departure", async () => {
   expect(await post("zjoin_reader", "follow")).toMatchObject({ status: 200 });
   await post("zjoin_reader", "join");
   const rendered = await html(await load("zjoin_reader"));
   expect(head(rendered)).toContain(m.village_joined());
   expect(head(rendered)).toContain('value="leave"');
   expect(rendered.split(m.village_joined())).toHaveLength(2);
-  expect(rendered).not.toMatch(/value="(?:unfollow|follow)"|data-village-participation-help/);
+  expect(head(rendered)).toMatch(/data-village-membership[\s\S]*value="unfollow"[\s\S]*<\/details>/);
+  expect(rendered).not.toContain("data-village-participation-help");
   expect(head(rendered)).toContain('href="/t/new?village=join-open"');
   expect(head(rendered)).not.toContain(m.village_leave_invite_help());
   await post("zjoin_reader", "leave");
@@ -64,16 +65,16 @@ it("puts joined state and departure in the header, hides follows, and retains an
 
 it("shows participation guidance before the description only for members who neither joined nor followed", async () => {
   const open = await html(await load("zjoin_guidance"));
-  expect(open).toContain(m.village_join_follow_help_chat({ filter: m.home_filter_following() }));
+  expect(open).toContain(m.village_join_follow_help_chat({ filter: m.home_scope_following() }));
   expect(open.indexOf("data-village-participation-help")).toBeLessThan(open.indexOf("Description sentinel"));
   vi.stubEnv("VILLAGE_CHAT", "");
   try {
     const withoutChat = await html(await load("zjoin_guidance"));
-    expect(withoutChat).toContain(m.village_join_follow_help({ filter: m.home_filter_following() }));
-    expect(withoutChat).not.toContain(m.village_join_follow_help_chat({ filter: m.home_filter_following() }));
+    expect(withoutChat).toContain(m.village_join_follow_help({ filter: m.home_scope_following() }));
+    expect(withoutChat).not.toContain(m.village_join_follow_help_chat({ filter: m.home_scope_following() }));
   } finally { vi.stubEnv("VILLAGE_CHAT", "1"); }
   const invite = await html(await load("zjoin_guidance", "join-invite"));
-  expect(invite).toContain(m.village_follow_members_help({ filter: m.home_filter_following() }));
+  expect(invite).toContain(m.village_follow_members_help({ filter: m.home_scope_following() }));
   expect(invite).not.toContain('value="join"');
   await post("zjoin_guidance", "follow", "join-invite");
   expect(await html(await load("zjoin_guidance", "join-invite"))).not.toContain("data-village-participation-help");

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { state, useMember } from "./helpers";
+import { enMessages as m, state, useMember } from "./helpers";
 import { VILLAGE_MEMBER_FIXTURES } from "./member-fixtures";
 
 test("private startup does not add village fixtures", () => {
@@ -38,4 +38,16 @@ test("disabled village chat has ordinary missing-route responses before login", 
   const receipt = await page.request.post("/v/en/chat/read", { headers: { Origin: state().baseURL }, form: { intent: "read", seq: "1" }, maxRedirects: 0 });
   expect(receipt.status()).toBe(404);
 
+});
+
+test("disabled villages keep the home on All and reject Following Markdown and saves", async ({ page }) => {
+  await useMember(page, "navigation_member@example.com");
+  for (const suffix of ["?scope=following", "?follow=1"]) {
+    const screen = await page.goto(`/${suffix}`);
+    expect(screen?.status()).toBe(200);
+    await expect(page.locator('form:has([value="home-scope"])')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: m.home_scope_following, exact: true })).toHaveCount(0);
+    expect((await page.request.get(`/home.md${suffix}`)).status()).toBe(404);
+  }
+  expect((await page.request.post("/", { headers: { Origin: state().baseURL }, form: { intent: "home-scope", scope: "following" } })).status()).toBe(404);
 });

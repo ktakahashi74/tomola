@@ -7,9 +7,8 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "~/lib/db/client.server";
 import { readDistributions } from "~/lib/distribution.server";
-import { divergences, drafts, entries, entryMentionSnapshots, entryRevisions, follows, savedTopics, nushiSources, memberSignatures, profiles, stanceChanges, stances, translations, villageFollows, villages, votes } from "~/lib/db/schema";
-import { publicPostVillageCondition } from "~/lib/villages.server";
-import { villagesEnabled } from "~/lib/villages-enabled.server";
+import { divergences, drafts, entries, entryMentionSnapshots, entryRevisions, follows, memberFollows, savedTopics, nushiSources, memberSignatures, profiles, stanceChanges, stances, translations, villageFollows, villages, votes } from "~/lib/db/schema";
+import { sharedVillageCondition } from "~/lib/villages.server";
 import { sourceHash } from "~/lib/source-hash.server";
 import type { Area } from "~/lib/languages";
 import { sameVendor } from "~/lib/llm/vendor";
@@ -307,7 +306,8 @@ export async function buildObservationExport(
 // Version 15 includes notification registration counts, coarse labels and dates.
 // Version 16 includes the member's saved appearance.
 // Version 17 includes source-attribution snapshots belonging to the member.
-export const MEMBER_EXPORT_VERSION = 17;
+// Version 18 separates member follows from shared-village follows.
+export const MEMBER_EXPORT_VERSION = 18;
 
 export type MemberExport = {
   format: "tomola-member-export";
@@ -395,28 +395,28 @@ export type MemberExport = {
   saved_topics: Array<{ topic_id: number; created_at: string }>;
   // The member's own follows (both states: `unfollowed` is the record that stops the automatic follow). Only the topic's id, never anything about the topic or other members.
   follows: Array<{ thread_id: number; state: string; created_at: string; updated_at: string }>;
-  // The villages the member follows: only the village selector (slug or @handle) and when the member began to follow it. A village that is not public any more is not listed.
   village_icons: Awaited<ReturnType<typeof exportVillageIcons>>;
   village_follows: Array<{ village: string; created_at: string }>;
+  member_follows: Array<{ handle: string; created_at: string }>;
   signatures: Array<{ id: number; entry_id: number | null; source_hash: string | null; operation: string; signed_payload: string; payload_hash: string; challenge: string; credential_id: string; public_key: string; rp_id: string; origin: string; assertion: Record<string, unknown>; authenticator_data: string; client_data_json: string; signature: string; created_at: string }>;
   ai_materials: Awaited<ReturnType<typeof exportPostAiMaterials>>;
   chat_messages: Awaited<ReturnType<typeof exportOwnChat>>;
   nushi_sources: Array<{ answer_id: number; entry_id: number; author: string; created_at: string }>;
 };
 
-// The villages the member follows, read in two steps so that a member who follows none (or while villages are closed) never makes a read of the villages table.
 async function exportVillageFollows(db: Db, userId: string): Promise<MemberExport["village_follows"]> {
-  if (!villagesEnabled()) return [];
-  const followed = await db.select({ villageId: villageFollows.villageId, createdAt: villageFollows.createdAt }).from(villageFollows)
-    .where(eq(villageFollows.userId, userId)).orderBy(asc(villageFollows.createdAt), asc(villageFollows.villageId));
-  if (followed.length === 0) return [];
-  const known = await db.select({ id: villages.id, slug: sql<string | null>`case when ${villages.kind} = 'personal' then '@' || ${profiles.handle} else ${villages.slug} end` }).from(villages).leftJoin(profiles, eq(profiles.userId, villages.ownerId))
-    .where(and(inArray(villages.id, followed.map(row => row.villageId)), publicPostVillageCondition()));
-  const slugs = new Map(known.map(row => [row.id, row.slug]));
-  return followed.flatMap(row => {
-    const slug = slugs.get(row.villageId);
-    return slug ? [{ village: slug, created_at: row.createdAt.toISOString() }] : [];
-  });
+  const rows = await db.select({ slug: villages.slug, createdAt: villageFollows.createdAt }).from(villageFollows)
+    .innerJoin(villages, eq(villages.id, villageFollows.villageId))
+    .where(and(eq(villageFollows.userId, userId), sharedVillageCondition()))
+    .orderBy(asc(villageFollows.createdAt), asc(villageFollows.villageId));
+  return rows.flatMap(row => row.slug ? [{ village: row.slug, created_at: row.createdAt.toISOString() }] : []);
+}
+
+async function exportMemberFollows(db: Db, userId: string): Promise<MemberExport["member_follows"]> {
+  const rows = await db.select({ handle: profiles.handle, createdAt: memberFollows.createdAt }).from(memberFollows)
+    .innerJoin(profiles, eq(profiles.userId, memberFollows.followedId))
+    .where(eq(memberFollows.followerId, userId)).orderBy(asc(memberFollows.createdAt), asc(profiles.handle));
+  return rows.map(row => ({ handle: row.handle, created_at: row.createdAt.toISOString() }));
 }
 
 export async function buildMemberExport(db: Db, userId: string, opts: { now?: Date } = {}): Promise<MemberExport> {
@@ -427,7 +427,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     .where(and(eq(entries.authorId, userId), isNull(entries.deletedAt)))
     .orderBy(asc(entries.createdAt), asc(entries.id));
   const ownIds = own.map((e) => e.id);
-  const [revisionRows, draftRows, voteRows, stanceRows, changeRows, followRows, villageFollowRows, signatureRows, savedRows] = await Promise.all([
+  const [revisionRows, draftRows, voteRows, stanceRows, changeRows, followRows, villageFollowRows, memberFollowRows, signatureRows, savedRows] = await Promise.all([
     ownIds.length === 0
       ? Promise.resolve([])
       : db.select({ revision: entryRevisions, sourceHash: entryMentionSnapshots.sourceHash }).from(entryRevisions)
@@ -440,6 +440,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     db.select().from(stanceChanges).where(eq(stanceChanges.userId, userId)).orderBy(asc(stanceChanges.createdAt), asc(stanceChanges.id)),
     db.select().from(follows).where(eq(follows.userId, userId)).orderBy(asc(follows.createdAt), asc(follows.threadId)),
     exportVillageFollows(db, userId),
+    exportMemberFollows(db, userId),
     db.select({ signature: memberSignatures }).from(memberSignatures).leftJoin(entries, eq(entries.id, memberSignatures.entryId))
       .where(and(eq(memberSignatures.userId, userId), or(isNull(memberSignatures.entryId), isNull(entries.deletedAt))))
       .orderBy(asc(memberSignatures.createdAt), asc(memberSignatures.id)),
@@ -538,6 +539,7 @@ export async function buildMemberExport(db: Db, userId: string, opts: { now?: Da
     follows: followRows.map((f) => ({ thread_id: f.threadId, state: f.state, created_at: f.createdAt.toISOString(), updated_at: f.updatedAt.toISOString() })),
     village_icons: await exportVillageIcons(db, userId),
     village_follows: villageFollowRows,
+    member_follows: memberFollowRows,
     signatures: signatureRows.map(({ signature: s }) => ({ id: s.id, entry_id: s.entryId, source_hash: s.sourceHash, operation: s.operation, signed_payload: s.payload, payload_hash: s.payloadHash, challenge: s.challenge, credential_id: s.credentialId, public_key: s.publicKey, rp_id: s.rpId, origin: s.origin, assertion: s.assertion, authenticator_data: s.authenticatorData, client_data_json: s.clientDataJson, signature: s.signature, created_at: s.createdAt.toISOString() })),
     chat_messages: await exportOwnChat(db, userId),
   };

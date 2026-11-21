@@ -1,4 +1,4 @@
-import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
+import { type RouteConfig, layout, route } from "@react-router/dev/routes";
 
 export default [
   route("readyz", "routes/readyz.ts"),
@@ -142,7 +142,7 @@ export default [
         route("c/:id/edit", "routes/reply-edit.tsx"),
         route("drafts/:id", "routes/draft.tsx"),
       ]),
-      index("routes/home.tsx"),
+      route("/", "routes/home.tsx"),
       route("introductions", "routes/introductions.tsx"),
       route("t/:id/ai-materials/:view?", "routes/post-ai-materials.tsx"),
       route("t/:id/ask", "routes/post-ask-ai.tsx"),

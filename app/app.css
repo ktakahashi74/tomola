@@ -700,7 +700,7 @@ article[data-new-reply]::before {
      A toggle (Insightful, a stance, follow) is not a place: use Button with pressed. */
   .choice { display: inline-flex; min-height: 1.5rem; align-items: center; border-bottom: 2px solid transparent; color: var(--muted-foreground); }
   .choice:is(:hover, :focus-visible) { color: var(--foreground); }
-  .choice:is([aria-current="page"], [aria-current="location"], [aria-current="true"], [aria-selected="true"]) { border-bottom-color: var(--location-accent); color: var(--foreground); font-weight: 500; }
+  .choice:is([aria-current="page"], [aria-current="location"], [aria-current="true"], [aria-selected="true"], [aria-pressed="true"]) { border-bottom-color: var(--location-accent); color: var(--foreground); font-weight: 500; }
 
   /* "More": a small link at the end of a sentence that opens the rest in place (MoreInfo). The link stays when it is open, so focus is kept. */
   .more-info { display: inline; }

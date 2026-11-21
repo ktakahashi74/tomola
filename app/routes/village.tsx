@@ -215,6 +215,10 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
     <div className="absolute end-0 z-40 mt-2 w-80 max-w-full space-y-3 rounded-lg border bg-background p-3 shadow-md ui-help">
       {village.kind === "invite_public" && !ended && !management.lastOwner && <><p className="font-semibold">{m.village_leave_confirm()}</p><p>{m.village_leave_invite_help()}</p></>}
       {!ended && management.lastOwner && <p>{m.village_error_last_owner()}</p>}
+      {(following || !ended) && <Form method="post" className="space-y-1">
+        <Button type="submit" variant="outline" name="intent" value={following ? "unfollow" : "follow"}>{following ? m.village_membership_unfollow() : m.village_membership_follow()}</Button>
+        {!ended && <p>{m.village_membership_follow_help()}</p>}
+      </Form>}
       {leaveForm}
     </div>
   </details> : undefined;
@@ -224,12 +228,12 @@ export default function Village({ loaderData, actionData }: Route.ComponentProps
   const mainAction = ended || !membership ? undefined : membership.joined
     ? <Link to={`/t/new?village=${village.slug}`} className={buttonVariants()}>{m.village_post_here()}</Link>
     : village.kind === "open" ? <Form method="post"><Button type="submit" name="intent" value="join">{m.village_join()}</Button></Form> : undefined;
-  // Following is reading only. Joined villages already appear on the home filter and in navigation, so only members who have not joined need this control. An ended village cannot be newly followed.
+  // Joined members manage their follow from the membership menu.
   const followForm = !loaderData.reader && !membership?.joined && (following || !ended) ? <Form method="post">
     <Button type="submit" variant="outline" pressed={following} name="intent" value={following ? "unfollow" : "follow"}>{following ? m.village_following() : m.village_follow()}<span className="sr-only"> {villageName(village)}</span></Button>
   </Form> : undefined;
   const participationHelp = !loaderData.reader && !membership?.joined && !following && (mainAction || followForm)
-    ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat({ filter: m.home_filter_following() }) : m.village_join_follow_help({ filter: m.home_filter_following() }) : m.village_follow_members_help({ filter: m.home_filter_following() })
+    ? village.kind === "open" ? "chat" in loaderData ? m.village_join_follow_help_chat({ filter: m.home_scope_following() }) : m.village_join_follow_help({ filter: m.home_scope_following() }) : m.village_follow_members_help({ filter: m.home_scope_following() })
     : undefined;
   return <main className="space-y-3 [overflow-wrap:anywhere]">
     <VillageHeader village={village} current="posts" chat={"chat" in loaderData ? { ...loaderData.chat!, member: !loaderData.reader } : undefined} actions={mainAction || membershipAction || followForm ? <>{mainAction}{membershipAction}{followForm}</> : undefined} purpose={<>

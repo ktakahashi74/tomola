@@ -64,6 +64,7 @@ export const publicOnly = [
   ["return-reading", ".*"],
 ] as const;
 export const bothModes = [
+  ["home-following", ".*"],
   ["load-more", "members"],
   ["introductions", ".*"],
   ["member-search", ".*"],

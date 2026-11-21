@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { updateDisplayNames } from "~/lib/display-names.server";
 import { createTopic } from "~/lib/entries.server";
 import { getProfile } from "~/lib/profiles.server";
-import { followedVillageNavigation, setVillageFollow } from "~/lib/village-follows.server";
+import { followedMemberNavigation, setMemberFollow } from "~/lib/member-follows.server";
 import { topicContinuation } from "~/lib/topic-continuation.server";
 import { postingVillages } from "~/lib/villages.server";
 import { buildListMarkdown } from "~/lib/md/lists.server";
@@ -22,24 +22,23 @@ beforeAll(async () => {
   await h.signIn("dn_place_reader", { homeArea: "en" });
   const created = await createTopic(h.db, h.ids.dn_place_owner, { title: "Owned place", body: "表示名のビレッジ", lang: "ja" });
   if (!created.ok) throw Error(created.error); topicId = created.id;
-  await setVillageFollow(h.db, h.ids.dn_place_reader, "@dn_place_owner", true);
+  await setMemberFollow(h.db, h.ids.dn_place_reader, h.ids.dn_place_owner, true);
 });
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); setTestMessages(); });
 
-it("selects personal village names on the server for navigation and the article's next posts", async () => {
+it("localizes followed member names and the article's personal village name", async () => {
   await updateDisplayNames(h.db, h.ids.dn_place_owner, "光の書き手", "Light Writer");
   const reader = { displayLang: "en" as const, readLangs: ["en" as const] };
   for (const locale of ["ja", "en"] as const) {
     setTestLocale(locale);
     const name = locale === "ja" ? "光の書き手" : "Light Writer";
-    const navigation = await followedVillageNavigation(h.db, h.ids.dn_place_reader, reader);
-    expect(navigation[0]).toMatchObject({ name, slug: "@dn_place_owner" });
+    const navigation = await followedMemberNavigation(h.db, h.ids.dn_place_reader, locale);
+    expect(navigation[0]).toMatchObject({ name, handle: "dn_place_owner" });
     expect((await topicContinuation(h.db, topicId, reader))?.village).toMatchObject({ name, slug: "@dn_place_owner" });
     // General labels stay generic; posting labels identify the current owner.
     const own = (await postingVillages(h.db, h.ids.dn_place_owner, undefined, { reader, repair: false })).choices.find(village => village.kind === "personal")!;
     expect(villageName(own)).toBe(m.village_personal());
     expect(postingVillageName(own, "dn_place_owner")).toBe(m.village_personal_destination({ handle: "dn_place_owner" }));
-    expect(postingVillageName(navigation[0], "dn_place_reader")).toBe(name);
   }
 });
 
@@ -49,7 +48,8 @@ it("uses either remaining form, then the handle when both forms are empty", asyn
     await updateDisplayNames(h.db, h.ids.dn_place_owner, native, latin);
     for (const locale of ["ja", "en"] as const) {
       setTestLocale(locale);
-      expect((await followedVillageNavigation(h.db, h.ids.dn_place_reader, reader))[0].name).toBe(expected);
+      const member = (await followedMemberNavigation(h.db, h.ids.dn_place_reader, locale))[0];
+      expect(member.name ?? `@${member.handle}`).toBe(expected);
       expect((await topicContinuation(h.db, topicId, reader))?.village.name).toBe(expected);
     }
   }

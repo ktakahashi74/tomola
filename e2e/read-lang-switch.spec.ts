@@ -74,7 +74,7 @@ test.describe("page reading language", () => {
       await expect(page).toHaveURL(url => url.searchParams.get("lang") === "fr" && url.searchParams.get("order") === "insightful");
       await waitForClientRoute(page);
       await page.locator(`summary[aria-label^="${en.filter_prefix}"]`).click();
-      await page.getByRole("navigation", { name: en.list_filter_label, exact: true }).getByRole("link", { name: en.home_filter_all, exact: true }).click();
+      await page.getByRole("navigation", { name: en.list_filter_label, exact: true }).getByRole("link", { name: en.list_all_topics, exact: true }).click();
       await expect(page).toHaveURL(url => !url.searchParams.has("long") && url.searchParams.get("order") === "insightful");
       expect(new URL(page.url()).searchParams.get("lang")).toBe("fr");
       expect(new URL(page.url()).searchParams.get("order")).toBe("insightful");

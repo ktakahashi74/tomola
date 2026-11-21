@@ -28,6 +28,7 @@ const PAGE_QUERY_KEYS = ["page", "lang", "sentences", "asks", "long", "order"] a
 export const READ_RESOURCE_QUERY_KEYS = {
   page: PAGE_QUERY_KEYS,
   following: [...PAGE_QUERY_KEYS, "all"],
+  home: [...PAGE_QUERY_KEYS, "scope", "follow"],
   search: ["lang", "q"],
   changes: ["since", "cursor"],
   glossary: ["page", "to", "from", "deleted"],
@@ -37,7 +38,8 @@ export const READ_RESOURCE_QUERY_KEYS = {
 
 function resourceQueryKeys(path: string): readonly string[] | null {
   if (/^\/t\/[1-9]\d*\/stances\.(?:md|txt)$/.test(path) || path === "/glossary.yaml") return READ_RESOURCE_QUERY_KEYS.unfiltered;
-  if (/^\/(?:t\/[1-9]\d*|a\/[A-Za-z-]+|latest|home)\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.page;
+  if (/^\/(?:t\/[1-9]\d*|a\/[A-Za-z-]+|latest)\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.page;
+  if (/^\/home\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.home;
   if (/^\/following\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.following;
   if (/^\/search\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.search;
   if (/^\/changes\.(?:md|txt)$/.test(path)) return READ_RESOURCE_QUERY_KEYS.changes;

@@ -42,6 +42,7 @@ beforeAll(async () => {
   await make("other", "vf_owner", "other-club", 2);
   await make("invited", "vf_owner", "invite-club", 3);
   await make("language", "vf_reader", "en", 4);
+  await h.db.delete(villageFollows).where(eq(villageFollows.villageId, (await villageBySlug(h.db, "en"))!.id));
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.stubEnv("VILLAGES", "1"); vi.stubEnv("ENABLED_LANGS", "en,ja"); });
 afterAll(() => { h.restore(); vi.unstubAllEnvs(); });
@@ -107,37 +108,37 @@ it("gives no right to write or to chat, and the village page only says whether t
   await h.db.delete(villageFollows).where(eq(villageFollows.userId, h.ids.vf_loner));
 });
 
-it("lists the posts of the villages followed or joined, in both orders, and never a closed, ended or unfollowed village's", async () => {
+it("lists own and followed topics in each order and excludes closed, ended and unfollowed villages", async () => {
   await h.db.delete(villageFollows).where(eq(villageFollows.userId, h.ids.vf_reader));
   for (const slug of ["follow-club", "invite-club"]) await post("vf_reader", slug, { intent: "follow" });
   // A topic in a closed village and in an ended one, both followed: not listed.
   const [secret] = await h.db.insert(entries).values({ kind: "topic", authorId: h.ids.vf_owner, lang: "en", title: "Closed topic", body: "Closed.", villageId: await idOf("secret-club") }).returning();
   const [gone] = await h.db.insert(entries).values({ kind: "topic", authorId: h.ids.vf_owner, lang: "en", title: "Ended topic", body: "Ended.", villageId: await idOf("gone-club") }).returning();
   await h.db.insert(villageFollows).values([{ userId: h.ids.vf_reader, villageId: await idOf("secret-club") }, { userId: h.ids.vf_reader, villageId: await idOf("gone-club") }]);
-  for (const order of ["created", "activity"] as const) {
-    const ids = (await listTopics(h.db, { kind: "my-villages", userId: h.ids.vf_reader }, { order })).topics.map(t => t.id).sort();
+  for (const order of ["created", "activity", "insightful"] as const) {
+    const ids = (await listTopics(h.db, { kind: "following-home", userId: h.ids.vf_reader }, { order })).topics.map(t => t.id).sort();
     expect(ids).toEqual([topicIds.followed, topicIds.invited, topicIds.language].sort());
     expect(ids).not.toContain(secret.id);
     expect(ids).not.toContain(gone.id);
     expect(ids).not.toContain(topicIds.other);
   }
-  // Someone who follows nothing sees only the villages joined (the language village from signing up).
-  expect((await listTopics(h.db, { kind: "my-villages", userId: h.ids.vf_quitter })).topics.map(t => t.id)).toEqual([topicIds.language]);
+  // Membership alone is not a home subscription.
+  expect((await listTopics(h.db, { kind: "following-home", userId: h.ids.vf_quitter })).topics.map(t => t.id)).toEqual([]);
   await h.db.delete(villageFollows).where(eq(villageFollows.userId, h.ids.vf_reader));
   await h.db.delete(entries).where(and(eq(entries.authorId, h.ids.vf_owner), eq(entries.title, "Closed topic")));
   await h.db.delete(entries).where(and(eq(entries.authorId, h.ids.vf_owner), eq(entries.title, "Ended topic")));
 });
 
-type HomeData = { filter: string; followingAvailable: boolean; noVillagePlaces: boolean; topics: Array<{ id: number }> };
+type HomeData = { filter: string; followingAvailable: boolean; scope: string; topics: Array<{ id: number }> };
 const home = async (path: string, as?: string) => await homeLoader(h.args(h.request(path, { as }))) as unknown as HomeData;
 
-it("filters the home to the followed and joined villages for a member only; asks and a closed setting win over it", async () => {
+it("applies the type filter independently of the home scope and keeps guests and disabled villages on All", async () => {
   await post("vf_reader", "follow-club", { intent: "follow" });
   const all = await home("/", "vf_reader");
   expect(all).toMatchObject({ filter: "all", followingAvailable: true });
   expect(all.topics.map(t => t.id).sort()).toEqual(Object.values(topicIds).sort());
   const following = await home("/?follow=1", "vf_reader");
-  expect(following).toMatchObject({ filter: "following", noVillagePlaces: false });
+  expect(following).toMatchObject({ filter: "all", scope: "following" });
   expect(following.topics.map(t => t.id).sort()).toEqual([topicIds.followed, topicIds.language].sort());
   // The default of the home does not change; a reader without an account has no such list.
   vi.stubEnv("PUBLIC_READING", "1");
@@ -145,13 +146,13 @@ it("filters the home to the followed and joined villages for a member only; asks
   expect(guest).toMatchObject({ filter: "all", followingAvailable: false });
   expect(guest.topics).toHaveLength(Object.keys(topicIds).length);
   vi.stubEnv("PUBLIC_READING", "");
-  expect((await home("/?follow=1&asks=1", "vf_reader")).filter).toBe("asks");
+  expect(await home("/?follow=1&asks=1", "vf_reader")).toMatchObject({ scope: "following", filter: "asks", topics: [] });
   vi.stubEnv("VILLAGES", "");
   expect(await home("/?follow=1", "vf_reader")).toMatchObject({ filter: "all", followingAvailable: false });
   vi.stubEnv("VILLAGES", "1");
   // No village to read from at all: the list says so (the page tells what to do).
   await h.db.delete(villageMembers).where(eq(villageMembers.userId, h.ids.vf_quitter));
-  expect(await home("/?follow=1", "vf_quitter")).toMatchObject({ filter: "following", noVillagePlaces: true, topics: [] });
+  expect(await home("/?follow=1", "vf_quitter")).toMatchObject({ filter: "all", scope: "following", topics: [] });
   await h.db.delete(villageFollows).where(eq(villageFollows.userId, h.ids.vf_reader));
 });
 
@@ -213,7 +214,7 @@ it("removes the follows with the account, leaving the village and what others fo
   expect(await rows("vf_quitter")).toHaveLength(1);
   const result = await deleteAccount(h.db, h.ids.vf_quitter, { confirmation: "vf_quitter" });
   expect(result.ok).toBe(true);
-  expect(await h.db.select().from(villageFollows).where(eq(villageFollows.villageId, await idOf("follow-club")))).toHaveLength(1);
+  expect(await h.db.select().from(villageFollows).where(eq(villageFollows.villageId, await idOf("follow-club")))).toHaveLength(2);
   expect(await rows("vf_reader")).toHaveLength(1);
   expect(await villageBySlug(h.db, "follow-club")).not.toBeNull();
 });

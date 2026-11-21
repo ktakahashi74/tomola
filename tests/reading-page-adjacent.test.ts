@@ -6,7 +6,7 @@ import { listObjections } from "~/lib/objections.server";
 import { listRelatedDiscussions } from "~/lib/related-discussions.server";
 import { readReadingRequest, readingHref, type ReadingPage } from "~/lib/reading-page";
 import { personalVillage } from "~/lib/personal-villages.server";
-import { setVillageFollow } from "~/lib/village-follows.server";
+import { setMemberFollow } from "~/lib/member-follows.server";
 import { ensureLanguageVillages } from "~/lib/villages.server";
 import { addMember, createTestDb } from "./helpers/db";
 
@@ -15,7 +15,7 @@ const request = (order = "created", query = "", param = "list") => readReadingRe
 const next = (page: ReadingPage) => readingHref("?lang=en&long=1", page, true);
 const must = <T extends { ok: boolean }>(value: T): Extract<T, { ok: true }> => { if (!value.ok) throw new Error(JSON.stringify(value)); return value as Extract<T, { ok: true }>; };
 
-it("keeps village and followed-village scopes and both member sections independent", async () => {
+it("keeps village and following-home scopes and both member sections independent", async () => {
   vi.stubEnv("VILLAGES", "1");
   const db = await createTestDb();
   await ensureLanguageVillages(db);
@@ -27,10 +27,10 @@ it("keeps village and followed-village scopes and both member sections independe
     own.push(must(await createTopic(db, "section-author", { lang: "en", title: `Own ${i}`, body: "Own fixture" })).id);
     elsewhere.push(must(await createTopic(db, "section-author", { lang: "en", title: `Elsewhere ${i}`, body: "Elsewhere fixture", village: "en" })).id);
   }
-  expect((await setVillageFollow(db, "section-reader", "@section_author", true)).ok).toBe(true);
+  expect((await setMemberFollow(db, "section-reader", "section-author", true)).ok).toBe(true);
   for (const order of ["created", "activity", "insightful"] as const) for (const scope of [
     { kind: "village", villageId: personal.id },
-    { kind: "my-villages", userId: "section-reader" },
+    { kind: "following-home", userId: "section-reader" },
   ] satisfies TopicScope[]) {
     const first = await listTopics(db, scope, { order, titledOnly: true, reading: request(order) });
     const second = await listTopics(db, scope, { order, titledOnly: true, reading: request(order, next(first.list!)) });

@@ -1,3 +1,4 @@
+import { parseHomeScope } from "~/lib/home-scope";
 import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { data } from "react-router";
 import { villageBySlug } from "~/lib/villages.server";
@@ -79,7 +80,15 @@ async function serveList(request: Request, resolve: () => ListSpec | null): Prom
 }
 
 async function listMd(request: Request, resolve: () => ListSpec | null): Promise<Response> {
-  const spec = resolve();
+  let spec = resolve();
+  if (spec?.kind === "home") {
+    const scope = parseHomeScope(new URL(request.url).searchParams);
+    if (scope === "invalid") return errorResponse(request, "text", 400, "invalid_scope", "?scope= must be all or following.");
+    if (scope === "following") {
+      if (!villagesEnabled()) return notFound(request, "text");
+      spec = { kind: "following-home" };
+    }
+  }
   const authed = await authenticatePageRead(request, allowsPublicListRead(spec));
   if (!authed.ok) return authed.response;
   const { auth } = authed;
@@ -100,7 +109,8 @@ export const serveAreaMd = (request: Request, stem: string): Promise<Response> =
 // Public-capability selection uses the same target and list rules as the twins.
 // Protected API/export resources and hidden placeholders retain member delegation.
 export async function canReadMarkdownPublicly(db: Db, resource: string): Promise<boolean> {
-  const path = new URL(resource, "http://tomola.invalid").pathname.replace(/\.txt$/, ".md");
+  const url = new URL(resource, "http://tomola.invalid");
+  const path = url.pathname.replace(/\.txt$/, ".md");
   const topic = /^\/t\/([1-9]\d*)\.md$/.exec(path);
   if (topic) {
     const id = parseIdOrNull(topic[1]);
@@ -108,7 +118,10 @@ export async function canReadMarkdownPublicly(db: Db, resource: string): Promise
   }
   const area = /^\/a\/([A-Za-z-]+)\.md$/.exec(path);
   if (area) return isLang(area[1]) && allowsPublicListRead({ kind: "area", lang: area[1] });
-  if (path === "/home.md") return allowsPublicListRead({ kind: "home" });
+  if (path === "/home.md") {
+    const scope = parseHomeScope(url.searchParams);
+    return scope === null || scope === "all";
+  }
   if (path === "/latest.md") return allowsPublicListRead({ kind: "latest" });
   if (path === "/following.md") return allowsPublicListRead({ kind: "following" });
   return false;

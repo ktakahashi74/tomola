@@ -25,14 +25,14 @@ test("following a village puts its posts on the home's Following list and its na
     // The home's filter has the list; the other village's post is not on it, and the default list still has both across its pages.
     await page.goto("/");
     await waitForClientRoute(page);
-    await page.locator("summary", { hasText: new RegExp(`^\\s*${m.home_filter_all}\\s*$`) }).click();
-    await page.getByRole("navigation", { name: m.list_filter_label }).getByRole("link", { name: m.home_filter_following, exact: true }).click();
-    await expect(page).toHaveURL(/follow=1/);
+    const following = page.getByRole("button", { name: m.home_scope_following, exact: true });
+    await following.click();
+    await expect(following).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByRole("link", { name: "Follow fixture topic" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Follow other topic" })).toHaveCount(0);
     for (const name of ["Follow fixture topic", "Follow other topic"]) {
       const topic = page.getByRole("link", { name, exact: true });
-      await visitListRow(page, "/", topic);
+      await visitListRow(page, "/?scope=all", topic);
       await expect(topic).toBeVisible();
     }
     // The village's own page is where its follow is managed.

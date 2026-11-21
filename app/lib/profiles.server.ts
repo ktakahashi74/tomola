@@ -1,3 +1,4 @@
+import type { HomeScope } from "./home-scope";
 import { isColorScheme, type ColorScheme } from "~/lib/theme-colors";
 import { ensurePersonalVillage } from "./personal-villages.server";
 import { isDeletedIdentity } from "./deleted-member";
@@ -83,6 +84,7 @@ export type Profile = {
   displayNameLatin?: string | null;
   handleChangedAt: Date | null;
   homeArea: Area;
+  homeScope: HomeScope;
   // Last membership-area change timestamp; null if unchanged since registration.
   homeAreaChangedAt: Date | null;
   readLangs: Lang[];
@@ -125,6 +127,7 @@ function toProfile(row: typeof profiles.$inferSelect): Profile {
     displayNameLatin: row.displayNameLatin,
     handleChangedAt: row.handleChangedAt,
     homeArea: row.homeArea as Area,
+    homeScope: row.homeScope,
     homeAreaChangedAt: row.homeAreaChangedAt,
     readLangs: row.readLangs as Lang[],
     displayLang: isLang(row.displayLang) ? row.displayLang : null,

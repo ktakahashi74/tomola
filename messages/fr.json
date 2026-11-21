@@ -914,7 +914,7 @@
     }
   ],
   "notifications_title": "Notifications",
-  "notifications_empty": "Aucune notification. Elles s’affichent ici lorsqu’une publication que vous suivez reçoit une réponse, ou lorsque quelqu’un vous répond ou vous mentionne.",
+  "notifications_empty": "Vous trouverez ici les nouvelles réponses aux publications suivies, les réponses qui vous sont adressées et les mentions.",
   "notifications_mark_all": "Tout marquer comme lu",
   "notification_unread": "non lu",
   "notification_open": "Ouvrir",
@@ -1350,13 +1350,13 @@
   "following_filter_new": "Nouvelles réponses",
   "following_filter_all": "Toutes",
   "following_no_new_replies": "Aucune nouvelle réponse.",
-  "following_rule": "Vous suivez les publications que vous rédigez et celles auxquelles vous répondez. Une publication que vous cessez de suivre ne sera plus suivie.",
+  "following_rule": "Vous suivez automatiquement les réponses à vos publications et à celles auxquelles vous répondez. Si vous arrêtez de suivre les réponses à une publication, ce choix est conservé.",
   "following_auto_label": "Publications suivies automatiquement",
-  "following_empty": "Rien pour le moment. Cliquez sur « Suivre » sur une publication qui vous intéresse ou répondez-y, et elle apparaîtra ici.",
-  "follow_button": "Suivre",
-  "follow_following": "Suivi",
-  "follow_unfollow": "Ne plus suivre",
-  "follow_help": "Vous suivez automatiquement les publications que vous lancez et celles auxquelles vous répondez. Les nouvelles réponses à une publication que vous suivez apparaissent dans vos notifications, regroupées en une seule jusqu’à ce que vous les lisiez, et vous parviennent par e-mail dans le récapitulatif quotidien sauf choix contraire de votre part. Une publication que vous cessez de suivre reste non suivie. Choisir une position ne vous fait pas suivre la publication.",
+  "following_empty": "Pour voir une publication ici, choisissez « Suivre les réponses » ou répondez à la publication.",
+  "follow_button": "Suivre les réponses",
+  "follow_following": "Réponses suivies",
+  "follow_unfollow": "Arrêter de suivre les réponses",
+  "follow_help": "Vous suivez automatiquement les réponses aux publications que vous créez et à celles auxquelles vous répondez. Les nouvelles réponses sont regroupées dans vos notifications jusqu’à leur lecture et figurent par défaut dans le récapitulatif quotidien par e-mail. Si vous arrêtez de suivre les réponses à une publication, ce choix est conservé. Choisir une position ne change pas le suivi.",
   "notification_followed_thread": [
     {
       "declarations": [
@@ -1369,9 +1369,9 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "Nouvelle réponse dans une publication que vous suivez, « {title} » : {count} (la plus récente provient de @{handle}).",
-        "countPlural=many": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count} (la plus récente provient de @{handle}).",
-        "countPlural=other": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count} (la plus récente provient de @{handle})."
+        "countPlural=one": "« {title} », publication suivie : {count} nouvelle réponse. La dernière est de @{handle}.",
+        "countPlural=other": "« {title} », publication suivie : {count} nouvelles réponses. La dernière est de @{handle}.",
+        "countPlural=many": "« {title} », publication suivie : {count} nouvelles réponses. La dernière est de @{handle}."
       }
     }
   ],
@@ -1386,14 +1386,14 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "Nouvelle réponse dans une publication que vous suivez, « {title} » : {count}.",
-        "countPlural=many": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}.",
-        "countPlural=other": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}."
+        "countPlural=one": "« {title} », publication suivie : {count} nouvelle réponse.",
+        "countPlural=other": "« {title} », publication suivie : {count} nouvelles réponses.",
+        "countPlural=many": "« {title} », publication suivie : {count} nouvelles réponses."
       }
     }
   ],
   "notification_content_unavailable": "Cette notification concernait une publication (ou la publication à laquelle elle appartient) qui est désormais masquée ou supprimée.",
-  "mail_subject_followed_thread": "Nouvelles réponses dans une publication que vous suivez",
+  "mail_subject_followed_thread": "Nouvelles réponses à une publication suivie",
   "mail_item_followed_thread": [
     {
       "declarations": [
@@ -1408,9 +1408,9 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "Nouvelle réponse dans une publication que vous suivez, « {title} » : {count}. La plus récente provient de @{handle} :\n\n{excerpt}\n\n{url}",
-        "countPlural=many": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}. La plus récente provient de @{handle} :\n\n{excerpt}\n\n{url}",
-        "countPlural=other": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}. La plus récente provient de @{handle} :\n\n{excerpt}\n\n{url}"
+        "countPlural=one": "« {title} », publication suivie : {count} nouvelle réponse. La dernière est de @{handle}.\n\n{excerpt}\n\n{url}",
+        "countPlural=other": "« {title} », publication suivie : {count} nouvelles réponses. La dernière est de @{handle}.\n\n{excerpt}\n\n{url}",
+        "countPlural=many": "« {title} », publication suivie : {count} nouvelles réponses. La dernière est de @{handle}.\n\n{excerpt}\n\n{url}"
       }
     }
   ],
@@ -1426,9 +1426,9 @@
         "countPlural"
       ],
       "match": {
-        "countPlural=one": "Nouvelle réponse dans une publication que vous suivez, « {title} » : {count}.\n\n{url}",
-        "countPlural=many": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}.\n\n{url}",
-        "countPlural=other": "Nouvelles réponses dans une publication que vous suivez, « {title} » : {count}.\n\n{url}"
+        "countPlural=one": "« {title} », publication suivie : {count} nouvelle réponse.\n\n{url}",
+        "countPlural=other": "« {title} », publication suivie : {count} nouvelles réponses.\n\n{url}",
+        "countPlural=many": "« {title} », publication suivie : {count} nouvelles réponses.\n\n{url}"
       }
     }
   ],
@@ -2407,7 +2407,7 @@
   "posted_translating": "En cours de traduction en :",
   "posted_all_reached": "Elle a atteint toutes les langues.",
   "posted_first": "C’est votre première publication. Une fois traduite, les personnes qui lisent d’autres langues la liront.",
-  "posted_reply_followed": "Réponse publiée. Vous suivez maintenant cette publication.",
+  "posted_reply_followed": "Réponse publiée. Vous suivez désormais les réponses à cette publication.",
   "edited_saved": "Modifications enregistrées. Les traductions sont en cours de régénération.",
   "ai_write_changed": "Le brouillon généré pour l’IA a été modifié après son enregistrement depuis cet écran, il n’a donc pas été écrasé. Votre texte est toujours ici. Ouvrez-le depuis vos brouillons pour voir la dernière version.",
   "local_draft_older": "Ébauche non envoyée antérieure à la modification de ce texte ({time}).",
@@ -2497,13 +2497,12 @@
   "notification_village_membership_ended": "Vous n’êtes plus membre de {name}. Vos publications restent dans le village.",
   "village_follow": "Suivre",
   "village_following": "Suivi",
-  "village_join_follow_help": "Suivez pour lire les publications de ce village dans le filtre {filter} de votre accueil (lecture seule). Rejoignez pour y publier également.",
-  "village_join_follow_help_chat": "Suivez pour lire les publications de ce village dans le filtre {filter} de votre accueil (lecture seule). Rejoignez pour y publier et discuter également.",
-  "village_follow_members_help": "Suivez pour lire les publications de ce village dans le filtre {filter} de votre accueil (lecture seule). Seuls les membres publient ici.",
+  "village_join_follow_help": "Abonnez-vous pour voir les publications de ce village dans « {filter} » sur l’accueil. En rejoignant le village, vous pouvez aussi y publier et vous vous y abonnez automatiquement.",
+  "village_join_follow_help_chat": "Abonnez-vous pour voir les publications de ce village dans « {filter} » sur l’accueil. En rejoignant le village, vous pouvez y publier et discuter, et vous vous y abonnez automatiquement.",
+  "village_follow_members_help": "Abonnez-vous pour voir les publications de ce village dans « {filter} » sur l’accueil. Les membres du village peuvent y publier et s’y abonnent automatiquement à leur arrivée.",
   "village_follow_places": "Villages suivis",
   "village_follow_more": "{count} de plus",
-  "home_filter_following": "Villages rejoints et suivis",
-  "home_following_empty": "Suivez un village ou rejoignez-en un, et ses publications apparaîtront ici.",
+  "home_following_empty": "Abonnez-vous à des personnes ou à des villages pour voir leurs publications publiques ici. Vos propres publications publiques y apparaissent aussi.",
   "objections_neutrality": "Aucune façon de poser la question, y compris la question d’origine, n’est tenue pour la bonne.",
   "notification_reply_to_topic_language": "@{handle} a répondu en {language} à votre publication « {title} ».",
   "notification_reply_to_reply_language": "@{handle} a répondu en {language} à votre réponse dans « {title} ».",
@@ -2522,9 +2521,7 @@
   "translation_article_arrived": "Passé à la traduction.",
   "village_personal": "Mon village",
   "village_personal_destination": "Mon village (@{handle})",
-  "village_personal_places": "Villages des membres",
   "member_page_elsewhere": "Publications ailleurs",
-  "member_page_village_follow_hint": "Suivez ce village pour recevoir les publications de cette section.",
   "display_name_native": "Nom affiché (dans votre langue)",
   "display_name_latin": "Nom affiché (en lettres latines)",
   "display_name_invalid": "Utilisez une seule ligne de 50 caractères au plus par nom, avec au moins une lettre et sans @. Pour la forme latine, utilisez des lettres latines, des espaces, des traits d’union, des apostrophes ou des points.",
@@ -3150,5 +3147,16 @@
     }
   ],
   "list_load_failed": "Impossible de charger plus de publications. Réessayez.",
-  "list_back_latest": "Revenir aux dernières publications"
+  "list_back_latest": "Revenir aux dernières publications",
+  "home_scope_all": "Tout",
+  "home_scope_following": "Abonnements",
+  "home_scope_label": "Publications à afficher sur l’accueil",
+  "home_filter_empty": "Aucune publication ne correspond à ce filtre.",
+  "home_clear_filter": "Réinitialiser le filtre",
+  "home_see_all": "Voir toutes les publications",
+  "nav_followed_members": "Membres auxquels vous êtes abonné",
+  "member_page_follow_hint": "Abonnez-vous à cette personne pour voir ses publications publiques dans les abonnements sur votre page d’accueil.",
+  "village_membership_unfollow": "Se désabonner de ce village",
+  "village_membership_follow": "S’abonner à ce village",
+  "village_membership_follow_help": "L’abonnement affiche les publications du village dans les abonnements sur l’accueil. Si vous vous désabonnez, vous restez membre et pouvez continuer à publier et à utiliser le chat s’il est disponible."
 }
