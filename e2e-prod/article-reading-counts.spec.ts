@@ -98,7 +98,7 @@ test("counts the initial translation and the client-side source switch once acro
   const stats = await page.request.get("/stats.md?lang=en");
   expect(await stats.text()).toContain(en.stats_reading_cumulative);
   await page.goto("/stats?lang=en");
-  await expect(page.getByText(en.stats_reading_cumulative, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: en.stats_reading_cumulative, exact: true })).toBeVisible();
   await page.goto("/admin/metrics");
   const operatorTable = page.getByRole("region", { name: en.metrics_article_reading_title });
   const row = operatorTable.getByRole("row").filter({ has: page.getByRole("link", { name: "Article count browser fixture" }) });

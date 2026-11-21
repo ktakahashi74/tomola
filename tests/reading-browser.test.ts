@@ -33,7 +33,7 @@ function post(id: number, search: string, opts: { intent?: "read" | "seen" | "st
   Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}${search}`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
   return action(h.args(new Request(base.url, { method: "POST", headers, body: JSON.stringify({ intent: opts.intent ?? "read", ids: opts.ids ?? [], internal: opts["internal"] ?? false, shared: opts.shared ?? new URLSearchParams(search).has("sl"), referrerHost: opts.referrerHost ?? "", mark: opts.mark, shown: opts.shown }) }), { id: String(id) }));
 }
-it("derives source and displayed languages server-side, separates shares and internal reads, and ignores reply pagination", async () => {
+it("derives reading languages and sources and shows counts without counting reply pagination", async () => {
   const id = await seed();
   await post(id, "?lang=en", { shared: true, referrerHost: "google.com" });
   await post(id, "?lang=en&sl=en", { internal: true, referrerHost: "google.com" });
@@ -56,6 +56,8 @@ it("derives source and displayed languages server-side, separates shares and int
   expect(seen.everSeen).toBe(true);
   expect(seen.firstSeenAt).not.toBeNull();
   await h.db.insert(entries).values(Array.from({ length: 101 }, () => ({ kind: "reply", threadId: id, authorId: h.ids.readsource, lang: "ja", body: "Reply page fixture" })));
+  const pageTwo = await topicLoader(h.args(h.request(`/t/${id}?lang=en&page=2`, { as: "readvisitor" }), { id: String(id) }));
+  expect(pageTwo).toMatchObject({ page: 2, articleViews: { total: 5 }, readingMark: null });
   await post(id, "?lang=en&page=2");
   expect(await h.db.select().from(readingCounts)).toEqual(rows);
 });

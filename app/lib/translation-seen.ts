@@ -75,14 +75,16 @@ export function markTopicRead(page: string, lang: SourceLang, isTranslated: bool
   const search = (value: string) => {
     const params = new URLSearchParams(value);
     params.delete(SHARE_LANG_PARAM);
+    params.delete("posted");
+    params.delete("edited");
+    params.delete("followed");
     return params.toString();
   };
   const displayedSearch = search(url.search);
   const report = () => {
-    if (document.visibilityState !== "visible" || location.pathname !== url.pathname || search(location.search) !== displayedSearch ||
+    if (location.pathname !== url.pathname || search(location.search) !== displayedSearch ||
       inFlightReads.has(key) || rememberRead(key, Date.now())) return;
     const internal = reportedRead || (window.history.state?.key ?? "default") !== documentKey;
-    reportedRead = true;
     inFlightReads.add(key);
     let host = "";
     try { if (!internal && document.referrer) host = new URL(document.referrer).hostname; } catch { /* No usable host. */ }
@@ -91,11 +93,20 @@ export function markTopicRead(page: string, lang: SourceLang, isTranslated: bool
         intent: "read", ids: [], internal, shared, referrerHost: host, shown: isTranslated ? "translation" : "original", mark,
       }) }).then(async response => {
       if (!response.ok) return drain(response);
+      reportedRead = true;
       const result = await response.json();
       if (result?.counted === true) rememberRead(key, Date.now(), true);
     }).catch(() => {}).finally(() => inFlightReads.delete(key));
   };
-  report();
-  document.addEventListener("visibilitychange", report);
-  return () => document.removeEventListener("visibilitychange", report);
+  if (document.visibilityState === "visible") {
+    report();
+    return () => {};
+  }
+  const onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") return;
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    report();
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  return () => document.removeEventListener("visibilitychange", onVisibilityChange);
 }

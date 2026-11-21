@@ -35,8 +35,9 @@ export default function Stats({ loaderData }: Route.ComponentProps) {
         <h2 id={`stats-${section.id}`} className="text-lg font-semibold">{section.title}</h2>
         {section.notes.map((note, index) => <p key={index} className="break-words">{typeof note === "string" ? note : <LocalTime iso={note.iso} formatLabel={note.label} />}</p>)}
         {section.tables.map((table, index) => <div key={index} className="max-w-full overflow-x-auto">
+          {table.showCaption && <h3 className="text-base font-semibold">{table.caption}</h3>}
           <Table>
-            <caption className={table.showCaption ? "pb-2 text-start font-semibold" : "sr-only"}>{table.caption}</caption>
+            <caption className="sr-only">{table.caption}</caption>
             <TableHeader><TableRow>{table.headers.map((heading, i) => <TableHead key={i} scope="col">{heading}</TableHead>)}</TableRow></TableHeader>
             <TableBody>{table.rows.map((row, i) => <TableRow key={i}>{row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}</TableRow>)}</TableBody>
           </Table>

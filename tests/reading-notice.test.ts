@@ -2,24 +2,29 @@ import { afterEach, expect, it, vi } from "vitest";
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 it("waits for visibility, deduplicates navigation displays, and drops raw referrers before sending", async () => {
   vi.resetModules();
+  vi.useFakeTimers();
   let visible = false;
   const listeners = new Set<() => void>();
   vi.stubGlobal("window", { history: { state: { key: "first" } } });
   vi.stubGlobal("location", new URL("https://forum.example/t/1?lang=en&sl=en"));
   vi.stubGlobal("document", { get visibilityState() { return visible ? "visible" : "hidden"; }, referrer: "https://www.google.com/search?q=private+words",
     addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) });
-  const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
+  const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ counted: false }) }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page: "/t/1?lang=en&sl=en" };
   const cleanup = markTopicRead(display.page, "en", false);
   expect(fetch).not.toHaveBeenCalled();
+  listeners.forEach(fn => fn());
+  expect(fetch).not.toHaveBeenCalled();
   visible = true; listeners.forEach(fn => fn());
+  expect(listeners.size).toBe(0);
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: "read", ids: [], internal: false, shared: true, referrerHost: "www.google.com", shown: "original" });
   expect(fetch.mock.calls[0][1].body).not.toContain("private");
   const again = markTopicRead(display.page, "en", false);
   expect(fetch).toHaveBeenCalledTimes(1);
   cleanup(); again();
+  await vi.advanceTimersByTimeAsync(0);
   vi.stubGlobal("location", new URL("https://forum.example/t/2"));
   markTopicRead("/t/2", "en", false)();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ internal: true, referrerHost: "" });
@@ -55,7 +60,8 @@ it("treats the first article after a client navigation from a list as internal",
 it.each([
   ["/t/5?lang=ja&sl=ja", "/t/5?lang=ja", true],
   ["/t/5?lang=en", "/t/5?lang=en&sl=en", false],
-] as const)("preserves arrival classification when the share address changes from %s to %s", async (page, address, shared) => {
+  ["/t/5?lang=ja&posted=5&edited=5&followed=1", "/t/5?lang=ja", false],
+] as const)("preserves arrival classification after transient query changes from %s to %s", async (page, address, shared) => {
   vi.resetModules();
   vi.stubGlobal("window", { history: { state: { key: "arrival" } } });
   vi.stubGlobal("location", new URL(address, "https://forum.example"));
@@ -64,6 +70,7 @@ it.each([
   const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page };
   markTopicRead(display.page, "en", false)();
+  expect(fetch).toHaveBeenCalledTimes(1);
   markTopicRead(`${address}#reply`, "en", false)();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][0]).toBe(`/t/5/translations${new URL(address, "https://forum.example").search}`);
@@ -85,6 +92,33 @@ function stubTab(fetch: ReturnType<typeof vi.fn>) {
 }
 
 const counted = () => ({ ok: true, json: async () => ({ counted: true }) });
+
+it.each([
+  { result: "counted false", startsVisible: true, counted: false, elapsed: 0 },
+  { result: "counted true and the deduplication window expires", startsVisible: false, counted: true, elapsed: 1_800_000 },
+])("does not resend on tab return after $result", async ({ startsVisible, counted, elapsed }) => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ counted }) });
+  stubTab(fetch);
+  const tab = Object.assign(new EventTarget(), { visibilityState: startsVisible ? "visible" : "hidden", referrer: "" });
+  vi.stubGlobal("document", tab);
+  const setVisibility = (state: string) => {
+    tab.visibilityState = state;
+    tab.dispatchEvent(new Event("visibilitychange"));
+  };
+  const { markTopicRead } = await import("~/lib/translation-seen");
+  const cleanup = markTopicRead("/t/6?lang=ja", "ja", false);
+  if (!startsVisible) setVisibility("visible");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fetch).toHaveBeenCalledTimes(1);
+
+  setVisibility("hidden");
+  await vi.advanceTimersByTimeAsync(elapsed);
+  setVisibility("visible");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  cleanup();
+});
 
 it("keeps the actual language and version distinct across reloads with a fixed 30-minute expiry", async () => {
   vi.resetModules();
@@ -168,4 +202,5 @@ it("allows another attempt after transport failure, HTTP error, or counted false
   await vi.advanceTimersByTimeAsync(0);
   expect(fetch).toHaveBeenCalledTimes(4);
   expect(saved.size).toBe(1);
+  expect(fetch.mock.calls.map(([, request]) => JSON.parse(request.body).internal)).toEqual([false, false, false, true]);
 });

@@ -20,6 +20,7 @@ import { formatTime } from "~/lib/time-format";
 import { SiteFooter } from "~/components/site-footer";
 import { setTestLocale } from "./stubs/paraglide-runtime";
 import { renderInRouter } from "./helpers/render-in-router";
+import { escapeRegex } from "./helpers/message-markup";
 import { addMember, createTestDb } from "./helpers/db";
 import { setupRouteHarness } from "./helpers/route-harness";
 import { routeElement } from "./helpers/route-fixtures";
@@ -316,8 +317,9 @@ it("publishes historical totals before the recent weekly tables with direct rate
   expect(weekly.rows.at(-1)?.[0]).toBe(m.stats_partial({ week: snapshot.currentWeek }));
   const html = await renderInRouter(() => routeElement(Stats, { loaderData: snapshot }), "/stats");
   const markdown = publicStatsMarkdown(snapshot);
-  for (const output of [html, markdown]) {
-    expect(output.indexOf(m.stats_reading_cumulative())).toBeLessThan(output.indexOf("33.3%"));
-    expect(output).toContain("2026-07-08");
-  }
+  const caption = escapeRegex(summary.caption);
+  expect(html).toMatch(new RegExp(`<h3[^>]*>${caption}</h3>(?:<div[^>]*>)*<table[^>]*><caption class="sr-only">${caption}</caption>`));
+  expect(markdown).toContain(`### ${summary.caption}`);
+  expect(markdown.indexOf(`### ${summary.caption}`)).toBeLessThan(markdown.indexOf("33.3%"));
+  for (const output of [html, markdown]) expect(output).toContain("2026-07-08");
 });

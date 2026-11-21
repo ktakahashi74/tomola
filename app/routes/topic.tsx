@@ -323,7 +323,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     topicVisible ? hasPostAiMaterial(db, topic.id) : null,
     user && topicReadable ? isTopicSaved(db, user.id, topic.id) : null,
     thread.replyCount >= 2 && topicVisible ? countReplyLanguages(db, topic.id) : 0,
-    writerPromise.then(({ canWriteReply }) => canWriteReply && thread.page === 1 ? articleReadingDisplay(db, topic.id) : null),
+    writerPromise.then(({ canWriteReply }) => canWriteReply ? articleReadingDisplay(db, topic.id) : null),
     countCrawler ? countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, display: browserReading }) : undefined,
   ]);
   const nushiView = { ...nushi, ...nushiPreference, setting: nushiTopic };
