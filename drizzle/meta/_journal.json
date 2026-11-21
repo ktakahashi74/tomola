@@ -862,6 +862,13 @@
       "when": 1795098480035,
       "tag": "0122_remove_nushi_result_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1795237693907,
+      "tag": "0123_home_following",
+      "breakpoints": true
     }
   ]
 }

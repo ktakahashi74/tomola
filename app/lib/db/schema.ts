@@ -257,6 +257,16 @@ export const villageFollows = pgTable("village_follows", {
   index("village_follows_village_idx").on(t.villageId),
 ]);
 
+export const memberFollows = pgTable("member_follows", {
+  followerId: text("follower_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  followedId: text("followed_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  primaryKey({ columns: [t.followerId, t.followedId] }),
+  index("member_follows_followed_idx").on(t.followedId),
+  check("member_follows_distinct_check", sql`${t.followerId} <> ${t.followedId}`),
+]);
+
 export const chatSequences = pgTable("chat_sequences", {
   villageId: text("village_id").primaryKey().references(() => villages.id, { onDelete: "cascade" }),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
@@ -430,6 +440,7 @@ export const profiles = pgTable(
     // Treat names differing only in case, full-width/half-width forms, or composed characters as identical to prevent duplicates.
     handleKey: text("handle_key").notNull(),
     homeArea: text("home_area").notNull(),
+    homeScope: text("home_scope").$type<"all" | "following">().notNull().default("all"),
     defaultVillageId: text("default_village_id").references(() => villages.id),
     defaultVillageReset: boolean("default_village_reset").notNull().default(false),
     villagePreparedAt: timestamp("village_prepared_at", { withTimezone: true }),
@@ -472,6 +483,7 @@ export const profiles = pgTable(
   (t) => [
     check("profiles_handle_check", sql`${t.handle} ~ '^[a-z0-9][a-z0-9_-]{1,29}$'`),
     check("profiles_home_area_check", oneOf(t.homeArea, AREAS)),
+    check("profiles_home_scope_check", oneOf(t.homeScope, ["all", "following"])),
     uniqueIndex("profiles_handle_key_unique").on(t.handleKey),
     index("profiles_avatar_media_idx").on(t.avatarMediaId).where(sql`${t.avatarMediaId} IS NOT NULL`),
     // Null passes CHECK, representing a member who is not suspended.
@@ -1596,7 +1608,7 @@ export const listSeen = pgTable("list_seen", {
 }, t => [
   primaryKey({ columns: [t.userId, t.scope] }),
   index("list_seen_member_order_idx").on(t.userId, t.updatedAt.desc(), t.scope),
-  check("list_seen_scope_check", sql`length(${t.scope}) <= 67 and ${t.scope} ~ '^(/|/a/[A-Za-z]{2,3}(-[A-Za-z]+)?/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$'`),
+  check("list_seen_scope_check", sql`length(${t.scope}) <= 67 and (${t.scope} = '/?scope=following' or ${t.scope} ~ '^(/|/a/[A-Za-z]{2,3}(-[A-Za-z]+)?/?|/v/[a-z0-9]+(-[a-z0-9]+)*/?)$')`),
 ]);
 
 // Private reading list; no copy of a post and no public activity signal.
