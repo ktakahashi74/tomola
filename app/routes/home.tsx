@@ -8,7 +8,6 @@ import { PageHeader } from "~/components/page-header";
 import { HomeInstallGuide } from "~/components/home-install-guide";
 import { PasskeyPrompt } from "~/components/passkey-prompt";
 import { OrderSwitch } from "~/components/order-switch";
-import { ReadingLangMenu } from "~/components/reading-lang-menu";
 import { readingOnlyMark } from "~/lib/reading-lang";
 import { ReadingList } from "~/components/reading-list";
 import { clearReadingParams, readReadingRequest } from "~/lib/reading-page";
@@ -141,8 +140,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         title={m.home_unified_title()}
         hideTitle
         purpose={loaderData.reader ? m.home_intro_guest() : undefined}
-        // One row for everything that changes the list: the order and the filter at the start; the language read and "Open in AI" packed at the end (the first of them has the auto margin).
-        // On a narrow screen the end part wraps as it fits, so no single item is left alone on a line of its own.
         switches={<div className="w-full space-y-2">
           {loaderData.followingAvailable && <Form method="post" action={loaderData.scopeAction} className="flex flex-wrap gap-x-4 gap-y-1" aria-label={m.home_scope_label()}>
             <input type="hidden" name="intent" value="home-scope" />
@@ -151,8 +148,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="relative flex w-full flex-wrap items-center gap-x-3 gap-y-1">
             <OrderSwitch compact order={order} />
             <AsksFilter filter={filter} withLong collapsed />
-            {loaderData.followingAvailable && <ReadingLangMenu choice={loaderData.readingLanguage} className="ms-auto" />}
-            <div className={loaderData.reader ? "ms-auto" : undefined}><OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} /></div>
+            <div className="ms-auto"><OpenInAi mdUrl={aiOpen.mdUrl} mdPath={aiOpen.mdPath} reader={loaderData.reader} /></div>
           </div>
         </div>}
       />

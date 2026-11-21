@@ -25,19 +25,19 @@ test("the home scope survives filters and navigation and can be saved without Ja
   await following.click();
   await expect(following).toHaveAttribute("aria-pressed", "true");
   await expect(page).toHaveURL(`${state().baseURL}/`);
-  await page.goto("/?scope=all");
+  await page.goto("/?scope=all&lang=en&rl=1");
   const more = page.locator('a[data-load-more="true"]').first();
-  expect(new URL((await more.getAttribute("href"))!, state().baseURL).searchParams.get("scope")).toBe("all");
-  await page.goto((await more.getAttribute("href"))!);
+  const nextPage = new URL((await more.getAttribute("href"))!, state().baseURL);
+  expect(Object.fromEntries(nextPage.searchParams)).toMatchObject({ scope: "all", lang: "en", rl: "1" });
+  await page.goto(nextPage.href);
   await expect(all).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("link", { name: m.home_order_activity, exact: true }).click();
   await expect(page).toHaveURL(url => url.searchParams.get("scope") === "all" && url.searchParams.get("order") === "activity" && !url.searchParams.has("list_after"));
+  expect(Object.fromEntries(new URL(page.url()).searchParams)).toMatchObject({ lang: "en", rl: "1" });
   await summary.click();
   await filter.getByRole("link", { name: m.list_questions_only, exact: true }).click();
   await expect(page).toHaveURL(url => url.searchParams.get("scope") === "all" && url.searchParams.get("asks") === "1");
-  await page.locator(".reading-lang-menu summary").click();
-  await page.getByRole("navigation", { name: m.reading_lang_label }).getByRole("link", { name: "English", exact: true }).click();
-  await expect(page).toHaveURL(url => url.searchParams.get("lang") === "en" && url.searchParams.get("scope") === "all");
+  expect(Object.fromEntries(new URL(page.url()).searchParams)).toMatchObject({ lang: "en", rl: "1" });
   await page.goto("/?scope=following&order=activity&asks=1");
   const clear = page.getByRole("link", { name: m.home_clear_filter });
   await expect(clear).toHaveAttribute("href", "/?scope=following&order=activity");
@@ -47,9 +47,9 @@ test("the home scope survives filters and navigation and can be saved without Ja
   const native = await browser.newContext({ javaScriptEnabled: false, ignoreHTTPSErrors: true, storageState: await page.context().storageState() });
   try {
     const withoutScripts = await native.newPage();
-    await withoutScripts.goto("/?order=activity&long=1&lang=ja&page=2&scope=following");
+    await withoutScripts.goto("/?order=activity&long=1&lang=ja&rl=1&page=2&scope=following");
     await withoutScripts.getByRole("button", { name: m.home_scope_all, exact: true }).click();
-    await expect(withoutScripts).toHaveURL(`${state().baseURL}/?order=activity&long=1&lang=ja`);
+    await expect(withoutScripts).toHaveURL(`${state().baseURL}/?order=activity&long=1&lang=ja&rl=1`);
     await expect(withoutScripts.getByRole("button", { name: m.home_scope_all, exact: true })).toHaveAttribute("aria-pressed", "true");
   } finally { await native.close(); }
 

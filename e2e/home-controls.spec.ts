@@ -37,12 +37,30 @@ async function controls(page: Page, messages: Messages, area = false) {
   }
 }
 
+async function expectHomeAiLayout(page: Page, messages: Messages) {
+  const order = page.getByRole("navigation", { name: messages.home_order_label, exact: true });
+  const ai = page.getByRole("button", { name: messages.open_in_ai, exact: true });
+  const menu = page.getByRole("button", { name: messages.open_in_ai_menu, exact: true });
+  await expect(ai).toBeVisible();
+  await expect(menu).toBeVisible();
+  const row = (await order.locator("..").boundingBox())!;
+  const primary = (await ai.boundingBox())!;
+  const more = (await menu.boundingBox())!;
+  expect(Math.abs(more.x + more.width - row.x - row.width)).toBeLessThan(1);
+  expect(more.y).toBe(primary.y);
+  if (page.viewportSize()?.width === 1280) {
+    const sorting = (await order.boundingBox())!;
+    expect(primary.y < sorting.y + sorting.height && sorting.y < primary.y + primary.height).toBe(true);
+  }
+}
+
 async function evidence(page: Page, name: string, messages: Messages) {
   const directory = path.join(process.cwd(), ".data", "home-controls");
   fs.mkdirSync(directory, { recursive: true });
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} at ${width}px`).toBe(true);
+    if (new URL(page.url()).pathname === "/") await expectHomeAiLayout(page, messages);
     const navigations = page.getByRole("navigation", { name: messages.home_order_label, exact: true })
       .or(page.getByRole("navigation", { name: messages.list_filter_label, exact: true }))
       .or(page.getByRole("navigation", { name: messages.home_origlang_label, exact: true }));
@@ -64,6 +82,7 @@ test("home and language lists retain accessible controls for public readers", as
         for (const width of [390, 1280]) {
           await page.setViewportSize({ width, height: 900 });
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          if (url === "/") await expectHomeAiLayout(page, messages);
           if (url === "/" && width === 390) {
             const order = page.getByRole("navigation", { name: messages.home_order_label, exact: true });
             const filter = page.locator(`summary:is([aria-label="${messages.home_filter_label}"], [aria-label^="${messages.filter_prefix}"])`);
