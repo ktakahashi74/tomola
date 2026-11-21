@@ -2,7 +2,7 @@ import { readingStatsSection } from "./reading-stats-view";
 import type { PublicStats } from "~/lib/public-stats.server";
 import { m } from "~/paraglide/messages.js";
 
-type Table = { caption: string; headers: string[]; rows: string[][] };
+type Table = { caption: string; showCaption?: boolean; headers: string[]; rows: string[][] };
 type TimeNote = { iso: string; label: (time: string) => string };
 export type StatsSection = { id: string; title: string; notes: Array<string | TimeNote>; tables: Table[] };
 const count = (value: number | null) => value === null ? m.stats_small() : String(value);
@@ -66,10 +66,12 @@ export function publicStatsMarkdown(stats: PublicStats): string {
   return [`# ${m.stats_title()}`, m.stats_intro(), m.stats_period(), m.stats_updated({ at: stats.generatedAt }), m.stats_privacy(),
     ...publicStatsSections(stats).flatMap(section => [
       `## ${section.title}`, ...section.notes.map(note => md(typeof note === "string" ? note : note.label(note.iso))),
-      ...section.tables.map(table => [
-        `| ${table.headers.map(md).join(" | ")} |`, `| ${table.headers.map(() => "---").join(" | ")} |`,
+      ...section.tables.flatMap(table => [
+        ...(table.showCaption ? [`### ${table.caption}`] : []),
+        [`| ${table.headers.map(md).join(" | ")} |`, `| ${table.headers.map(() => "---").join(" | ")} |`,
         ...table.rows.map(row => `| ${row.map(md).join(" | ")} |`),
-      ].join("\n")),
+        ].join("\n"),
+      ]),
     ]),
   ].join("\n\n") + "\n";
 }

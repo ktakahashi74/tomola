@@ -1,8 +1,11 @@
+import { articleReadingDisplay, countReading, topArticleReadings } from "~/lib/reading-counts.server";
+import { deleteEntry } from "~/lib/moderation.server";
+import type { ModScope } from "~/lib/roles.server";
 import { eq } from "drizzle-orm";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { appeals, entries, entryMentionSnapshots, entryRevisions, memberSignatures, moderationActions, reports, retentionHold, translationReports } from "~/lib/db/schema";
+import { appeals, entries, entryMentionSnapshots, entryReadingCounts, entryRevisions, memberSignatures, moderationActions, reports, retentionHold, translationReports } from "~/lib/db/schema";
 import { createAppeal, decideAppeal, getAppealableAction, listOpenAppeals } from "~/lib/appeals.server";
 import { pruneDeletedEntries } from "~/lib/entry-retention.server";
 import { runMaintenanceCleanup } from "~/lib/jobs/maintenance-jobs.server";
@@ -170,5 +173,32 @@ it.skipIf(!PG_MODE)("an appeal opened during cleanup's entry lock is serialized 
     expect((await pruneDeletedEntries(db, NOW)).entries).toBe(0);
   } finally { release(); }
   expect(await first).toMatchObject({ ok: true });
+  expect((await db.select().from(entries).where(eq(entries.id, topic.id)))[0].body).toBe("Private source");
+});
+
+it("keeps operator-deleted counts for restoration and purges only counts after the cutoff without an open appeal", async () => {
+  const db = await world();
+  const topic = await post(db, { deletedAt: null });
+  const opts = { method: "browser" as const, readerId: "r", display: { sourceLang: "en", readLang: "en", isTranslated: false } as const, now: ago(32) };
+  for (let i = 0; i < 5; i++) expect(await countReading(db, topic.id, opts)).toEqual({ counted: true });
+  const scope: ModScope = { operator: true, langs: [] };
+  const actor = { id: "m", scope };
+  const deleteTopic = (now = ago(31)) => deleteEntry(db, actor, { entryId: topic.id, reason: "other", note: "Review fixture." }, { now });
+  expect(await deleteTopic()).toMatchObject({ ok: true });
+  const [action] = await db.select().from(moderationActions).where(eq(moderationActions.targetEntryId, topic.id));
+  expect(await articleReadingDisplay(db, topic.id)).toBeNull();
+  expect((await topArticleReadings(db, ago(31))).articles).toEqual([]);
+  expect(await createAppeal(db, "a", action.id, "Please review.", { now: ago(30) })).toMatchObject({ ok: true });
+  await pruneDeletedEntries(db, NOW);
+  expect((await db.select().from(entryReadingCounts)).map(row => row.count)).toEqual([5]);
+  const [appeal] = await db.select().from(appeals);
+  expect(await decideAppeal(db, { ...actor, id: "r" }, appeal.id, { decision: "overturned", note: "Restore fixture." }, { now: ago(1) })).toMatchObject({ ok: true, reversed: true });
+  expect(await articleReadingDisplay(db, topic.id)).toMatchObject({ total: 5 });
+  expect((await topArticleReadings(db, ago(31))).articles).toMatchObject([{ id: topic.id, browser: 5 }]);
+  expect(await deleteTopic(NOW)).toMatchObject({ ok: true });
+  await pruneDeletedEntries(db, new Date(NOW.getTime() + 30 * DAY));
+  expect((await db.select().from(entryReadingCounts)).map(row => row.count)).toEqual([5]);
+  await pruneDeletedEntries(db, new Date(NOW.getTime() + 31 * DAY));
+  expect(await db.select().from(entryReadingCounts)).toEqual([]);
   expect((await db.select().from(entries).where(eq(entries.id, topic.id)))[0].body).toBe("Private source");
 });

@@ -151,7 +151,7 @@ it("reports only content failures in every target language, leaves the source vi
 it("rounds unopened source and original-reading languages into anonymous other buckets", async () => {
   const { db, id } = await fixture();
   await db.update(entries).set({ lang: "de" }).where(eq(entries.id, id));
-  await countReading(db, id, { method: "browser", lang: "de", source: "none" });
+  await countReading(db, id, { method: "browser", display: { sourceLang: "de", readLang: "de", isTranslated: false }, source: "none" });
   expect((await db.select().from(readingCounts)).find(row => row.count > 0)).toMatchObject({ sourceLang: "other", readLang: "other" });
 });
 

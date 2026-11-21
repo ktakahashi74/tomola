@@ -1,35 +1,38 @@
 import { and, eq, isNull, lt, notInArray, sql, type SQL } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
-import { appeals, divergences, entries, entryEmbeddings, entryMedia, entryMentionSnapshots, entryReferences, entryRevisions, memberSignatures, moderationActions, reports, segments, translationReports, translationRevisions, translations } from "~/lib/db/schema";
+import { appeals, divergences, entries, entryEmbeddings, entryMedia, entryMentionSnapshots, entryReadingCounts, entryReferences, entryRevisions, memberSignatures, moderationActions, reports, segments, translationReports, translationRevisions, translations } from "~/lib/db/schema";
 import { RETENTION, RETENTION_BATCH_SIZE, PURGED_QUESTION_TITLE, daysBefore } from "~/lib/retention";
 import { deleteRetentionRows, updateRetentionRows, drainRetentionBatches, type RetentionResults } from "~/lib/retention-batch.server";
 
 export type EntryRetentionCounts = { entries: number; revisionsDeleted: number; revisionsPruned: number };
 
-// These are copies or indexes of the original content, not other members' text.
-const derivatives = [entryMentionSnapshots, memberSignatures, translations, translationRevisions, entryEmbeddings, segments, divergences, entryMedia] as const;
+// These derivatives are tied to the entry and contain no other members' text.
+const derivatives = [entryMentionSnapshots, memberSignatures, translations, translationRevisions, entryEmbeddings, segments, divergences, entryMedia, entryReadingCounts] as const;
 const referencedRevision = sql`exists (select 1 from ${moderationActions} where ${moderationActions.revisionId} = ${entryRevisions.id})`;
 const pendingRevision = sql`(${entryRevisions.body} <> '' or ${entryRevisions.title} is not null or not ${referencedRevision})`;
 
 const sourcePending = sql`(${entries.body} <> '' or (${entries.title} is not null and ${entries.title} <> ${PURGED_QUESTION_TITLE}) or ${entries.sourceHash} is not null)`;
 const excerptPending = sql`${translationReports.excerpt} <> ''`;
 
+// Keep reversible operator-deleted source content under its existing policy.
+const canPurgeContent = and(isNull(entries.hiddenAt),
+  sql`not exists (select 1 from ${moderationActions} where ${moderationActions.id} = ${entries.moderationActionId} and ${moderationActions.action} = 'delete')`)!;
+const hasReadingCounts = sql`exists (select 1 from ${entryReadingCounts} where ${entryReadingCounts.entryId} = ${entries.id})`;
+
 function eligible(now: Date): SQL {
   return and(
-    lt(entries.deletedAt, daysBefore(now, RETENTION.deletedEntryDays)), isNull(entries.hiddenAt),
-    // An operator deletion is reversible and is not an author's deletion.
-    sql`not exists (select 1 from ${moderationActions} where ${moderationActions.id} = ${entries.moderationActionId} and ${moderationActions.action} = 'delete')`,
+    lt(entries.deletedAt, daysBefore(now, RETENTION.deletedEntryDays)),
     // Include member actions whose underlying report concerns this post.
     sql`not exists (select 1 from ${appeals} inner join ${moderationActions} on ${moderationActions.id} = ${appeals.actionId}
       left join ${reports} on ${reports.id} = ${moderationActions.reportId}
       where ${appeals.status} = 'open' and (${moderationActions.targetEntryId} = ${entries.id} or ${reports.entryId} = ${entries.id}
         or ${moderationActions.revisionId} in (select ${entryRevisions.id} from ${entryRevisions} where ${entryRevisions.entryId} = ${entries.id})))`,
     // A source can already be blank while a bounded derivative backlog remains.
-    sql`(${sourcePending}
+    sql`(${hasReadingCounts} or (${canPurgeContent} and (${sourcePending}
       or exists (select 1 from ${entryRevisions} where ${entryRevisions.entryId} = ${entries.id} and ${pendingRevision})
       or exists (select 1 from ${translationReports} where ${translationReports.entryId} = ${entries.id} and ${excerptPending})
       or exists (select 1 from ${entryReferences} where ${entryReferences.sourceEntryId} = ${entries.id})
-      or ${sql.join(derivatives.map(table => sql`exists (select 1 from ${table} where ${table.entryId} = ${entries.id})`), sql` or `)})`,
+      or ${sql.join(derivatives.map(table => sql`exists (select 1 from ${table} where ${table.entryId} = ${entries.id})`), sql` or `)})))`,
   )!;
 }
 
@@ -40,13 +43,18 @@ export async function pruneDeletedEntries(db: Db, now: Date, results?: Retention
   await drainRetentionBatches(db, "entry_content", async tx => {
     // Serialize appeals and source erasure on the entry, and share one mutation
     // budget across its source, revisions and every derivative table.
-    const candidates = await tx.select({ id: entries.id, asksStance: entries.asksStance, sourcePending: sql<boolean>`${sourcePending}` }).from(entries)
+    const candidates = await tx.select({ id: entries.id, asksStance: entries.asksStance, sourcePending: sql<boolean>`${sourcePending}`, canPurgeContent: sql<boolean>`${canPurgeContent}` }).from(entries)
       .where(and(condition, blocked.size ? notInArray(entries.id, [...blocked]) : undefined)).orderBy(entries.deletedAt, entries.id).limit(RETENTION_BATCH_SIZE).for("no key update", { skipLocked: true });
     let changed = 0;
     const batchCounts: EntryRetentionCounts = { entries: 0, revisionsDeleted: 0, revisionsPruned: 0 };
     for (const entry of candidates) {
       if (changed === RETENTION_BATCH_SIZE) break;
       const before = changed;
+      if (!entry.canPurgeContent) {
+        changed += await deleteRetentionRows(tx, entryReadingCounts, eq(entryReadingCounts.entryId, entry.id), RETENTION_BATCH_SIZE - changed);
+        if (changed === before) blocked.add(entry.id);
+        continue;
+      }
       if (entry.sourcePending) {
         await tx.update(entries).set({ body: "", title: entry.asksStance ? PURGED_QUESTION_TITLE : null, sourceHash: null, html: null, cardHtml: null, htmlVersion: 0 }).where(eq(entries.id, entry.id));
         changed++;
@@ -74,12 +82,13 @@ export async function pruneDeletedEntries(db: Db, now: Date, results?: Retention
     counts.revisionsPruned += batchCounts.revisionsPruned;
     return { removed: changed, more: candidates.length > 0 };
   }, async () => {
-    const { rows } = await db.execute(sql`select coalesce(sum(
+    const { rows } = await db.execute(sql`select coalesce(sum(case when ${canPurgeContent} then
       (${sourcePending})::int
       + (select count(*) from ${entryRevisions} where ${entryRevisions.entryId} = ${entries.id} and ${pendingRevision})
       + (select count(*) from ${entryReferences} where ${entryReferences.sourceEntryId} = ${entries.id})
       + (select count(*) from ${translationReports} where ${translationReports.entryId} = ${entries.id} and ${excerptPending})
       + ${sql.join(derivatives.map(table => sql`(select count(*) from ${table} where ${table.entryId} = ${entries.id})`), sql` + `)}
+    else (select count(*) from ${entryReadingCounts} where ${entryReadingCounts.entryId} = ${entries.id}) end
     ), 0)::int as count from ${entries} where ${condition}`) as { rows: { count: number }[] };
     return rows[0].count;
   }, results);

@@ -1,6 +1,6 @@
-import { ReadingMetrics } from "~/components/reading-metrics";
+import { ArticleReadingMetrics, ReadingMetrics } from "~/components/reading-metrics";
 import { recentMotionDelivery } from "~/lib/motion-delivery.server";
-import { weeklyReadings } from "~/lib/reading-counts.server";
+import { topArticleReadings, weeklyReadings } from "~/lib/reading-counts.server";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { QualityMetrics } from "~/components/quality-metrics";
 import { evaluationHistory } from "~/lib/eval/metrics.server";
@@ -27,7 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { db } = await requireOperator(request);
   const now = new Date();
   const metrics = await getMetrics(db, now);
-  const [history, qualitySignals, reading] = await Promise.all([evaluationHistory(db), translationQualitySignals(db), weeklyReadings(db, now)]);
+  const [history, qualitySignals, reading, articleReadings] = await Promise.all([evaluationHistory(db), translationQualitySignals(db), weeklyReadings(db, now), topArticleReadings(db, now)]);
   const weeks = observationWeeks(now).map(day);
   // The distance points are grouped by pair of areas, one cell per week (the points come in order of the weeks).
   const pairs: Array<{ a: Area; b: Area; cells: Array<{ questions: number; people: number; sumDistance: number; mean: number | null }> }> = [];
@@ -42,6 +42,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     questionReportsLabel: m.post_ask_reports_title(),
     qualitySignals,
     reading,
+    articleReadings,
     weeks,
     crossAreaReplyRate: metrics.crossAreaReplyRate.map((w) => ({ ...w, weekStart: day(w.weekStart) })),
     insightful: metrics.crossAreaInsightful.map((w) => ({ ...w, weekStart: day(w.weekStart) })),
@@ -174,6 +175,7 @@ export default function AdminMetrics({ loaderData }: Route.ComponentProps) {
       <p><Link className="underline" to="/admin/ai-question-reports">{loaderData.questionReportsLabel}</Link></p>
 
       <ReadingMetrics readings={loaderData.reading} />
+      <ArticleReadingMetrics readings={loaderData.articleReadings} />
       <QualityMetrics history={loaderData.history} signals={loaderData.qualitySignals} />
 
       <section className="space-y-2">

@@ -1,5 +1,5 @@
 import { bodyWithinLimits } from "./body-length";
-import { postAiMaterials } from "./db/schema";
+import { entryReadingCounts, postAiMaterials } from "./db/schema";
 import { requestNushi } from "./nushi.server";
 import { readNushiAnswer } from "./nushi.server";
 import { resolvePostLanguage } from "./lang-detect";
@@ -472,7 +472,10 @@ export async function softDeleteEntry(
       .where(and(eq(entries.id, entryId), isNull(entries.deletedAt)))
       .returning({ id: entries.id, kind: entries.kind, threadId: entries.threadId, altOf: entries.altOf });
     if (!row) return { ok: false as const, error: "not_found" as const };
-    if (row.kind === "topic" && opts.moderationActionId === undefined) await tx.delete(postAiMaterials).where(eq(postAiMaterials.topicId, row.id));
+    if (row.kind === "topic" && opts.moderationActionId === undefined) {
+      await tx.delete(postAiMaterials).where(eq(postAiMaterials.topicId, row.id));
+      await tx.delete(entryReadingCounts).where(eq(entryReadingCounts.entryId, row.id));
+    }
     if (row.kind === "reply" && row.threadId !== null) await recomputeThreadActivity(tx, row.threadId);
     // Deleting an alternative framing changes the original question's Markdown (alternative-framing list). Emit a change for the original too.
     if (row.altOf !== null) await touchQuestion(tx, row.altOf, now);

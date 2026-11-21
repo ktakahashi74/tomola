@@ -36,7 +36,7 @@ import type { ReasonPick } from "../reasons";
 import { user } from "./auth-schema";
 import { VILLAGE_INVITE_KINDS, VILLAGE_INVITE_STATES } from "../villages";
 
-import { READING_METHODS, READING_SOURCES } from "../reading-sources.server";
+import { READING_METHODS, READING_SOURCES, type ReadingMethod } from "../reading-sources.server";
 
 export * from "./auth-schema";
 export * from "./oauth-schema";
@@ -1810,6 +1810,27 @@ export const readingCounts = pgTable("reading_counts", {
   check("reading_counts_count_check", sql`${t.count} >= 0`),
   check("reading_counts_machine_source_check", sql`${t.method} = 'browser' or ${t.source} = 'none'`),
 ]);
+
+// Daily public-article aggregates. No reader, device, IP, referrer, user agent,
+// or per-read event is stored. Article-linked counts are restricted to eligible
+// members on the article page and to operators for operational review.
+export const entryReadingCounts = pgTable("entry_reading_counts", {
+  entryId: bigint("entry_id", { mode: "number" }).notNull().references(() => entries.id, { onDelete: "cascade" }),
+  day: date("day").notNull(),
+  method: text("method").notNull().$type<ReadingMethod>(),
+  isTranslated: boolean("is_translated").notNull(),
+  count: bigint("count", { mode: "number" }).notNull().default(0),
+}, t => [
+  primaryKey({ columns: [t.entryId, t.day, t.method, t.isTranslated] }),
+  index("entry_reading_counts_day_entry_idx").on(t.day, t.entryId),
+  check("entry_reading_counts_method_check", oneOf(t.method, READING_METHODS)),
+  check("entry_reading_counts_count_check", sql`${t.count} >= 0`),
+]);
+
+export const entryReadingMetricState = pgTable("entry_reading_metric_state", {
+  id: integer("id").primaryKey(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [check("entry_reading_metric_state_singleton", sql`${t.id} = 1`)]);
 
 // AI replies have no member identity and never enter human post aggregates.
 export const nushiRequests = pgTable("nushi_requests", {

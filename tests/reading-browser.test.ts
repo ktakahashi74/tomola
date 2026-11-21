@@ -1,8 +1,14 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterEach, expect, it, vi } from "vitest";
 import { setupRouteHarness, type RouteHarness } from "./helpers/route-harness";
-import { entries, profiles, rateLimits, readingCounts, translations } from "~/lib/db/schema";
+import { entries, entryReadingCounts, profiles, rateLimits, readingCounts, translations } from "~/lib/db/schema";
 import { createTopic } from "~/lib/entries.server";
+import { loader as topicLoader } from "~/routes/topic";
+import { loader as adminLoader } from "~/routes/admin-metrics";
+import { EXCLUDED_RESIDENCE_COUNTRIES } from "./helpers/operator";
+import { DELETED_MEMBER_ID, DELETED_MEMBER_EMAIL } from "~/lib/deleted-member";
+import { user } from "~/lib/db/schema";
+import { signReadingMark } from "~/lib/reading-mark.server";
 import { action } from "~/routes/topic-translations";
 import { TRANSLATION_READ_CALLS_HOURLY } from "~/lib/translation-on-read.server";
 import { hitMemoryReadLimit, hitRateLimit } from "~/lib/rate-limit.server";
@@ -21,11 +27,11 @@ async function seed() {
   await h.db.insert(translations).values({ entryId: result.id, lang: "en", field: "body", kind: "primary", text: "Read.", sourceHash: topic.sourceHash, engine: "fake" });
   return result.id;
 }
-function post(id: number, search: string, opts: { intent?: "read" | "seen" | "status" | "request"; ids?: number[]; as?: string; internal?: boolean; shared?: boolean; referrerHost?: string; headers?: Record<string, string> } = {}) {
+function post(id: number, search: string, opts: { intent?: "read" | "seen" | "status" | "request"; ids?: number[]; as?: string; internal?: boolean; shared?: boolean; referrerHost?: string; mark?: string; shown?: "original" | "translation"; headers?: Record<string, string> } = {}) {
   const base = h.request(`/t/${id}/translations${search}`, { as: opts.as });
   const headers = new Headers(base.headers);
   Object.entries({ origin: "http://localhost:5173", referer: `http://localhost:5173/t/${id}${search}`, "content-type": "application/json", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty", ...opts.headers }).forEach(([key, value]) => headers.set(key, value));
-  return action(h.args(new Request(base.url, { method: "POST", headers, body: JSON.stringify({ intent: opts.intent ?? "read", ids: opts.ids ?? [], internal: opts["internal"] ?? false, shared: opts.shared ?? new URLSearchParams(search).has("sl"), referrerHost: opts.referrerHost ?? "" }) }), { id: String(id) }));
+  return action(h.args(new Request(base.url, { method: "POST", headers, body: JSON.stringify({ intent: opts.intent ?? "read", ids: opts.ids ?? [], internal: opts["internal"] ?? false, shared: opts.shared ?? new URLSearchParams(search).has("sl"), referrerHost: opts.referrerHost ?? "", mark: opts.mark, shown: opts.shown }) }), { id: String(id) }));
 }
 it("derives source and displayed languages server-side, separates shares and internal reads, and ignores reply pagination", async () => {
   const id = await seed();
@@ -90,4 +96,59 @@ it("limits anonymous read notifications in memory without storing IPs and preser
     await hitRateLimit(h.db, { key: "ip:translation-read-calls:192.0.2.41", ...rule, cost: rule.limit });
     expect(await h.outcome(() => post(id, "?lang=en", { intent, headers }))).toMatchObject({ status: 429 });
   }
+});
+
+it("uses the loader's signed display after an edit and verifies unsigned, expired, and altered notifications", async () => {
+  const id = await seed();
+  const search = `?lang=en&tr=${id}`;
+  const { readingMark } = await topicLoader(h.args(h.request(`/t/${id}${search}`), { id: String(id) }));
+  expect(readingMark).toBeTruthy();
+  await h.db.update(entries).set({ lang: "de" }).where(eq(entries.id, id));
+  await h.db.delete(translations).where(eq(translations.entryId, id));
+  expect(await post(id, search, { mark: readingMark!, shown: "translation" })).toMatchObject({ data: { ok: true, counted: true } });
+  const expired = signReadingMark(id, { sourceLang: "ja", readLang: "en", isTranslated: true }, Date.now() - 16 * 60_000);
+  const wrongArticle = signReadingMark(id + 1, { sourceLang: "ja", readLang: "en", isTranslated: true });
+  for (const mark of [undefined, expired, wrongArticle, readingMark! + ".extra"]) {
+    expect(await post(id, search, { mark, shown: "translation" })).toMatchObject({ data: { ok: true, counted: true } });
+  }
+  expect(await post(id, search, { mark: readingMark!, shown: "original" })).toMatchObject({ data: { ok: true, counted: true } });
+  expect((await h.db.select().from(entryReadingCounts)).map(({ isTranslated, count }) => [isTranslated, count])).toEqual(expect.arrayContaining([[true, 1], [false, 5]]));
+  expect((await h.db.select().from(readingCounts)).filter(row => row.count)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ sourceLang: "ja", readLang: "en", count: 1 }),
+    expect.objectContaining({ sourceLang: "de", readLang: "de", count: 5 }),
+  ]));
+});
+
+it("rolls back the site-wide write on an article upsert failure and returns counted false", async () => {
+  const id = await seed();
+  await h.db.execute(sql`alter table entry_reading_counts add constraint fixture_reject_read check (count = 0)`);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  expect(await post(id, "?lang=en", { shown: "translation" })).toMatchObject({ data: { ok: true, counted: false } });
+  expect(await h.db.select().from(entryReadingCounts)).toEqual([]);
+  expect((await h.db.select().from(readingCounts)).every(row => row.count === 0)).toBe(true);
+  expect(warn.mock.calls).toEqual([["[reading-counts] Could not count read"]]);
+});
+
+it("shares article counts only with eligible members and continues counting articles by a departed author", async () => {
+  const id = await seed();
+  const article = (as?: string) => topicLoader(h.args(h.request(`/t/${id}?lang=en`, { as }), { id: String(id) }));
+  const stats = (as: string) => adminLoader(h.args(h.request("/admin/metrics", { as })));
+  await h.db.insert(user).values({ id: DELETED_MEMBER_ID, name: "", email: DELETED_MEMBER_EMAIL });
+  await h.db.update(entries).set({ authorId: DELETED_MEMBER_ID }).where(eq(entries.id, id));
+  for (let i = 0; i < 5; i++) expect(await post(id, "?lang=en", { as: "readvisitor" })).toMatchObject({ data: { counted: true } });
+  expect((await article("readvisitor")).articleViews).toMatchObject({ total: 5, translated: 5 });
+  expect((await article()).articleViews).toBeNull();
+  expect(await h.outcome(() => stats("readvisitor"))).toMatchObject({ status: 404 });
+  vi.stubEnv("OPERATOR_EMAILS", "readsource@example.com");
+  expect((await stats("readsource")).articleReadings.articles).toMatchObject([{ id, browser: 5, translated: 5 }]);
+  for (const restriction of [
+    { suspendedUntil: new Date(Date.now() + 86_400_000) },
+    { suspendedUntil: null, residenceCountry: EXCLUDED_RESIDENCE_COUNTRIES[0] },
+    { residenceCountry: "JP", trialConsentAt: null, trialConsentVersion: null },
+  ]) {
+    await h.db.update(profiles).set(restriction).where(eq(profiles.userId, h.ids.readvisitor));
+    expect((await article("readvisitor")).articleViews).toBeNull();
+  }
+  await h.signIn("pendingread", { profile: false });
+  expect(await h.outcome(() => article("pendingread"))).toMatchObject({ status: 302, location: "/onboarding" });
 });

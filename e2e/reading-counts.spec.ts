@@ -13,7 +13,7 @@ test("anonymous original and translated displays report once, and client navigat
   page.on("response", response => { const request = response.request(); if (request.method() === "POST" && request.url().includes("/translations") && request.postDataJSON()?.intent === "read") responses.push(response.status()); });
   await page.goto(`/t/${first}?lang=ja&sl=ja`);
   await expect.poll(() => responses.length).toBe(1);
-  expect(reads).toEqual([{ intent: "read", ids: [], internal: false, shared: true, referrerHost: "" }]);
+  expect(reads).toEqual([{ intent: "read", ids: [], internal: false, shared: true, referrerHost: "", shown: "original", mark: expect.any(String) }]);
   await waitForClientRoute(page);
   for (const search of ["?lang=en", "?lang=ja&tag=agree", "?lang=ja&page=2", "?lang=ja&page=1", "?lang=ja&posted=7"]) {
     await page.evaluate(async path => {
@@ -22,25 +22,26 @@ test("anonymous original and translated displays report once, and client navigat
     await waitForClientRoute(page);
     await expect(page.locator(`#p-${first}`)).toBeVisible();
   }
-  expect(reads).toHaveLength(1);
+  await expect.poll(() => responses.length).toBe(2);
+  expect(reads[1]).toMatchObject({ internal: true, shown: "translation" });
   await page.evaluate(async id => {
     await (window as unknown as { __reactRouterDataRouter: { navigate(path: string): Promise<void> } }).__reactRouterDataRouter.navigate(`/t/${id}?lang=en&sl=en`);
   }, next);
   await expect(page.locator(`#p-${next} .longread`)).toHaveAttribute("lang", "en");
-  await expect.poll(() => responses.length).toBe(2);
-  expect(reads[1].internal).toBe(true);
+  await expect.poll(() => responses.length).toBe(3);
+  expect(reads[2].internal).toBe(true);
   await page.evaluate(() => (window as unknown as { __reactRouterDataRouter: { revalidate(): void } }).__reactRouterDataRouter.revalidate());
   await waitForClientRoute(page);
-  expect(responses).toEqual([200, 200]);
-  expect(reads).toHaveLength(2);
+  expect(responses).toEqual([200, 200, 200]);
+  expect(reads).toHaveLength(3);
   await page.evaluate(() => { location.hash = "reply"; });
   await waitForClientRoute(page);
-  expect(reads).toHaveLength(2);
+  expect(reads).toHaveLength(3);
   await page.evaluate(async path => {
     await (window as unknown as { __reactRouterDataRouter: { navigate(path: string): Promise<void> } }).__reactRouterDataRouter.navigate(path);
   }, `/t/${first}?lang=en`);
   await waitForClientRoute(page);
-  expect(reads).toHaveLength(2);
+  expect(reads).toHaveLength(3);
 });
 
 test("hidden documents wait for visibility and prefetched HTML never reports a browser read", async ({ page }) => {
@@ -79,4 +80,13 @@ test("the first article after entering on a list is internal even before another
   expect((await report).status()).toBe(200);
   expect(reads).toHaveLength(1);
   expect(reads[0]).toMatchObject({ internal: true, referrerHost: "" });
+});
+
+test("keeps article-linked counts off public village lists", async ({ request }) => {
+  const [, , , id] = fixtures();
+  const response = await request.get("/v/reading-counts-fixture?lang=en");
+  expect(response.status()).toBe(200);
+  const html = await response.text();
+  expect(html).toContain(`href="/t/${id}`);
+  expect(html).not.toMatch(/918273|data-article-views/);
 });

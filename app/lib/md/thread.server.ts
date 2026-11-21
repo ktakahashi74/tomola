@@ -19,7 +19,7 @@ import { isoSeconds, mdUrl, replyCanonical, siteUrl, threadCanonical, twinPreamb
 import { listAlternativeRefs, listObjectionRefs } from "~/lib/objections.server";
 import { checkPagination, pageCount, REPLIES_PER_PAGE } from "~/lib/pagination";
 import { segmentId } from "~/lib/segment";
-import type { Area, Lang } from "~/lib/languages";
+import type { Area, Lang, SourceLang } from "~/lib/languages";
 import { loadReactions } from "~/lib/votes.server";
 import { relatedMarkdownBlock } from "~/lib/md/related.server";
 import { enabledTargetLangs } from "~/lib/enabled-langs.server";
@@ -389,7 +389,12 @@ export async function buildThreadMarkdown(db: Db, threadId: number, opts: Thread
   );
   if (!topic.hiddenAt) blocks.push(...await nushiMarkdownBlocks(db, threadId, [...(opts.page === 1 ? [threadId] : []), ...shownReplies.map(reply => reply.id)], opts.lang && opts.lang !== "all" ? opts.lang : "en"));
   const markdown = joinBlocks(blocks);
-  if (opts.readingMethod && opts.page === 1) await countReading(db, threadId, { method: opts.readingMethod, readerId: opts.readerId,
-    lang: opts.lang === "all" ? opts.displayLang ?? topic.lang as Lang : opts.lang ?? topic.lang as Lang });
+  if (opts.readingMethod && opts.page === 1 && contentShown(topic)) {
+    const sourceLang = topic.lang as SourceLang;
+    const resolvedLang = opts.lang === "all" ? opts.displayLang ?? sourceLang : opts.lang ?? sourceLang;
+    const isTranslated = tr.shown.get(threadId)?.some(translation => translation.lang === resolvedLang) ?? false;
+    await countReading(db, threadId, { method: opts.readingMethod, readerId: opts.readerId,
+      display: { sourceLang, readLang: isTranslated ? resolvedLang : sourceLang, isTranslated } });
+  }
   return markdown;
 }

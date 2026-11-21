@@ -1,3 +1,4 @@
+import { ARTICLE_AUTHOR, ARTICLE_OPERATOR, ARTICLE_RESTRICTED, ARTICLE_SUSPENDED, ARTICLE_UNCONSENTED } from "./article-reading-fixtures";
 import type { SeedMember } from "../e2e/member-fixtures";
 import { EARLY_MEMBERS } from "../e2e/early-members";
 
@@ -12,6 +13,9 @@ export const PROD_MEMBERS: readonly SeedMember[] = [
   { email: "scribe_other_prod@example.com", handle: "scribe_other_prod", homeArea: "en", uiLocale: "en" },
   { email: "older_keep_prod@example.com", handle: "older_keep_prod", homeArea: "en", uiLocale: "en" },
   { email: "style_preloads_reader@example.com", handle: "style_preloads_reader", homeArea: "en", uiLocale: "en" },
+  ...[ARTICLE_AUTHOR, ARTICLE_OPERATOR, ARTICLE_SUSPENDED, ARTICLE_UNCONSENTED, ARTICLE_RESTRICTED].map(email => ({
+    email, handle: email.split("@")[0], homeArea: "en" as const, uiLocale: "en" as const,
+  })),
   ...EARLY_MEMBERS,
   { email: "pat@example.com", handle: "member_page_pat", homeArea: "en", uiLocale: "en" },
   { email: "kai@example.com", handle: "earlywriter", homeArea: "en", uiLocale: "en" },

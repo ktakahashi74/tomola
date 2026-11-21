@@ -42,9 +42,9 @@ import { TranslationReportForm } from "~/components/translation-report-form";
 import { getReader, getRequestViewer, getSessionUser, requireMember, requireWriter } from "~/lib/auth/session.server";
 import { getWriter } from "~/lib/members.server";
 import { distributionViewerFor, readDistributions } from "~/lib/distribution.server";
-import { countReading } from "~/lib/reading-counts.server";
+import { articleReadingDisplay, countReading } from "~/lib/reading-counts.server";
 import { isAiCrawler } from "~/lib/reading-sources.server";
-import { browserReadingLanguage } from "~/lib/reading-language.server";
+import { signReadingMark, type ReadingDisplay } from "~/lib/reading-mark.server";
 import { displayLangFor, langCarry, readingLanguageChoice, screenReadLangsFor } from "~/lib/display-lang.server";
 import { defaultPostLang } from "~/lib/profiles.server";
 import { parseIdSet } from "~/lib/display";
@@ -260,6 +260,11 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     materialWarning: warning ? { text: m.ai_material_instruction_warning(), label: m.ai_material_link(), href: `/t/${topic.id}/ai-materials` } : null,
   })) : null;
   const alternateLang = url.searchParams.get("lang");
+  const articleDisplay = displayOf(topic.id);
+  const browserReading: ReadingDisplay = {
+    sourceLang: topic.lang, readLang: articleDisplay.shown === "original" ? topic.lang : displayLang,
+    isTranslated: articleDisplay.shown !== "original",
+  };
   const countCrawler = request.method === "GET" && url.pathname === `/t/${topic.id}` && thread.page === 1 && topicVisible &&
     !/prefetch/i.test(`${request.headers.get("purpose")} ${request.headers.get("sec-purpose")}`) &&
     isAiCrawler(request.headers.get("user-agent") ?? "");
@@ -300,7 +305,7 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
   })();
   const [
     stancePart, parents, target, postedNotice, village, share, { nushi, refreshable }, nushiPreference, nushiTopic,
-    { canWriteReply, nushiAvailable }, nushiReply, material, saved, replyLangCount,
+    { canWriteReply, nushiAvailable }, nushiReply, material, saved, replyLangCount, articleViews,
   ] = await Promise.all([
     stancePromise,
     loadReplyLocations(db, [topic.id], [...new Set([...parentIds, ...missingRootIds])], { viewer, lang: carriedLang }),
@@ -318,7 +323,8 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     topicVisible ? hasPostAiMaterial(db, topic.id) : null,
     user && topicReadable ? isTopicSaved(db, user.id, topic.id) : null,
     thread.replyCount >= 2 && topicVisible ? countReplyLanguages(db, topic.id) : 0,
-    countCrawler ? countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, lang: () => browserReadingLanguage(db, { ...topic, kind: "topic", lang: topic.lang as Lang }, request, profile) }) : undefined,
+    writerPromise.then(({ canWriteReply }) => canWriteReply && thread.page === 1 ? articleReadingDisplay(db, topic.id) : null),
+    countCrawler ? countReading(db, topic.id, { method: "ai_crawler", readerId: user?.id, display: browserReading }) : undefined,
   ]);
   const nushiView = { ...nushi, ...nushiPreference, setting: nushiTopic };
   const hiddenActionOf = (id: number) => {
@@ -420,6 +426,8 @@ async function loaderImplementation({ request, params }: Route.LoaderArgs) {
     ...(showContinuation ? { continuation } : {}),
     introSelected: !!user && profile?.introEntryId === topic.id,
     postedNotice,
+    articleViews,
+    readingMark: topicVisible && thread.page === 1 ? signReadingMark(topic.id, browserReading) : null,
     edited: user ? readEditedId(url) : null,
     topic:
       topic.visibility === "hidden-redacted"
@@ -627,17 +635,6 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
   const location = useLocation();
   const motionHistory = useMemo(() => ({ topicId: topic.id, entries: new Map<number, Set<string>>() }), [topic.id]);
   const returnTo = `${location.pathname}${location.search}`;
-  const reportsRead = page === 1 && topic.placeholder === null && !topic.hidden;
-  useEffect(() => {
-    if (!reportsRead) return;
-    let active = true, stop: (() => void) | undefined;
-    void import("~/lib/translation-seen").then(module => {
-      if (active) {
-        stop = module.markTopicRead(returnTo);
-      }
-    }).catch(() => {});
-    return () => { active = false; stop?.(); };
-  }, [returnTo, reportsRead]);
   const [replyTarget, setReplyTarget] = useState(loaderData.replyTarget);
   // The author's language menu: languages whose translation has arrived since the page was read (TranslationWatch) are no longer muted.
   const [settled, setSettled] = useState<{ id: number; langs: Lang[] }>({ id: topic.placeholder === null ? topic.id : 0, langs: [] });
@@ -845,6 +842,12 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
         {loaderData.village && loaderData.village.kind !== "personal" && !loaderData.village.language && <Link to={`/v/${loaderData.village.slug}`} title={villageNameTitle(loaderData.village)} className="ui-meta underline">{villageName(loaderData.village)}</Link>}
         {follow && <FollowButton variant="compact" threadId={full.id} state={follow.state} returnTo={`${returnTo}#p-${full.id}`} />}
       </div>
+      {loaderData.articleViews && <div data-article-views="" className="ui-meta text-muted-foreground">
+        <p>{loaderData.articleViews.translated === null
+          ? m.article_views({ count: loaderData.articleViews.total })
+          : m.article_views_translated({ count: loaderData.articleViews.total, translated: loaderData.articleViews.translated })}</p>
+        <p>{m.article_views_help()}{loaderData.articleViews.since && <>{" "}{m.article_views_since({ since: loaderData.articleViews.since })}</>}</p>
+      </div>}
       {loaderData.saved != null && <noscript className="reading-mobile-fallback">
         <SaveButton topicId={full.id} saved={loaderData.saved} returnTo={`${returnTo}#p-${full.id}`} />
       </noscript>}
@@ -939,6 +942,7 @@ export default function Topic({ loaderData, actionData }: Route.ComponentProps) 
                 </>
               )}
               onReportedChange={reportTopicTranslationChange}
+              readingMark={loaderData.readingMark}
               footer={() => <p className="article-signature" data-article-signature="">
                 <AuthorLink handle={topic.authorHandle} name={topic.authorName} latin={topic.authorNameLatin} reader={loaderData.reader} byline handleClassName="article-author-handle" />
               </p>}

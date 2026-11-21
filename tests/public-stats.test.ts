@@ -3,7 +3,7 @@ import { createElement } from "react";
 import fs from "node:fs";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatMessages, chatMessageTranslations, entries, qualityMetricState, translationEvalPoints, translationEvalRuns, translationEvalTexts, translationReports, translations, villages } from "~/lib/db/schema";
+import { chatMessages, chatMessageTranslations, entries, qualityMetricState, readingCounts, translationEvalPoints, translationEvalRuns, translationEvalTexts, translationReports, translations, villages } from "~/lib/db/schema";
 import type { Db } from "~/lib/db/client.server";
 import { evaluationHistory } from "~/lib/eval/metrics.server";
 import { translationInventory, translationQualitySignals } from "~/lib/eval/signals.server";
@@ -29,9 +29,11 @@ vi.mock("~/paraglide/messages.js", async () => ({ m: (await import("./helpers/me
 const now = new Date("2026-11-02T12:00:00Z");
 afterEach(() => { vi.unstubAllEnvs(); setTestLocale("en"); });
 
-function sample(reading: Parameters<typeof selectPublicStats>[0]["reading"] = { since: null, weeks: [] }) {
+type CollectedStats = Parameters<typeof selectPublicStats>[0];
+function sample(reading: CollectedStats["reading"] = { since: null, weeks: [] },
+  cumulative: CollectedStats["cumulative"] = { total: 0, translated: 0, sources: [], methods: [] }) {
   const starts = observationWeeks(now);
-  return selectPublicStats({ now, history: [], reading, inventory: { weekly: starts.map(weekStart => ({ weekStart, count: 3 })), pairs: 4, pairsFrom: "2026-10-05T12:00:00Z" },
+  return selectPublicStats({ now, history: [], reading, cumulative, inventory: { weekly: starts.map(weekStart => ({ weekStart, count: 3 })), pairs: 4, pairsFrom: "2026-10-05T12:00:00Z" },
     replies: starts.map(weekStart => ({ weekStart, topics: 10, crossArea: 2, rate: 0.2, people: 1 })),
     insightful: starts.map(weekStart => ({ weekStart, observed: true, numerator: 5, denominator: 10, people: 4, rate: 0.5 })),
     active: starts.map(weekStart => ({ weekStart, members: 4 })),
@@ -287,8 +289,35 @@ it.each(["en", "ja"] as const)("distinguishes measured empty reading weeks from 
     { ...empty, week: "2026-10-26", observed: false }, { ...empty, week: "2026-11-02", observed: true },
   ] });
   const section = readingStatsSection(snapshot.reading, "2026-11-02");
-  expect(section.tables[0].rows[0].slice(1)).toEqual([m.stats_unmeasured(), m.stats_unmeasured()]);
-  expect(section.tables[0].rows[1].slice(1)).toEqual(["0", "—"]);
-  expect(section.tables[1].rows[1].slice(1)).toEqual(["—"]);
-  expect(section.tables[2].rows[1].slice(1)).toEqual(["0"]);
+  expect(section.tables[1].rows[0].slice(1)).toEqual([m.stats_unmeasured(), m.stats_unmeasured()]);
+  expect(section.tables[1].rows[1].slice(1)).toEqual(["0", "—"]);
+  expect(section.tables[2].rows[1].slice(1)).toEqual(["—"]);
+  expect(section.tables[3].rows[1].slice(1)).toEqual(["0"]);
+});
+
+it("publishes historical totals before the recent weekly tables with direct rates and suppressed small cells", async () => {
+  const db = await createTestDb();
+  await db.delete(readingCounts);
+  await db.insert(readingCounts).values([
+    { day: "2026-07-08", method: "browser", sourceLang: "other", readLang: "other", source: "none", count: 0 },
+    { day: "2026-07-08", method: "browser", sourceLang: "ja", readLang: "ja", source: "none", count: 3 },
+    { day: "2026-07-15", method: "browser", sourceLang: "ja", readLang: "en", source: "social", count: 5 },
+    { day: "2026-11-02", method: "browser", sourceLang: "ja", readLang: "ja", source: "search", count: 7 },
+    { day: "2026-11-02", method: "api", sourceLang: "ja", readLang: "ja", source: "none", count: 4 },
+  ]);
+  const snapshot = await collectPublicStats(db, now);
+  expect(snapshot.reading.since).toBe("2026-07-08");
+  expect(snapshot.reading.cumulative).toMatchObject({ count: 15, translated: { numerator: 5, denominator: 15, rate: 5 / 15 } });
+  expect(snapshot.reading.cumulative.sources.find(row => row.source === "none")).toMatchObject({ numerator: null, rate: null });
+  expect(snapshot.reading.cumulative.methods.find(row => row.method === "api")?.count).toBeNull();
+  expect(snapshot.reading.weeks.at(-1)).toMatchObject({ count: 7, translated: { numerator: 0, rate: 0 } });
+  const [summary, weekly] = readingStatsSection(snapshot.reading, snapshot.currentWeek).tables;
+  expect(summary).toMatchObject({ caption: m.stats_reading_cumulative(), rows: expect.arrayContaining([[m.stats_reading_translated(), "5", "33.3%"]]) });
+  expect(weekly.rows.at(-1)?.[0]).toBe(m.stats_partial({ week: snapshot.currentWeek }));
+  const html = await renderInRouter(() => routeElement(Stats, { loaderData: snapshot }), "/stats");
+  const markdown = publicStatsMarkdown(snapshot);
+  for (const output of [html, markdown]) {
+    expect(output.indexOf(m.stats_reading_cumulative())).toBeLessThan(output.indexOf("33.3%"));
+    expect(output).toContain("2026-07-08");
+  }
 });

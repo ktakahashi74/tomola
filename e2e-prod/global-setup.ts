@@ -1,3 +1,4 @@
+import { ARTICLE_OPERATOR } from "./article-reading-fixtures";
 import { noPreloadSmoke } from "./support/no-preload-smoke";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -114,7 +115,7 @@ export default async function globalSetup(config: FullConfig) {
       TRANSLATION_SECONDARY: "none",
       DIVERGENCE_JUDGE: "none",
       EMBEDDING_ENGINE: "",
-      OPERATOR_EMAILS: "boss@example.com",
+      OPERATOR_EMAILS: `boss@example.com,${ARTICLE_OPERATOR}`,
       // The enabled languages (production needs them explicitly). The startup check refuses fr and Chinese until a native speaker has checked their interface strings,
       // so the tests run with ja,en.
       ENABLED_LANGS: "ja,en",

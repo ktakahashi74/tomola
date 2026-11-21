@@ -12,9 +12,21 @@ export function readingStatsSection(reading: PublicStats["reading"], currentWeek
   const sourceLabels = readingSourceLabels(), methodLabels = readingMethodLabels();
   const week = (value: string) => value === currentWeek ? m.stats_partial({ week: value }) : value;
   const cell = (observed: boolean, value: string) => observed ? value : m.stats_unmeasured();
-  return { id: "reading", title: m.stats_reading_title(), notes: [m.stats_reading_help(),
+  const cumulative = reading.cumulative;
+  const share = (value: typeof cumulative.translated) => value.denominator === 0 ? "—" : percent(value.rate);
+  return { id: "reading", title: m.stats_reading_title(), notes: [m.stats_reading_help(), m.stats_reading_dedupe(),
     reading.since ? m.stats_reading_since({ since: reading.since }) : m.stats_unmeasured(),
     m.stats_reading_translation_help(), m.stats_reading_source_help(), m.stats_reading_tools_help()], tables: [
+    ...(reading.since ? [{
+      caption: m.stats_reading_cumulative(), showCaption: true,
+      headers: [m.stats_reading_measure(), m.stats_count(), m.metrics_col_rate()],
+      rows: [
+        [m.stats_reading_browser(), small(cumulative.count), "—"],
+        [m.stats_reading_translated(), small(cumulative.translated.numerator), share(cumulative.translated)],
+        ...cumulative.sources.map(item => [sourceLabels[item.source], small(item.numerator), share(item)]),
+        ...cumulative.methods.map(item => [methodLabels[item.method], small(item.count), "—"]),
+      ],
+    }] : []),
     { caption: m.stats_reading_title(), headers: [m.metrics_col_week(), m.stats_count(), m.stats_reading_translated()],
       rows: reading.weeks.map(row => [week(row.week), cell(row.observed, small(row.count)), cell(row.observed, row.translated.denominator === 0 ? "—" : percent(row.translated.rate))]) },
     { caption: m.stats_reading_sources(), headers: [m.metrics_col_week(), ...Object.values(sourceLabels)],

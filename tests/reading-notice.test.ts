@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 it("waits for visibility, deduplicates navigation displays, and drops raw referrers before sending", async () => {
   vi.resetModules();
   let visible = false;
@@ -11,17 +11,17 @@ it("waits for visibility, deduplicates navigation displays, and drops raw referr
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page: "/t/1?lang=en&sl=en" };
-  const cleanup = markTopicRead(display.page);
+  const cleanup = markTopicRead(display.page, "en", false);
   expect(fetch).not.toHaveBeenCalled();
   visible = true; listeners.forEach(fn => fn());
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: "read", ids: [], internal: false, shared: true, referrerHost: "www.google.com" });
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: "read", ids: [], internal: false, shared: true, referrerHost: "www.google.com", shown: "original" });
   expect(fetch.mock.calls[0][1].body).not.toContain("private");
-  const again = markTopicRead(display.page);
+  const again = markTopicRead(display.page, "en", false);
   expect(fetch).toHaveBeenCalledTimes(1);
   cleanup(); again();
   vi.stubGlobal("location", new URL("https://forum.example/t/2"));
-  markTopicRead("/t/2")();
+  markTopicRead("/t/2", "en", false)();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ internal: true, referrerHost: "" });
 });
 it("removes hidden-page callbacks when navigation leaves before the page becomes visible", async () => {
@@ -34,7 +34,7 @@ it("removes hidden-page callbacks when navigation leaves before the page becomes
     addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) });
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
-  markTopicRead("/t/3")();
+  markTopicRead("/t/3", "en", false)();
   visible = true; listeners.forEach(fn => fn());
   expect(fetch).not.toHaveBeenCalled();
 });
@@ -48,7 +48,7 @@ it("treats the first article after a client navigation from a list as internal",
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   history.state = { key: "article-navigation" };
-  markTopicRead("/t/4")();
+  markTopicRead("/t/4", "en", false)();
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ internal: true, referrerHost: "" });
 });
 
@@ -63,30 +63,109 @@ it.each([
   const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   const { markTopicRead } = await import("~/lib/translation-seen");
   const display = { page };
-  markTopicRead(display.page)();
-  markTopicRead(`${address}#reply`)();
+  markTopicRead(display.page, "en", false)();
+  markTopicRead(`${address}#reply`, "en", false)();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][0]).toBe(`/t/5/translations${new URL(address, "https://forum.example").search}`);
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ internal: false, shared });
 
 });
 
-it("counts each pathname once across query changes, pagination and navigation away and back", async () => {
-  vi.resetModules();
+function stubTab(fetch: ReturnType<typeof vi.fn>) {
+  const saved = new Map<string, string>();
   vi.stubGlobal("window", { history: { state: null } });
   vi.stubGlobal("document", { visibilityState: "visible", referrer: "", addEventListener() {}, removeEventListener() {} });
-  const fetch = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", fetch);
   vi.stubGlobal("location", new URL("https://forum.example/t/6?lang=ja"));
-  const { markTopicRead } = await import("~/lib/translation-seen");
-  for (const page of ["/t/6?lang=ja", "/t/6?lang=en", "/t/6?tag=agree", "/t/6?page=2", "/t/6?page=1", "/t/6?posted=7", "/t/6?orig=6&tr=7&old=1", "/t/7", "/t/6?lang=fr#reply"]) {
-    vi.stubGlobal("location", new URL(page, "https://forum.example"));
-    markTopicRead(page)();
-  }
-  expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls[0][0]).toBe("/t/6/translations?lang=ja");
-  expect(fetch.mock.calls[1][0]).toBe("/t/7/translations");
-  // A new document starts a new in-memory set.
+  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("sessionStorage", {
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => saved.set(key, value),
+  });
+  return saved;
+}
+
+const counted = () => ({ ok: true, json: async () => ({ counted: true }) });
+
+it("keeps the actual language and version distinct across reloads with a fixed 30-minute expiry", async () => {
   vi.resetModules();
-  (await import("~/lib/translation-seen")).markTopicRead("/t/6?lang=fr")();
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockImplementation(async () => counted());
+  const saved = stubTab(fetch);
+  const page = "/t/6?lang=ja";
+  let { markTopicRead } = await import("~/lib/translation-seen");
+  markTopicRead(page, "ja", false, "fixture-mark")();
+  await vi.advanceTimersByTimeAsync(0);
+  markTopicRead(page, "en", true)();
+  await vi.advanceTimersByTimeAsync(0);
+  markTopicRead(page, "fr", true)();
+  await vi.advanceTimersByTimeAsync(0);
+  markTopicRead(page, "ja", false)();
+  await vi.advanceTimersByTimeAsync(1_799_999);
+  vi.resetModules();
+  ({ markTopicRead } = await import("~/lib/translation-seen"));
+  markTopicRead(page, "ja", false)();
   expect(fetch).toHaveBeenCalledTimes(3);
+  expect([...saved.keys()]).toEqual(["tomola:read-dedupe:v1"]);
+  expect(Object.keys(JSON.parse([...saved.values()][0]))).toEqual(["/t/6:ja:orig", "/t/6:en:tr", "/t/6:fr:tr"]);
+  expect([...saved.values()][0]).not.toContain("fixture-mark");
+  await vi.advanceTimersByTimeAsync(1);
+  markTopicRead(page, "ja", false)();
+  expect(fetch).toHaveBeenCalledTimes(4);
+});
+
+it.each(["access", "quota"])("uses the same fixed window in memory when storage fails on %s", async mode => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockImplementation(async () => counted());
+  stubTab(fetch);
+  const fail = () => { throw new Error("Storage unavailable"); };
+  vi.stubGlobal("sessionStorage", { getItem: mode === "access" ? fail : () => null, setItem: fail });
+  const { markTopicRead } = await import("~/lib/translation-seen");
+  const report = () => markTopicRead("/t/6?lang=ja", "ja", false)();
+  report();
+  await vi.advanceTimersByTimeAsync(0);
+  report();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1_800_000);
+  report();
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("evicts the oldest record after 100 successes", async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockImplementation(async () => counted());
+  const saved = stubTab(fetch);
+  const { markTopicRead } = await import("~/lib/translation-seen");
+  const report = (id: number) => {
+    vi.stubGlobal("location", new URL(`https://forum.example/t/${id}`));
+    markTopicRead(`/t/${id}`, "ja", false)();
+  };
+  for (let id = 1; id <= 101; id++) {
+    report(id);
+    await vi.advanceTimersByTimeAsync(1);
+  }
+  expect(Object.keys(JSON.parse([...saved.values()][0]))).toHaveLength(100);
+  report(2);
+  expect(fetch).toHaveBeenCalledTimes(101);
+  report(1);
+  expect(fetch).toHaveBeenCalledTimes(102);
+});
+
+it("allows another attempt after transport failure, HTTP error, or counted false", async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockResolvedValueOnce({ ok: false, arrayBuffer: async () => new ArrayBuffer(0) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ counted: false }) }).mockImplementation(async () => counted());
+  const saved = stubTab(fetch);
+  const { markTopicRead } = await import("~/lib/translation-seen");
+  for (let i = 0; i < 3; i++) {
+    markTopicRead("/t/6?lang=ja", "ja", false)();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(saved.size).toBe(0);
+  }
+  markTopicRead("/t/6?lang=ja", "ja", false)();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fetch).toHaveBeenCalledTimes(4);
+  expect(saved.size).toBe(1);
 });

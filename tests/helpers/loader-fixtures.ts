@@ -102,7 +102,7 @@ export const replyEntry = loaderFixture<VisibleReply>(() => ({
 export const topicData = loaderFixture<TopicData>(() => ({
   aiMaterialLinks: [], nushi: { entries: {}, controls: "", reply: "", pending: [] },
   nushiAvailable: false, reader: false, askAi: null, canReply: false, respondWithPost: null,
-  stanceResume: null, share: null, introSelected: false, postedNotice: null, edited: null,
+  stanceResume: null, share: null, introSelected: false, postedNotice: null, articleViews: null, readingMark: null, edited: null,
   topic: topicEntry(), replies: [],
   question: { asksStance: false, isAlt: false, origin: null, locked: false, canFix: false, stance: null, reasons: null, objections: null },
   loadedAt: "2026-10-03T00:00:00.000Z", stanceTag: null, follow: null, saved: false, postedFollowed: false,

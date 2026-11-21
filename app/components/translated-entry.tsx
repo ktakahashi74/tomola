@@ -51,6 +51,7 @@ export function TranslatedEntry({
   longTranslation = false,
   quotable = false,
   onReportedChange,
+  readingMark,
   quoteHandle,
   initializedDetails,
   motionHistory,
@@ -82,6 +83,7 @@ export function TranslatedEntry({
   readingActions?: (lang: SourceLang, details: { available: boolean; allOpen: boolean; toggle: () => void }) => { actions: ReactNode; actionMenu: ReactNode };
   quotable?: boolean;
   // Tells the page which translation is shown now (the one a report of a wrong translation is about), for a control that the page draws outside this component. Called after every change of the version shown.
+  readingMark?: string | null;
   onReportedChange?: (translation: EntryDisplay["translation"]) => void;
   // The author's handle, carried with the quotable body so that a quotation can say where it comes from.
   quoteHandle?: string;
@@ -121,6 +123,18 @@ export function TranslatedEntry({
   }
 
   const reported = showing ?? (showingOlder ? tr : null);
+  const readLang = reported?.lang ?? lang;
+  const { pathname, search } = location;
+  const initialShown = display.shown;
+  useEffect(() => {
+    if (!readingMark) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void import("~/lib/translation-seen").then(module => {
+      if (active) stop = module.markTopicRead(pathname + search, readLang, current !== "original", current === initialShown ? readingMark : undefined);
+    }).catch(() => {});
+    return () => { active = false; stop?.(); };
+  }, [readingMark, pathname, search, readLang, current, initialShown]);
   useEffect(() => { onReportedChange?.(reported); }, [reported, onReportedChange]);
   useEffect(() => {
     const ids = (showing ?? showingOlder)?.unseenIds;

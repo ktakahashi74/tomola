@@ -1,3 +1,4 @@
+import type { SourceLang } from "./languages";
 import { documentKey } from "./reading-document";
 import { SHARE_LANG_PARAM } from "./share-language";
 
@@ -34,21 +35,65 @@ export function markTranslationSeen(ids: readonly number[]): void {
   }, 0);
 }
 
-// Reading reports share the existing browser-only lazy notification module.
-// One read per article for this document, including navigation away and back.
-const reportedPages = new Set<string>();
-export function markTopicRead(page: string): () => void {
+// Each tab remembers successful reports for a fixed window across reloads.
+const readStorageKey = "tomola:read-dedupe:v1";
+const readLifetime = 1_800_000;
+const maxReads = 100;
+const fallbackReads = new Map<string, number>();
+const inFlightReads = new Set<string>();
+let reportedRead = false;
+
+function pruneReads(reads: Map<string, number>, now: number) {
+  for (const [key, expiry] of reads) if (!(expiry > now)) reads.delete(key);
+  while (reads.size > maxReads) reads.delete(reads.keys().next().value!);
+}
+
+function rememberRead(key: string, now: number, save = false): boolean {
+  try {
+    const saved: Record<string, number> = JSON.parse(sessionStorage.getItem(readStorageKey) ?? "{}");
+    const reads = new Map(Object.entries(saved).sort((a, b) => a[1] - b[1]));
+    if (save) {
+      reads.delete(key);
+      reads.set(key, now + readLifetime);
+    }
+    pruneReads(reads, now);
+    if (save || reads.size !== Object.keys(saved).length) {
+      sessionStorage.setItem(readStorageKey, JSON.stringify(Object.fromEntries(reads)));
+    }
+    if (reads.has(key)) return true;
+  } catch {
+    if (save) fallbackReads.set(key, now + readLifetime);
+  }
+  pruneReads(fallbackReads, now);
+  return fallbackReads.has(key);
+}
+
+export function markTopicRead(page: string, lang: SourceLang, isTranslated: boolean, mark?: string): () => void {
   const url = new URL(page, location.href);
-  const shown = url.pathname;
+  const key = `${url.pathname}:${lang}:${isTranslated ? "tr" : "orig"}`;
   const shared = url.searchParams.has(SHARE_LANG_PARAM);
-  const internal = reportedPages.size > 0 || (window.history.state?.key ?? "default") !== documentKey;
+  const search = (value: string) => {
+    const params = new URLSearchParams(value);
+    params.delete(SHARE_LANG_PARAM);
+    return params.toString();
+  };
+  const displayedSearch = search(url.search);
   const report = () => {
-    if (document.visibilityState !== "visible" || location.pathname !== shown || reportedPages.has(shown)) return;
-    reportedPages.add(shown);
+    if (document.visibilityState !== "visible" || location.pathname !== url.pathname || search(location.search) !== displayedSearch ||
+      inFlightReads.has(key) || rememberRead(key, Date.now())) return;
+    const internal = reportedRead || (window.history.state?.key ?? "default") !== documentKey;
+    reportedRead = true;
+    inFlightReads.add(key);
     let host = "";
     try { if (!internal && document.referrer) host = new URL(document.referrer).hostname; } catch { /* No usable host. */ }
-    void fetch(`${location.pathname}/translations${location.search}`, { method: "POST", credentials: "same-origin", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent: "read", ids: [], internal, shared, referrerHost: host }) }).then(drain).catch(() => {});
+    void fetch(`${url.pathname}/translations${location.search}`, { method: "POST", credentials: "same-origin", redirect: "error",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        intent: "read", ids: [], internal, shared, referrerHost: host, shown: isTranslated ? "translation" : "original", mark,
+      }) }).then(async response => {
+      if (!response.ok) return drain(response);
+      const result = await response.json();
+      if (result?.counted === true) rememberRead(key, Date.now(), true);
+    }).catch(() => {}).finally(() => inFlightReads.delete(key));
   };
   report();
   document.addEventListener("visibilitychange", report);
