@@ -175,7 +175,7 @@ it("omits language-village names on member rows while keeping community and orga
     viewerId: "pv-reader", readLangs: ["en"], displayLang: "en", page: 1,
     reading: readReadingRequest(request, "created"), personalReading: readReadingRequest(request, "created", 1, "vlist"),
   });
-  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...content, following: null, reported: false } }), "/u/pv_owner");
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...content, following: false, reported: false } }), "/u/pv_owner");
   expect(html).not.toContain('href="/v/en"');
   for (const place of places) {
     expect(html).toContain(`href="/v/${place.slug}"`);
@@ -286,7 +286,7 @@ it("gives the two member-page sections independent Load more links and keeps aut
   const first = await load(url);
   expect(first.personal?.topics).toHaveLength(READING_BATCH);
   expect(first.topics).toHaveLength(READING_BATCH);
-  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...first, following: null, reported: false } }), path);
+  const html = await renderInRouter(() => routeElement(MemberPage, { loaderData: { ...first, reported: false } }), path);
   const links = [...html.matchAll(/<a\b[^>]*data-load-more="true"[^>]*href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll("&amp;", "&"), url));
   expect(links.map(link => link.hash)).toEqual(["#village", "#posts"]);
   const [villageLink, postsLink] = links;

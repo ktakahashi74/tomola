@@ -55,8 +55,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   // Other readers get the speaking-style link only when its page exists for them.
   const voiceVillage = nushiVoiceEnabled() && content.personal ? await personalVillage(db, member.userId) : null;
   const showVoice = !!voiceVillage && (user.id === member.userId || (await nushiVoiceHistory(db, [voiceVillage.id])).length > 0);
-  const following = canFollow ? await isFollowingMember(db, user.id, member.userId) : null;
-  return { ...content, following, ...(showVoice ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}), reported: query.get("reported") === "1" };
+  return {
+    ...content,
+    ...(canFollow ? { following: await isFollowingMember(db, user.id, member.userId) } : {}),
+    ...(showVoice ? { nushiVoiceHref: `/v/personal/${member.handle}#nushi-voice` } : {}),
+    reported: query.get("reported") === "1",
+  };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -98,7 +102,7 @@ export default function MemberPage({ loaderData, actionData }: Route.ComponentPr
     <main className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold wrap-anywhere">{loaderData.avatarUrl && <img src={loaderData.avatarUrl} alt="" className="member-avatar member-avatar-prominent me-3 inline-block rounded" />}<AuthorLink handle={handle} name={loaderData.name} latin={loaderData.nameLatin} byline reader/></h1>
-        {loaderData.following !== null && <div className="space-y-1">
+        {typeof loaderData.following === "boolean" && <div className="space-y-1">
           <Form method="post"><Button type="submit" variant="outline" size="sm" pressed={loaderData.following} name="intent" value={loaderData.following ? "unfollow" : "follow"}>{loaderData.following ? m.village_following() : m.village_follow()}<span className="sr-only"> @{handle}</span></Button></Form>
           {!loaderData.following && <p className="ui-help text-muted-foreground">{m.member_page_follow_hint()}</p>}
         </div>}

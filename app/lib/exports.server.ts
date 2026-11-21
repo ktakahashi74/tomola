@@ -9,6 +9,7 @@ import type { Db } from "~/lib/db/client.server";
 import { readDistributions } from "~/lib/distribution.server";
 import { divergences, drafts, entries, entryMentionSnapshots, entryRevisions, follows, memberFollows, savedTopics, nushiSources, memberSignatures, profiles, stanceChanges, stances, translations, villageFollows, villages, votes } from "~/lib/db/schema";
 import { sharedVillageCondition } from "~/lib/villages.server";
+import { villagesEnabled } from "~/lib/villages-enabled.server";
 import { sourceHash } from "~/lib/source-hash.server";
 import type { Area } from "~/lib/languages";
 import { sameVendor } from "~/lib/llm/vendor";
@@ -405,11 +406,17 @@ export type MemberExport = {
 };
 
 async function exportVillageFollows(db: Db, userId: string): Promise<MemberExport["village_follows"]> {
-  const rows = await db.select({ slug: villages.slug, createdAt: villageFollows.createdAt }).from(villageFollows)
-    .innerJoin(villages, eq(villages.id, villageFollows.villageId))
-    .where(and(eq(villageFollows.userId, userId), sharedVillageCondition()))
-    .orderBy(asc(villageFollows.createdAt), asc(villageFollows.villageId));
-  return rows.flatMap(row => row.slug ? [{ village: row.slug, created_at: row.createdAt.toISOString() }] : []);
+  if (!villagesEnabled()) return [];
+  const followed = await db.select({ villageId: villageFollows.villageId, createdAt: villageFollows.createdAt }).from(villageFollows)
+    .where(eq(villageFollows.userId, userId)).orderBy(asc(villageFollows.createdAt), asc(villageFollows.villageId));
+  if (followed.length === 0) return [];
+  const known = await db.select({ id: villages.id, slug: villages.slug }).from(villages)
+    .where(and(inArray(villages.id, followed.map(row => row.villageId)), sharedVillageCondition()));
+  const slugs = new Map(known.map(row => [row.id, row.slug]));
+  return followed.flatMap(row => {
+    const slug = slugs.get(row.villageId);
+    return slug ? [{ village: slug, created_at: row.createdAt.toISOString() }] : [];
+  });
 }
 
 async function exportMemberFollows(db: Db, userId: string): Promise<MemberExport["member_follows"]> {

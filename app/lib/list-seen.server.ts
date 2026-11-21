@@ -2,11 +2,12 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "~/lib/db/client.server";
 import { listSeen, user } from "~/lib/db/schema";
 import { FOLLOWING_HOME_LIST_SCOPE } from "~/lib/home-scope";
+import { isLang } from "~/lib/languages";
 
 export function validListScope(scope: unknown): scope is string {
   if (typeof scope !== "string" || scope.length > 67 || /\s/.test(scope)) return false;
   return scope === "/" || scope === FOLLOWING_HOME_LIST_SCOPE || /^\/v\/[a-z0-9]+(-[a-z0-9]+)*\/?$/.test(scope)
-    || /^\/a\/[A-Za-z]{2,3}(-[A-Za-z]+)?\/?$/.test(scope);
+    || /^\/a\/[^/]+\/?$/.test(scope) && isLang(scope.split("/")[2]);
 }
 
 // Lock the account even for the first list visit. This serializes exchanges and
